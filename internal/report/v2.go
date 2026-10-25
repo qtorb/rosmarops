@@ -1,0 +1,666 @@
+package report
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/qtorb/rosmarops/internal/schemaval"
+
+	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/finding"
+	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/index"
+	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/schemas"
+)
+
+// V2FileName is the v2 report written to the reports directory. Like the
+// graph it reads, its name is fixed: each run replaces it.
+const V2FileName = "report.v2.json"
+
+// V2 mirrors schemas/v2/report.v2.schema.json (decision 2026-10-24, informe
+// legible, §6, E9). It carries no prose: the Markdown takes its texts from
+// the message catalog.
+type V2 struct {
+	SchemaVersion int             `json:"schema_version"`
+	GeneratedAt   string          `json:"generated_at"`
+	Provenance    V2Provenance    `json:"provenance"`
+	Status        string          `json:"status"`
+	Today         rules.Today     `json:"today"`
+	Index         index.Index     `json:"index"`
+	Memory        memory.Root     `json:"memory"`
+	Findings      []rules.Finding `json:"findings"`
+	Posture       []rules.Posture `json:"posture"`
+	Coverage      V2Coverage      `json:"coverage"`
+	Legacy        V2Legacy        `json:"legacy"`
+	// Silenced is the test data the user silenced (M10–M11), always
+	// shown; Signals the red technical-report categories (adjustment B).
+	Silenced rules.Silenced `json:"silenced"`
+	Signals  []Signal       `json:"signals"`
+	// NewAgents are the agents new since the last run (M5).
+	NewAgents  []string         `json:"-"`
+	repos      int              // configured repositories
+	nextMemory memory.File      // findings-memory.json after this run
+	memoryPrev bool             // an earlier findings-memory.json was read
+	base       string           // the run's report base name
+	series     []int            // the evaluated agent's comparable scores, oldest first
+	seriesBy   map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
+}
+
+// NextMemory is findings-memory.json after this run, to write.
+func (v V2) NextMemory() memory.File { return v.nextMemory }
+
+// V2Provenance is the graph's provenance, the SHA-256 of the graph.v2.json
+// evaluated, and the rules version (graph and hash null when no graph was
+// built).
+type V2Provenance struct {
+	Graph        *graph.Provenance `json:"graph"`
+	GraphSHA256  *string           `json:"graph_sha256"`
+	RulesVersion string            `json:"rules_version"`
+}
+
+// V2Coverage summarises the graph's coverage and the run's scan errors.
+type V2Coverage struct {
+	GraphBuilt        bool                     `json:"graph_built"`
+	SourcesRead       int                      `json:"sources_read"`
+	SourcesFailed     []graph.SourceFailed     `json:"sources_failed"`
+	AgentsUnsupported []graph.AgentUnsupported `json:"agents_unsupported"`
+	ScanErrors        []string                 `json:"scan_errors"`
+}
+
+// V2Legacy is the v1 findings, grouped (§3, E7).
+type V2Legacy struct {
+	Status string        `json:"status"`
+	Counts LegacyCounts  `json:"counts"`
+	Groups []LegacyGroup `json:"groups"`
+}
+
+// LegacyCounts are the v1 findings by severity.
+type LegacyCounts struct {
+	Red    int `json:"red"`
+	Yellow int `json:"yellow"`
+	Info   int `json:"info"`
+}
+
+// LegacyGroup is one row of v1 findings: same category, pattern or detail,
+// and repository family. Severity is the highest of its members.
+type LegacyGroup struct {
+	Category   string   `json:"category"`
+	Detail     string   `json:"detail"`
+	Family     string   `json:"family"`
+	Severity   string   `json:"severity"`
+	Count      int      `json:"count"`
+	Repos      []string `json:"repos"`
+	FindingIDs []string `json:"finding_ids"`
+	AlsoInV2   bool     `json:"also_in_v2,omitempty"`
+
+	// members are what identifies each finding of the group, for the
+	// Markdown (BV-39); report.v2.json keeps finding_ids and repos.
+	members []string
+}
+
+// V2Input is what the v2 report is built from.
+type V2Input struct {
+	// Graph is the graph written this run, nil when none could be built;
+	// GraphSHA256 the SHA-256 of its file.
+	Graph       *graph.Graph
+	GraphSHA256 string
+
+	Base knowledge.Base
+	// Bases are every knowledge base by product (decision 2026-10-25,
+	// Cursor); empty means Base alone.
+	Bases     map[string]knowledge.Base
+	RepoRoots []string
+
+	// Families are the repository families of the run (BV-33), each a list
+	// of roots; a root in none is its own family.
+	Families [][]string
+
+	V1          Report
+	GeneratedAt time.Time
+
+	// Previous is the last entry of index-history.json (nil on a first run
+	// or after a reset); HistoryReset says the history was set aside.
+	Previous     *index.Entry
+	HistoryReset bool
+	// History is every entry of index-history.json, for the evolution line
+	// of the HTML (informe HTML v2, §5).
+	History []index.Entry
+
+	// Salt is the local salt (the memory's references); Memory the last
+	// findings-memory.json, MemoryReset true when it was set aside.
+	Salt        []byte
+	Memory      memory.File
+	MemoryReset bool
+
+	// Rotated and Fixtures are allow_list.rotated_credentials and
+	// test_fixtures; ConfigFile the configuration file as the report shows
+	// it (decision 2026-10-24, memoria, M9–M10).
+	Rotated    []config.AllowEntryRotated
+	Fixtures   []config.AllowEntryTestFixture
+	ConfigFile string
+}
+
+// bases are the knowledge bases by product: Bases, or Base alone.
+func (in V2Input) bases() map[string]knowledge.Base {
+	if len(in.Bases) > 0 {
+		return in.Bases
+	}
+	return map[string]knowledge.Base{in.Base.Product: in.Base}
+}
+
+// inference are the products with a knowledge base: an agent of one of
+// them is evaluated (decision 2026-10-25, Cursor).
+func inference(bases map[string]knowledge.Base) map[string]bool {
+	out := map[string]bool{}
+	for p := range bases {
+		out[p] = true
+	}
+	return out
+}
+
+// BuildV2 builds the v2 report: the rules over the graph, the v1 findings
+// grouped, and the status, the highest of v1 and v2 (fail-secure: no graph
+// is at least yellow). It is a pure function.
+func BuildV2(in V2Input) (V2, rules.Result) {
+	fams := map[string]string{}
+	for _, fam := range in.Families {
+		for _, root := range fam {
+			fams[graph.CanonicalPath(root)] = fam[0]
+		}
+	}
+	v := V2{
+		SchemaVersion: 2,
+		GeneratedAt:   in.GeneratedAt.UTC().Format(time.RFC3339),
+		Provenance:    V2Provenance{RulesVersion: rules.Version},
+		Findings:      []rules.Finding{},
+		Posture:       []rules.Posture{},
+		repos:         len(in.RepoRoots),
+	}
+	v2Status := finding.StatusYellow // no graph: fail-secure
+	var res rules.Result
+	if in.Graph != nil {
+		g := *in.Graph
+		prov, sha := g.Provenance, in.GraphSHA256
+		v.Provenance.Graph, v.Provenance.GraphSHA256 = &prov, &sha
+		res = rules.Evaluate(rules.Input{
+			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
+			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
+			ConfigFile: in.ConfigFile, Now: in.GeneratedAt,
+		})
+		v.Silenced = res.Silenced
+		v.Findings, v.Today, v.Posture = res.Findings, res.Today, res.Posture
+		if v.Findings == nil {
+			v.Findings = []rules.Finding{}
+		}
+		v.Coverage = V2Coverage{
+			GraphBuilt:        true,
+			SourcesRead:       len(g.Coverage.SourcesRead),
+			SourcesFailed:     g.Coverage.SourcesFailed,
+			AgentsUnsupported: g.Coverage.AgentsUnsupported,
+		}
+		v2Status = finding.StatusGreen
+		for _, f := range v.Findings {
+			v2Status = maxStatus(v2Status, finding.Status(f.Severity))
+		}
+	} else {
+		v.Today = rules.Today{Code: rules.TodayNothingUrgent}
+	}
+	if v.Coverage.SourcesFailed == nil {
+		v.Coverage.SourcesFailed = []graph.SourceFailed{}
+	}
+	if v.Coverage.AgentsUnsupported == nil {
+		v.Coverage.AgentsUnsupported = []graph.AgentUnsupported{}
+	}
+	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
+	v.Index = buildIndex(in, res, v)
+	// The technical report keeps the v1 categories of §2.1 that do not
+	// pass to v2 and are not retired (M5): only they count in its status.
+	tech := technicalFindings(in.V1.Findings)
+	counts := LegacyCounts{}
+	for _, f := range tech {
+		switch f.Severity {
+		case finding.SeverityRed:
+			counts.Red++
+		case finding.SeverityYellow:
+			counts.Yellow++
+		case finding.SeverityInfo:
+			counts.Info++
+		}
+	}
+	legacyStatus := string(finding.Reducer(tech, len(in.V1.Errors)))
+	v.Legacy = V2Legacy{
+		Status: legacyStatus,
+		Counts: counts,
+		Groups: groupLegacy(tech, fams, reportedFiles(v.Findings)),
+	}
+	v.Signals = signals(in.V1.Findings)
+	v.NewAgents = newAgents(in.V1.Findings)
+	if v.Silenced.Entries == nil {
+		v.Silenced.Entries = []rules.SilencedEntry{}
+	}
+	setPostureCount(v.Posture, rules.PostureEnvFilesTracked, envFilesTracked(in.V1.Findings, committedOf(in.V1.Findings)))
+	v.Status = string(maxStatus(finding.Status(legacyStatus), v2Status))
+	// The memory names the run's report, which needs the status.
+	applyMemory(&v, in)
+	v.base = FilenameV2(in.V1, v)
+	// The evolution follows the step 1 score: the evaluated agent with the
+	// lowest score, ties by name (informe HTML v3 §3 point 6).
+	v.series = []int{}
+	var low *index.AgentIndex
+	for i := range v.Index.Agents {
+		a := &v.Index.Agents[i]
+		if a.Value != nil && (low == nil || *a.Value < *low.Value || *a.Value == *low.Value && a.Agent < low.Agent) {
+			low = a
+		}
+	}
+	if low != nil {
+		v.series = index.Series(in.History, index.EntryOf(v.Index, ""), low.Agent)
+	}
+	v.seriesBy = map[string][]int{}
+	for _, a := range v.Index.Agents {
+		v.seriesBy[a.Agent] = index.Series(in.History, index.EntryOf(v.Index, ""), a.Agent)
+	}
+	return v, res
+}
+
+// statusRank orders statuses; anything unknown counts as yellow
+// (fail-secure).
+// applyMemory sets each finding's verdict and the run's memory against the
+// last checked run (memoria, M1–M4). The run is complete when the graph was
+// built and no evaluated agent lacks coverage.
+func applyMemory(v *V2, in V2Input) {
+	run := memory.Run{
+		Date: in.GeneratedAt.Local().Format("2006-01-02"), Report: FilenameV2(in.V1, *v),
+		RulesVersion: rules.Version, KnowledgeVersion: in.Base.Version,
+		Agents: v.Index.Scope.Evaluated, Repos: len(in.RepoRoots), Complete: in.Graph != nil,
+	}
+	for _, a := range v.Index.Agents {
+		if a.Unavailable == index.ReasonCoverage {
+			run.Complete = false
+		}
+	}
+	cur := make([]memory.Finding, 0, len(v.Findings))
+	for _, f := range v.Findings {
+		mf := memory.Finding{ID: f.ID, Rule: f.Rule, Severity: f.Severity}
+		machine := rules.IsMachineFinding(f) // no agent: the credential is the key
+		for i, n := range f.Evidence.Nodes {
+			switch {
+			case i == 0 && !machine:
+				mf.Agent = n
+			case strings.HasPrefix(n, "cred_"):
+				mf.Creds = append(mf.Creds, n)
+			}
+		}
+		cur = append(cur, mf)
+	}
+	next, verdicts, root := memory.Update(in.Memory, run, cur, in.Salt)
+	root.Reset = in.MemoryReset
+	for i := range v.Findings {
+		m := verdicts[v.Findings[i].ID]
+		v.Findings[i].Memory = &m
+	}
+	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
+}
+
+// buildIndex computes the Agent Posture Score of the run (I1–I9).
+func buildIndex(in V2Input, res rules.Result, v V2) index.Index {
+	ii := index.Input{
+		GraphBuilt: in.Graph != nil, Inference: inference(in.bases()),
+		Findings: v.Findings, Today: v.Today, MediumReadable: map[string]int{},
+		SourcesFailed: v.Coverage.SourcesFailed, Repos: len(in.RepoRoots),
+		RulesVersion: rules.Version, KnowledgeVersion: in.Base.Version, Previous: in.Previous,
+	}
+	if in.Graph != nil {
+		for _, n := range in.Graph.Nodes {
+			if n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient {
+				ii.Agents = append(ii.Agents, index.Agent{ID: n.ID, Name: n.Name, Product: n.Platform, ConfigDir: n.ConfigPath})
+			}
+		}
+	}
+	for agent, creds := range res.MediumReadable {
+		ii.MediumReadable[agent] = len(creds)
+	}
+	idx := index.Compute(ii)
+	if in.Graph == nil {
+		// No graph: no agent is known; the score is unavailable, not "not
+		// applicable" (fail-secure, I5).
+		idx.Machine = index.Score{Unavailable: index.ReasonCoverage}
+	}
+	idx.HistoryReset = in.HistoryReset
+	return idx
+}
+
+func statusRank(s finding.Status) int {
+	switch s {
+	case finding.StatusRed:
+		return 2
+	case finding.StatusGreen:
+		return 0
+	}
+	return 1
+}
+
+func maxStatus(a, b finding.Status) finding.Status {
+	return []finding.Status{finding.StatusGreen, finding.StatusYellow, finding.StatusRed}[max(statusRank(a), statusRank(b))]
+}
+
+func scanErrorScopes(errs []finding.ScanError) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, e := range errs {
+		if !seen[e.Scope] {
+			seen[e.Scope] = true
+			out = append(out, e.Scope)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// reportedFiles are the files (canonical) of the credentials v2 findings
+// report: each location's part before ":<line>" or "#".
+func reportedFiles(fs []rules.Finding) map[string]bool {
+	out := map[string]bool{}
+	for _, f := range fs {
+		if f.Rule != rules.RuleCredReadAndSend && f.Rule != rules.RuleCredReadable && f.Rule != rules.RuleCredInGit {
+			continue
+		}
+		for _, file := range graph.CredentialFiles(graph.Node{Locations: f.Evidence.Locations}) {
+			out[graph.CanonicalPath(file)] = true
+		}
+	}
+	return out
+}
+
+// legacyFile is the file of a v1 finding: its evidence file, under its
+// repository when the file is relative.
+func legacyFile(f finding.Finding) string {
+	file := f.Evidence.File
+	if file == "" || f.Evidence.RepoPath == "" || strings.HasPrefix(file, "/") || strings.Contains(file, ":") {
+		return file
+	}
+	return strings.TrimRight(f.Evidence.RepoPath, `/\`) + "/" + file
+}
+
+// legacyMember is what identifies a v1 finding, read from its evidence
+// (BV-39): never a preview or a value.
+//   - repository secrets: repository + file; history: repository + the
+//     commit's first 12 characters;
+//   - vscode_extension_new: the extension id;
+//   - mcp_*: server (client);
+//   - scheduled_task_*: Extra task_name;
+//   - the rest, the most specific field: package.json and the script name
+//     (lifecycle), the file (workflows, hooks), core.hooksPath (its
+//     value), the repository (scan_timeout), kind and value (Defender
+//     exclusions), the profile paths (shell profile), manager and
+//     package@version (global packages), npmrc_path for a registry (the
+//     registry URL can carry credentials), else the file or repository.
+func legacyMember(f finding.Finding) string {
+	e := f.Evidence
+	in := func(file string) string {
+		if file == "" {
+			return e.RepoPath
+		}
+		return legacyFile(finding.Finding{Evidence: finding.Evidence{RepoPath: e.RepoPath, File: file}})
+	}
+	switch {
+	case f.Category == "secret_tracked" || f.Category == "env_tracked":
+		return in(e.File)
+	case f.Category == "secret_in_history":
+		commit := e.CommitSHA
+		if len(commit) > 12 {
+			commit = commit[:12]
+		}
+		return strings.TrimSpace(e.RepoPath + " @ " + commit)
+	case f.Category == "vscode_extension_new":
+		return e.ExtensionID
+	case strings.HasPrefix(f.Category, "mcp_"):
+		if e.MCPServer == "" {
+			return ""
+		}
+		return e.MCPServer + " (" + e.MCPClient + ")"
+	case strings.HasPrefix(f.Category, "scheduled_task_"):
+		return extra(e, "task_name")
+	case f.Category == "lifecycle_script_with_network":
+		return in(e.File) + " " + extra(e, "script_name")
+	case f.Category == "core_hookspath_redirected":
+		return e.RepoPath + " core.hooksPath=" + extra(e, "core_hooks_path")
+	case f.Category == "av_exclusion_new":
+		return extra(e, "exclusion_kind") + " " + extra(e, "exclusion_value")
+	case f.Category == "shell_profile_modified":
+		var paths []string
+		for _, k := range extraKeys(e) {
+			if strings.HasPrefix(k, "profile_") && strings.HasSuffix(k, "_path") {
+				paths = append(paths, extra(e, k))
+			}
+		}
+		return strings.Join(paths, ", ")
+	case f.Category == "global_package_new":
+		return extra(e, "package_manager") + " " + extra(e, "package_name") + "@" + extra(e, "package_version")
+	case f.Category == "npm_registry_non_standard":
+		return extra(e, "npmrc_path")
+	}
+	return in(e.File)
+}
+
+// extra reads a string from a finding's Extra map.
+func extra(e finding.Evidence, key string) string {
+	switch m := e.Extra.(type) {
+	case map[string]string:
+		return m[key]
+	case map[string]any:
+		if s, ok := m[key].(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// extraKeys are the keys of a finding's Extra map, sorted.
+func extraKeys(e finding.Evidence) []string {
+	var keys []string
+	switch m := e.Extra.(type) {
+	case map[string]string:
+		for k := range m {
+			keys = append(keys, k)
+		}
+	case map[string]any:
+		for k := range m {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func uniqueSorted(ss []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, s := range ss {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// groupLegacy groups v1 findings by (category, pattern or detail, family).
+// A finding with no detail (outside the repository checks) is a group of
+// its own; one outside every repository has family "". A group with a
+// finding in a file of a credential v2 reports is also_in_v2 (dedup by
+// file, BV-38).
+func groupLegacy(fs []finding.Finding, fams map[string]string, v2Files map[string]bool) []LegacyGroup {
+	type key struct{ category, detail, family string }
+	groups := map[key]*LegacyGroup{}
+	repos := map[key]map[string]bool{}
+	for _, f := range fs {
+		detail := f.GroupDetail
+		if detail == "" {
+			// A finding outside the repository checks: its readable
+			// identifier, not its hashed id (BV-39).
+			if detail = legacyMember(f); detail == "" {
+				detail = f.ID
+			}
+		}
+		family := ""
+		if f.Evidence.RepoPath != "" {
+			family = f.Evidence.RepoPath
+			if fam, ok := fams[graph.CanonicalPath(f.Evidence.RepoPath)]; ok {
+				family = fam
+			}
+		}
+		k := key{f.Category, detail, family}
+		g, ok := groups[k]
+		if !ok {
+			g = &LegacyGroup{Category: f.Category, Detail: detail, Family: family, Severity: string(f.Severity)}
+			groups[k] = g
+			repos[k] = map[string]bool{}
+		}
+		g.Count++
+		g.FindingIDs = append(g.FindingIDs, f.ID)
+		if file := legacyFile(f); file != "" && v2Files[graph.CanonicalPath(file)] {
+			g.AlsoInV2 = true
+		}
+		if severityOrder(f.Severity) < severityOrder(finding.Severity(g.Severity)) {
+			g.Severity = string(f.Severity)
+		}
+		if f.Evidence.RepoPath != "" {
+			repos[k][f.Evidence.RepoPath] = true
+		}
+		if m := legacyMember(f); m != "" {
+			g.members = append(g.members, m)
+		}
+	}
+	out := make([]LegacyGroup, 0, len(groups))
+	for k, g := range groups {
+		g.Repos = []string{}
+		for r := range repos[k] {
+			g.Repos = append(g.Repos, r)
+		}
+		sort.Strings(g.Repos)
+		sort.Strings(g.FindingIDs)
+		g.members = uniqueSorted(g.members)
+		out = append(out, *g)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if sa, sb := severityOrder(finding.Severity(a.Severity)), severityOrder(finding.Severity(b.Severity)); sa != sb {
+			return sa < sb
+		}
+		if a.Category != b.Category {
+			return a.Category < b.Category
+		}
+		if a.Detail != b.Detail {
+			return a.Detail < b.Detail
+		}
+		return a.Family < b.Family
+	})
+	return out
+}
+
+// RenderV2JSON serialises v and validates it against the embedded
+// report.v2 schema: an invalid report is an error, never written.
+func RenderV2JSON(v V2) ([]byte, error) {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal report v2: %w", err)
+	}
+	schema, err := schemaval.Compile(schemas.ReportV2Schema)
+	if err != nil {
+		return nil, fmt.Errorf("compile report v2 schema: %w", err)
+	}
+	result, err := schema.Validate(data)
+	if err != nil {
+		return nil, fmt.Errorf("validate report v2: %w", err)
+	}
+	if !result.Valid() {
+		msgs := ""
+		for _, e := range result.Errors() {
+			msgs += "\n  " + e.String()
+		}
+		return nil, fmt.Errorf("report v2 fails schema validation:%s", msgs)
+	}
+	return append(data, '\n'), nil
+}
+
+// V2Counts are the red and yellow findings of v2.
+func V2Counts(v V2) (red, yellow int) {
+	for _, f := range v.Findings {
+		switch f.Severity {
+		case rules.SeverityRed:
+			red++
+		case rules.SeverityYellow:
+			yellow++
+		}
+	}
+	return red, yellow
+}
+
+// FilenameV2 is Filename with the run's status (the highest of v1 and v2,
+// fail-secure) and the red and yellow counts of v2 only (BV-39).
+func FilenameV2(r Report, v V2) string {
+	r.Header.Status = v.Status
+	r.Header.Counts.Red, r.Header.Counts.Yellow = V2Counts(v)
+	return Filename(r)
+}
+
+// ConsoleSummary is the run's two console lines, from the catalog
+// (BV-39): the status and the v2 and legacy counts, then the report path.
+func ConsoleSummary(v V2, cat catalog.Catalog, path string) string {
+	red, yellow := V2Counts(v)
+	summary := cat.Text("console.summary", map[string]string{
+		"status": cat.Text("report.status."+v.Status, nil),
+		"red":    strconv.Itoa(red), "yellow": strconv.Itoa(yellow),
+		"legacy_red": strconv.Itoa(v.Legacy.Counts.Red), "legacy_yellow": strconv.Itoa(v.Legacy.Counts.Yellow),
+	})
+	return summary + "\n" + cat.Text("console.report", map[string]string{"path": path}) + "\n"
+}
+
+// WriteV2 writes the run's report files to dir: the Markdown (the v2
+// report, with v1 in its legacy section), the v1 JSON sidecar as before,
+// and report.v2.json. The v2 JSON is validated before anything is written.
+// The Markdown is the technical report: always English, whatever --lang
+// (BV-45).
+func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, v2Path string, err error) {
+	cat, err := catalog.Load(catalog.DefaultLang)
+	if err != nil {
+		return "", "", "", fmt.Errorf("message catalog: %w", err)
+	}
+	v2JSON, err := RenderV2JSON(v)
+	if err != nil {
+		return "", "", "", err
+	}
+	v1JSON, err := RenderJSON(r)
+	if err != nil {
+		return "", "", "", err
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", "", "", fmt.Errorf("create report dir %s: %w", dir, err)
+	}
+	base := FilenameV2(r, v)
+	mdPath = filepath.Join(dir, base+".md")
+	jsonPath = filepath.Join(dir, base+".json")
+	v2Path = filepath.Join(dir, V2FileName)
+	if err := os.WriteFile(mdPath, []byte(RenderV2Markdown(v, cat, loc)), 0o600); err != nil {
+		return "", "", "", fmt.Errorf("write markdown report: %w", err)
+	}
+	if err := os.WriteFile(jsonPath, v1JSON, 0o600); err != nil {
+		return "", "", "", fmt.Errorf("write json sidecar: %w", err)
+	}
+	if err := os.WriteFile(v2Path, v2JSON, 0o600); err != nil {
+		return "", "", "", fmt.Errorf("write report v2: %w", err)
+	}
+	return mdPath, jsonPath, v2Path, nil
+}

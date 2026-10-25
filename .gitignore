@@ -1,0 +1,31 @@
+# Binaries (anchored to repo root so cmd/rosmarops/ is not ignored)
+/rosmarops
+/rosmarops.exe
+*.exe
+*.test
+*.out
+
+# Go module cache / vendor
+/vendor/
+
+# Go test and coverage artifacts
+coverage.out
+coverage.html
+
+# OS artifacts
+Thumbs.db
+.DS_Store
+ehthumbs.db
+Desktop.ini
+
+# IDE / editor
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code machine-local settings (agent permissions, machine-specific)
+.claude/settings.local.json
+
+# Build outputs not tracked above
+/dist/

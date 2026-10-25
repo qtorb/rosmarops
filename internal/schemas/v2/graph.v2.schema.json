@@ -1,0 +1,393 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/graph.v2.schema.json",
+  "title": "RosmarOps — Graph v2",
+  "description": "Data contract of the v2 engine: agents, capabilities, credentials and resources (nodes) and their relations (edges). Secret values are never represented.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "coverage", "provenance", "nodes", "edges"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 2 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "coverage": { "$ref": "#/definitions/coverage" },
+    "provenance": { "$ref": "#/definitions/provenance" },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/edge" }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "minLength": 1 },
+    "dateTime": { "type": "string", "format": "date-time" },
+    "sourceRef": {
+      "type": "string",
+      "description": "Location of the evidence: file:line, file#<JSON Pointer>, or kb:<product>/<entry>@<version> for product_default capabilities."
+    },
+    "certainty": { "enum": ["observed", "inferred"] },
+    "derivedFrom": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/id" },
+      "description": "Ids of the nodes and edges the inference relies on."
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "description": "Stable codes for what RosmarOps assumes and cannot see (e.g. process_runs_as_user)."
+    },
+
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources_read", "sources_failed", "agents_unsupported"],
+      "properties": {
+        "sources_read": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths that were read successfully."
+        },
+        "sources_failed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "reason"],
+            "properties": {
+              "path": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "agents_unsupported": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["platform", "config_path"],
+            "properties": {
+              "platform": { "type": "string" },
+              "config_path": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine_version", "rules_version", "knowledge_version", "host_id"],
+      "properties": {
+        "engine_version": { "type": "string" },
+        "rules_version": { "type": "string" },
+        "knowledge_version": { "type": "string" },
+        "host_id": { "type": "string" }
+      }
+    },
+
+    "node": {
+      "oneOf": [
+        { "$ref": "#/definitions/agent" },
+        { "$ref": "#/definitions/capability" },
+        { "$ref": "#/definitions/credential" },
+        { "$ref": "#/definitions/resource" }
+      ]
+    },
+
+    "agent": {
+      "$comment": "ai_client: type + product + canonical configuration folder; mcp_server: type + product + canonical config file + name [+ JSON Pointer when not /mcpServers/<name>]",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "type", "platform", "config_path", "discovered_at"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "kind": { "const": "agent" },
+        "type": { "enum": ["ai_client", "mcp_server", "extension", "bot"] },
+        "name": {
+          "type": "string",
+          "description": "Human-readable name for display (e.g. the MCP server’s key, like ‘postgres’). Not an identifier; the id is the identifier."
+        },
+        "platform": { "type": "string" },
+        "config_path": {
+          "type": "string",
+          "description": "For ai_client: the agent's configuration folder (e.g. %USERPROFILE%\\.claude). For mcp_server: the config file that declares it."
+        },
+        "discovered_at": { "$ref": "#/definitions/dateTime" }
+      },
+      "if": {
+        "properties": { "type": { "const": "mcp_server" } },
+        "required": ["type"]
+      },
+      "then": { "required": ["name"] }
+    },
+
+    "capability": {
+      "$comment": "configured: agent id + applies_in + approval + canonical rule; product_default: agent id + type + kb entry id (without version)",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "type", "basis", "in_force", "approval", "target_scope", "applies_in", "source"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "kind": { "const": "capability" },
+        "type": { "enum": ["execute_shell", "read_files", "write_files", "network", "invoke_mcp_tool", "permission_mode"] },
+        "basis": {
+          "enum": ["configured", "product_default"],
+          "description": "configured: a rule written in a config file; product_default: documented behaviour of the product, from the knowledge base."
+        },
+        "in_force": { "type": "boolean" },
+        "not_in_force_reason": {
+          "enum": ["rule_never_matches", "mode_not_allowed_in_scope", "workspace_untrusted", "sandbox_unsupported_on_platform", "managed_rules_only", "mode_disabled"],
+          "description": "Required when in_force is false; forbidden when it is true."
+        },
+        "rule": {
+          "type": "string",
+          "description": "Literal text of the rule, with any secret redacted. Required when basis is configured; forbidden when it is product_default."
+        },
+        "approval": { "enum": ["allow", "ask", "deny", "unknown"] },
+        "target_scope": {
+          "type": "string",
+          "description": "Path or resource the permission applies to."
+        },
+        "applies_in": {
+          "type": "string",
+          "description": "Project or config layer where the permission is in force (e.g. Claude Code managed/user/project/local). May be empty."
+        },
+        "source": { "$ref": "#/definitions/sourceRef" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "in_force": { "const": false } },
+            "required": ["in_force"]
+          },
+          "then": { "required": ["not_in_force_reason"] },
+          "else": { "not": { "required": ["not_in_force_reason"] } }
+        },
+        {
+          "if": {
+            "properties": { "basis": { "const": "configured" } },
+            "required": ["basis"]
+          },
+          "then": { "required": ["rule"] },
+          "else": { "not": { "required": ["rule"] } }
+        }
+      ]
+    },
+
+    "credential": {
+      "$comment": "Natural key for deterministic id: fingerprint",
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A secret's metadata only. There is deliberately no field for the secret value.",
+      "required": ["id", "kind", "type", "service", "fingerprint", "locations", "discovered_at"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "kind": { "const": "credential" },
+        "type": { "enum": ["api_key", "db_credential", "oauth_token", "webhook_secret", "ssh_key", "private_key", "generic_secret"] },
+        "service": { "type": "string" },
+        "fingerprint": {
+          "type": "string",
+          "description": "Stable hash of the secret value, salted with a machine-local salt that never leaves the device. Identifies the same secret across locations. The secret value itself is never stored."
+        },
+        "locations": {
+          "type": "array",
+          "minItems": 0,
+          "items": { "$ref": "#/definitions/sourceRef" },
+          "description": "Readable files on disk that hold the secret. Empty only for a secret found solely in git history, which then has at least one committed_in edge (checked when the graph is validated)."
+        },
+        "discovered_at": { "$ref": "#/definitions/dateTime" }
+      }
+    },
+
+    "resource": {
+      "$comment": "Natural key for deterministic id: type + canonical path",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "type", "path", "discovered_at"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "kind": { "const": "resource" },
+        "type": { "enum": ["file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository"] },
+        "path": { "type": "string" },
+        "discovered_at": { "$ref": "#/definitions/dateTime" },
+        "family": {
+          "type": "string",
+          "description": "git_repository only: canonical root of the first repository of its family (repositories that share objects or a root commit)."
+        },
+        "configures": {
+          "$ref": "#/definitions/id",
+          "description": "Id of the agent this resource belongs to. Required when type is agent_config (changes the agent's permissions/settings), agent_instructions (instructions the agent obeys, e.g. CLAUDE.md, AGENTS.md, .cursor/rules) or agent_executable (hook or binary the agent executes); forbidden otherwise."
+        }
+      },
+      "if": {
+        "properties": { "type": { "enum": ["agent_config", "agent_instructions", "agent_executable"] } },
+        "required": ["type"]
+      },
+      "then": { "required": ["configures"] },
+      "else": { "not": { "required": ["configures"] } }
+    },
+
+    "edge": {
+      "oneOf": [
+        { "$ref": "#/definitions/edgeHas" },
+        { "$ref": "#/definitions/edgeReaches" },
+        { "$ref": "#/definitions/edgeWritesConfigOf" },
+        { "$ref": "#/definitions/edgeLoads" },
+        { "$ref": "#/definitions/edgeReceives" },
+        { "$ref": "#/definitions/edgeAuthenticatesTo" },
+        { "$ref": "#/definitions/edgeReadsEnv" },
+        { "$ref": "#/definitions/edgeCommittedIn" }
+      ]
+    },
+
+    "edgeHas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "from", "to", "source"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "has" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" }
+      }
+    },
+
+    "edgeReaches": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "from", "to", "source", "certainty", "via", "derived_from", "assumptions"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "reaches" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "inferred" },
+        "via": {
+          "$ref": "#/definitions/id",
+          "description": "Id of the capability through which the target is reached."
+        },
+        "derived_from": { "$ref": "#/definitions/derivedFrom" },
+        "assumptions": { "$ref": "#/definitions/assumptions" }
+      }
+    },
+
+    "edgeWritesConfigOf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "from", "to", "source", "certainty", "derived_from", "assumptions"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "writes_config_of" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "inferred" },
+        "derived_from": { "$ref": "#/definitions/derivedFrom" },
+        "assumptions": { "$ref": "#/definitions/assumptions" }
+      }
+    },
+
+    "edgeLoads": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agent to agent: a client loads an MCP server.",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "loads" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "$ref": "#/definitions/certainty" },
+        "applies_in": {
+          "type": "string",
+          "description": "Config layer where the client loads the server (e.g. user, local:<project>, project:<repo root>)."
+        },
+        "approval_state": {
+          "enum": ["approved", "pending", "rejected", "unknown"],
+          "description": "Whether the user approved the server, for servers that need approval (project-scope .mcp.json)."
+        }
+      },
+      "if": {
+        "properties": { "approval_state": { "enum": ["pending", "unknown"] } },
+        "required": ["approval_state"]
+      },
+      "then": { "properties": { "certainty": { "const": "inferred" } } }
+    },
+
+    "edgeReceives": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Credential to agent: the credential is handed to the agent in its config, without going through a capability.",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "receives" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "$ref": "#/definitions/certainty" }
+      }
+    },
+
+    "edgeAuthenticatesTo": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Credential to external_service resource: the service the credential opens.",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "authenticates_to" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "$ref": "#/definitions/certainty" },
+        "observed_scope": {
+          "type": "string",
+          "description": "Scope read locally when possible (e.g. service_role or anon for a Supabase key)."
+        }
+      }
+    },
+
+    "edgeReadsEnv": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "File resource to credential: a code file reads the credential from the environment.",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "reads_env" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "$ref": "#/definitions/certainty" }
+      }
+    },
+
+    "edgeCommittedIn": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Credential to git_repository resource: the secret is committed in the repository, in its current files or only in past commits. Read at rest: a declared remote, not whether it is public or the commits were pushed.",
+      "required": ["id", "type", "from", "to", "source", "certainty", "presence", "has_remote"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "committed_in" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": {
+          "$ref": "#/definitions/sourceRef",
+          "description": "file:line for presence tracked, <short commit>:<file> for presence history_only."
+        },
+        "certainty": { "$ref": "#/definitions/certainty" },
+        "presence": { "enum": ["tracked", "history_only"] },
+        "has_remote": { "type": "boolean", "description": "True when .git/config declares at least one remote." }
+      }
+    }
+  }
+}

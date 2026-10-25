@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "date": "2026-10-25",
+      "index_version": 1,
+      "rules_version": "1",
+      "knowledge_version": "2026-10-24",
+      "agents": [
+        {
+          "agent": "Claude Code",
+          "value": 30,
+          "band": "exposed",
+          "red": 2,
+          "yellow": 1
+        },
+        {
+          "agent": "Cursor",
+          "value": 26,
+          "band": "exposed",
+          "red": 3,
+          "yellow": 1
+        }
+      ],
+      "scope": {
+        "agents": [
+          "Claude Code",
+          "Cursor"
+        ],
+        "repos": 3
+      }
+    },
+    {
+      "date": "2026-10-25",
+      "index_version": 1,
+      "rules_version": "1",
+      "knowledge_version": "2026-10-24",
+      "agents": [
+        {
+          "agent": "Claude Code",
+          "value": 27,
+          "band": "exposed",
+          "red": 2,
+          "yellow": 2
+        },
+        {
+          "agent": "Cursor",
+          "value": 24,
+          "band": "exposed",
+          "red": 3,
+          "yellow": 2
+        }
+      ],
+      "scope": {
+        "agents": [
+          "Claude Code",
+          "Cursor"
+        ],
+        "repos": 3
+      }
+    }
+  ]
+}

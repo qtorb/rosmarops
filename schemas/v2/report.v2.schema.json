@@ -1,0 +1,1218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/report.v2.schema.json",
+  "title": "RosmarOps — Report v2",
+  "description": "Output contract of the v2 report: findings of the rules layer over one graph.v2.json, the one thing to do today, posture counts, coverage and the grouped legacy v1 findings. No prose for people: ids, enums, stable codes and technical detail; texts come from the message catalog by code. Secret values are never represented.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "provenance",
+    "status",
+    "today",
+    "findings",
+    "posture",
+    "coverage",
+    "legacy",
+    "index",
+    "memory"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "generated_at": {
+      "$ref": "#/definitions/dateTime"
+    },
+    "provenance": {
+      "$ref": "#/definitions/provenance"
+    },
+    "status": {
+      "$ref": "#/definitions/status"
+    },
+    "today": {
+      "$ref": "#/definitions/today"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/finding"
+      }
+    },
+    "posture": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/posture"
+      }
+    },
+    "coverage": {
+      "$ref": "#/definitions/coverage"
+    },
+    "legacy": {
+      "$ref": "#/definitions/legacy"
+    },
+    "index": {
+      "$ref": "#/definitions/index"
+    },
+    "memory": {
+      "$ref": "#/definitions/memory"
+    },
+    "silenced": {
+      "$ref": "#/definitions/silenced"
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/signal"
+      },
+      "description": "Red v1 checks of the technical report (decision memoria, adjustment B). They do not count in the score."
+    }
+  },
+  "definitions": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dateTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "green",
+        "yellow",
+        "red"
+      ]
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph",
+        "graph_sha256",
+        "rules_version"
+      ],
+      "properties": {
+        "graph": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "engine_version",
+                "rules_version",
+                "knowledge_version",
+                "host_id"
+              ],
+              "properties": {
+                "engine_version": {
+                  "type": "string"
+                },
+                "rules_version": {
+                  "type": "string"
+                },
+                "knowledge_version": {
+                  "type": "string"
+                },
+                "host_id": {
+                  "type": "string"
+                }
+              },
+              "description": "The provenance of the graph.v2.json evaluated, as written in it."
+            }
+          ]
+        },
+        "graph_sha256": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          ],
+          "description": "SHA-256 of the graph.v2.json evaluated; null when no graph was built."
+        },
+        "rules_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the rules layer that produced the findings."
+        }
+      }
+    },
+    "today": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "const": "today.nothing_urgent"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "finding_id"
+          ],
+          "properties": {
+            "finding_id": {
+              "$ref": "#/definitions/findingId"
+            },
+            "action_id": {
+              "$ref": "#/definitions/actionId"
+            },
+            "remains": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ways"
+              ],
+              "properties": {
+                "radius": {
+                  "enum": [
+                    "same_project"
+                  ]
+                },
+                "ways": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/id"
+                  }
+                }
+              },
+              "description": "What stays possible after a partial or radius-only action: the radius left and the edges or egress capabilities not cut."
+            }
+          }
+        }
+      ]
+    },
+    "findingId": {
+      "type": "string",
+      "pattern": "^f_[0-9a-f]{16}$",
+      "description": "f_ + sha16(rule, key); the rule version does not enter it."
+    },
+    "actionId": {
+      "type": "string",
+      "pattern": "^a_[0-9a-f]{16}$"
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "rule",
+        "rule_version",
+        "severity",
+        "confidence",
+        "params",
+        "evidence",
+        "group",
+        "actions",
+        "memory"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/findingId"
+        },
+        "rule": {
+          "enum": [
+            "cred_read_and_send",
+            "cred_in_git",
+            "cred_readable",
+            "foreign_agent_config_writable",
+            "foreign_agent_instructions_writable",
+            "own_instructions_writable",
+            "own_config_writable"
+          ]
+        },
+        "rule_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "enum": [
+            "red",
+            "yellow"
+          ]
+        },
+        "confidence": {
+          "enum": [
+            "high",
+            "medium"
+          ]
+        },
+        "radius": {
+          "enum": [
+            "any_project",
+            "same_project"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "agent",
+            "count"
+          ],
+          "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "service": {
+              "type": "string"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "class": {
+              "enum": [
+                "high",
+                "medium",
+                "low",
+                "unclassified"
+              ]
+            },
+            "target_agent": {
+              "type": "string"
+            },
+            "resource_type": {
+              "type": "string"
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cred_id": {
+              "type": "string",
+              "pattern": "^cred_[0-9a-f]{16}$",
+              "description": "cred_in_git: the credential id, derived from the salted fingerprint; the user records it in allow_list.rotated_credentials."
+            },
+            "cred_type": {
+              "enum": [
+                "api_key",
+                "db_credential",
+                "oauth_token",
+                "webhook_secret",
+                "ssh_key",
+                "private_key",
+                "generic_secret"
+              ],
+              "description": "cred_in_git: the credential type of the graph."
+            },
+            "has_remote": {
+              "type": "boolean",
+              "description": "cred_in_git: a repository of the finding declares a remote."
+            }
+          },
+          "description": "Typed values for the catalog texts. Never a secret value."
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nodes",
+            "edges",
+            "locations",
+            "assumptions"
+          ],
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/id"
+              },
+              "minItems": 1
+            },
+            "edges": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/id"
+              }
+            },
+            "locations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "file:line, file#<JSON Pointer>, or a resource path."
+            },
+            "assumptions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/code"
+              }
+            }
+          }
+        },
+        "group": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "members"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "members": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "family",
+                  "count",
+                  "items"
+                ],
+                "properties": {
+                  "family": {
+                    "type": "string",
+                    "description": "Root of the family's first repository; empty outside every repository."
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/action"
+          }
+        },
+        "memory": {
+          "$ref": "#/definitions/findingMemory"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "code",
+        "file_exists",
+        "completeness",
+        "magnitude",
+        "cuts"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/actionId"
+        },
+        "code": {
+          "enum": [
+            "ask_edit_rule",
+            "ask_read_rule",
+            "block_reads_outside",
+            "manual_default_mode",
+            "remove_from_disk",
+            "sandbox_read_boundary_workspace",
+            "rotate_credential"
+          ]
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "file_exists": {
+          "type": "boolean"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Literal JSON fragment to merge into the file; the whole file when it does not exist."
+        },
+        "locations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "completeness": {
+          "enum": [
+            "full",
+            "partial",
+            "radius_only"
+          ]
+        },
+        "magnitude": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "cuts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          },
+          "description": "Ids of the edges, or egress capabilities, the action cuts."
+        }
+      }
+    },
+    "posture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "count",
+        "by_class"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "posture.credentials_readable_without_prompt",
+            "posture.credentials_in_templates_only",
+            "posture.env_files_tracked"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_class": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "high",
+            "medium",
+            "low",
+            "unclassified"
+          ],
+          "properties": {
+            "high": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "medium": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "low": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unclassified": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "graph_built",
+        "sources_read",
+        "sources_failed",
+        "agents_unsupported",
+        "scan_errors"
+      ],
+      "properties": {
+        "graph_built": {
+          "type": "boolean"
+        },
+        "sources_read": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sources_failed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "reason"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "agents_unsupported": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "platform",
+              "config_path"
+            ],
+            "properties": {
+              "platform": {
+                "type": "string"
+              },
+              "config_path": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "scan_errors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Scopes of the scan errors of the run."
+        }
+      }
+    },
+    "legacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "counts",
+        "groups"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/status"
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "red",
+            "yellow",
+            "info"
+          ],
+          "properties": {
+            "red": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "yellow": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "info": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "category",
+              "detail",
+              "family",
+              "severity",
+              "count",
+              "repos",
+              "finding_ids"
+            ],
+            "properties": {
+              "category": {
+                "type": "string",
+                "minLength": 1
+              },
+              "detail": {
+                "type": "string"
+              },
+              "family": {
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "red",
+                  "yellow",
+                  "info"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "repos": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "finding_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "also_in_v2": {
+                "type": "boolean",
+                "description": "The group's secret is also a credential of a v2 finding at the same file:line."
+              }
+            }
+          }
+        }
+      },
+      "description": "The v1 findings grouped by (category, pattern or detail, family)."
+    },
+    "index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index_version",
+        "rules_version",
+        "knowledge_version",
+        "agents",
+        "machine",
+        "scope",
+        "history_reset"
+      ],
+      "properties": {
+        "index_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rules_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "knowledge_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/agentIndex"
+          }
+        },
+        "machine": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              ]
+            },
+            "unavailable": {
+              "enum": [
+                "coverage",
+                "not_applicable",
+                "agents_not_evaluated"
+              ]
+            },
+            "band": {
+              "enum": [
+                "exposed",
+                "open_gaps",
+                "contained"
+              ]
+            }
+          },
+          "description": "Only when every agent present has a score: the worst of them."
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "evaluated",
+            "not_evaluated",
+            "repos"
+          ],
+          "properties": {
+            "evaluated": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "not_evaluated": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "repos": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "history_reset": {
+          "type": "boolean",
+          "description": "index-history.json did not validate and was set aside with the suffix .invalid."
+        }
+      },
+      "description": "Agent Posture Score (decision índice de postura agéntica, I1–I14): one score per evaluated agent and one for the machine."
+    },
+    "agentIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent",
+        "agent_id",
+        "value",
+        "red",
+        "yellow",
+        "weights",
+        "comparison"
+      ],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_id": {
+          "$ref": "#/definitions/id"
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          ]
+        },
+        "unavailable": {
+          "enum": [
+            "coverage",
+            "not_applicable",
+            "agents_not_evaluated"
+          ]
+        },
+        "band": {
+          "enum": [
+            "exposed",
+            "open_gaps",
+            "contained"
+          ]
+        },
+        "red": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "yellow": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "finding_id",
+              "weight",
+              "without"
+            ],
+            "properties": {
+              "finding_id": {
+                "$ref": "#/definitions/findingId"
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0
+              },
+              "without": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          },
+          "description": "Per finding, its weight and the score without it."
+        },
+        "projection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action_id",
+            "value"
+          ],
+          "properties": {
+            "action_id": {
+              "$ref": "#/definitions/actionId"
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "description": "The score once today's action is applied, from its declared effect."
+        },
+        "comparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "none",
+                "direct",
+                "not_comparable_rules",
+                "not_comparable_scope"
+              ]
+            },
+            "previous": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "prev_repos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "now_repos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "method_delta": {
+              "type": "integer",
+              "minimum": -100,
+              "maximum": 100,
+              "description": "When index_version changed since the previous run: this score minus this graph's score with the previous version's weights (I7, double calculation)."
+            },
+            "prev_index_version": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "findingMemory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "verdict",
+        "open_since",
+        "first_seen",
+        "reappeared"
+      ],
+      "properties": {
+        "verdict": {
+          "enum": [
+            "new",
+            "still_observed",
+            "observed_again",
+            "no_longer_observed",
+            "not_comparable",
+            "not_checked"
+          ]
+        },
+        "open_since": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "first_seen": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "reappeared": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "The finding's verdict against the last checked run (decision memoria, M3)."
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "counts",
+        "no_longer_observed",
+        "moved",
+        "reset"
+      ],
+      "properties": {
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "new",
+            "still_observed",
+            "observed_again",
+            "no_longer_observed",
+            "not_comparable",
+            "not_checked"
+          ],
+          "properties": {
+            "new": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "still_observed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observed_again": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "no_longer_observed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_comparable": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_checked": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "no_longer_observed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rule",
+              "severity",
+              "open_since",
+              "last_report"
+            ],
+            "properties": {
+              "rule": {
+                "enum": [
+                  "cred_read_and_send",
+                  "cred_in_git",
+                  "cred_readable",
+                  "foreign_agent_config_writable",
+                  "foreign_agent_instructions_writable",
+                  "own_instructions_writable",
+                  "own_config_writable"
+                ]
+              },
+              "severity": {
+                "enum": [
+                  "red",
+                  "yellow"
+                ]
+              },
+              "open_since": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "last_report": {
+                "type": "string",
+                "pattern": "^report-[0-9]{4}-[0-9]{2}-[0-9]{2}__[A-Z]+__[0-9]+R-[0-9]+Y$",
+                "description": "Base name of a report file: date, colour and counts only."
+              }
+            }
+          },
+          "description": "No longer observed is not resolved."
+        },
+        "moved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "rule",
+              "finding_id",
+              "open_since",
+              "last_report"
+            ],
+            "properties": {
+              "rule": {
+                "enum": [
+                  "cred_read_and_send",
+                  "cred_in_git",
+                  "cred_readable",
+                  "foreign_agent_config_writable",
+                  "foreign_agent_instructions_writable",
+                  "own_instructions_writable",
+                  "own_config_writable"
+                ]
+              },
+              "finding_id": {
+                "$ref": "#/definitions/findingId"
+              },
+              "open_since": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "last_report": {
+                "type": "string",
+                "pattern": "^report-[0-9]{4}-[0-9]{2}-[0-9]{2}__[A-Z]+__[0-9]+R-[0-9]+Y$",
+                "description": "Base name of a report file: date, colour and counts only."
+              }
+            }
+          },
+          "description": "A no_longer_observed and a new of one rule and one agent with a credential in common (memory.moved)."
+        },
+        "reason": {
+          "enum": [
+            "rules_changed",
+            "scope_changed"
+          ]
+        },
+        "reset": {
+          "type": "boolean",
+          "description": "findings-memory.json did not validate and was set aside with the suffix .invalid."
+        }
+      },
+      "description": "The run's memory (decision memoria, M3)."
+    },
+    "silenced": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "entries"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Findings silenced as test data; they do not count in the score."
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "repo",
+              "path",
+              "note",
+              "expires_on",
+              "state",
+              "count"
+            ],
+            "properties": {
+              "repo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "note": {
+                "type": "string"
+              },
+              "expires_on": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              },
+              "state": {
+                "enum": [
+                  "applied",
+                  "expired",
+                  "ignored_scope",
+                  "fingerprint_match"
+                ],
+                "description": "applied, or why the entry is not applied: expired, it covers a credential source (guard 1), or the key also appears outside test data (guard 2)."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Findings this entry silences."
+              }
+            }
+          }
+        }
+      },
+      "description": "allow_list.test_fixtures (decision memoria, M10–M11): always shown."
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category",
+        "count"
+      ],
+      "properties": {
+        "category": {
+          "enum": [
+            "workflow_dangerous_pattern",
+            "git_hook_with_network",
+            "core_hooks_path_redirected",
+            "git_alias_with_shell",
+            "dependency_lifecycle_script_network",
+            "shell_profile_modified",
+            "av_exclusion_new",
+            "scheduled_task_new",
+            "global_package_new",
+            "npm_registry_non_standard",
+            "suspicious_script_unexpected_location",
+            "vscode_workspace_trust_disabled"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

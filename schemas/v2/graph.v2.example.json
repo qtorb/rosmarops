@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-22T09:00:00Z",
+  "coverage": {
+    "sources_read": [
+      "~/.cursor/mcp.json",
+      ".cursor/cli.json",
+      "~/.claude/settings.json",
+      "/src/app/.mcp.json",
+      ".env"
+    ],
+    "sources_failed": [],
+    "agents_unsupported": []
+  },
+  "provenance": {
+    "engine_version": "0.2.0-dev",
+    "rules_version": "0",
+    "knowledge_version": "0",
+    "host_id": "host_example_01"
+  },
+  "nodes": [
+    {
+      "id": "agent_cursor",
+      "kind": "agent",
+      "type": "ai_client",
+      "name": "Cursor",
+      "platform": "cursor",
+      "config_path": "~/.cursor",
+      "discovered_at": "2026-10-22T09:00:00Z"
+    },
+    {
+      "id": "agent_claude_code",
+      "kind": "agent",
+      "type": "ai_client",
+      "name": "Claude Code",
+      "platform": "claude-code",
+      "config_path": "~/.claude",
+      "discovered_at": "2026-10-22T09:00:00Z"
+    },
+    {
+      "id": "agent_mcp_postgres",
+      "kind": "agent",
+      "type": "mcp_server",
+      "name": "postgres",
+      "platform": "cursor",
+      "config_path": "~/.cursor/mcp.json",
+      "discovered_at": "2026-10-22T09:00:00Z"
+    },
+    {
+      "id": "agent_mcp_repo_tools",
+      "kind": "agent",
+      "type": "mcp_server",
+      "name": "repo-tools",
+      "platform": "claude-code",
+      "config_path": "/src/app/.mcp.json",
+      "discovered_at": "2026-10-22T09:00:00Z"
+    },
+    {
+      "id": "cap_cursor_shell",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "",
+      "applies_in": "project",
+      "source": ".cursor/cli.json:5",
+      "rule": "Shell(*)"
+    },
+    {
+      "id": "cap_cursor_write",
+      "kind": "capability",
+      "type": "write_files",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "~/.claude/",
+      "applies_in": "project",
+      "source": ".cursor/cli.json:6",
+      "rule": "Write(~/.claude/**)"
+    },
+    {
+      "id": "cap_claude_code_sandbox_network",
+      "kind": "capability",
+      "type": "network",
+      "basis": "product_default",
+      "in_force": false,
+      "not_in_force_reason": "sandbox_unsupported_on_platform",
+      "approval": "deny",
+      "target_scope": "*",
+      "applies_in": "user",
+      "source": "kb:claude-code/sandbox-network@0"
+    },
+    {
+      "id": "cred_db_servicerole",
+      "kind": "credential",
+      "type": "db_credential",
+      "service": "supabase",
+      "fingerprint": "sha256:ab12cd34ef56",
+      "locations": [
+        ".env:12"
+      ],
+      "discovered_at": "2026-10-22T09:00:00Z"
+    },
+    {
+      "id": "res_claude_config",
+      "kind": "resource",
+      "type": "agent_config",
+      "path": "~/.claude/settings.json",
+      "discovered_at": "2026-10-22T09:00:00Z",
+      "configures": "agent_claude_code"
+    },
+    {
+      "id": "res_env_file",
+      "kind": "resource",
+      "type": "file",
+      "path": ".env",
+      "discovered_at": "2026-10-22T09:00:00Z"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_cursor_has_shell",
+      "type": "has",
+      "from": "agent_cursor",
+      "to": "cap_cursor_shell",
+      "source": ".cursor/cli.json:5"
+    },
+    {
+      "id": "edge_cursor_has_write",
+      "type": "has",
+      "from": "agent_cursor",
+      "to": "cap_cursor_write",
+      "source": ".cursor/cli.json:6"
+    },
+    {
+      "id": "edge_claude_code_has_sandbox_network",
+      "type": "has",
+      "from": "agent_claude_code",
+      "to": "cap_claude_code_sandbox_network",
+      "source": "kb:claude-code/sandbox-network@0"
+    },
+    {
+      "id": "edge_cursor_reaches_db_servicerole",
+      "type": "reaches",
+      "from": "agent_cursor",
+      "to": "cred_db_servicerole",
+      "source": ".cursor/cli.json:5",
+      "certainty": "inferred",
+      "via": "cap_cursor_shell",
+      "derived_from": [
+        "agent_cursor",
+        "cap_cursor_shell",
+        "cred_db_servicerole"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "id": "edge_cursor_writes_claude_config",
+      "type": "writes_config_of",
+      "from": "agent_cursor",
+      "to": "res_claude_config",
+      "source": ".cursor/cli.json:6",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_cursor",
+        "cap_cursor_write",
+        "res_claude_config"
+      ],
+      "assumptions": [
+        "process_runs_as_user"
+      ]
+    },
+    {
+      "id": "edge_cursor_loads_postgres",
+      "type": "loads",
+      "from": "agent_cursor",
+      "to": "agent_mcp_postgres",
+      "source": "~/.cursor/mcp.json",
+      "certainty": "observed",
+      "applies_in": "user"
+    },
+    {
+      "id": "edge_claude_code_loads_repo_tools",
+      "type": "loads",
+      "from": "agent_claude_code",
+      "to": "agent_mcp_repo_tools",
+      "source": "/src/app/.mcp.json",
+      "certainty": "inferred",
+      "applies_in": "project:/src/app",
+      "approval_state": "unknown"
+    },
+    {
+      "id": "edge_env_file_reads_db_servicerole",
+      "type": "reads_env",
+      "from": "res_env_file",
+      "to": "cred_db_servicerole",
+      "source": ".env:12",
+      "certainty": "observed"
+    }
+  ]
+}

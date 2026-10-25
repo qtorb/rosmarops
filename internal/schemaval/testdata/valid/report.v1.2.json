@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "engine_version": "0.1.0-dev",
+  "generated_at": "2026-10-25T10:26:25Z",
+  "platform": {
+    "os": "linux",
+    "arch": "amd64"
+  },
+  "header": {
+    "status": "red",
+    "counts": {
+      "red": 2,
+      "yellow": 0,
+      "info": 0,
+      "allow_listed_this_run": 0
+    },
+    "repos_scanned": 0,
+    "repos_failed": 0,
+    "consecutive_green": 0,
+    "scan_duration_seconds": 0.028659363
+  },
+  "findings": [
+    {
+      "id": "secret_in_history:6fd65bfb0fbdf58e",
+      "severity": "red",
+      "category": "secret_in_history",
+      "title": "Secret in git history: Database URL with embedded credentials (232bb6a5)",
+      "evidence": {
+        "redacted_preview": "DATA ... ass@",
+        "repo_path": "/home/dev/src/api-backend",
+        "commit_sha": "232bb6a5030b6dffee882858c1420c6e2952289e"
+      },
+      "why_it_matters": "A secret credential was found in a commit that is part of this repository's history. Anyone with read access to the repository can retrieve it using standard git commands, regardless of whether the file has since been modified or deleted. Rotating the secret without cleaning history leaves the old credential exposed indefinitely.",
+      "suggested_action": "Revoke and rotate the credential immediately — assume it is compromised. Clean the commit from history using `git filter-repo` (preferred over the deprecated `git filter-branch`). Force-push the cleaned history to all remotes and coordinate with collaborators to re-clone or rebase. Once confirmed rotated, add an entry under `allow_list.secrets_in_history` in rosmarops.config.json with `pattern_type`, `commit_sha`, and a note confirming the rotation; future runs will silently accept it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "secret_tracked:330c7e8ecd68130b",
+      "severity": "red",
+      "category": "secret_tracked_file",
+      "title": "Secret in tracked file: .env.example (Database URL with embedded credentials)",
+      "evidence": {
+        "file": ".env.example",
+        "redacted_preview": "DATA ... ass@",
+        "repo_path": "/home/dev/src/api-backend"
+      },
+      "why_it_matters": "A secret credential was found in a file that is currently tracked by git. Even if the file is later removed, the credential remains in the repository's history and can be extracted by anyone with read access to the repository — including future collaborators, forks, and hosted services.",
+      "suggested_action": "Revoke and rotate the credential immediately — assume it is compromised. Remove the secret from the file and purge it from git history using `git filter-repo` (preferred) or BFG Repo-Cleaner. Then add the file or pattern to .gitignore to prevent future accidental commits. Deleting the file in a new commit is not sufficient; the credential is still accessible in the old commit.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    }
+  ],
+  "summary": {
+    "by_category": {
+      "secret_in_history": {
+        "red": 1
+      },
+      "secret_tracked": {
+        "red": 1
+      }
+    },
+    "top_reds": [
+      "secret_in_history:6fd65bfb0fbdf58e",
+      "secret_tracked:330c7e8ecd68130b"
+    ],
+    "top_yellows": []
+  }
+}

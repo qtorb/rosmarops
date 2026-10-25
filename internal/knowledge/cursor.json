@@ -1,0 +1,148 @@
+{
+  "product": "cursor",
+  "version": "2026-10-25",
+  "entries": [
+    {
+      "id": "file_tools_read",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "source_url": "https://cursor.com/docs/agent/security.md",
+      "verified": "doc 2026-10-25; \"Reading files and searching code don't require approval\"; scope limited to the workspace (decision 2026-10-25, §0.4)"
+    },
+    {
+      "id": "default_ignore_file_tools",
+      "type": "read_files",
+      "approval": "deny",
+      "target_scope": "default_ignore_file_tools",
+      "source_url": "https://cursor.com/docs/reference/ignore-file",
+      "verified": "doc 2026-10-25; only the two patterns that bear on credentials, read without ambiguity (decision 2026-10-25, Cursor, annex 3 point 2); they block the file tools, Tab and mentions only, not the terminal or MCP tools (https://cursor.com/docs/context/ignore-files); gitignore semantics: a pattern without a slash matches at any depth",
+      "paths": [".env*", ".git/"]
+    },
+    {
+      "id": "file_tools_write_workspace",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "source_url": "https://cursor.com/docs/agent/security.md",
+      "verified": "doc 2026-10-25; \"Agents can modify workspace files without approval, except for configuration files\""
+    },
+    {
+      "id": "sandbox_protected_paths",
+      "type": "write_files",
+      "approval": "deny",
+      "target_scope": "sandbox_protected_paths",
+      "source_url": "https://cursor.com/docs/reference/sandbox.md",
+      "verified": "doc 2026-10-25; always protected from writes in the sandbox, relative to the workspace",
+      "paths": [
+        ".cursor/*.json",
+        ".cursor/**/*.json",
+        ".cursor/.workspace-trusted",
+        ".claude/*.json",
+        ".claude/**/*.json",
+        ".vscode/**",
+        ".code-workspace",
+        ".git/hooks/**",
+        ".git/config",
+        ".git/info/attributes",
+        ".cursorignore"
+      ]
+    },
+    {
+      "id": "sandbox_defaults",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "sandbox_read_boundary_system",
+      "source_url": "https://cursor.com/docs/reference/sandbox.md",
+      "verified": "doc 2026-10-25; readBoundary defaults to system: the sandboxed shell reads the whole system (type workspace_readwrite and networkPolicy.default deny are in the code, citing this page)"
+    },
+    {
+      "id": "run_mode_builtin",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "auto_review",
+      "source_url": "https://cursor.com/docs/agent/security/run-modes.md",
+      "verified": "doc 2026-10-25; \"Auto-review shipped as the recommended default\" (3.6); assumed, the IDE mode is not readable at rest (ide_run_mode_not_readable)"
+    },
+    {
+      "id": "terminal_default",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://cursor.com/docs/agent/security.md",
+      "verified": "doc 2026-10-25; \"By default, terminal commands need your approval\""
+    },
+    {
+      "id": "mcp_default",
+      "type": "invoke_mcp_tool",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://cursor.com/docs/context/mcp",
+      "verified": "doc 2026-10-25; \"Cursor asks for approval before using MCP tools by default\""
+    },
+    {
+      "id": "network_default",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://cursor.com/docs/agent/security.md",
+      "verified": "doc 2026-10-25; \"Agents cannot make arbitrary network requests with default settings\"; the documented exceptions (GitHub, direct links, search providers) are not egress (decision 2026-10-25, §2.4)"
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "sandbox_read_boundary_workspace",
+      "setting": "readBoundary",
+      "file": "~/.cursor/sandbox.json",
+      "value": "\"workspace\"",
+      "completeness": "radius_only",
+      "cuts": [],
+      "narrows": ["mode_auto_review"],
+      "magnitude": 2,
+      "source_url": "https://cursor.com/docs/reference/sandbox.md",
+      "verified": "doc 2026-10-25; requires Cursor 3.23 or later (run-modes)"
+    },
+    {
+      "id": "remove_from_disk",
+      "setting": "credential_file",
+      "completeness": "by_cuts",
+      "cuts": ["any_reach"],
+      "narrows": [],
+      "magnitude": 3,
+      "source_url": "https://cursor.com/docs/context/ignore-files",
+      "verified": "doc 2026-10-25; \"The terminal and MCP server tools used by Agent cannot block access\": only removing the credential cuts every way"
+    }
+  ],
+  "read_commands": [
+    {"program": "cat", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "type", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "more", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "less", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "head", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "tail", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "grep", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "rg", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "findstr", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "awk", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "sed", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "get-content", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "gc", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "select-string", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "sls", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"}
+  ],
+  "network_commands": [
+    {"program": "curl", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "wget", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "invoke-webrequest", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "iwr", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "invoke-restmethod", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "irm", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "scp", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "sftp", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "ftp", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "nc", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "ncat", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "ssh", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"},
+    {"program": "rsync", "source_url": "docs/decisions/2026-10-25-capacidades-cursor.md#anexo-2", "verified": "signed 2026-10-25"}
+  ]
+}

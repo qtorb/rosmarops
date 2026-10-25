@@ -1,0 +1,1143 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-25T10:26:25Z",
+  "coverage": {
+    "sources_read": [
+      "/home/dev/home/.claude.json",
+      "/home/dev/home/.claude/settings.json",
+      "/home/dev/home/.cursor/permissions.json",
+      "/home/dev/src/webapp/dashboard/.env.local",
+      "/home/dev/src/api-backend/.env.example",
+      "/home/dev/src/notes/.env"
+    ],
+    "sources_failed": [],
+    "agents_unsupported": []
+  },
+  "provenance": {
+    "engine_version": "0.1.0-dev",
+    "rules_version": "0",
+    "knowledge_version": "2026-10-24",
+    "host_id": "host_ec7ae90fdb749c2f"
+  },
+  "nodes": [
+    {
+      "id": "agent_client_70ecc232d00b77a7",
+      "kind": "agent",
+      "type": "ai_client",
+      "name": "Claude Code",
+      "platform": "claude-code",
+      "config_path": "/home/dev/home/.claude",
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "agent_client_764a08829c0ea77d",
+      "kind": "agent",
+      "type": "ai_client",
+      "name": "Cursor",
+      "platform": "cursor",
+      "config_path": "/home/dev/home/.cursor",
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "cap_00f1acdc9976dffa",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "npx tsx *",
+      "applies_in": "user",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/1",
+      "rule": "Bash(npx tsx *)"
+    },
+    {
+      "id": "cap_1542c59c7b5e7e00",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "git status",
+      "applies_in": "user",
+      "source": "/home/dev/home/.cursor/permissions.json#/terminalAllowlist/1",
+      "rule": "terminalAllowlist:git status"
+    },
+    {
+      "id": "cap_18304d5ced1afd04",
+      "kind": "capability",
+      "type": "read_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "applies_in": "",
+      "source": "kb:cursor/file_tools_read@2026-10-25"
+    },
+    {
+      "id": "cap_2a26ede557a8d5f1",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "npm test",
+      "applies_in": "user",
+      "source": "/home/dev/home/.cursor/permissions.json#/terminalAllowlist/0",
+      "rule": "terminalAllowlist:npm test"
+    },
+    {
+      "id": "cap_2ca9ae8bdf107f20",
+      "kind": "capability",
+      "type": "network",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:claude-code/web_default@2026-10-24"
+    },
+    {
+      "id": "cap_2ff79c42411ddc45",
+      "kind": "capability",
+      "type": "read_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "outside_working_directories",
+      "applies_in": "",
+      "source": "kb:claude-code/read_outside_working_dirs@2026-10-24"
+    },
+    {
+      "id": "cap_498342e2ae8a6d45",
+      "kind": "capability",
+      "type": "network",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "preapproved_documentation_domains",
+      "applies_in": "",
+      "source": "kb:claude-code/webfetch_preapproved_domains@2026-10-24"
+    },
+    {
+      "id": "cap_4d0ce3d318d84650",
+      "kind": "capability",
+      "type": "read_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "applies_in": "",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24"
+    },
+    {
+      "id": "cap_4ea37a8a61411289",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "builtin_read_only_bash_commands",
+      "applies_in": "",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24"
+    },
+    {
+      "id": "cap_5b00f70e033cd114",
+      "kind": "capability",
+      "type": "permission_mode",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "auto",
+      "applies_in": "",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24"
+    },
+    {
+      "id": "cap_5feda45241df92a0",
+      "kind": "capability",
+      "type": "write_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "applies_in": "",
+      "source": "kb:cursor/file_tools_write_workspace@2026-10-25"
+    },
+    {
+      "id": "cap_722b72b0b536cf58",
+      "kind": "capability",
+      "type": "read_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "sandbox_read_boundary_system",
+      "applies_in": "",
+      "source": "kb:cursor/sandbox_defaults@2026-10-25"
+    },
+    {
+      "id": "cap_74fec5fb2aa25663",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "npm test",
+      "applies_in": "user",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/0",
+      "rule": "Bash(npm test)"
+    },
+    {
+      "id": "cap_7d6fd33560cabd76",
+      "kind": "capability",
+      "type": "permission_mode",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "auto_review",
+      "applies_in": "",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25"
+    },
+    {
+      "id": "cap_b5d39af9dd65cb07",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:cursor/terminal_default@2026-10-25"
+    },
+    {
+      "id": "cap_b61c0c13f6fd0187",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "configured",
+      "in_force": true,
+      "approval": "allow",
+      "target_scope": "npx eslint *",
+      "applies_in": "user",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/2",
+      "rule": "Bash(npx eslint *)"
+    },
+    {
+      "id": "cap_bae7d9517edf8b13",
+      "kind": "capability",
+      "type": "network",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:cursor/network_default@2026-10-25"
+    },
+    {
+      "id": "cap_c2399f2a846bd32a",
+      "kind": "capability",
+      "type": "write_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:claude-code/edit_default@2026-10-24"
+    },
+    {
+      "id": "cap_d3478f2252e3db2f",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:claude-code/shell_default@2026-10-24"
+    },
+    {
+      "id": "cap_e9f39b80a25c9391",
+      "kind": "capability",
+      "type": "invoke_mcp_tool",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "*",
+      "applies_in": "",
+      "source": "kb:cursor/mcp_default@2026-10-25"
+    },
+    {
+      "id": "cred_1ecec71a0748c2d4",
+      "kind": "credential",
+      "type": "api_key",
+      "service": "supabase",
+      "fingerprint": "hmac-sha256:8eeaa24e4007547a1ed7d66b8cdfea231e80d533ac0361471de9a940102ac38b",
+      "locations": [
+        "/home/dev/src/webapp/dashboard/.env.local:2"
+      ],
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "cred_50d9e0decb16d50b",
+      "kind": "credential",
+      "type": "api_key",
+      "service": "openai",
+      "fingerprint": "hmac-sha256:3b1f40eb4e26fc26ce882eaa3ec066564464af4c871af642317485812ce06af2",
+      "locations": [
+        "/home/dev/src/notes/.env:1"
+      ],
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "cred_6eb58dc5d65294e6",
+      "kind": "credential",
+      "type": "db_credential",
+      "service": "unknown",
+      "fingerprint": "hmac-sha256:93cff86fdb1be3fb3f132e4370b59d56d9a9f0a46454aee6de13a5663c0ab446",
+      "locations": [
+        "/home/dev/src/api-backend/.env.example:2"
+      ],
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "cred_f1371ab311fb3983",
+      "kind": "credential",
+      "type": "api_key",
+      "service": "supabase",
+      "fingerprint": "hmac-sha256:115db7df4c117168cee5bb8b66086b79bd5638651c68d20cab19e80a38d5fdf6",
+      "locations": [
+        "/home/dev/src/webapp/dashboard/.env.local:3"
+      ],
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "res_agent_config_43809e4f7e4aeab6",
+      "kind": "resource",
+      "type": "agent_config",
+      "path": "/home/dev/home/.cursor/permissions.json",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_764a08829c0ea77d"
+    },
+    {
+      "id": "res_agent_config_56e93053d578bfad",
+      "kind": "resource",
+      "type": "agent_config",
+      "path": "/home/dev/home/.claude.json",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_70ecc232d00b77a7"
+    },
+    {
+      "id": "res_agent_config_c47a3b83d0d49a9f",
+      "kind": "resource",
+      "type": "agent_config",
+      "path": "/home/dev/home/.claude/settings.json",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_70ecc232d00b77a7"
+    },
+    {
+      "id": "res_agent_instructions_5c6f0d11b47dddf8",
+      "kind": "resource",
+      "type": "agent_instructions",
+      "path": "/home/dev/src/notes/CLAUDE.md",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_70ecc232d00b77a7"
+    },
+    {
+      "id": "res_agent_instructions_aeb52d460e7e6d56",
+      "kind": "resource",
+      "type": "agent_instructions",
+      "path": "/home/dev/src/api-backend/CLAUDE.md",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_70ecc232d00b77a7"
+    },
+    {
+      "id": "res_agent_instructions_dda6f47f10469378",
+      "kind": "resource",
+      "type": "agent_instructions",
+      "path": "/home/dev/src/webapp/CLAUDE.md",
+      "discovered_at": "2026-10-25T10:26:25Z",
+      "configures": "agent_client_70ecc232d00b77a7"
+    },
+    {
+      "id": "res_service_7290dc78ea33b803",
+      "kind": "resource",
+      "type": "external_service",
+      "path": "https://abcdefghijklmnopqrst.supabase.co",
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "res_service_cf63fd2370956baf",
+      "kind": "resource",
+      "type": "external_service",
+      "path": "service://supabase",
+      "discovered_at": "2026-10-25T10:26:25Z"
+    },
+    {
+      "id": "res_service_fedcbadc57546112",
+      "kind": "resource",
+      "type": "external_service",
+      "path": "service://openai",
+      "discovered_at": "2026-10-25T10:26:25Z"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_authenticates_to_7455759ef9f828c4",
+      "type": "authenticates_to",
+      "from": "cred_1ecec71a0748c2d4",
+      "to": "res_service_cf63fd2370956baf",
+      "source": "/home/dev/src/webapp/dashboard/.env.local:2",
+      "certainty": "inferred",
+      "observed_scope": "secret"
+    },
+    {
+      "id": "edge_authenticates_to_7627611ec67ef910",
+      "type": "authenticates_to",
+      "from": "cred_f1371ab311fb3983",
+      "to": "res_service_7290dc78ea33b803",
+      "source": "/home/dev/src/webapp/dashboard/.env.local:3",
+      "certainty": "observed",
+      "observed_scope": "service_role"
+    },
+    {
+      "id": "edge_authenticates_to_de6c42ba6ad0df5c",
+      "type": "authenticates_to",
+      "from": "cred_50d9e0decb16d50b",
+      "to": "res_service_fedcbadc57546112",
+      "source": "/home/dev/src/notes/.env:1",
+      "certainty": "inferred"
+    },
+    {
+      "id": "edge_has_0b46a102fa2f52b6",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_18304d5ced1afd04",
+      "source": "kb:cursor/file_tools_read@2026-10-25"
+    },
+    {
+      "id": "edge_has_177de7df09a1ce1f",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_bae7d9517edf8b13",
+      "source": "kb:cursor/network_default@2026-10-25"
+    },
+    {
+      "id": "edge_has_45c5ddbd781cb5a4",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_b61c0c13f6fd0187",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/2"
+    },
+    {
+      "id": "edge_has_4e117c3f82404215",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_b5d39af9dd65cb07",
+      "source": "kb:cursor/terminal_default@2026-10-25"
+    },
+    {
+      "id": "edge_has_56a6b80f3ef3f76b",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_722b72b0b536cf58",
+      "source": "kb:cursor/sandbox_defaults@2026-10-25"
+    },
+    {
+      "id": "edge_has_5a5e56a40448b3f8",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_5feda45241df92a0",
+      "source": "kb:cursor/file_tools_write_workspace@2026-10-25"
+    },
+    {
+      "id": "edge_has_5bbbedc739c36b96",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_d3478f2252e3db2f",
+      "source": "kb:claude-code/shell_default@2026-10-24"
+    },
+    {
+      "id": "edge_has_65265b0dfb83be8a",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_c2399f2a846bd32a",
+      "source": "kb:claude-code/edit_default@2026-10-24"
+    },
+    {
+      "id": "edge_has_665334a3b03ad8d8",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_1542c59c7b5e7e00",
+      "source": "/home/dev/home/.cursor/permissions.json#/terminalAllowlist/1"
+    },
+    {
+      "id": "edge_has_7a4f64818bd761b7",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_4ea37a8a61411289",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24"
+    },
+    {
+      "id": "edge_has_7cb1e63037fda762",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_2ca9ae8bdf107f20",
+      "source": "kb:claude-code/web_default@2026-10-24"
+    },
+    {
+      "id": "edge_has_a63093e195c5467a",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_7d6fd33560cabd76",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25"
+    },
+    {
+      "id": "edge_has_a7f8509e95fbdab6",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_5b00f70e033cd114",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24"
+    },
+    {
+      "id": "edge_has_adf46d1797c82d1c",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_74fec5fb2aa25663",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/0"
+    },
+    {
+      "id": "edge_has_bee2194ac05f5e50",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_00f1acdc9976dffa",
+      "source": "/home/dev/home/.claude/settings.json#/permissions/allow/1"
+    },
+    {
+      "id": "edge_has_c2ab721145415c4d",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_4d0ce3d318d84650",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24"
+    },
+    {
+      "id": "edge_has_e48a6734916b9b85",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_e9f39b80a25c9391",
+      "source": "kb:cursor/mcp_default@2026-10-25"
+    },
+    {
+      "id": "edge_has_f0b9b5cce614e935",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_498342e2ae8a6d45",
+      "source": "kb:claude-code/webfetch_preapproved_domains@2026-10-24"
+    },
+    {
+      "id": "edge_has_f0bb49d962785aa9",
+      "type": "has",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cap_2a26ede557a8d5f1",
+      "source": "/home/dev/home/.cursor/permissions.json#/terminalAllowlist/0"
+    },
+    {
+      "id": "edge_has_f2d297946d51c116",
+      "type": "has",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cap_2ff79c42411ddc45",
+      "source": "kb:claude-code/read_outside_working_dirs@2026-10-24"
+    },
+    {
+      "id": "edge_reaches_1930eaa62b5236ef",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_f1371ab311fb3983",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4ea37a8a61411289",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4ea37a8a61411289",
+        "cred_f1371ab311fb3983"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "bash_tool_available",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_2537829cf54c6240",
+      "type": "reaches",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cred_1ecec71a0748c2d4",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "via": "cap_7d6fd33560cabd76",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "cred_1ecec71a0748c2d4"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_reaches_2891ac05e6003f1e",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_1ecec71a0748c2d4",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_5b00f70e033cd114",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "cred_1ecec71a0748c2d4"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_reaches_30cbbe9cd52d2ea0",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_f1371ab311fb3983",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4d0ce3d318d84650",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4d0ce3d318d84650",
+        "cred_f1371ab311fb3983"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_49f9a575e302445f",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_1ecec71a0748c2d4",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4ea37a8a61411289",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4ea37a8a61411289",
+        "cred_1ecec71a0748c2d4"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "bash_tool_available",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_95b5de45cce5650e",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_1ecec71a0748c2d4",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4d0ce3d318d84650",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4d0ce3d318d84650",
+        "cred_1ecec71a0748c2d4"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_9a2ed172d3418141",
+      "type": "reaches",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cred_50d9e0decb16d50b",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "via": "cap_7d6fd33560cabd76",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "cred_50d9e0decb16d50b"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_reaches_a0069e636b1dce8d",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_6eb58dc5d65294e6",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_5b00f70e033cd114",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "cred_6eb58dc5d65294e6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_reaches_a0614c8be0f4d323",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_50d9e0decb16d50b",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4ea37a8a61411289",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4ea37a8a61411289",
+        "cred_50d9e0decb16d50b"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "bash_tool_available",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_b6f9ff65a74e1763",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_6eb58dc5d65294e6",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4d0ce3d318d84650",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4d0ce3d318d84650",
+        "cred_6eb58dc5d65294e6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_b845394f48c631c9",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_6eb58dc5d65294e6",
+      "source": "kb:claude-code/shell_readonly_bash_commands@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4ea37a8a61411289",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4ea37a8a61411289",
+        "cred_6eb58dc5d65294e6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "bash_tool_available",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_reaches_c6adda1dcbca2c5f",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_f1371ab311fb3983",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_5b00f70e033cd114",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "cred_f1371ab311fb3983"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_reaches_c7e94a03bb4cb3fb",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_50d9e0decb16d50b",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_5b00f70e033cd114",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "cred_50d9e0decb16d50b"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_reaches_cbcac6898812cfda",
+      "type": "reaches",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cred_6eb58dc5d65294e6",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "via": "cap_7d6fd33560cabd76",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "cred_6eb58dc5d65294e6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_reaches_e34420806b7ec8e5",
+      "type": "reaches",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "cred_f1371ab311fb3983",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "via": "cap_7d6fd33560cabd76",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "cred_f1371ab311fb3983"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_reaches_f6cf7b5abfd92545",
+      "type": "reaches",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "cred_50d9e0decb16d50b",
+      "source": "kb:claude-code/read_in_working_dirs@2026-10-24",
+      "certainty": "inferred",
+      "via": "cap_4d0ce3d318d84650",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_4d0ce3d318d84650",
+        "cred_50d9e0decb16d50b"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_004a5e8b563be286",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_aeb52d460e7e6d56",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_instructions_aeb52d460e7e6d56"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_0fff5d38f9cb6769",
+      "type": "writes_config_of",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "res_agent_instructions_dda6f47f10469378",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "res_agent_instructions_dda6f47f10469378"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_3911b1b567f601fc",
+      "type": "writes_config_of",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "res_agent_instructions_aeb52d460e7e6d56",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "res_agent_instructions_aeb52d460e7e6d56"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_3e2b69e8f00e63df",
+      "type": "writes_config_of",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "res_agent_instructions_5c6f0d11b47dddf8",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "res_agent_instructions_5c6f0d11b47dddf8"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_46d99edeabe688f7",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_5c6f0d11b47dddf8",
+      "source": "kb:cursor/file_tools_write_workspace@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_5feda45241df92a0",
+        "res_agent_instructions_5c6f0d11b47dddf8"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "config_file_protection_scope_unknown"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_51faac68b9dff2b9",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_config_43809e4f7e4aeab6",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_config_43809e4f7e4aeab6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "shell_write_unchecked"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_5687c24b092d5bef",
+      "type": "writes_config_of",
+      "from": "agent_client_70ecc232d00b77a7",
+      "to": "res_agent_config_43809e4f7e4aeab6",
+      "source": "kb:claude-code/builtin_default_mode@2026-10-24",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_70ecc232d00b77a7",
+        "cap_5b00f70e033cd114",
+        "res_agent_config_43809e4f7e4aeab6"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "no_pretooluse_hook_blocks",
+        "auto_classifier_permits",
+        "ui_mode_choice_unknown",
+        "auto_mode_available"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_5767876a90ff8ec0",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_5c6f0d11b47dddf8",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_instructions_5c6f0d11b47dddf8"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_7237b857b9e9793f",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_config_c47a3b83d0d49a9f",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_config_c47a3b83d0d49a9f"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "shell_write_unchecked"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_a59b3df10445396d",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_config_56e93053d578bfad",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_config_56e93053d578bfad"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "shell_write_unchecked"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_eaf2f166a25ad848",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_aeb52d460e7e6d56",
+      "source": "kb:cursor/file_tools_write_workspace@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_5feda45241df92a0",
+        "res_agent_instructions_aeb52d460e7e6d56"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "config_file_protection_scope_unknown"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_f5cf30eea047b328",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_dda6f47f10469378",
+      "source": "kb:cursor/run_mode_builtin@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_7d6fd33560cabd76",
+        "res_agent_instructions_dda6f47f10469378"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "ide_run_mode_not_readable",
+        "auto_classifier_permits",
+        "sandbox_platform_unknown"
+      ]
+    },
+    {
+      "id": "edge_writes_config_of_f7888b1afb766a03",
+      "type": "writes_config_of",
+      "from": "agent_client_764a08829c0ea77d",
+      "to": "res_agent_instructions_dda6f47f10469378",
+      "source": "kb:cursor/file_tools_write_workspace@2026-10-25",
+      "certainty": "inferred",
+      "derived_from": [
+        "agent_client_764a08829c0ea77d",
+        "cap_5feda45241df92a0",
+        "res_agent_instructions_dda6f47f10469378"
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented",
+        "team_policy_unknown",
+        "config_file_protection_scope_unknown"
+      ]
+    }
+  ]
+}

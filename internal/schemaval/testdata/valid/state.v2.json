@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "engine_version": "0.1.0-dev",
+  "last_run": "2026-10-25T10:26:25Z",
+  "last_run_status": "red",
+  "local_salt": "e77a4d3c9930274daa398efa2fff6bab60a0a70f92f51319bd8dc9f157ec3e70",
+  "consecutive_green": 0,
+  "integrity": {
+    "vigil_binary_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "config_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "baselines": {
+    "repos": [
+      {
+        "path": "/home/dev/src/webapp"
+      },
+      {
+        "path": "/home/dev/src/api-backend"
+      },
+      {
+        "path": "/home/dev/src/notes"
+      }
+    ],
+    "global_packages": [
+      {
+        "manager": "npm",
+        "name": "@anthropic-ai/claude-code",
+        "version": "2.1.42"
+      },
+      {
+        "manager": "npm",
+        "name": "chromedriver",
+        "version": "147.0.0"
+      },
+      {
+        "manager": "npm",
+        "name": "corepack",
+        "version": "0.34.0"
+      },
+      {
+        "manager": "npm",
+        "name": "docx",
+        "version": "9.7.1"
+      },
+      {
+        "manager": "npm",
+        "name": "eslint",
+        "version": "10.1.0"
+      },
+      {
+        "manager": "npm",
+        "name": "http-server",
+        "version": "14.1.1"
+      },
+      {
+        "manager": "npm",
+        "name": "nodemon",
+        "version": "3.1.14"
+      },
+      {
+        "manager": "npm",
+        "name": "npm",
+        "version": "10.9.4"
+      },
+      {
+        "manager": "npm",
+        "name": "playwright",
+        "version": "1.56.1"
+      },
+      {
+        "manager": "npm",
+        "name": "pnpm",
+        "version": "10.28.0"
+      },
+      {
+        "manager": "npm",
+        "name": "prettier",
+        "version": "3.8.1"
+      },
+      {
+        "manager": "npm",
+        "name": "serve",
+        "version": "14.2.6"
+      },
+      {
+        "manager": "npm",
+        "name": "ts-node",
+        "version": "10.9.2"
+      },
+      {
+        "manager": "npm",
+        "name": "typescript",
+        "version": "6.0.2"
+      },
+      {
+        "manager": "npm",
+        "name": "yarn",
+        "version": "1.22.22"
+      }
+    ]
+  }
+}

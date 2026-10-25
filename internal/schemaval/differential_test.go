@@ -1,0 +1,467 @@
+package schemaval_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"math"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/xeipuuv/gojsonschema"
+
+	"github.com/qtorb/rosmarops/internal/schemas"
+	"github.com/qtorb/rosmarops/internal/schemaval"
+)
+
+// The differential test (decision 2026-10-25, sustituir gojsonschema, G3):
+// over the eight schemas, the own validator and gojsonschema, the oracle,
+// give the same verdict on every valid fixture and on every document broken
+// from them. gojsonschema is linked into this test only.
+
+// schemaSet are the eight schemas, keyed by the prefix of their fixtures in
+// testdata/valid.
+var schemaSet = map[string][]byte{
+	"config.v1":          schemas.ConfigSchema,
+	"state.v1":           schemas.StateSchema,
+	"state.v2":           schemas.StateV2Schema,
+	"report.v1":          schemas.ReportSchema,
+	"graph.v2":           schemas.GraphV2Schema,
+	"report.v2":          schemas.ReportV2Schema,
+	"index-history.v1":   schemas.IndexHistorySchema,
+	"findings-memory.v1": schemas.FindingsMemorySchema,
+}
+
+// pair is one schema compiled by both validators.
+type pair struct {
+	own    *schemaval.Schema
+	oracle *gojsonschema.Schema
+}
+
+func compileAll(t testing.TB) map[string]pair {
+	t.Helper()
+	out := map[string]pair{}
+	for name, raw := range schemaSet {
+		own, err := schemaval.Compile(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		oracle, err := gojsonschema.NewSchema(gojsonschema.NewBytesLoader(raw))
+		if err != nil {
+			t.Fatalf("%s: oracle: %v", name, err)
+		}
+		out[name] = pair{own: own, oracle: oracle}
+	}
+	return out
+}
+
+// fixtures are the valid documents of each schema: real outputs of the
+// engine (e2e of BV-48, paths rewritten), the graph example, and a v1 state.
+func fixtures(t testing.TB) map[string][][]byte {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("testdata", "valid", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string][][]byte{}
+	for _, f := range files {
+		base := filepath.Base(f)
+		name := ""
+		for s := range schemaSet {
+			if strings.HasPrefix(base, s+".") && len(s) > len(name) {
+				name = s
+			}
+		}
+		if name == "" {
+			t.Fatalf("%s: no schema for this fixture", f)
+		}
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[name] = append(out[name], raw)
+	}
+	for s := range schemaSet {
+		if len(out[s]) == 0 {
+			t.Fatalf("no valid fixture for %s", s)
+		}
+	}
+	return out
+}
+
+// verdicts validates doc with both; oracleTypes are gojsonschema's error
+// types. An oracle panic (a number beyond float64 under enum, const or
+// uniqueItems) counts as invalid: the own validator fails secure there.
+func verdicts(t testing.TB, p pair, doc []byte) (own, oracle bool, oracleTypes []string) {
+	t.Helper()
+	r, err := p.own.Validate(doc)
+	if err != nil {
+		t.Fatalf("own: %v\n%s", err, doc)
+	}
+	own = r.Valid()
+	func() {
+		defer func() {
+			if recover() != nil {
+				oracle = false
+			}
+		}()
+		res, err := p.oracle.Validate(gojsonschema.NewBytesLoader(doc))
+		if err != nil {
+			t.Fatalf("oracle: %v\n%s", err, doc)
+		}
+		oracle = res.Valid()
+		for _, e := range res.Errors() {
+			oracleTypes = append(oracleTypes, e.Type())
+			if strings.Contains(e.Field(), ".") {
+				oracleTypes = append(oracleTypes, "nested")
+			}
+		}
+	}()
+	return own, oracle, oracleTypes
+}
+
+func TestDifferential_ValidFixtures(t *testing.T) {
+	pairs := compileAll(t)
+	for name, docs := range fixtures(t) {
+		for i, doc := range docs {
+			own, oracle, types := verdicts(t, pairs[name], doc)
+			if !own || !oracle {
+				t.Errorf("%s fixture %d: own %v, oracle %v %v", name, i, own, oracle, types)
+			}
+		}
+	}
+}
+
+// path is a location in a decoded document: object keys and array indexes.
+type path []any
+
+// walk lists every location of v (the root included).
+func walk(v any, at path, out *[]path) {
+	*out = append(*out, append(path(nil), at...))
+	switch x := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			walk(x[k], append(at, k), out)
+		}
+	case []any:
+		// One element per shape: its sibling of the same shape breaks the
+		// same keywords.
+		shapes := map[string]bool{}
+		for i, e := range x {
+			if s := shape(e); !shapes[s] {
+				shapes[s] = true
+				walk(e, append(at, i), out)
+			}
+		}
+	}
+}
+
+// shape is an array element's kind: its type and, for an object, its keys
+// and its "kind" and "type" values.
+func shape(v any) string {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return fmt.Sprintf("%T", v)
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Sprint(keys, m["kind"], m["type"])
+}
+
+func get(v any, at path) any {
+	for _, s := range at {
+		switch k := s.(type) {
+		case string:
+			v = v.(map[string]any)[k]
+		case int:
+			v = v.([]any)[k]
+		}
+	}
+	return v
+}
+
+// set returns doc with the value at at replaced (remove deletes it).
+func set(doc any, at path, val any, remove bool) any {
+	if len(at) == 0 {
+		return val
+	}
+	parent := get(doc, at[:len(at)-1])
+	switch k := at[len(at)-1].(type) {
+	case string:
+		m := parent.(map[string]any)
+		if remove {
+			delete(m, k)
+		} else {
+			m[k] = val
+		}
+	case int:
+		a := parent.([]any)
+		if remove {
+			setParent(doc, at[:len(at)-1], append(append([]any{}, a[:k]...), a[k+1:]...))
+		} else {
+			a[k] = val
+		}
+	}
+	return doc
+}
+
+func setParent(doc any, at path, val any) { set(doc, at, val, false) }
+
+func decode(t testing.TB, raw []byte) any {
+	t.Helper()
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func encode(t testing.TB, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// replacements are values that break most keywords where they land.
+var replacements = []any{
+	nil, true, false, "", "x", "X Y", strings.Repeat("a", 64), strings.Repeat("A", 64), "f_0123456789abcdeg",
+	"2026-10-25T10:26:25Z", "2026-13-45T00:00:00Z", "10:26:25", "2026-10-25", "1.2.3", "a:0123456789abcdef",
+	json.Number("0"), json.Number("-1"), json.Number("1"), json.Number("1.0"), json.Number("1.5"), json.Number("101"),
+	json.Number("1e3"), json.Number("100000"), json.Number("1e400"),
+	[]any{},
+	[]any{"x"},
+	map[string]any{},
+	map[string]any{"zz_unknown": json.Number("1")},
+}
+
+// mutations are the documents one targeted change away from doc at at: the
+// value replaced by each replacement and by a sibling's value, a string or
+// number nudged, an object key removed or an unknown one added, an array
+// emptied, shortened, given a duplicate or grown past its bounds.
+func mutations(t testing.TB, raw []byte, at path) [][]byte {
+	t.Helper()
+	var out [][]byte
+	apply := func(f func(doc any) any) {
+		out = append(out, encode(t, f(decode(t, raw))))
+	}
+	cur := get(decode(t, raw), at)
+	for _, r := range replacements {
+		r := r
+		apply(func(doc any) any { return set(doc, at, r, false) })
+	}
+	if len(at) > 0 {
+		apply(func(doc any) any { return set(doc, at, nil, true) })
+	}
+	switch x := cur.(type) {
+	case string:
+		for _, s := range []string{x + "!", x[:len(x)/2], strings.ToUpper(x), " " + x, x + "\n", strings.Repeat(x, 2)} {
+			s := s
+			apply(func(doc any) any { return set(doc, at, s, false) })
+		}
+	case json.Number:
+		for _, s := range []string{"+1", "-1", "*-1", "+0.5", "*1000"} {
+			s := s
+			apply(func(doc any) any {
+				f, _ := strconv.ParseFloat(string(x), 64)
+				d, _ := strconv.ParseFloat(s[1:], 64)
+				if s[0] == '+' {
+					f += d
+				} else {
+					f *= d
+				}
+				if math.IsInf(f, 0) || math.IsNaN(f) {
+					return doc // no JSON number
+				}
+				return set(doc, at, json.Number(strconv.FormatFloat(f, 'g', -1, 64)), false)
+			})
+		}
+	case map[string]any:
+		apply(func(doc any) any {
+			get(doc, at).(map[string]any)["zz_unknown"] = "x"
+			return doc
+		})
+	case []any:
+		if len(x) > 0 {
+			apply(func(doc any) any { return set(doc, at, append(append([]any{}, x...), x[0]), false) })
+			apply(func(doc any) any { return set(doc, at, x[1:], false) })
+			for _, n := range []int{6, 11, 105, 1001} {
+				n := n
+				if n > 11 && len(encode(t, x[0])) > 256 {
+					continue // past the bounds of the arrays of small items only
+				}
+				apply(func(doc any) any {
+					grown := make([]any, 0, n)
+					for i := 0; i < n; i++ {
+						grown = append(grown, x[i%len(x)])
+					}
+					return set(doc, at, grown, false)
+				})
+			}
+		}
+		apply(func(doc any) any { return set(doc, at, []any{}, false) })
+	}
+	// A sibling's value, in an object.
+	if len(at) > 0 {
+		if m, ok := get(decode(t, raw), at[:len(at)-1]).(map[string]any); ok {
+			for k := range m {
+				if k != at[len(at)-1] {
+					k := k
+					apply(func(doc any) any {
+						return set(doc, at, get(doc, append(append(path(nil), at[:len(at)-1]...), k)), false)
+					})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// keywordErrors are the oracle's error types that each §1.2 keyword yields;
+// "nested" is an error below the root, which only properties, items,
+// additionalProperties as a schema and $ref reach.
+var keywordErrors = map[string]string{
+	"type": "invalid_type", "required": "required", "additionalProperties": "additional_property_not_allowed",
+	"enum": "enum", "const": "const", "pattern": "pattern", "format": "format", "minLength": "string_gte",
+	"minimum": "number_gte", "maximum": "number_lte", "minItems": "array_min_items", "maxItems": "array_max_items",
+	"uniqueItems": "unique", "oneOf": "number_one_of", "allOf": "number_all_of", "not": "number_not",
+	"if/then": "condition_then", "if/else": "condition_else", "properties/items/$ref": "nested",
+}
+
+// Every targeted mutation of every fixture: the verdicts match, and every
+// keyword of §1.2 breaks at least one of them.
+func TestDifferential_BrokenFixtures(t *testing.T) {
+	pairs := compileAll(t)
+	seen := map[string]bool{}
+	total, invalid := 0, 0
+	for name, docs := range fixtures(t) {
+		for _, raw := range docs {
+			var paths []path
+			walk(decode(t, raw), nil, &paths)
+			for _, at := range paths {
+				for _, doc := range mutations(t, raw, at) {
+					own, oracle, types := verdicts(t, pairs[name], doc)
+					total++
+					if !oracle {
+						invalid++
+					}
+					if own != oracle {
+						t.Fatalf("%s at %v: own %v, oracle %v %v\n%.2000s", name, at, own, oracle, types, doc)
+					}
+					for _, ty := range types {
+						seen[ty] = true
+					}
+				}
+			}
+		}
+	}
+	for kw, ty := range keywordErrors {
+		if !seen[ty] {
+			t.Errorf("no broken fixture breaks %s (%s)", kw, ty)
+		}
+	}
+	t.Logf("%d mutated documents, %d invalid", total, invalid)
+}
+
+// Seeded random chains of mutations, so changes combine.
+func TestDifferential_RandomMutations(t *testing.T) {
+	pairs := compileAll(t)
+	rng := rand.New(rand.NewSource(49))
+	rounds := 150
+	if testing.Short() {
+		rounds = 40
+	}
+	for name, docs := range fixtures(t) {
+		for _, raw := range docs {
+			for i := 0; i < rounds; i++ {
+				doc := raw
+				for steps := 1 + rng.Intn(3); steps > 0; steps-- {
+					var paths []path
+					walk(decode(t, doc), nil, &paths)
+					ms := mutations(t, doc, paths[rng.Intn(len(paths))])
+					doc = ms[rng.Intn(len(ms))]
+				}
+				if own, oracle, types := verdicts(t, pairs[name], doc); own != oracle {
+					t.Fatalf("%s round %d: own %v, oracle %v %v\n%.2000s", name, i, own, oracle, types, doc)
+				}
+			}
+		}
+	}
+}
+
+// FuzzDifferential mutates the fixtures' bytes: every JSON document gets
+// the same verdict from both, under every schema.
+func FuzzDifferential(f *testing.F) {
+	for _, docs := range fixtures(f) {
+		for _, raw := range docs {
+			f.Add(raw)
+		}
+	}
+	pairs := compileAll(f)
+	f.Fuzz(func(t *testing.T, doc []byte) {
+		if !json.Valid(doc) {
+			return
+		}
+		for name, p := range pairs {
+			if own, oracle, types := verdicts(t, p, doc); own != oracle {
+				t.Fatalf("%s: own %v, oracle %v %v", name, own, oracle, types)
+			}
+		}
+	})
+}
+
+// Compile refuses every keyword outside §1.2, a format other than
+// date-time, items as an array and a reference that is not local.
+func TestCompile_RefusesUnsupported(t *testing.T) {
+	for _, s := range []string{
+		`{"patternProperties": {}}`, `{"anyOf": [true]}`, `{"maxLength": 1}`, `{"exclusiveMinimum": 1}`,
+		`{"multipleOf": 2}`, `{"contains": true}`, `{"dependencies": {}}`, `{"propertyNames": true}`,
+		`{"minProperties": 1}`, `{"additionalItems": true}`, `{"format": "email"}`, `{"items": [true]}`,
+		`{"$ref": "http://example.com/s.json"}`, `{"$ref": "other.json#/a"}`, `{"$ref": "#/definitions/missing"}`,
+		`{"type": "decimal"}`, `{"properties": {"a": {"bogus": 1}}}`, `{"definitions": {"a": {"if": {"nope": 1}}}}`,
+	} {
+		if _, err := schemaval.Compile([]byte(s)); err == nil {
+			t.Errorf("%s: compiled", s)
+		}
+	}
+}
+
+// Errors read "field: description", as gojsonschema's did.
+func TestValidate_ErrorFormat(t *testing.T) {
+	s, err := schemaval.Compile([]byte(`{"type": "object", "required": ["a"], "properties": {"b": {"type": "array", "items": {"type": "string"}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := s.Validate([]byte(`{"b": ["x", 1]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range r.Errors() {
+		got = append(got, e.String())
+	}
+	want := "(root): a is required|b.1: Invalid type. Expected: string, given: integer"
+	if strings.Join(got, "|") != want {
+		t.Errorf("errors %q", got)
+	}
+	if _, err := s.Validate([]byte(`{} {}`)); err == nil {
+		t.Error("trailing data accepted")
+	}
+}

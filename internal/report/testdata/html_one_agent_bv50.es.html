@@ -1,0 +1,221 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Informe RosmarOps</title><style>:root{--ink:#1B1A18;--mut:#4D4A45;--red:#94200B;--amb:#6B4700;--grn:#1A5532;--redfill:#C2381C;--ambfill:#B07A00;--grnfill:#2E8B57;--bg:#F6F5F2;--card:#FFFFFF;--line:#D9D5CC;--red-bg:#FDECE7;--amb-bg:#FDF5DF;--grn-bg:#E8F5EE;--code:#F0EEE8;--focus:#1F4FD1}
+@media (prefers-color-scheme:dark){:root{--ink:#EDEBE6;--mut:#C4C1BA;--red:#FF9A85;--amb:#F5C451;--grn:#6FD6A3;--redfill:#FF6A4D;--ambfill:#F0B429;--grnfill:#4CC38A;--bg:#131311;--card:#1D1C1A;--line:#3A3833;--red-bg:#2E1913;--amb-bg:#2A2310;--grn-bg:#12281D;--code:#2A2926;--focus:#8FB1FF}}
+*{box-sizing:border-box}
+svg{flex-shrink:0}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+main{max-width:1320px;margin:0 auto;padding:16px 32px 16px}
+code,pre{font-family:ui-monospace,Consolas,monospace}
+code{font-size:.88em}
+a{color:var(--ink);text-decoration:underline}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+.hdr{font-size:14px;font-weight:400;color:var(--mut);margin:0 0 16px}
+.flow{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.08fr) minmax(0,1.5fr);column-gap:36px;align-items:start}
+.head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.num{width:48px;height:48px;flex:none;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;box-shadow:0 0 0 8px var(--bg)}
+.now .num{box-shadow:0 0 0 5px var(--bg),0 0 0 8px var(--ink),0 0 0 14px var(--bg)}
+.step{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;line-height:1.25}
+.hint{display:block;font-size:14px;font-weight:600;color:var(--mut);line-height:1.2}
+.line{flex:1;min-width:24px;height:2px;background:var(--mut);opacity:.5;margin-right:-36px;position:relative}
+.line::after{content:"";position:absolute;right:0;top:-5px;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:9px solid var(--mut)}
+.iname{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.score{font-size:84px;font-weight:800;line-height:.95;letter-spacing:-.03em;margin:2px 0 10px;white-space:nowrap;overflow-wrap:normal}
+.score .of{font-size:26px;font-weight:600;color:var(--mut);letter-spacing:0}
+.unavail{font-size:21px;font-weight:700;color:var(--mut);margin:2px 0 10px}
+h1.hl{font-size:21px;font-weight:700;line-height:1.3;margin:0 0 12px}
+.meta{font-size:15px;color:var(--mut);line-height:1.7;margin:0}
+.tbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 22px}
+.tbox h2{font-size:20px;font-weight:700;line-height:1.3;margin:0 0 8px}
+.lbl{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
+.tf{font-size:15px;font-weight:600;margin:0 0 6px}
+.tf .tchip{margin-left:8px}
+.tbox>p.imp{font-size:15px;margin:0 0 10px}
+.proj{display:inline-block;font-size:14px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:3px 12px;margin:0 0 12px}
+button{font-family:inherit;font-size:14px;font-weight:600;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;border:0;cursor:pointer;min-height:44px}
+button.wide{display:flex;width:100%;justify-content:center;align-items:center;min-height:48px;border-radius:10px;font-size:16px}
+.live{margin-left:10px;font-size:14px}
+.how{font-size:14px;color:var(--mut);margin:10px 0 0}
+.tbox details.manual{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.manual{font-size:15px;margin-top:12px}
+.manual>summary{min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--mut);list-style:none}
+.tbox .manual>summary{font-size:14px}
+.tbox .after{display:block;font-size:14px;color:var(--mut);margin:10px 0 0}
+.tbox .live{display:block;margin:0}
+.grp{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700}
+.grp:not(:first-of-type){margin-top:10px}
+.dot{width:10px;height:10px;flex:none;border-radius:50%}
+details.row{border-bottom:1px solid var(--line)}
+.grp+details.row{border-top:1px solid var(--line)}
+details.row>summary{display:flex;gap:10px;align-items:center;min-height:44px;font-size:15px;list-style:none;cursor:pointer}
+details>summary::-webkit-details-marker{display:none}
+details.row>summary .t{flex:1;min-width:0;line-height:1.3;padding:6px 0}
+details.row>summary .x{font-size:13px;color:var(--mut);min-width:86px;text-align:right;white-space:nowrap}
+.chev{color:var(--mut);transition:transform .15s}
+details[open]>summary .chev{transform:rotate(90deg)}
+.rb{padding:0 0 12px 20px;font-size:15px}
+.tchip{font-size:12px;font-weight:600;color:var(--mut);border:1px solid var(--line);padding:1px 8px;border-radius:999px;white-space:nowrap}
+.chip-any{display:inline-block;font-size:13px;font-weight:600;color:var(--red);background:var(--red-bg);padding:3px 9px;border-radius:999px}
+.gain{font-size:15px;font-weight:600}
+.tech{font-size:14px;color:var(--mut);margin-top:12px}
+.tech>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+.fix{background:var(--bg);border-radius:12px;padding:14px 16px;margin-top:12px}
+.rb .fix{background:var(--card)}
+.fix-t{font-weight:700;margin-bottom:6px}
+pre{background:var(--code);padding:10px 12px;font-size:13px;white-space:pre-wrap;word-break:break-all;border-radius:8px}
+.after{display:flex;gap:8px;align-items:center;font-size:15px;color:var(--ink);margin-top:12px}
+.none{font-size:17px;margin:0}
+.empty{font-size:15px;color:var(--mut);margin:0}
+.cov{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:20px;font-size:14px}
+.cov h3{font-size:15px;margin:0 0 4px}
+.cov p.note{color:var(--mut)}
+.sig{list-style:none;padding:0;margin:8px 0 0}
+.sig li{display:flex;align-items:center;gap:8px;font-size:15px}
+.sig .n{color:var(--mut)}
+.rot{font-size:15px;margin:0 0 12px;padding-left:20px}
+.cov p,.cov ul{margin:0}
+.more{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;border-top:1px solid var(--line);margin-top:20px;padding-top:14px}
+.more h3{font-size:14px;font-weight:700;margin:0 0 4px}
+.more p{font-size:14px;color:var(--mut);line-height:1.45;margin:0 0 8px}
+.more details>summary{font-size:14px;color:var(--mut);min-height:44px;display:flex;align-items:center;cursor:pointer}
+button.b2{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:14px;font-weight:600;margin:0 6px 6px 0}
+.foot{font-size:13px;color:var(--mut);margin:8px 0 0}
+button.i{width:28px;height:28px;min-height:28px;padding:0;margin:0 2px;border:2px solid var(--mut);background:transparent;color:var(--mut);border-radius:50%;position:relative;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;font:700 14px Georgia,serif;text-transform:none;letter-spacing:0}
+button.i::after{content:"";position:absolute;inset:-8px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+.gl{display:block;background:var(--bg);border-left:4px solid var(--mut);border-radius:6px;padding:8px 12px;margin:8px 0;font-size:15px;font-weight:400;line-height:1.5;color:var(--ink);text-transform:none;letter-spacing:normal}
+.gl[hidden]{display:none}
+@media (max-width:1099px){.flow{grid-template-columns:minmax(0,1fr);row-gap:36px}.line{display:none}.more{grid-template-columns:repeat(2,minmax(0,1fr))}.tchip{white-space:normal}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}details[open]>summary .chev{transform:none}}</style></head><body><main><div class="hdr">Informe RosmarOps · 24 OCT 2026 · nada ha salido de tu ordenador</div><div class="flow"><section class="s1" aria-labelledby="step1"><div class="head"><div class="num" aria-hidden="true">1</div><div><h2 class="step" id="step1">Tu situación</h2></div><span class="line" aria-hidden="true"></span></div><div class="iname"><span>Nota de exposición de tus agentes</span><button type="button" class="i" aria-expanded="false" aria-controls="g1"><span aria-hidden="true">i</span><span class="vh">¿Cómo se calcula la nota?</span></button><span class="gl" id="g1" hidden><b>¿Cómo se calcula la nota?</b> Empieza en 100 y baja con cada aviso, más cuanto más grave y cuanto más lejos llega. Con algún aviso urgente nunca pasa de 49; si solo hay avisos para revisar, nunca pasa de 79. El método es público.</span></div><div class="score" role="img" aria-label="30/100" style="color:var(--red)">30<span class="of">/100</span></div><h1 class="hl">Claude Code puede leer tus claves y sacarlas sin que nadie lo apruebe.</h1><p class="meta">Claude Code · Expuesto<button type="button" class="i" aria-expanded="false" aria-controls="g2"><span aria-hidden="true">i</span><span class="vh">¿Qué es un agente de IA?</span></button><span class="gl" id="g2" hidden><b>¿Qué es un agente de IA?</b> Un programa de IA que trabaja en tu ordenador con tus permisos: lee ficheros, ejecuta órdenes y edita código. Claude Code, Cursor y Cline son agentes.</span><br>Urgentes: 2 · Para revisar: 1<br>2 proyectos revisados</p></section><section class="now" aria-labelledby="today-title"><div class="head"><div class="num" aria-hidden="true">2</div><div><p class="step">Lo que haces hoy</p><span class="hint">2 minutos</span></div><span class="line" aria-hidden="true"></span></div><div class="tbox"><h2 id="today-title">Impide que Claude Code lea fuera del proyecto en el que trabaja</h2><div class="lbl">Corrige este aviso</div><p class="tf">La llave maestra de tu base de datos de Supabase está al alcance de Claude Code<button type="button" class="i" aria-expanded="false" aria-controls="g3"><span aria-hidden="true">i</span><span class="vh">¿Qué es la llave maestra de Supabase?</span></button><span class="gl" id="g3" hidden><b>¿Qué es la llave maestra de Supabase?</b> La clave de Supabase pensada solo para servidores (service_role): se salta todas las reglas de seguridad de tu base de datos. No debería estar en tu ordenador salvo que sea imprescindible.</span></p><p class="imp">Con ella se puede leer, cambiar o borrar todo lo que guarda tu base de datos, saltándose todas sus protecciones. Ahora mismo Claude Code puede leerla desde cualquiera de tus 2 proyectos, y tiene una forma de enviarla fuera sin que nadie lo apruebe.<button type="button" class="i" aria-expanded="false" aria-controls="g4"><span aria-hidden="true">i</span><span class="vh">¿Qué es el modo «auto»?</span></button><span class="gl" id="g4" hidden><b>¿Qué es el modo «auto»?</b> Un modo de Claude Code en el que te pregunta mucho menos: las lecturas y las ediciones dentro del proyecto se aprueban solas, y casi todo lo demás lo decide otro modelo de IA. Desde la versión 2.1.283 es el modo con el que arranca si no has elegido otro.</span></p><div class="proj">Si haces esto, tu nota pasa de 30 a 32.</div><pre hidden>Edita el fichero %USERPROFILE%/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+{
+  &#34;permissions&#34;: {
+    &#34;blockReadsOutsideWorkingDirectories&#34;: true
+  }
+}</pre><button type="button" class="wide" data-copied="Copiado">Copiar instrucciones para Claude Code</button><span class="live" aria-live="polite"></span><p class="how">Pégalas en Claude Code. Te enseñará el cambio y te pedirá confirmación antes de hacerlo. Vuelve a ejecutar RosmarOps.</p><details class="manual"><summary><span class="chev" aria-hidden="true">›</span>Prefiero hacerlo a mano</summary><ol><li>Abre el fichero <code>~/.claude/settings.json</code> con el Bloc de notas.<button type="button" class="i" aria-expanded="false" aria-controls="g5"><span aria-hidden="true">i</span><span class="vh">¿Qué es settings.json?</span></button><span class="gl" id="g5" hidden><b>¿Qué es settings.json?</b> El fichero de ajustes de Claude Code en tu usuario. Ahí se decide qué puede hacer sin preguntarte.</span></li><li>Añade estas líneas dentro de lo que ya hay, sin borrar nada:<pre>{
+  &#34;permissions&#34;: {
+    &#34;blockReadsOutsideWorkingDirectories&#34;: true
+  }
+}</pre></li><li>Guárdalo y vuelve a ejecutar RosmarOps.</li></ol></details><p class="after">Después, Claude Code solo podrá leerla cuando trabajes dentro de a. Para eliminar el riesgo del todo, saca la clave de este ordenador y cámbiala en el proveedor.<button type="button" class="i" aria-expanded="false" aria-controls="g6"><span aria-hidden="true">i</span><span class="vh">¿Qué es un fichero .env?</span></button><span class="gl" id="g6" hidden><b>¿Qué es un fichero .env?</b> Un fichero donde cada proyecto guarda sus claves y contraseñas para funcionar. Suele quedar fuera de git, pero sigue en tu disco, y cualquier programa que lea tus ficheros puede leerlo.</span></p></div></section><section aria-labelledby="step3"><div class="head"><div class="num" aria-hidden="true">3</div><div><h2 class="step" id="step3">Lo que queda</h2><span class="hint">2 avisos, cuando tengas tiempo</span></div></div><div class="grp"><span class="dot" style="background:var(--redfill)"></span>Urgente</div><details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">Claude Code puede cambiar la configuración de Cursor</span><span class="x"></span></summary><div class="rb"><p>Si alguien engaña a Claude Code, puede dejar instalado en Cursor un programa que se ejecutará la próxima vez que lo abras, sin dejar rastro.<button type="button" class="i" aria-expanded="false" aria-controls="g7"><span aria-hidden="true">i</span><span class="vh">¿Qué es la configuración de un agente?</span></button><span class="gl" id="g7" hidden><b>¿Qué es la configuración de un agente?</b> El fichero donde un agente apunta qué herramientas extra arranca al abrirse (servidores MCP). Quien pueda escribir en él puede hacer que el agente ejecute un programa nuevo.</span></p><p class="gain">Si lo arreglas: 30 → 34</p><div class="fix"><div class="fix-t">Cómo arreglarlo</div><ol><li>Pulsa el botón para copiar las instrucciones.</li><li>Pégalas en Claude Code. Te enseñará el cambio y te pedirá confirmación antes de hacerlo.</li><li>Vuelve a ejecutar RosmarOps.</li></ol><pre>Edita el fichero %USERPROFILE%/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(//h/.cursor/mcp.json)&#34;
+    ]
+  }
+}</pre><button type="button" data-copied="Copiado">Copiar instrucciones para Claude Code</button><span class="live" aria-live="polite"></span><details class="manual"><summary><span class="chev" aria-hidden="true">›</span>Prefiero hacerlo a mano</summary><ol><li>Abre el fichero <code>~/.claude/settings.json</code> con el Bloc de notas.</li><li>Añade estas líneas dentro de lo que ya hay, sin borrar nada:<pre>{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(//h/.cursor/mcp.json)&#34;
+    ]
+  }
+}</pre></li><li>Guárdalo y vuelve a ejecutar RosmarOps.</li></ol></details><div class="after"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--grnfill)"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Esto reduce el riesgo pero no lo elimina: quedan otras vías. Tu nota no cambia hasta que el aviso desaparezca.</span></div></div><details class="tech"><summary>Detalles técnicos</summary><p>Dónde: <code>/h/.cursor/mcp.json</code> </p><p>Confianza media: un paso depende del clasificador del modo «auto», que es un modelo y no una persona.</p><ul><li>Depende de que el clasificador del modo «auto» permita el paso. El clasificador es un modelo, no una persona, y RosmarOps no puede prever qué decidirá.</li><li>Supone que el modo «auto» está disponible para tu cuenta y tu modelo; si no lo está, Claude Code arranca en modo manual.</li><li>Supone que usas el modo por defecto. El modo que eliges en la app o en el IDE no se guarda donde RosmarOps pueda leerlo.</li></ul></details></div></details><div class="grp"><span class="dot" style="background:var(--ambfill)"></span>Para revisar</div><details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">Claude Code puede reescribir sus propias instrucciones</span><span class="x"></span></summary><div class="rb"><p>Una sesión engañada puede esconder órdenes en tus 1 ficheros de instrucciones que obedecerán todas las sesiones siguientes.</p><p class="gain">Si lo arreglas: 30 → 31</p><div class="fix"><div class="fix-t">Cómo arreglarlo</div><ol><li>Pulsa el botón para copiar las instrucciones.</li><li>Pégalas en Claude Code. Te enseñará el cambio y te pedirá confirmación antes de hacerlo.</li><li>Vuelve a ejecutar RosmarOps.</li></ol><pre>Edita el fichero %USERPROFILE%/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(//src/a/CLAUDE.md)&#34;
+    ]
+  }
+}</pre><button type="button" data-copied="Copiado">Copiar instrucciones para Claude Code</button><span class="live" aria-live="polite"></span><details class="manual"><summary><span class="chev" aria-hidden="true">›</span>Prefiero hacerlo a mano</summary><ol><li>Abre el fichero <code>~/.claude/settings.json</code> con el Bloc de notas.</li><li>Añade estas líneas dentro de lo que ya hay, sin borrar nada:<pre>{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(//src/a/CLAUDE.md)&#34;
+    ]
+  }
+}</pre></li><li>Guárdalo y vuelve a ejecutar RosmarOps.</li></ol></details><div class="after"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--grnfill)"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Esto reduce el riesgo pero no lo elimina: quedan otras vías. Tu nota no cambia hasta que el aviso desaparezca.</span></div></div><details class="tech"><summary>Detalles técnicos</summary><p>Dónde: <code>/src/a/CLAUDE.md</code> </p><p>Confianza media: un paso depende del clasificador del modo «auto», que es un modelo y no una persona.</p><ul><li>Depende de que el clasificador del modo «auto» permita el paso. El clasificador es un modelo, no una persona, y RosmarOps no puede prever qué decidirá.</li><li>Supone que el modo «auto» está disponible para tu cuenta y tu modelo; si no lo está, Claude Code arranca en modo manual.</li><li>Supone que usas el modo por defecto. El modo que eliges en la app o en el IDE no se guarda donde RosmarOps pueda leerlo.</li></ul></details></div></details></section></div><div class="more"><div><h3>Memoria</h3><p>Es la primera ejecución: a partir de la próxima, aquí verás qué ha cambiado.</p></div><div><h3>Lo que no sabemos</h3><p>Damos por hecho que Claude Code funciona como dice su documentación, que se ejecuta con tu usuario y que ningún ajuste tuyo lo bloquea. Todo lo que depende del modo «auto» depende de su clasificador, que es otro modelo y no una persona: no podemos saber de antemano qué decidirá.</p></div><div><h3>Pásaselo a tu IA</h3><p>Si lo pegas en una IA en la nube, este texto sale de tu ordenador porque lo pegas tú. Incluye rutas y nombres de repos y de servicios. Nunca incluye secretos ni partes de ellos.</p><button type="button" class="b2" id="ai-copy" data-done="Copiado">Copiar para tu IA</button><span class="live" aria-live="polite"></span><button type="button" class="b2" id="ai-download" data-file="rosmarops-ai-2026-10-24.md">Descargar para tu IA</button><template id="ai-export">Ayúdame a resolver estos avisos uno por uno. Propón cada cambio y espera mi confirmación. No ejecutes nada por tu cuenta.
+
+RosmarOps es un auditor local de solo lectura: lee en reposo la configuración de los agentes de IA de este ordenador, no envía nada y no cambia nada.
+
+Nota de exposición de tus agentes · Claude Code · 30/100 (Expuesto) · 2 urgentes, 1 para revisar
+
+## Si solo haces una cosa hoy
+
+### La llave maestra de tu base de datos de Supabase está al alcance de Claude Code
+
+Con ella se puede leer, cambiar o borrar todo lo que guarda tu base de datos, saltándose todas sus protecciones. Ahora mismo Claude Code puede leerla desde cualquiera de tus 2 proyectos, y tiene una forma de enviarla fuera sin que nadie lo apruebe.
+
+Edita el fichero ~/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+```json
+{
+  &#34;permissions&#34;: {
+    &#34;blockReadsOutsideWorkingDirectories&#34;: true
+  }
+}
+```
+
+Después, Claude Code solo podrá leerla cuando trabajes dentro de a. Para eliminar el riesgo del todo, saca la clave de este ordenador y cámbiala en el proveedor.
+
+## Avisos
+
+### La llave maestra de tu base de datos de Supabase está al alcance de Claude Code
+
+Con ella se puede leer, cambiar o borrar todo lo que guarda tu base de datos, saltándose todas sus protecciones.
+
+Edita el fichero ~/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+```json
+{
+  &#34;permissions&#34;: {
+    &#34;blockReadsOutsideWorkingDirectories&#34;: true
+  }
+}
+```
+
+Después, Claude Code solo podrá leerla cuando trabajes dentro de a. Para eliminar el riesgo del todo, saca la clave de este ordenador y cámbiala en el proveedor.
+
+- `/src/a/dashboard/.env.local:4`
+
+### Claude Code puede cambiar la configuración de Cursor
+
+Si alguien engaña a Claude Code, puede dejar instalado en Cursor un programa que se ejecutará la próxima vez que lo abras, sin dejar rastro.
+
+Edita el fichero ~/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+```json
+{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(~/.cursor/mcp.json)&#34;
+    ]
+  }
+}
+```
+
+Esto reduce el riesgo pero no lo elimina: quedan otras vías. Tu nota no cambia hasta que el aviso desaparezca.
+
+- `~/.cursor/mcp.json`
+
+### Claude Code puede reescribir sus propias instrucciones
+
+Una sesión engañada puede esconder órdenes en tus 1 ficheros de instrucciones que obedecerán todas las sesiones siguientes.
+
+Edita el fichero ~/.claude/settings.json y fusiona este contenido con lo que ya tiene, sin borrar nada. Enséñame el cambio antes de guardar.
+
+```json
+{
+  &#34;permissions&#34;: {
+    &#34;ask&#34;: [
+      &#34;Edit(//src/a/CLAUDE.md)&#34;
+    ]
+  }
+}
+```
+
+Esto reduce el riesgo pero no lo elimina: quedan otras vías. Tu nota no cambia hasta que el aviso desaparezca.
+
+- `/src/a/CLAUDE.md`
+
+Damos por hecho que Claude Code funciona como dice su documentación, que se ejecuta con tu usuario y que ningún ajuste tuyo lo bloquea. Todo lo que depende del modo «auto» depende de su clasificador, que es otro modelo y no una persona: no podemos saber de antemano qué decidirá.
+
+RosmarOps no ve: los agentes que aún no evalúa, lo que hacen los agentes mientras se ejecutan, lo que hace por dentro una herramienta MCP ni el almacén de credenciales de Windows.
+</template></div><div><h3>Compártelo</h3><p>La tarjeta solo lleva la nota, el tramo, los recuentos, la fecha y la versión del método. No se envía nada.</p><button type="button" class="b2" id="card-button" data-svg="rosmarops-card-2026-10-24.svg" data-txt="rosmarops-card-2026-10-24.txt">Guardar mi tarjeta</button><template id="card-svg"><svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#131311"/><rect width="1200" height="12" fill="#FF6A4D"/><text x="72" y="120" font-family="system-ui, sans-serif" font-size="32" font-weight="700" fill="#A3A098">Nota de exposición de tus agentes</text><text x="72" y="180" font-family="system-ui, sans-serif" font-size="40" font-weight="600" fill="#EDEBE6">Claude Code</text><text x="72" y="400" font-family="system-ui, sans-serif" font-size="220" font-weight="800" fill="#FF6A4D">30</text><text x="352" y="400" font-family="system-ui, sans-serif" font-size="64" font-weight="600" fill="#A3A098">/100</text><text x="72" y="480" font-family="system-ui, sans-serif" font-size="44" font-weight="700" fill="#FF6A4D">Expuesto</text><text x="72" y="540" font-family="system-ui, sans-serif" font-size="30" font-weight="400" fill="#EDEBE6">2 urgentes, 1 para revisar</text><text x="72" y="590" font-family="system-ui, sans-serif" font-size="26" fill="#A3A098">24 OCT 2026 · método: rosmarops index v2</text></svg></template><template id="card-txt">Nota de exposición de tus agentes · Claude Code · 30/100 (Expuesto) · 2 urgentes, 1 para revisar · 24 OCT 2026 · método: rosmarops index v2</template></div></div><p class="foot">Cursor: aún sin evaluar · Las comprobaciones antiguas están en el informe técnico: report-2026-10-25__RED__2R-1Y.md</p></main><script>document.querySelectorAll('button[data-copied]').forEach(function(b){b.addEventListener('click',function(){var p=b.previousElementSibling;var l=b.nextElementSibling;function sel(){var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}try{navigator.clipboard.writeText(p.innerText).then(function(){l.textContent=b.dataset.copied;setTimeout(function(){l.textContent=''},1500)},sel)}catch(e){sel()}})});
+var cb=document.getElementById('card-button');
+function save(c,type,name){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
+if(cb){cb.addEventListener('click',function(){save(document.getElementById('card-svg').innerHTML,'image/svg+xml',cb.dataset.svg);save(document.getElementById('card-txt').content.textContent,'text/plain',cb.dataset.txt)})}
+var ac=document.getElementById('ai-copy'),ad=document.getElementById('ai-download');
+function aiText(){return document.getElementById('ai-export').content.textContent}
+function aiSave(){save(aiText(),'text/markdown',ad.dataset.file)}
+if(ad){ad.addEventListener('click',aiSave)}
+if(ac){ac.addEventListener('click',function(){var l=ac.nextElementSibling;try{navigator.clipboard.writeText(aiText()).then(function(){l.textContent=ac.dataset.done;setTimeout(function(){l.textContent=''},1500)},aiSave)}catch(e){aiSave()}})}
+document.querySelectorAll('button.i').forEach(function(b){b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();var g=document.getElementById(b.getAttribute('aria-controls'));var open=b.getAttribute('aria-expanded')==='true';b.setAttribute('aria-expanded',open?'false':'true');g.hidden=open})});</script></body></html>

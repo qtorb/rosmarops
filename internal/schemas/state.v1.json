@@ -1,0 +1,179 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/state.v1.json",
+  "title": "RosmarOps — State",
+  "description": "Persisted state between runs. Owned by RosmarOps. Not intended for hand-editing. Used as the baseline for drift detection.",
+  "type": "object",
+  "required": ["schema_version", "engine_version", "last_run", "integrity", "baselines"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "engine_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?$",
+      "description": "SemVer of the RosmarOps binary that produced this state."
+    },
+    "last_run":        { "type": "string", "format": "date-time" },
+    "last_run_status": {
+      "type": "string",
+      "enum": ["green", "yellow", "red", "error"]
+    },
+    "consecutive_green": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Resets to 0 on any non-green run. After 3+, rosmarops suggests biweekly cadence."
+    },
+    "integrity": {
+      "type": "object",
+      "required": ["vigil_binary_sha256", "config_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "vigil_binary_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Hash of the RosmarOps binary as of the last `rosmarops baseline`."
+        },
+        "config_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Hash of rosmarops.config.json as of the last successful run."
+        }
+      }
+    },
+    "baselines": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vscode_extensions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "version"],
+            "additionalProperties": false,
+            "properties": {
+              "id":         { "type": "string" },
+              "version":    { "type": "string" },
+              "first_seen": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "vscode_settings_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "mcp_servers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["client", "name", "command_sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "client":         { "type": "string", "description": "AI coding agent / MCP host. Examples: claude-code, cline, cursor, continue, aider, claude-desktop." },
+              "name":           { "type": "string" },
+              "command_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "SHA-256 of the concatenated (command + args + env keys)."
+              },
+              "first_seen":     { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": false,
+            "properties": {
+              "path": { "type": "string" },
+              "package_sets_sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "SHA-256 of the canonicalized set of {package_name}@{version} strings across all manifest files in the repo."
+              },
+              "workflow_files": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["path", "sha256"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "path":   { "type": "string" },
+                    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                  }
+                }
+              },
+              "hooks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "sha256"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "name":   { "type": "string", "description": "Hook filename (pre-commit, post-checkout, …)" },
+                    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                  }
+                }
+              },
+              "core_hooks_path": {
+                "type": "string",
+                "description": "Value of git config core.hooksPath at baseline, if non-default."
+              }
+            }
+          }
+        },
+        "shell_profile_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "PowerShell $PROFILE on Windows. ~/.zshrc or ~/.bashrc on Unix."
+        },
+        "av_exclusions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "value"],
+            "additionalProperties": false,
+            "properties": {
+              "kind":  { "type": "string", "enum": ["path", "process", "extension"] },
+              "value": { "type": "string" }
+            }
+          }
+        },
+        "global_packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["manager", "name", "version"],
+            "additionalProperties": false,
+            "properties": {
+              "manager": { "type": "string", "enum": ["npm", "pnpm", "pip", "cargo", "go"] },
+              "name":    { "type": "string" },
+              "version": { "type": "string" }
+            }
+          }
+        },
+        "scheduled_tasks": {
+          "type": "array",
+          "description": "Baseline of OS scheduled tasks: Windows Task Scheduler, macOS launchd, Linux systemd/cron.",
+          "items": {
+            "type": "object",
+            "required": ["name", "sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "name":   { "type": "string" },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "SHA-256 of the canonical task definition."
+              }
+            }
+          }
+        },
+        "npmrc_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Hash of ~/.npmrc for registry override detection."
+        }
+      }
+    }
+  }
+}

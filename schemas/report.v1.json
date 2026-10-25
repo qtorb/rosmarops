@@ -1,0 +1,278 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/report.v1.json",
+  "title": "RosmarOps — Report",
+  "description": "Machine-readable sidecar to the Markdown report. Designed so the v0.4 local web viewer can consume it without schema changes.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "engine_version",
+    "generated_at",
+    "platform",
+    "header",
+    "findings",
+    "summary"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "engine_version": { "type": "string" },
+    "generated_at":   { "type": "string", "format": "date-time" },
+
+    "platform": {
+      "type": "object",
+      "required": ["os", "arch"],
+      "additionalProperties": false,
+      "properties": {
+        "os":   { "type": "string", "enum": ["windows", "macos", "linux"] },
+        "arch": { "type": "string", "enum": ["amd64", "arm64"] },
+        "hostname_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of the local hostname. Local hint to spot multi-machine confusion. Not used for identification or telemetry."
+        }
+      }
+    },
+
+    "header": {
+      "type": "object",
+      "required": [
+        "status",
+        "counts",
+        "repos_scanned",
+        "repos_failed",
+        "consecutive_green"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["green", "yellow", "red"],
+          "description": "Overall report status. Reducer: any red -> red; else any yellow or any scan error -> yellow; else green."
+        },
+        "counts": {
+          "type": "object",
+          "required": ["red", "yellow", "info", "allow_listed_this_run"],
+          "additionalProperties": false,
+          "properties": {
+            "red":                   { "type": "integer", "minimum": 0 },
+            "yellow":                { "type": "integer", "minimum": 0 },
+            "info":                  { "type": "integer", "minimum": 0 },
+            "new_since_last":        { "type": "integer", "minimum": 0 },
+            "allow_listed_this_run": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Findings suppressed this run by an allow-list entry. Always present (0 when nothing was suppressed)."
+            }
+          }
+        },
+        "repos_scanned":     { "type": "integer", "minimum": 0 },
+        "repos_failed":      { "type": "integer", "minimum": 0 },
+        "consecutive_green": { "type": "integer", "minimum": 0 },
+        "scan_duration_seconds": { "type": "number", "minimum": 0 },
+        "cadence_recommendation": {
+          "type": "string",
+          "enum": ["keep_weekly", "consider_biweekly"],
+          "description": "consider_biweekly after 3+ consecutive greens."
+        }
+      }
+    },
+
+    "findings": {
+      "type": "array",
+      "description": "All findings. Ordered: red first, then yellow, then info. Within a severity, ordered by category, then by id.",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+
+    "summary": {
+      "type": "object",
+      "required": ["by_category", "top_reds", "top_yellows"],
+      "additionalProperties": false,
+      "properties": {
+        "by_category": {
+          "type": "object",
+          "description": "Counts per category. Keys must match a value of findings[].category.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "red":    { "type": "integer", "minimum": 0 },
+              "yellow": { "type": "integer", "minimum": 0 },
+              "info":   { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "top_reds": {
+          "type": "array",
+          "maxItems": 5,
+          "description": "Finding IDs surfaced in the Markdown header. Noise budget: max 5.",
+          "items": { "type": "string" }
+        },
+        "top_yellows": {
+          "type": "array",
+          "maxItems": 10,
+          "description": "Finding IDs surfaced in the Markdown header. Noise budget: max 10.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "path":              { "type": "string" },
+          "branch":            { "type": "string" },
+          "status":            { "type": "string", "enum": ["ok", "error", "skipped", "timeout"] },
+          "uncommitted_files": { "type": "integer", "minimum": 0 },
+          "error_message":     { "type": "string" }
+        }
+      }
+    },
+
+    "errors": {
+      "type": "array",
+      "description": "Non-fatal scan errors. If this array is non-empty, header.status MUST NOT be green (fail-secure invariant).",
+      "items": {
+        "type": "object",
+        "required": ["scope", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "scope":   { "type": "string", "description": "e.g. 'repo:C:/Users/x/proj', 'mcp:cline', 'platform:defender'" },
+          "message": { "type": "string" }
+        }
+      }
+    },
+
+    "delta": {
+      "type": "object",
+      "description": "What changed since the previous report. Drives the 'new since last' count.",
+      "additionalProperties": false,
+      "properties": {
+        "previous_report_at":    { "type": "string", "format": "date-time" },
+        "added_finding_ids":     { "type": "array", "items": { "type": "string" } },
+        "resolved_finding_ids":  { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "id",
+        "severity",
+        "category",
+        "title",
+        "why_it_matters",
+        "suggested_action",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z_]+:[a-f0-9]{16,64}$",
+          "description": "Stable identifier across runs. Format: <category>:<sha256-prefix-of-evidence>. Lets the report engine compute delta."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["red", "yellow", "info"]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "secret_tracked_file",
+            "secret_in_history",
+            "env_tracked",
+            "private_key_detected",
+            "workflow_dangerous_pattern",
+            "workflow_new_or_modified",
+            "git_hook_with_network",
+            "git_hook_new_or_modified",
+            "core_hooks_path_redirected",
+            "vscode_extension_new",
+            "vscode_workspace_trust_disabled",
+            "vscode_terminal_env_secret",
+            "vscode_settings_modified",
+            "mcp_server_new",
+            "mcp_server_user_writable_command",
+            "mcp_server_modified",
+            "dependency_added",
+            "dependency_lifecycle_script_network",
+            "dependency_lifecycle_script_new",
+            "shell_profile_modified",
+            "av_exclusion_new",
+            "scheduled_task_new",
+            "global_package_new",
+            "npm_registry_non_standard",
+            "git_alias_with_shell",
+            "suspicious_script_unexpected_location",
+            "uncommitted_changes_above_threshold",
+            "config_hash_changed",
+            "binary_hash_changed",
+            "scan_error",
+            "scan_timeout"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short human-readable headline. One line, ideally < 80 chars."
+        },
+        "evidence": {
+          "type": "object",
+          "description": "Where/what was observed. Fields used depend on category. Never contains a full secret value.",
+          "additionalProperties": false,
+          "properties": {
+            "file":           { "type": "string" },
+            "line":           { "type": "integer", "minimum": 1 },
+            "redacted_preview": {
+              "type": "string",
+              "description": "For secret-related categories. Format: 4 chars + ' ... ' + 4 chars. The middle is never the original."
+            },
+            "repo_path":       { "type": "string" },
+            "extension_id":    { "type": "string" },
+            "package_name":    { "type": "string" },
+            "package_version": { "type": "string" },
+            "mcp_server":      { "type": "string" },
+            "mcp_client":      { "type": "string" },
+            "command":         { "type": "string" },
+            "commit_sha":      { "type": "string" },
+            "previous_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "current_sha256":  { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "extra":           { "type": "object", "description": "Free-form additional context. UI may render or hide." }
+          }
+        },
+        "why_it_matters": {
+          "type": "string",
+          "minLength": 10,
+          "description": "One to three sentences explaining the risk in plain language. Reused across findings of the same category but customizable per case."
+        },
+        "suggested_action": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Concrete next step in imperative voice. Should be actionable in <5 minutes when possible."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low"],
+          "description": "RosmarOps's confidence this is a true positive. Used by the viewer for sorting and color intensity."
+        },
+        "first_seen": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this finding (by id) first appeared in any report."
+        },
+        "is_new_since_last": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if this finding ID was not present in the immediately previous report."
+        }
+      }
+    }
+  }
+}

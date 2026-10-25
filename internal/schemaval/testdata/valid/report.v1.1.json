@@ -1,0 +1,375 @@
+{
+  "schema_version": 1,
+  "engine_version": "0.1.0-dev",
+  "generated_at": "2026-10-25T10:26:25Z",
+  "platform": {
+    "os": "linux",
+    "arch": "amd64"
+  },
+  "header": {
+    "status": "red",
+    "counts": {
+      "red": 2,
+      "yellow": 16,
+      "info": 0,
+      "allow_listed_this_run": 0
+    },
+    "repos_scanned": 0,
+    "repos_failed": 0,
+    "consecutive_green": 0,
+    "scan_duration_seconds": 0.032046588
+  },
+  "findings": [
+    {
+      "id": "secret_in_history:6fd65bfb0fbdf58e",
+      "severity": "red",
+      "category": "secret_in_history",
+      "title": "Secret in git history: Database URL with embedded credentials (232bb6a5)",
+      "evidence": {
+        "redacted_preview": "DATA ... ass@",
+        "repo_path": "/home/dev/src/api-backend",
+        "commit_sha": "232bb6a5030b6dffee882858c1420c6e2952289e"
+      },
+      "why_it_matters": "A secret credential was found in a commit that is part of this repository's history. Anyone with read access to the repository can retrieve it using standard git commands, regardless of whether the file has since been modified or deleted. Rotating the secret without cleaning history leaves the old credential exposed indefinitely.",
+      "suggested_action": "Revoke and rotate the credential immediately — assume it is compromised. Clean the commit from history using `git filter-repo` (preferred over the deprecated `git filter-branch`). Force-push the cleaned history to all remotes and coordinate with collaborators to re-clone or rebase. Once confirmed rotated, add an entry under `allow_list.secrets_in_history` in rosmarops.config.json with `pattern_type`, `commit_sha`, and a note confirming the rotation; future runs will silently accept it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "secret_tracked:330c7e8ecd68130b",
+      "severity": "red",
+      "category": "secret_tracked_file",
+      "title": "Secret in tracked file: .env.example (Database URL with embedded credentials)",
+      "evidence": {
+        "file": ".env.example",
+        "redacted_preview": "DATA ... ass@",
+        "repo_path": "/home/dev/src/api-backend"
+      },
+      "why_it_matters": "A secret credential was found in a file that is currently tracked by git. Even if the file is later removed, the credential remains in the repository's history and can be extracted by anyone with read access to the repository — including future collaborators, forks, and hosted services.",
+      "suggested_action": "Revoke and rotate the credential immediately — assume it is compromised. Remove the secret from the file and purge it from git history using `git filter-repo` (preferred) or BFG Repo-Cleaner. Then add the file or pattern to .gitignore to prevent future accidental commits. Deleting the file in a new commit is not sufficient; the credential is still accessible in the old commit.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:018da2dcdfd08b0f",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: nodemon@3.1.14",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "nodemon",
+          "package_version": "3.1.14"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:15b626dad59deb4a",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: @anthropic-ai/claude-code@2.1.42",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "@anthropic-ai/claude-code",
+          "package_version": "2.1.42"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:1d41a3552c554339",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: playwright@1.56.1",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "playwright",
+          "package_version": "1.56.1"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:2e950e78f2513ecc",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: yarn@1.22.22",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "yarn",
+          "package_version": "1.22.22"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:421604c98542c03a",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: eslint@10.1.0",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "eslint",
+          "package_version": "10.1.0"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:48ef094bc07f7f24",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: prettier@3.8.1",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "prettier",
+          "package_version": "3.8.1"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:5d02d1d8253a6a66",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: npm@10.9.4",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "npm",
+          "package_version": "10.9.4"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:5d7ecb239150e6b4",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: chromedriver@147.0.0",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "chromedriver",
+          "package_version": "147.0.0"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:666031a4d0947047",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: http-server@14.1.1",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "http-server",
+          "package_version": "14.1.1"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:7ebf15d1a53a7fcf",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: corepack@0.34.0",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "corepack",
+          "package_version": "0.34.0"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:8493630ee151f233",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: pnpm@10.28.0",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "pnpm",
+          "package_version": "10.28.0"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:9b49e36cb45bdf9b",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: typescript@6.0.2",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "typescript",
+          "package_version": "6.0.2"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:bd6c507250dea7e0",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: docx@9.7.1",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "docx",
+          "package_version": "9.7.1"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:d11dd6264bdf0843",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: serve@14.2.6",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "serve",
+          "package_version": "14.2.6"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "global_package_new:d25d0c16c131ce3b",
+      "severity": "yellow",
+      "category": "global_package_new",
+      "title": "New global npm package: ts-node@10.9.2",
+      "evidence": {
+        "extra": {
+          "package_manager": "npm",
+          "package_name": "ts-node",
+          "package_version": "10.9.2"
+        }
+      },
+      "why_it_matters": "A globally-installed npm or pnpm package appeared that was not in your baseline. Global packages run with your user privileges and are implicitly available to every project on your machine without appearing in any project's package.json. A compromised or malicious global package can intercept build steps, inject code into outputs, or exfiltrate credentials from any project that shares your PATH.",
+      "suggested_action": "Confirm you installed this package intentionally. If yes, add an entry under `allow_list.global_packages` in rosmarops.config.json with the package name as `id` and a note explaining why it is installed globally; future runs will silently accept it. If you did not install it, remove it immediately with `npm uninstall -g \u003cname\u003e` and investigate what installed it.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    },
+    {
+      "id": "mcp_server_new:51c37bd94e3d3457",
+      "severity": "yellow",
+      "category": "mcp_server_new",
+      "title": "New MCP server configured: cursor/fs",
+      "evidence": {
+        "file": "/home/dev/home/.cursor/mcp.json",
+        "mcp_server": "fs",
+        "mcp_client": "cursor",
+        "command": "npx"
+      },
+      "why_it_matters": "MCP servers run inside your AI agent's process and can read files, execute shell commands, and make network calls on your behalf. A server that appeared without a deliberate configuration change may indicate an MCP config injection attack, a supply-chain compromise in a tool you installed, or unauthorized access to your machine.",
+      "suggested_action": "Confirm you configured this MCP server intentionally. If yes, add an entry under `allow_list.mcp_servers` in your rosmarops.config.json with `id` set to `\u003cclient\u003e:\u003cname\u003e` and a brief note; future runs will silently accept it. If no, remove the server entry from the config file immediately, then audit how it appeared.",
+      "confidence": "high",
+      "first_seen": "2026-10-25T10:26:25Z",
+      "is_new_since_last": true
+    }
+  ],
+  "summary": {
+    "by_category": {
+      "global_package_new": {
+        "yellow": 15
+      },
+      "mcp_server_new": {
+        "yellow": 1
+      },
+      "secret_in_history": {
+        "red": 1
+      },
+      "secret_tracked": {
+        "red": 1
+      }
+    },
+    "top_reds": [
+      "secret_in_history:6fd65bfb0fbdf58e",
+      "secret_tracked:330c7e8ecd68130b"
+    ],
+    "top_yellows": [
+      "global_package_new:018da2dcdfd08b0f",
+      "global_package_new:15b626dad59deb4a",
+      "global_package_new:1d41a3552c554339",
+      "global_package_new:2e950e78f2513ecc",
+      "global_package_new:421604c98542c03a",
+      "global_package_new:48ef094bc07f7f24",
+      "global_package_new:5d02d1d8253a6a66",
+      "global_package_new:5d7ecb239150e6b4",
+      "global_package_new:666031a4d0947047",
+      "global_package_new:7ebf15d1a53a7fcf"
+    ]
+  }
+}

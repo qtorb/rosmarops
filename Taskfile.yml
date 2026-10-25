@@ -1,0 +1,59 @@
+version: '3'
+
+# RosmarOps — task runner (https://taskfile.dev)
+# Requires: Go 1.22+, gofumpt, staticcheck (install via `go install`)
+#   go install mvdan.cc/gofumpt@latest
+#   go install honnef.co/go/tools/cmd/staticcheck@latest
+# Ensure $GOPATH/bin (default: ~/go/bin) is in your PATH.
+
+vars:
+  BINARY: rosmarops
+  CMD_PATH: ./cmd/rosmarops
+
+tasks:
+  build:
+    desc: Compile the rosmarops binary
+    cmds:
+      - go build -o {{.BINARY}}{{exeExt}} {{.CMD_PATH}}
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  vet:
+    desc: Run go vet on all packages
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Check formatting with gofumpt (exits non-zero if any file needs formatting)
+    cmds:
+      - gofumpt -l -d .
+
+  fmt-write:
+    desc: Apply gofumpt formatting in-place
+    cmds:
+      - gofumpt -w .
+
+  lint:
+    desc: Run staticcheck on all packages
+    cmds:
+      - staticcheck ./...
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - cmd: del /f rosmarops.exe 2>nul & exit 0
+        platforms: [windows]
+      - cmd: rm -f rosmarops
+        platforms: [linux, darwin]
+
+  check-schemas:
+    desc: Verify that schemas/ and internal/schemas/ copies are byte-identical (exit 1 if they diverge)
+    cmds:
+      - go test ./tests/unit/ -run TestSchemasInSync -v
+
+  ci:
+    desc: Full CI gate — vet, fmt check, lint, test, schema sync check
+    deps: [vet, fmt, lint, test, check-schemas]

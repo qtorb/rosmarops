@@ -1,0 +1,423 @@
+{
+  "product": "claude-code",
+  "version": "2026-10-24",
+  "entries": [
+    {
+      "id": "read_in_working_dirs",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "working_directories",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23"
+    },
+    {
+      "id": "read_outside_working_dirs",
+      "type": "read_files",
+      "approval": "ask",
+      "target_scope": "outside_working_directories",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23"
+    },
+    {
+      "id": "shell_readonly_bash_commands",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "builtin_read_only_bash_commands",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23; any path; restricted only by permissions.blockReadsOutsideWorkingDirectories"
+    },
+    {
+      "id": "shell_default",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23; observed locally 2026-10-23, v2.1.309, manual mode: PowerShell Get-Content outside the working directory asked for permission"
+    },
+    {
+      "id": "edit_default",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23"
+    },
+    {
+      "id": "webfetch_preapproved_domains",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "preapproved_documentation_domains",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23"
+    },
+    {
+      "id": "web_default",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-23"
+    },
+    {
+      "id": "builtin_default_mode",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "auto",
+      "source_url": "https://code.claude.com/docs/en/permission-modes",
+      "verified": "doc 2026-10-24: \"With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions\""
+    },
+    {
+      "id": "protected_paths",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "protected_paths",
+      "source_url": "https://code.claude.com/docs/en/permission-modes#protected-paths",
+      "verified": "doc 2026-10-24; not statically checkable, not listed: a directory loaded with --plugin-dir, the plansDirectory exception, and the target of a settings file that is a symbolic link",
+      "paths": [
+        ".git/",
+        ".config/git/",
+        ".vscode/",
+        ".idea/",
+        ".husky/",
+        ".cargo/",
+        ".devcontainer/",
+        ".yarn/",
+        ".mvn/",
+        ".claude/",
+        "~/.claude/dev-mods/",
+        ".gitconfig",
+        ".gitmodules",
+        ".bashrc",
+        ".bash_profile",
+        ".bash_login",
+        ".bash_aliases",
+        ".bash_logout",
+        ".zshrc",
+        ".zprofile",
+        ".zshenv",
+        ".zlogin",
+        ".zlogout",
+        ".profile",
+        ".envrc",
+        ".npmrc",
+        ".yarnrc",
+        ".yarnrc.yml",
+        ".pnp.cjs",
+        ".pnp.loader.mjs",
+        ".pnpmfile.cjs",
+        "bunfig.toml",
+        ".bunfig.toml",
+        ".bazelrc",
+        ".bazelversion",
+        ".bazeliskrc",
+        ".pre-commit-config.yaml",
+        "lefthook.yml",
+        "lefthook.yaml",
+        ".lefthook.yml",
+        ".lefthook.yaml",
+        "gradle-wrapper.properties",
+        "maven-wrapper.properties",
+        ".devcontainer.json",
+        ".ripgreprc",
+        "pyrightconfig.json",
+        ".mcp.json",
+        ".claude.json"
+      ],
+      "exceptions": [
+        ".claude/worktrees/",
+        "~/.claude/plans/",
+        "~/.claude/jobs/<id>/tmp/",
+        "~/.claude/projects/<project>/memory/*.md",
+        ".claude/agent-memory/*.md"
+      ]
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "ask_edit_rule",
+      "setting": "permissions.ask",
+      "rule_tool": "Edit",
+      "completeness": "by_cuts",
+      "cuts": [
+        "mode_accept_edits",
+        "edit_allow"
+      ],
+      "narrows": [
+        "mode_auto",
+        "mode_bypass",
+        "shell_allow"
+      ],
+      "magnitude": 1,
+      "source_url": "https://code.claude.com/docs/en/permission-modes#actions-no-mode-auto-approves",
+      "verified": "doc 2026-10-24: \"Claude Code doesn't auto-approve the following in any mode, including `bypassPermissions`\" ... \"Tools matched by an explicit ask rule\"; permissions: \"`Edit` rules apply to all built-in tools that edit files.\""
+    },
+    {
+      "id": "ask_read_rule",
+      "setting": "permissions.ask",
+      "rule_tool": "Read",
+      "completeness": "partial",
+      "cuts": [
+        "file_tools"
+      ],
+      "narrows": [
+        "bash_read_only",
+        "mode_auto",
+        "mode_bypass"
+      ],
+      "magnitude": 1,
+      "source_url": "https://code.claude.com/docs/en/permissions#read-and-edit",
+      "verified": "doc 2026-10-24: \"Read and Edit deny rules apply to Claude's built-in file tools, to file commands Claude Code recognizes in Bash, such as `cat`, `head`, `tail`, `sed`, and `tee` ... They don't apply to a command that reads files without naming them, such as `grep -r pattern .`\""
+    },
+    {
+      "id": "block_reads_outside",
+      "setting": "permissions.blockReadsOutsideWorkingDirectories",
+      "value": "true",
+      "completeness": "radius_only",
+      "cuts": [],
+      "narrows": [
+        "bash_read_only",
+        "mode_bypass"
+      ],
+      "magnitude": 2,
+      "source_url": "https://code.claude.com/docs/en/permissions",
+      "verified": "doc 2026-10-24: \"Set `permissions.blockReadsOutsideWorkingDirectories` to make the file tools refuse the paths it fences in every permission mode.\"; permission-modes: \"recognized file-reading Bash commands prompt even in auto mode and `bypassPermissions` mode\""
+    },
+    {
+      "id": "manual_default_mode",
+      "setting": "permissions.defaultMode",
+      "value": "\"default\"",
+      "completeness": "by_cuts",
+      "cuts": [
+        "mode_auto",
+        "mode_bypass",
+        "egress_auto",
+        "egress_bypass"
+      ],
+      "narrows": [],
+      "magnitude": 3,
+      "source_url": "https://code.claude.com/docs/en/permission-modes",
+      "verified": "doc 2026-10-24: \"Every terminal session you start on this machine | Set `permissions.defaultMode` in `~/.claude/settings.json`\"; \"Its config value is `default`\""
+    },
+    {
+      "id": "remove_from_disk",
+      "setting": "credential_file",
+      "completeness": "by_cuts",
+      "cuts": [
+        "any_reach"
+      ],
+      "narrows": [],
+      "magnitude": 3,
+      "source_url": "https://code.claude.com/docs/en/permissions#read-and-edit",
+      "verified": "not a setting: a credential no longer on disk is no longer read; RosmarOps lists the locations and changes nothing"
+    }
+  ],
+  "code_launchers": [
+    {
+      "family": "second_shell",
+      "program": "cmd",
+      "form": "cmd /c",
+      "options": [
+        "/c"
+      ],
+      "source_url": "https://github.com/MicrosoftDocs/windowsserverdocs/blob/0f5dbfad59cfb66e3dfb348e29f94cb479ed7256/WindowsServerDocs/administration/windows-commands/cmd.md",
+      "verified": "vendor doc, commit 0f5dbfad: \"| /c | Carries out the command specified by `<string>` and then exits the command processor. |\""
+    },
+    {
+      "family": "second_shell",
+      "program": "powershell",
+      "form": "powershell -Command",
+      "options": [
+        "-Command"
+      ],
+      "source_url": "https://github.com/MicrosoftDocs/PowerShell-Docs/blob/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/5.1/Microsoft.PowerShell.Core/About/about_PowerShell_exe.md",
+      "verified": "vendor doc, commit a3de8f22: \"A string passed to **Command** is still executed as PowerShell code\""
+    },
+    {
+      "family": "second_shell",
+      "program": "powershell",
+      "form": "powershell -EncodedCommand",
+      "options": [
+        "-EncodedCommand"
+      ],
+      "source_url": "https://github.com/MicrosoftDocs/PowerShell-Docs/blob/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/5.1/Microsoft.PowerShell.Core/About/about_PowerShell_exe.md",
+      "verified": "vendor doc, commit a3de8f22: \"Accepts a base-64-encoded string version of a command.\""
+    },
+    {
+      "family": "second_shell",
+      "program": "pwsh",
+      "form": "pwsh -Command / -c",
+      "options": [
+        "-Command",
+        "-c"
+      ],
+      "source_url": "https://github.com/MicrosoftDocs/PowerShell-Docs/blob/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+      "verified": "vendor doc, commit a3de8f22: \"### -Command | -c\" ... \"all arguments following it are interpreted as part of the command to execute.\""
+    },
+    {
+      "family": "second_shell",
+      "program": "pwsh",
+      "form": "pwsh -EncodedCommand / -e / -ec",
+      "options": [
+        "-EncodedCommand",
+        "-e",
+        "-ec"
+      ],
+      "source_url": "https://github.com/MicrosoftDocs/PowerShell-Docs/blob/a3de8f22552170e70852470d46cd52cd9ca471ec/reference/7.5/Microsoft.PowerShell.Core/About/about_Pwsh.md",
+      "verified": "vendor doc, commit a3de8f22: \"### -EncodedCommand | -e | -ec\""
+    },
+    {
+      "family": "inline_code",
+      "program": "node",
+      "form": "node -e / --eval",
+      "options": [
+        "-e",
+        "--eval"
+      ],
+      "source_url": "https://nodejs.org/api/cli.html",
+      "verified": "doc v26.12.1, 2026-10-24: \"-e, --eval \\\"script\\\"\" ... \"Evaluate the following argument as JavaScript.\""
+    },
+    {
+      "family": "inline_code",
+      "program": "node",
+      "form": "node -p / --print",
+      "options": [
+        "-p",
+        "--print"
+      ],
+      "source_url": "https://nodejs.org/api/cli.html",
+      "verified": "doc v26.12.1, 2026-10-24: \"-p, --print \\\"script\\\"\" ... \"Identical to -e but prints the result.\""
+    },
+    {
+      "family": "inline_code",
+      "program": "python",
+      "form": "python -c",
+      "options": [
+        "-c"
+      ],
+      "source_url": "https://github.com/python/cpython/blob/94d16d2e13baaab2d15e94993e818a1de4c8e171/Doc/using/cmdline.rst",
+      "verified": "vendor doc, commit 94d16d2e: \".. option:: -c <command>\" ... \"Execute the Python code in *command*.\""
+    },
+    {
+      "family": "inline_code",
+      "program": "python3",
+      "form": "python3 -c",
+      "options": [
+        "-c"
+      ],
+      "source_url": "https://github.com/python/cpython/blob/94d16d2e13baaab2d15e94993e818a1de4c8e171/Doc/using/windows.rst",
+      "verified": "vendor doc, commit 94d16d2e: \"A ``python3`` command is also included that mimics the ``python`` command.\""
+    },
+    {
+      "family": "inline_code",
+      "program": "py",
+      "form": "py -c",
+      "options": [
+        "-c"
+      ],
+      "source_url": "https://github.com/python/cpython/blob/94d16d2e13baaab2d15e94993e818a1de4c8e171/Doc/using/windows.rst",
+      "verified": "vendor doc, commit 94d16d2e: \"To launch your default runtime, run ``python`` or ``py`` with the arguments you want to be passed to the runtime\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx *",
+      "source_url": "https://code.claude.com/docs/en/permissions#wrappers",
+      "verified": "doc 2026-10-24: \"Development environment runners such as `direnv exec`, `devbox run`, `mise exec`, `npx`, and `docker exec` are not in the list. Because these tools execute their arguments as a command, a rule like `Bash(devbox run *)` matches whatever comes after `run`, including `devbox run rm -rf .`\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx tsx *",
+      "package": "tsx",
+      "source_url": "https://github.com/privatenumber/tsx/blob/4473971f4b3261de253209b148d8fdc43269fcc4/docs/node-enhancement.md",
+      "verified": "vendor doc, commit 4473971f: \"`tsx` is a drop-in replacement for `node`, meaning you can use it the exact same way (supports all command-line flags)\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx ts-node *",
+      "package": "ts-node",
+      "source_url": "https://github.com/TypeStrong/ts-node/blob/ddb05ef23be92a90c3ecac5a0220435c65ebbd2a/README.md",
+      "verified": "vendor README, commit ddb05ef2: \"`ts-node` supports `--print` (`-p`), `--eval` (`-e`), `--require` (`-r`) and `--interactive` (`-i`) similar to the node.js CLI\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx node *",
+      "package": "node",
+      "source_url": "https://github.com/aredridel/node-bin-gen/blob/1be0e894cec7780863de5fc52257b34ab67ac6cb/README.md",
+      "verified": "vendor README, commit 1be0e894 (npm package node, repository aredridel/node-bin-gen): \"This package generates a `node` package\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx zx *",
+      "package": "zx",
+      "source_url": "https://github.com/google/zx/blob/1e1cdb46b96f2d54abc04c713c91b069000c9c50/docs/cli.md",
+      "verified": "vendor doc, commit 1e1cdb46: \"## `--eval`\" ... \"Evaluate the following argument as a script.\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx vite-node *",
+      "package": "vite-node",
+      "source_url": "https://github.com/antfu-collective/vite-node/blob/00c37e55ffc283408b2c6c8598de89d3b21a070f/README.md",
+      "verified": "vendor README, commit 00c37e55: \"Run JS/TS file on Node.js using Vite's resolvers and transformers.\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx esno *",
+      "package": "esno",
+      "source_url": "https://github.com/esbuild-kit/esno/blob/2e39433898d93157eca985a7cbb0db6b3d003fdc/README.md",
+      "verified": "vendor README, commit 2e394338: \"`esno` is essentially an alias of `tsx`\""
+    },
+    {
+      "family": "npx",
+      "program": "npx",
+      "form": "npx jiti *",
+      "package": "jiti",
+      "source_url": "https://github.com/unjs/jiti/blob/fd3bb289b75ed207edfb686d671ed50144f7e90f/README.md",
+      "verified": "vendor README, commit fd3bb289: \"You can use `jiti` CLI to quickly run any script with TypeScript and native ESM support!\""
+    },
+    {
+      "family": "git",
+      "program": "git",
+      "form": "git * (options before the subcommand)",
+      "source_url": "https://code.claude.com/docs/en/permissions#wildcard-patterns",
+      "verified": "doc 2026-10-24: \"In `Bash(git * main)`, it stands in for the subcommand, so Claude Code matches every git subcommand and every option before it. That includes `-c`, which makes git run a program you name.\""
+    },
+    {
+      "family": "env_launcher",
+      "program": "docker",
+      "form": "docker exec",
+      "subcommand": "exec",
+      "source_url": "https://code.claude.com/docs/en/permissions#wrappers",
+      "verified": "doc 2026-10-24: \"Development environment runners such as `direnv exec`, `devbox run`, `mise exec`, `npx`, and `docker exec` are not in the list. Because these tools execute their arguments as a command, a rule like `Bash(devbox run *)` matches whatever comes after `run`, including `devbox run rm -rf .`\""
+    },
+    {
+      "family": "env_launcher",
+      "program": "devbox",
+      "form": "devbox run",
+      "subcommand": "run",
+      "source_url": "https://code.claude.com/docs/en/permissions#wrappers",
+      "verified": "doc 2026-10-24: \"Development environment runners such as `direnv exec`, `devbox run`, `mise exec`, `npx`, and `docker exec` are not in the list. Because these tools execute their arguments as a command, a rule like `Bash(devbox run *)` matches whatever comes after `run`, including `devbox run rm -rf .`\""
+    },
+    {
+      "family": "env_launcher",
+      "program": "mise",
+      "form": "mise exec",
+      "subcommand": "exec",
+      "source_url": "https://code.claude.com/docs/en/permissions#wrappers",
+      "verified": "doc 2026-10-24: \"Development environment runners such as `direnv exec`, `devbox run`, `mise exec`, `npx`, and `docker exec` are not in the list. Because these tools execute their arguments as a command, a rule like `Bash(devbox run *)` matches whatever comes after `run`, including `devbox run rm -rf .`\""
+    },
+    {
+      "family": "env_launcher",
+      "program": "direnv",
+      "form": "direnv exec",
+      "subcommand": "exec",
+      "source_url": "https://code.claude.com/docs/en/permissions#wrappers",
+      "verified": "doc 2026-10-24: \"Development environment runners such as `direnv exec`, `devbox run`, `mise exec`, `npx`, and `docker exec` are not in the list. Because these tools execute their arguments as a command, a rule like `Bash(devbox run *)` matches whatever comes after `run`, including `devbox run rm -rf .`\""
+    }
+  ]
+}

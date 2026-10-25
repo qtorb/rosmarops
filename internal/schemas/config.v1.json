@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/config.v1.json",
+  "title": "RosmarOps — Config",
+  "description": "User-editable configuration for RosmarOps. Plain JSON, no executable code. Validated at startup.",
+  "type": "object",
+  "required": ["schema_version", "repo_roots"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "repo_roots": {
+      "type": "array",
+      "description": "Absolute paths to directories that may contain git repos. RosmarOps scans recursively but always skips the forced-exclusion list (see CLAUDE.md).",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "report_directory": {
+      "type": "string",
+      "description": "Absolute path where reports are written. Defaults to <user-home>/.rosmarops/reports/ when omitted.",
+      "minLength": 1
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_uncommitted_files": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 50,
+          "description": "Above this count, a repo gets a YELLOW finding."
+        },
+        "max_findings_in_header": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 15,
+          "description": "Headline limit. Above this, findings move to the appendix. Noise budget."
+        }
+      }
+    },
+    "schedule_hint": {
+      "type": "object",
+      "description": "Used by `rosmarops schedule` to install the OS scheduled task.",
+      "additionalProperties": false,
+      "properties": {
+        "day_of_week": {
+          "type": "string",
+          "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+          "default": "Sunday"
+        },
+        "hour_local_24h": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23,
+          "default": 22
+        },
+        "minute": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 59,
+          "default": 0
+        }
+      }
+    },
+    "allow_list": {
+      "type": "object",
+      "description": "Explicit acceptance of items RosmarOps would otherwise flag. Every entry requires a specific note.",
+      "additionalProperties": false,
+      "properties": {
+        "extensions":         { "$ref": "#/$defs/allow_entries_id" },
+        "mcp_servers":        { "$ref": "#/$defs/allow_entries_id" },
+        "packages":           { "$ref": "#/$defs/allow_entries_id" },
+        "scheduled_tasks":    { "$ref": "#/$defs/allow_entries_id" },
+        "global_packages":    { "$ref": "#/$defs/allow_entries_id" },
+        "av_exclusions":      { "$ref": "#/$defs/allow_entries_path" },
+        "git_hooks":          { "$ref": "#/$defs/allow_entries_path" },
+        "secrets_in_history": { "$ref": "#/$defs/allow_entries_secret_history" },
+        "rotated_credentials": { "$ref": "#/$defs/allow_entries_rotated_credential" },
+        "test_fixtures": { "$ref": "#/$defs/allow_entries_test_fixture" }
+      }
+    },
+    "extra_secret_patterns": {
+      "type": "array",
+      "description": "User-defined regex patterns to extend the built-in secret matchers. Each pattern is compiled at startup and bypassed if invalid.",
+      "items": {
+        "type": "object",
+        "required": ["name", "regex"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Identifier surfaced in findings as the secret type."
+          },
+          "regex": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Go regexp.Regexp. Should match a token-shaped substring."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["yellow", "red"],
+            "default": "red"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "allow_entries_id": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "id":          { "type": "string", "minLength": 1 },
+          "note":        { "type": "string", "minLength": 5, "description": "Why this is accepted. Must be specific." },
+          "accepted_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "allow_entries_path": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "path":        { "type": "string", "minLength": 1 },
+          "note":        { "type": "string", "minLength": 5 },
+          "accepted_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "allow_entries_secret_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern_type", "commit_sha", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "pattern_type": { "type": "string", "minLength": 1 },
+          "commit_sha":   { "type": "string", "pattern": "^[a-fA-F0-9]{7,40}$" },
+          "note":         { "type": "string", "minLength": 5, "description": "Typically: 'rotated YYYY-MM-DD, value no longer valid'." },
+          "accepted_at":  { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "allow_entries_rotated_credential": {
+      "type": "array",
+      "description": "Credentials the user declares rotated (decision 2026-10-24, memoria, M9): the id stops giving cred_in_git. RosmarOps cannot check a rotation without network.",
+      "items": {
+        "type": "object",
+        "required": ["id", "date", "note"],
+        "additionalProperties": false,
+        "properties": {
+          "id":   { "type": "string", "pattern": "^cred_[0-9a-f]{16}$", "description": "Credential id printed by the report; derived from the salted fingerprint, reveals nothing." },
+          "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+          "note": { "type": "string", "description": "May be empty when an agent adds the entry from the report; the user confirms the change at the next run." }
+        }
+      }
+    },
+    "allow_entries_test_fixture": {
+      "type": "array",
+      "description": "Test data silenced by the user (decision 2026-10-24, memoria, M10): never applied to credential sources, nor to a key that also appears outside test data; always shown in the report.",
+      "items": {
+        "type": "object",
+        "required": ["repo", "path", "note", "expires_on"],
+        "additionalProperties": false,
+        "properties": {
+          "repo":       { "type": "string", "minLength": 1, "description": "Repository root." },
+          "path":       { "type": "string", "minLength": 1, "description": "Pattern relative to the repository root, e.g. **/*_test.go or internal/**/testdata/**." },
+          "note":       { "type": "string", "minLength": 5 },
+          "expires_on": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "description": "At most one year after the entry is added; an expired entry is ignored and reported." }
+        }
+      }
+    }
+  }
+}

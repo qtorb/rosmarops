@@ -1,0 +1,96 @@
+# Release of RosmarOps (decision 2026-10-24, distribución, CTO-8 and CTO-8b):
+# only on a tag v*; the checks the repository requires, a Windows build,
+# the zip with the binary and the two launchers, SHA256SUMS.txt, a build
+# provenance attestation and the GitHub release.
+#
+# Third-party actions are pinned by commit SHA (the tag in the comment).
+# The release is created with the GitHub CLI that the runner ships with.
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Tools (pinned versions)
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install mvdan.cc/gofumpt@v0.7.0
+      - name: Strace for the runtime network trust test
+        run: sudo apt-get update && sudo apt-get install -y strace
+      - name: go vet
+        run: go vet ./... && GOOS=windows go vet ./...
+      - name: staticcheck
+        run: staticcheck ./... && GOOS=windows staticcheck ./...
+      - name: gofumpt
+        run: test -z "$(gofumpt -l .)"
+      - name: go test (trust tests included)
+        run: go test -count=1 ./...
+
+  release:
+    needs: verify
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Release note
+        run: |
+          test -s "docs/release-notes/${TAG}.md" || { echo "no release note docs/release-notes/${TAG}.md"; exit 1; }
+      - name: Build rosmarops.exe
+        env:
+          CGO_ENABLED: "0"
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          mkdir -p dist/pkg
+          go build -trimpath -o dist/pkg/rosmarops.exe ./cmd/rosmarops
+      - name: No network in the binary
+        run: |
+          if GOOS=windows GOARCH=amd64 go list -deps ./cmd/rosmarops | grep -E '^(net|crypto/tls)(/|$)'; then exit 1; fi
+          if go tool nm dist/pkg/rosmarops.exe | awk '{print $NF}' | grep -E '^(net\.|net/|crypto/tls\.|syscall\.(Socket|Connect|Sendto)$)'; then exit 1; fi
+      - name: Zip and checksums
+        run: |
+          cp scripts/windows/rosmarops-run.bat scripts/windows/rosmarops-ejecutar.bat dist/pkg/
+          cd dist
+          zip -X -j "rosmarops-windows-amd64.zip" pkg/rosmarops.exe pkg/rosmarops-run.bat pkg/rosmarops-ejecutar.bat
+          cp pkg/rosmarops.exe .
+          sha256sum "rosmarops-windows-amd64.zip" rosmarops.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/rosmarops-windows-amd64.zip
+            dist/rosmarops.exe
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${TAG}" \
+            "dist/rosmarops-windows-amd64.zip" dist/SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" --title "RosmarOps ${TAG}" --notes-file "docs/release-notes/${TAG}.md" --verify-tag

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "repo_roots": [
+    "/home/dev/src/webapp",
+    "/home/dev/src/api-backend",
+    "/home/dev/src/notes"
+  ],
+  "thresholds": {
+    "max_uncommitted_files": 50,
+    "max_findings_in_header": 15
+  },
+  "schedule_hint": {
+    "day_of_week": "Sunday",
+    "hour_local_24h": 22
+  },
+  "allow_list": {}
+}

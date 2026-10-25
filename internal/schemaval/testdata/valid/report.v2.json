@@ -1,0 +1,998 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-10-25T10:26:25Z",
+  "provenance": {
+    "graph": {
+      "engine_version": "0.1.0-dev",
+      "rules_version": "0",
+      "knowledge_version": "2026-10-24",
+      "host_id": "host_ec7ae90fdb749c2f"
+    },
+    "graph_sha256": "cc8702947aca150ab53398a4a22d9ddcbbb6ed8a243276d408618a7d407f2152",
+    "rules_version": "1"
+  },
+  "status": "red",
+  "today": {
+    "finding_id": "f_4c41374f0dc3c329",
+    "action_id": "a_b9fc812f1017c0dd",
+    "remains": {
+      "radius": "same_project",
+      "ways": [
+        "cap_00f1acdc9976dffa",
+        "cap_5b00f70e033cd114",
+        "edge_reaches_1930eaa62b5236ef",
+        "edge_reaches_2891ac05e6003f1e",
+        "edge_reaches_30cbbe9cd52d2ea0",
+        "edge_reaches_49f9a575e302445f",
+        "edge_reaches_95b5de45cce5650e",
+        "edge_reaches_c6adda1dcbca2c5f"
+      ]
+    }
+  },
+  "index": {
+    "index_version": 1,
+    "rules_version": "1",
+    "knowledge_version": "2026-10-24",
+    "agents": [
+      {
+        "agent": "Claude Code",
+        "agent_id": "agent_client_70ecc232d00b77a7",
+        "value": 27,
+        "band": "exposed",
+        "red": 2,
+        "yellow": 2,
+        "weights": [
+          {
+            "finding_id": "f_4c41374f0dc3c329",
+            "weight": 30,
+            "without": 35
+          },
+          {
+            "finding_id": "f_1103abaa313208e9",
+            "weight": 15,
+            "without": 31
+          },
+          {
+            "finding_id": "f_5b6d856c7749cd84",
+            "weight": 4,
+            "without": 28
+          },
+          {
+            "finding_id": "f_40e8b48e65e9be57",
+            "weight": 12,
+            "without": 30
+          }
+        ],
+        "projection": {
+          "action_id": "a_b9fc812f1017c0dd",
+          "value": 30
+        },
+        "comparison": {
+          "status": "direct",
+          "previous": 30
+        }
+      },
+      {
+        "agent": "Cursor",
+        "agent_id": "agent_client_764a08829c0ea77d",
+        "value": 24,
+        "band": "exposed",
+        "red": 3,
+        "yellow": 2,
+        "weights": [
+          {
+            "finding_id": "f_9f40a968877ab343",
+            "weight": 30,
+            "without": 30
+          },
+          {
+            "finding_id": "f_c3189c8f5f9c12a9",
+            "weight": 15,
+            "without": 27
+          },
+          {
+            "finding_id": "f_5235a0371cab3ae8",
+            "weight": 15,
+            "without": 27
+          },
+          {
+            "finding_id": "f_dde3508b4b96df4e",
+            "weight": 6,
+            "without": 25
+          },
+          {
+            "finding_id": "f_629cd862b63ecc85",
+            "weight": 12,
+            "without": 26
+          }
+        ],
+        "comparison": {
+          "status": "direct",
+          "previous": 26
+        }
+      }
+    ],
+    "machine": {
+      "value": 24,
+      "band": "exposed"
+    },
+    "scope": {
+      "evaluated": [
+        "Claude Code",
+        "Cursor"
+      ],
+      "not_evaluated": [],
+      "repos": 3
+    },
+    "history_reset": false
+  },
+  "memory": {
+    "counts": {
+      "new": 2,
+      "no_longer_observed": 0,
+      "not_checked": 0,
+      "not_comparable": 0,
+      "observed_again": 0,
+      "still_observed": 7
+    },
+    "no_longer_observed": [],
+    "moved": [],
+    "reset": false
+  },
+  "findings": [
+    {
+      "id": "f_4c41374f0dc3c329",
+      "rule": "cred_read_and_send",
+      "rule_version": "1",
+      "severity": "red",
+      "confidence": "medium",
+      "radius": "any_project",
+      "params": {
+        "agent": "Claude Code",
+        "service": "supabase",
+        "scope": "service_role",
+        "class": "high",
+        "count": 2
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_70ecc232d00b77a7",
+          "cap_00f1acdc9976dffa",
+          "cap_4d0ce3d318d84650",
+          "cap_4ea37a8a61411289",
+          "cap_5b00f70e033cd114",
+          "cred_1ecec71a0748c2d4",
+          "cred_f1371ab311fb3983"
+        ],
+        "edges": [
+          "edge_reaches_1930eaa62b5236ef",
+          "edge_reaches_2891ac05e6003f1e",
+          "edge_reaches_30cbbe9cd52d2ea0",
+          "edge_reaches_49f9a575e302445f",
+          "edge_reaches_95b5de45cce5650e",
+          "edge_reaches_c6adda1dcbca2c5f"
+        ],
+        "locations": [
+          "/home/dev/src/webapp/dashboard/.env.local:2",
+          "/home/dev/src/webapp/dashboard/.env.local:3"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "auto_mode_available",
+          "bash_tool_available",
+          "code_launcher_rule",
+          "no_pretooluse_hook_blocks",
+          "process_runs_as_user",
+          "ui_mode_choice_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 2,
+        "members": [
+          {
+            "family": "/home/dev/src/webapp",
+            "count": 2,
+            "items": [
+              "/home/dev/src/webapp/dashboard/.env.local:2",
+              "/home/dev/src/webapp/dashboard/.env.local:3"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_f8981e9fab6a36b0",
+          "code": "ask_read_rule",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.ask",
+          "rules": [
+            "Read(//home/dev/src/webapp/dashboard/.env.local)"
+          ],
+          "value": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Read(//home/dev/src/webapp/dashboard/.env.local)\"\n    ]\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 1,
+          "cuts": [
+            "edge_reaches_30cbbe9cd52d2ea0",
+            "edge_reaches_95b5de45cce5650e"
+          ]
+        },
+        {
+          "id": "a_b9fc812f1017c0dd",
+          "code": "block_reads_outside",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.blockReadsOutsideWorkingDirectories",
+          "value": "{\n  \"permissions\": {\n    \"blockReadsOutsideWorkingDirectories\": true\n  }\n}",
+          "completeness": "radius_only",
+          "magnitude": 2,
+          "cuts": []
+        },
+        {
+          "id": "a_bc78fec9d9e5d9d2",
+          "code": "manual_default_mode",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.defaultMode",
+          "value": "{\n  \"permissions\": {\n    \"defaultMode\": \"default\"\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 3,
+          "cuts": [
+            "cap_5b00f70e033cd114",
+            "edge_reaches_2891ac05e6003f1e",
+            "edge_reaches_c6adda1dcbca2c5f"
+          ]
+        },
+        {
+          "id": "a_1c8dccc22f538c08",
+          "code": "remove_from_disk",
+          "file_exists": false,
+          "locations": [
+            "/home/dev/src/webapp/dashboard/.env.local:2",
+            "/home/dev/src/webapp/dashboard/.env.local:3"
+          ],
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_reaches_1930eaa62b5236ef",
+            "edge_reaches_2891ac05e6003f1e",
+            "edge_reaches_30cbbe9cd52d2ea0",
+            "edge_reaches_49f9a575e302445f",
+            "edge_reaches_95b5de45cce5650e",
+            "edge_reaches_c6adda1dcbca2c5f"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_9f40a968877ab343",
+      "rule": "cred_read_and_send",
+      "rule_version": "1",
+      "severity": "red",
+      "confidence": "medium",
+      "radius": "any_project",
+      "params": {
+        "agent": "Cursor",
+        "service": "supabase",
+        "scope": "service_role",
+        "class": "high",
+        "count": 2
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_764a08829c0ea77d",
+          "cap_7d6fd33560cabd76",
+          "cred_1ecec71a0748c2d4",
+          "cred_f1371ab311fb3983"
+        ],
+        "edges": [
+          "edge_reaches_2537829cf54c6240",
+          "edge_reaches_e34420806b7ec8e5"
+        ],
+        "locations": [
+          "/home/dev/src/webapp/dashboard/.env.local:2",
+          "/home/dev/src/webapp/dashboard/.env.local:3"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "ide_run_mode_not_readable",
+          "process_runs_as_user",
+          "sandbox_platform_unknown",
+          "team_policy_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 2,
+        "members": [
+          {
+            "family": "/home/dev/src/webapp",
+            "count": 2,
+            "items": [
+              "/home/dev/src/webapp/dashboard/.env.local:2",
+              "/home/dev/src/webapp/dashboard/.env.local:3"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_3bfa7959a5849544",
+          "code": "sandbox_read_boundary_workspace",
+          "file": "/home/dev/home/.cursor/sandbox.json",
+          "file_exists": false,
+          "key": "readBoundary",
+          "value": "{\n  \"readBoundary\": \"workspace\"\n}",
+          "completeness": "radius_only",
+          "magnitude": 2,
+          "cuts": []
+        },
+        {
+          "id": "a_1c8dccc22f538c08",
+          "code": "remove_from_disk",
+          "file_exists": false,
+          "locations": [
+            "/home/dev/src/webapp/dashboard/.env.local:2",
+            "/home/dev/src/webapp/dashboard/.env.local:3"
+          ],
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_reaches_2537829cf54c6240",
+            "edge_reaches_e34420806b7ec8e5"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_c3189c8f5f9c12a9",
+      "rule": "foreign_agent_config_writable",
+      "rule_version": "1",
+      "severity": "red",
+      "confidence": "medium",
+      "params": {
+        "agent": "Cursor",
+        "target_agent": "Claude Code",
+        "resource_type": "agent_config",
+        "count": 2
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_764a08829c0ea77d",
+          "agent_client_70ecc232d00b77a7",
+          "cap_7d6fd33560cabd76",
+          "res_agent_config_56e93053d578bfad",
+          "res_agent_config_c47a3b83d0d49a9f"
+        ],
+        "edges": [
+          "edge_writes_config_of_7237b857b9e9793f",
+          "edge_writes_config_of_a59b3df10445396d"
+        ],
+        "locations": [
+          "/home/dev/home/.claude.json",
+          "/home/dev/home/.claude/settings.json"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "ide_run_mode_not_readable",
+          "process_runs_as_user",
+          "shell_write_unchecked",
+          "team_policy_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 2,
+        "members": [
+          {
+            "family": "",
+            "count": 2,
+            "items": [
+              "/home/dev/home/.claude.json",
+              "/home/dev/home/.claude/settings.json"
+            ]
+          }
+        ]
+      },
+      "actions": [],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_1103abaa313208e9",
+      "rule": "foreign_agent_config_writable",
+      "rule_version": "1",
+      "severity": "red",
+      "confidence": "medium",
+      "params": {
+        "agent": "Claude Code",
+        "target_agent": "Cursor",
+        "resource_type": "agent_config",
+        "count": 1
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_70ecc232d00b77a7",
+          "agent_client_764a08829c0ea77d",
+          "cap_5b00f70e033cd114",
+          "res_agent_config_43809e4f7e4aeab6"
+        ],
+        "edges": [
+          "edge_writes_config_of_5687c24b092d5bef"
+        ],
+        "locations": [
+          "/home/dev/home/.cursor/permissions.json"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "auto_mode_available",
+          "no_pretooluse_hook_blocks",
+          "process_runs_as_user",
+          "ui_mode_choice_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 1,
+        "members": [
+          {
+            "family": "",
+            "count": 1,
+            "items": [
+              "/home/dev/home/.cursor/permissions.json"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_a895f0816277b251",
+          "code": "ask_edit_rule",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.ask",
+          "rules": [
+            "Edit(//home/dev/home/.cursor/permissions.json)"
+          ],
+          "value": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Edit(//home/dev/home/.cursor/permissions.json)\"\n    ]\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 1,
+          "cuts": []
+        },
+        {
+          "id": "a_bc78fec9d9e5d9d2",
+          "code": "manual_default_mode",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.defaultMode",
+          "value": "{\n  \"permissions\": {\n    \"defaultMode\": \"default\"\n  }\n}",
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_writes_config_of_5687c24b092d5bef"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_5235a0371cab3ae8",
+      "rule": "own_config_writable",
+      "rule_version": "1",
+      "severity": "red",
+      "confidence": "medium",
+      "params": {
+        "agent": "Cursor",
+        "resource_type": "agent_config",
+        "count": 1
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_764a08829c0ea77d",
+          "cap_7d6fd33560cabd76",
+          "res_agent_config_43809e4f7e4aeab6"
+        ],
+        "edges": [
+          "edge_writes_config_of_51faac68b9dff2b9"
+        ],
+        "locations": [
+          "/home/dev/home/.cursor/permissions.json"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "ide_run_mode_not_readable",
+          "process_runs_as_user",
+          "shell_write_unchecked",
+          "team_policy_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 1,
+        "members": [
+          {
+            "family": "",
+            "count": 1,
+            "items": [
+              "/home/dev/home/.cursor/permissions.json"
+            ]
+          }
+        ]
+      },
+      "actions": [],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_dde3508b4b96df4e",
+      "rule": "foreign_agent_instructions_writable",
+      "rule_version": "1",
+      "severity": "yellow",
+      "confidence": "medium",
+      "params": {
+        "agent": "Cursor",
+        "target_agent": "Claude Code",
+        "resource_type": "agent_instructions",
+        "count": 3
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_764a08829c0ea77d",
+          "agent_client_70ecc232d00b77a7",
+          "cap_5feda45241df92a0",
+          "cap_7d6fd33560cabd76",
+          "res_agent_instructions_5c6f0d11b47dddf8",
+          "res_agent_instructions_aeb52d460e7e6d56",
+          "res_agent_instructions_dda6f47f10469378"
+        ],
+        "edges": [
+          "edge_writes_config_of_004a5e8b563be286",
+          "edge_writes_config_of_46d99edeabe688f7",
+          "edge_writes_config_of_5767876a90ff8ec0",
+          "edge_writes_config_of_eaf2f166a25ad848",
+          "edge_writes_config_of_f5cf30eea047b328",
+          "edge_writes_config_of_f7888b1afb766a03"
+        ],
+        "locations": [
+          "/home/dev/src/webapp/CLAUDE.md",
+          "/home/dev/src/api-backend/CLAUDE.md",
+          "/home/dev/src/notes/CLAUDE.md"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "config_file_protection_scope_unknown",
+          "ide_run_mode_not_readable",
+          "process_runs_as_user",
+          "sandbox_platform_unknown",
+          "team_policy_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 3,
+        "members": [
+          {
+            "family": "/home/dev/src/webapp",
+            "count": 1,
+            "items": [
+              "/home/dev/src/webapp/CLAUDE.md"
+            ]
+          },
+          {
+            "family": "/home/dev/src/api-backend",
+            "count": 1,
+            "items": [
+              "/home/dev/src/api-backend/CLAUDE.md"
+            ]
+          },
+          {
+            "family": "/home/dev/src/notes",
+            "count": 1,
+            "items": [
+              "/home/dev/src/notes/CLAUDE.md"
+            ]
+          }
+        ]
+      },
+      "actions": [],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_5b6d856c7749cd84",
+      "rule": "own_instructions_writable",
+      "rule_version": "1",
+      "severity": "yellow",
+      "confidence": "medium",
+      "params": {
+        "agent": "Claude Code",
+        "resource_type": "agent_instructions",
+        "count": 3
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_70ecc232d00b77a7",
+          "cap_5b00f70e033cd114",
+          "res_agent_instructions_5c6f0d11b47dddf8",
+          "res_agent_instructions_aeb52d460e7e6d56",
+          "res_agent_instructions_dda6f47f10469378"
+        ],
+        "edges": [
+          "edge_writes_config_of_0fff5d38f9cb6769",
+          "edge_writes_config_of_3911b1b567f601fc",
+          "edge_writes_config_of_3e2b69e8f00e63df"
+        ],
+        "locations": [
+          "/home/dev/src/webapp/CLAUDE.md",
+          "/home/dev/src/api-backend/CLAUDE.md",
+          "/home/dev/src/notes/CLAUDE.md"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "auto_mode_available",
+          "no_pretooluse_hook_blocks",
+          "process_runs_as_user",
+          "ui_mode_choice_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 3,
+        "members": [
+          {
+            "family": "/home/dev/src/webapp",
+            "count": 1,
+            "items": [
+              "/home/dev/src/webapp/CLAUDE.md"
+            ]
+          },
+          {
+            "family": "/home/dev/src/api-backend",
+            "count": 1,
+            "items": [
+              "/home/dev/src/api-backend/CLAUDE.md"
+            ]
+          },
+          {
+            "family": "/home/dev/src/notes",
+            "count": 1,
+            "items": [
+              "/home/dev/src/notes/CLAUDE.md"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_9d9631fd51ca49a9",
+          "code": "ask_edit_rule",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.ask",
+          "rules": [
+            "Edit(//home/dev/src/webapp/CLAUDE.md)",
+            "Edit(//home/dev/src/api-backend/CLAUDE.md)",
+            "Edit(//home/dev/src/notes/CLAUDE.md)"
+          ],
+          "value": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Edit(//home/dev/src/webapp/CLAUDE.md)\",\n      \"Edit(//home/dev/src/api-backend/CLAUDE.md)\",\n      \"Edit(//home/dev/src/notes/CLAUDE.md)\"\n    ]\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 1,
+          "cuts": []
+        },
+        {
+          "id": "a_bc78fec9d9e5d9d2",
+          "code": "manual_default_mode",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.defaultMode",
+          "value": "{\n  \"permissions\": {\n    \"defaultMode\": \"default\"\n  }\n}",
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_writes_config_of_0fff5d38f9cb6769",
+            "edge_writes_config_of_3911b1b567f601fc",
+            "edge_writes_config_of_3e2b69e8f00e63df"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "still_observed",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_40e8b48e65e9be57",
+      "rule": "cred_read_and_send",
+      "rule_version": "1",
+      "severity": "yellow",
+      "confidence": "medium",
+      "radius": "any_project",
+      "params": {
+        "agent": "Claude Code",
+        "service": "openai",
+        "class": "medium",
+        "count": 1
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_70ecc232d00b77a7",
+          "cap_00f1acdc9976dffa",
+          "cap_4d0ce3d318d84650",
+          "cap_4ea37a8a61411289",
+          "cap_5b00f70e033cd114",
+          "cred_50d9e0decb16d50b"
+        ],
+        "edges": [
+          "edge_reaches_a0614c8be0f4d323",
+          "edge_reaches_c7e94a03bb4cb3fb",
+          "edge_reaches_f6cf7b5abfd92545"
+        ],
+        "locations": [
+          "/home/dev/src/notes/.env:1"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "auto_mode_available",
+          "bash_tool_available",
+          "code_launcher_rule",
+          "no_pretooluse_hook_blocks",
+          "process_runs_as_user",
+          "ui_mode_choice_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 1,
+        "members": [
+          {
+            "family": "/home/dev/src/notes",
+            "count": 1,
+            "items": [
+              "/home/dev/src/notes/.env:1"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_f19f88c44ca3a288",
+          "code": "ask_read_rule",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.ask",
+          "rules": [
+            "Read(//home/dev/src/notes/.env)"
+          ],
+          "value": "{\n  \"permissions\": {\n    \"ask\": [\n      \"Read(//home/dev/src/notes/.env)\"\n    ]\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 1,
+          "cuts": [
+            "edge_reaches_f6cf7b5abfd92545"
+          ]
+        },
+        {
+          "id": "a_b9fc812f1017c0dd",
+          "code": "block_reads_outside",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.blockReadsOutsideWorkingDirectories",
+          "value": "{\n  \"permissions\": {\n    \"blockReadsOutsideWorkingDirectories\": true\n  }\n}",
+          "completeness": "radius_only",
+          "magnitude": 2,
+          "cuts": []
+        },
+        {
+          "id": "a_bc78fec9d9e5d9d2",
+          "code": "manual_default_mode",
+          "file": "/home/dev/home/.claude/settings.json",
+          "file_exists": true,
+          "key": "permissions.defaultMode",
+          "value": "{\n  \"permissions\": {\n    \"defaultMode\": \"default\"\n  }\n}",
+          "completeness": "partial",
+          "magnitude": 3,
+          "cuts": [
+            "cap_5b00f70e033cd114",
+            "edge_reaches_c7e94a03bb4cb3fb"
+          ]
+        },
+        {
+          "id": "a_cfa2273b41baa744",
+          "code": "remove_from_disk",
+          "file_exists": false,
+          "locations": [
+            "/home/dev/src/notes/.env:1"
+          ],
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_reaches_a0614c8be0f4d323",
+            "edge_reaches_c7e94a03bb4cb3fb",
+            "edge_reaches_f6cf7b5abfd92545"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "new",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    },
+    {
+      "id": "f_629cd862b63ecc85",
+      "rule": "cred_read_and_send",
+      "rule_version": "1",
+      "severity": "yellow",
+      "confidence": "medium",
+      "radius": "any_project",
+      "params": {
+        "agent": "Cursor",
+        "service": "openai",
+        "class": "medium",
+        "count": 1
+      },
+      "evidence": {
+        "nodes": [
+          "agent_client_764a08829c0ea77d",
+          "cap_7d6fd33560cabd76",
+          "cred_50d9e0decb16d50b"
+        ],
+        "edges": [
+          "edge_reaches_9a2ed172d3418141"
+        ],
+        "locations": [
+          "/home/dev/src/notes/.env:1"
+        ],
+        "assumptions": [
+          "auto_classifier_permits",
+          "ide_run_mode_not_readable",
+          "process_runs_as_user",
+          "sandbox_platform_unknown",
+          "team_policy_unknown",
+          "version_behaves_as_documented"
+        ]
+      },
+      "group": {
+        "count": 1,
+        "members": [
+          {
+            "family": "/home/dev/src/notes",
+            "count": 1,
+            "items": [
+              "/home/dev/src/notes/.env:1"
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "id": "a_3bfa7959a5849544",
+          "code": "sandbox_read_boundary_workspace",
+          "file": "/home/dev/home/.cursor/sandbox.json",
+          "file_exists": false,
+          "key": "readBoundary",
+          "value": "{\n  \"readBoundary\": \"workspace\"\n}",
+          "completeness": "radius_only",
+          "magnitude": 2,
+          "cuts": []
+        },
+        {
+          "id": "a_cfa2273b41baa744",
+          "code": "remove_from_disk",
+          "file_exists": false,
+          "locations": [
+            "/home/dev/src/notes/.env:1"
+          ],
+          "completeness": "full",
+          "magnitude": 3,
+          "cuts": [
+            "edge_reaches_9a2ed172d3418141"
+          ]
+        }
+      ],
+      "memory": {
+        "verdict": "new",
+        "open_since": "2026-10-25",
+        "first_seen": "2026-10-25",
+        "reappeared": 0
+      }
+    }
+  ],
+  "posture": [
+    {
+      "code": "posture.credentials_readable_without_prompt",
+      "count": 0,
+      "by_class": {
+        "high": 0,
+        "low": 0,
+        "medium": 0,
+        "unclassified": 0
+      }
+    },
+    {
+      "code": "posture.credentials_in_templates_only",
+      "count": 1,
+      "by_class": {
+        "high": 1,
+        "low": 0,
+        "medium": 0,
+        "unclassified": 0
+      }
+    }
+  ],
+  "coverage": {
+    "graph_built": true,
+    "sources_read": 6,
+    "sources_failed": [],
+    "agents_unsupported": [],
+    "scan_errors": []
+  },
+  "legacy": {
+    "status": "red",
+    "counts": {
+      "red": 2,
+      "yellow": 0,
+      "info": 0
+    },
+    "groups": [
+      {
+        "category": "secret_in_history",
+        "detail": "database_url_with_credentials",
+        "family": "/home/dev/src/api-backend",
+        "severity": "red",
+        "count": 1,
+        "repos": [
+          "/home/dev/src/api-backend"
+        ],
+        "finding_ids": [
+          "secret_in_history:6fd65bfb0fbdf58e"
+        ]
+      },
+      {
+        "category": "secret_tracked",
+        "detail": "database_url_with_credentials",
+        "family": "/home/dev/src/api-backend",
+        "severity": "red",
+        "count": 1,
+        "repos": [
+          "/home/dev/src/api-backend"
+        ],
+        "finding_ids": [
+          "secret_tracked:330c7e8ecd68130b"
+        ]
+      }
+    ]
+  }
+}
