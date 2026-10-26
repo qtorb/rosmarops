@@ -147,10 +147,12 @@ type inference struct {
 	protected protectedPaths
 	bashVia   *Node // product_default shell_readonly_bash_commands
 	fileVia   *Node // product_default read_in_working_dirs
+
+	launchers []knowledge.CodeLauncher // the base's code launchers (D3)
 }
 
 func newInference(client Node, caps []Node, nodes map[string]Node, base knowledge.Base, prot knowledge.Entry, repoRoots []string, home string) inference {
-	in := inference{client: client, home: home, protected: protectedPaths{entry: prot, configDir: client.ConfigPath, home: home}}
+	in := inference{client: client, home: home, protected: protectedPaths{entry: prot, configDir: client.ConfigPath, home: home}, launchers: base.CodeLaunchers}
 	for _, c := range caps {
 		if c.InForce {
 			in.inForce = append(in.inForce, c)
@@ -322,6 +324,19 @@ func (in inference) shellRules(tool string) bool {
 	return false
 }
 
+// launcher reports a configured execute_shell allow in force, with a
+// specifier, that is a code launcher (D3, knowledge.LauncherOf: the same
+// detection as the rules layer's egress), its tool not denied or asked
+// without specifier.
+func (in inference) launcher(c Node) bool {
+	if c.Type != CapExecuteShell || c.Approval != ApprovalAllow || c.Basis != BasisConfigured || c.TargetScope == scopeAll ||
+		in.shellRules(shellTool(c.Rule)) {
+		return false
+	}
+	_, ok := knowledge.LauncherOf(c.TargetScope, in.launchers)
+	return ok
+}
+
 // shellTool is the shell tool of an execute_shell rule: Bash or PowerShell.
 func shellTool(rule string) string {
 	if isRule(rule, "PowerShell") {
@@ -438,9 +453,12 @@ func (in inference) readWays(files []string) []inferredWay {
 //   - bypassPermissions: any p;
 //   - auto: any p that is not protected;
 //   - an execute_shell allow in force with target_scope "*": any p, unless S
-//     for its tool.
+//     for its tool;
+//   - a configured execute_shell allow in force that is a code launcher (D3):
+//     any p, as "*", with code_launcher_rule (decision 2026-10-26,
+//     lanzadores en escritura, L1).
 //
-// On the bypassPermissions, auto and shell ways, E(p) keeps the edge with
+// On the bypassPermissions, auto, shell and launcher ways, E(p) keeps the edge with
 // edit_rule_partial and the rules in derived_from. A resource with no file
 // (a registry value) gets no edge.
 func (in inference) writes(all []Node) []Edge {
@@ -501,6 +519,11 @@ func (in inference) writeWays(file string) []inferredWay {
 		case c.Type == CapExecuteShell && c.Approval == ApprovalAllow && c.TargetScope == scopeAll &&
 			!in.shellRules(shellTool(c.Rule)):
 			partial(via{c, hook(AssumeShellWriteUnchecked)})
+		case in.launcher(c):
+			// A configured allow that is a code launcher runs any code, so
+			// it writes like "shell *" (decision 2026-10-26, lanzadores en
+			// escritura, L1).
+			partial(via{c, hook(AssumeCodeLauncherRule, AssumeShellWriteUnchecked)})
 		}
 	}
 	return out

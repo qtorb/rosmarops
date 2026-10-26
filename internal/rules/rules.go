@@ -28,7 +28,7 @@ import (
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
 	Version     = "1"
-	RuleVersion = "1"
+	RuleVersion = "2"
 )
 
 // Rule codes (§1).
@@ -666,7 +666,7 @@ func (v *agentView) egressWays(base knowledge.Base, launchers *[]LauncherRule) [
 			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: a})
 			continue
 		}
-		if l, ok := launcherOf(c.TargetScope, base.CodeLaunchers); ok {
+		if l, ok := knowledge.LauncherOf(c.TargetScope, base.CodeLaunchers); ok {
 			*launchers = append(*launchers, LauncherRule{Capability: c.ID, Rule: c.Rule, Form: l.Form})
 			out = append(out, way{id: c.ID, code: "egress_launcher", cap: c.ID, assumptions: append(a, AssumeCodeLauncherRule)})
 		}

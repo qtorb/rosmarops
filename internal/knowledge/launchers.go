@@ -1,10 +1,8 @@
-package rules
+package knowledge
 
 import (
 	"path"
 	"strings"
-
-	"github.com/qtorb/rosmarops/internal/knowledge"
 )
 
 // The launcher rule (decision 2026-10-24, informe legible, §4, E8): an
@@ -86,16 +84,19 @@ func programName(w string) string {
 // windowsOptions are the programs whose options are case-insensitive.
 var windowsOptions = map[string]bool{"cmd": true, "powershell": true, "pwsh": true}
 
-// launcherOf returns the code launcher a shell rule's specifier falls in,
+// LauncherOf returns the code launcher a shell rule's specifier falls in,
 // and false when it falls in none (no "*", or the "*" is where no code goes).
-func launcherOf(spec string, launchers []knowledge.CodeLauncher) (knowledge.CodeLauncher, bool) {
+// It is the one detection of launchers: the rules layer's egress and the
+// graph's write inference use it (decision 2026-10-26, lanzadores en
+// escritura, L1).
+func LauncherOf(spec string, launchers []CodeLauncher) (CodeLauncher, bool) {
 	star := strings.Index(spec, "*")
 	if star < 0 {
-		return knowledge.CodeLauncher{}, false
+		return CodeLauncher{}, false
 	}
 	toks := tokenize(spec[:star])
 	if len(toks) == 0 || !toks[0].complete {
-		return knowledge.CodeLauncher{}, false
+		return CodeLauncher{}, false
 	}
 	prog := programName(toks[0].text)
 	args := toks[1:]
@@ -120,7 +121,7 @@ func launcherOf(spec string, launchers []knowledge.CodeLauncher) (knowledge.Code
 			return l, true
 		}
 	}
-	return knowledge.CodeLauncher{}, false
+	return CodeLauncher{}, false
 }
 
 // hasOption returns the index of the first complete word that is one of

@@ -383,7 +383,8 @@ func TestWriteV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "report-" + v1.GeneratedAt[:10] + "__RED__2R-1Y"; filepath.Base(md) != want+".md" || filepath.Base(js) != want+".json" || filepath.Base(v2) != report.V2FileName {
+	// 3 red since BV-64: a launcher writes, own_config_writable (L1).
+	if want := "report-" + v1.GeneratedAt[:10] + "__RED__3R-1Y"; filepath.Base(md) != want+".md" || filepath.Base(js) != want+".json" || filepath.Base(v2) != report.V2FileName {
 		t.Errorf("files %s %s %s", md, js, v2)
 	}
 	entries, _ := os.ReadDir(dir)
@@ -529,13 +530,13 @@ func TestFilenameAndConsole(t *testing.T) {
 	g := v2Graph(t)
 	v1 := report.Build("t", []finding.Finding{{ID: "x:1", Severity: finding.SeverityRed, Category: "x"}, {ID: "y:1", Severity: finding.SeverityYellow, Category: "y"}}, nil, 0, 0, 0, 0, nil)
 	v := buildV2(t, &g, v1)
-	if got, want := report.FilenameV2(v1, v), "report-"+v1.GeneratedAt[:10]+"__RED__2R-1Y"; got != want {
+	if got, want := report.FilenameV2(v1, v), "report-"+v1.GeneratedAt[:10]+"__RED__3R-1Y"; got != want {
 		t.Errorf("file name %s, want %s", got, want)
 	}
 	// BV-46: «Label: n», the status followed by a space, never ".:".
 	for lang, want := range map[string]string{
-		"en": "Red: 2 · Yellow: 1. Legacy checks — red: 1 · yellow: 1.\nReport: /r/report.md\n",
-		"es": "Urgentes: 2 · Para revisar: 1. Comprobaciones antiguas — urgentes: 1 · para revisar: 1.\nInforme: /r/report.md\n",
+		"en": "Red: 3 · Yellow: 1. Legacy checks — red: 1 · yellow: 1.\nReport: /r/report.md\n",
+		"es": "Urgentes: 3 · Para revisar: 1. Comprobaciones antiguas — urgentes: 1 · para revisar: 1.\nInforme: /r/report.md\n",
 	} {
 		cat, err := catalog.Load(lang)
 		if err != nil {

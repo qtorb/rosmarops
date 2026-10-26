@@ -1,14 +1,12 @@
-package rules
+package knowledge
 
 import (
 	"testing"
-
-	"github.com/qtorb/rosmarops/internal/knowledge"
 )
 
-func launchers(t *testing.T) []knowledge.CodeLauncher {
+func launchers(t *testing.T) []CodeLauncher {
 	t.Helper()
-	b, err := knowledge.ClaudeCode()
+	b, err := ClaudeCode()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +46,7 @@ func TestLauncherOf_RealShapes(t *testing.T) {
 		{`pwsh -c *`, "pwsh -Command / -c"},
 	}
 	for _, c := range counts {
-		l, ok := launcherOf(c.spec, ls)
+		l, ok := LauncherOf(c.spec, ls)
 		if !ok || l.Form != c.form {
 			t.Errorf("%q: got %q %v, want %q", c.spec, l.Form, ok, c.form)
 		}
@@ -71,7 +69,7 @@ func TestLauncherOf_RealShapes(t *testing.T) {
 		`npm test`,
 	}
 	for _, spec := range none {
-		if l, ok := launcherOf(spec, ls); ok {
+		if l, ok := LauncherOf(spec, ls); ok {
 			t.Errorf("%q counted as %q", spec, l.Form)
 		}
 	}

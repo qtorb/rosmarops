@@ -107,7 +107,15 @@ func ovCases() map[string]ovFixture {
 	return map[string]ovFixture{
 		"default": {roots: allRoots},
 		"edit src": {roots: allRoots, claude: []platform.ClaudeSettingsFile{userSettings(platform.ClaudePermissions{
-			Allow: []string{"Edit(src/**)", "Bash(npm test)", "Bash(node -e *)"},
+			Allow: []string{"Edit(src/**)", "Bash(npm test)"},
+		})}},
+		// A launcher writes any file (decision 2026-10-26, lanzadores en
+		// escritura, L1).
+		"launcher": {roots: allRoots, claude: []platform.ClaudeSettingsFile{userSettings(platform.ClaudePermissions{
+			Allow: []string{"Bash(npm test)", "Bash(node -e *)"},
+		})}},
+		"launcher default": {roots: allRoots, claude: []platform.ClaudeSettingsFile{userSettings(platform.ClaudePermissions{
+			DefaultMode: "default", Allow: []string{"Bash(npx tsx *)"},
 		})}},
 		"default mode": {roots: allRoots, claude: []platform.ClaudeSettingsFile{userSettings(platform.ClaudePermissions{DefaultMode: "default"})}},
 		"dontAsk":      {roots: allRoots, claude: []platform.ClaudeSettingsFile{userSettings(platform.ClaudePermissions{DefaultMode: "dontAsk"})}},
@@ -310,7 +318,7 @@ func TestOverview_CTOCases(t *testing.T) {
 // T3 and §2.4: preapproved commands are data, a launcher among them makes
 // runs_commands nobody; a denied tool without specifier is blocked, not you.
 func TestOverview_RunsAndBlocked(t *testing.T) {
-	_, res := ovEvaluate(t, ovCases()["edit src"])
+	_, res := ovEvaluate(t, ovCases()["launcher"])
 	c := ovCell(t, res, "Claude Code", rules.RowRunsCommands)
 	if *c.Data.PreapprovedRules != 2 || *c.Data.LauncherRules != 1 || c.Decider != rules.DeciderNobody || c.Scope != rules.ScopeMachine {
 		t.Errorf("runs: %+v %d %d", c, *c.Data.PreapprovedRules, *c.Data.LauncherRules)
