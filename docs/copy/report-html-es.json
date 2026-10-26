@@ -248,6 +248,7 @@
   "memory.no_longer_observed.line": "Un aviso {severity} ({rule}), abierto desde {open_since}, ya no se observa. Detalle: {last_report}. Que ya no se observe no quiere decir que esté resuelto.",
   "memory.not_comparable": "No comparable con la ejecución anterior: {reason}.",
   "memory.reason.rules_changed": "han cambiado las reglas de detección",
+  "memory.reason.salt_changed": "el estado local de RosmarOps se ha vuelto a crear",
   "memory.reason.scope_changed": "ha cambiado lo revisado",
   "report.status.green": "Nada necesita tu atención.",
   "report.status.red": "Algo necesita tu atención hoy.",

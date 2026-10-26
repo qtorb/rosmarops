@@ -482,3 +482,26 @@ func TestDifferential_FindingsMemoryV2AgentRefs(t *testing.T) {
 		}
 	}
 }
+
+// Decision 2026-10-26 (agentes y MCP nuevos, A8): report.v2 accepts the
+// memory reason salt_changed beside rules_changed and scope_changed, in both
+// validators; any other reason is refused.
+func TestDifferential_ReportV2SaltChanged(t *testing.T) {
+	p := compileAll(t)["report.v2"]
+	raw, err := os.ReadFile(filepath.Join("testdata", "valid", "report.v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for reason, want := range map[string]bool{"salt_changed": true, "rules_changed": true, "scope_changed": true, "salt_reset": false} {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		doc["memory"].(map[string]any)["reason"] = reason
+		b, _ := json.Marshal(doc)
+		own, oracle, _ := verdicts(t, p, b)
+		if own != want || oracle != want {
+			t.Errorf("reason %s: own %v, oracle %v, want %v", reason, own, oracle, want)
+		}
+	}
+}

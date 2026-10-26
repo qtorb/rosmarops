@@ -204,7 +204,10 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 			root.Reason = ReasonScopeChanged
 		}
 	}
-	notComparable := root.Reason != "" || root.SaltChanged
+	if root.SaltChanged {
+		root.Reason = ReasonSaltChanged // A8: shown as the other reasons
+	}
+	notComparable := root.Reason != ""
 
 	// A1: the agents and MCP servers not in the last checked run's.
 	if b := prev.LastChecked; b != nil && b.AgentRefs != nil && !root.SaltChanged {

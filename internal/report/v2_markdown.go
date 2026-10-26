@@ -40,7 +40,7 @@ var staticKeys = []string{
 	"section.assumptions", "console.summary", "console.report",
 	// BV-43
 	"section.memory", "memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
-	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged,
+	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
 	// BV-50
 	"report.silenced.one", "report.silenced.other", "report.silenced.entry",
 	"report.testdata.one", "report.testdata.other", "report.testdata.entry",

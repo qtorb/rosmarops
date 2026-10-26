@@ -94,12 +94,13 @@ func TestNewAgents_IncompleteRunIsNotTheBase(t *testing.T) {
 	}
 }
 
-// A2: another salt makes no «new» line and the findings not comparable.
+// A2: another salt makes no «new» line and the findings not comparable,
+// with the reason salt_changed (A8, BV-60).
 func TestNewAgents_SaltChanged(t *testing.T) {
 	m, _, _ := Update(File{}, runSeen("2026-10-01", seen("fs")), []Finding{fnd("f_a"), fnd("f_gone")}, salt)
 	other := []byte("fedcba9876543210fedcba9876543210")
 	_, v, root := Update(m, runSeen("2026-10-02", seen("fs", "browser")), []Finding{fnd("f_a")}, other)
-	if !root.SaltChanged || root.NewMCP != nil || root.NewAgents != nil {
+	if !root.SaltChanged || root.Reason != ReasonSaltChanged || root.NewMCP != nil || root.NewAgents != nil {
 		t.Fatalf("salt changed: %+v", root)
 	}
 	if v["f_a"].Verdict != VerdictNotComparable || root.Counts[VerdictNotComparable] != 3 || root.Counts[VerdictNew] != 0 || len(root.NoLongerObserved) != 0 {

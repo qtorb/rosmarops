@@ -1112,7 +1112,8 @@
         "reason": {
           "enum": [
             "rules_changed",
-            "scope_changed"
+            "scope_changed",
+            "salt_changed"
           ]
         },
         "reset": {

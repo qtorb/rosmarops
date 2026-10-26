@@ -1162,7 +1162,7 @@ func HTMLKeys() []string {
 		"ai.instruction", "ai.what", "ai.today", "ai.findings", "ai.limits", "ai.more",
 		"html.memory.title", "html.memory.first", "html.memory.evolution",
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
-		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged,
+		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
 		"severity.red", "severity.yellow",
 		"html.verdict.new", "html.verdict.still", "html.verdict.again", "html.verdict.not_checked",
 	}
