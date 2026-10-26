@@ -92,20 +92,59 @@ func htmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;").Replace(s)
 }
 
-// No graph: no score, no card; no finding: the html.none line.
+// J14 (decision 2026-10-26, integridad y revisión semanal, §7): with no
+// graph the page cannot look clean — no card; the score unavailable for
+// coverage, never not_applicable; step 2 html.today.incomplete and step 3
+// html.rest.incomplete instead of «nothing to fix» and «nothing else
+// pending»; in en and es. With a graph and no agent, not_applicable stays.
 func TestRenderHTML_NoScoreNoFindings(t *testing.T) {
-	v := buildV2(t, nil, report.Build("t", nil, []finding.ScanError{{Scope: "graph", Message: "x"}}, 0, 0, 0, 0, nil))
-	page := renderHTML(t, "en", v)
-	cat, _ := catalog.Load("en")
-	if strings.Contains(page, `id="card-button"`) || !strings.Contains(page, htmlEscape(cat.Text("html.none", nil))) {
-		t.Error("no-graph page has a card or lacks html.none")
+	v := buildV2(t, nil, report.Build("t", nil, []finding.ScanError{{Scope: "global_timeout", Message: "x"}}, 0, 0, 0, 0, nil))
+	if v.Coverage.GraphBuilt || v.Index.Machine.Unavailable != index.ReasonCoverage {
+		t.Fatalf("no graph: built %v, machine %+v", v.Coverage.GraphBuilt, v.Index.Machine)
 	}
 	empty := graph.Build(graph.Fragment{}, graph.Provenance{EngineVersion: "t", RulesVersion: "0", KnowledgeVersion: "k", HostID: "h"}, v2Now)
-	v = buildV2(t, &empty, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	page = renderHTML(t, "en", v)
-	reason := cat.Text("html.index.reason.not_applicable", nil)
-	if !strings.Contains(page, htmlEscape(cat.Text("html.index.unavailable", map[string]string{"reason": reason}))) {
-		t.Error("no agent: not applicable line missing")
+	none := buildV2(t, &empty, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		unavailable := func(reason string) string {
+			return htmlEscape(cat.Text("html.index.unavailable", map[string]string{"reason": cat.Text("html.index.reason."+reason, nil)}))
+		}
+		page := renderHTML(t, lang, v)
+		if strings.Contains(page, `id="card-button"`) {
+			t.Errorf("%s: no-graph page has a card", lang)
+		}
+		for _, want := range []string{
+			unavailable(index.ReasonCoverage),
+			`<p class="none">` + htmlEscape(cat.Text("html.today.incomplete", nil)) + `</p>`,
+			`<p class="empty">` + htmlEscape(cat.Text("html.rest.incomplete", nil)) + `</p>`,
+		} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s: no graph, no %q", lang, want)
+			}
+		}
+		for _, k := range []string{"html.none", "html.step.3.none"} {
+			if strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
+				t.Errorf("%s: no graph, but %s", lang, k)
+			}
+		}
+		if strings.Contains(page, htmlEscape(cat.Text("html.index.reason.not_applicable", nil))) {
+			t.Errorf("%s: no graph, but the not_applicable reason", lang)
+		}
+
+		page = renderHTML(t, lang, none)
+		if !strings.Contains(page, unavailable(index.ReasonNotApplicable)) {
+			t.Errorf("%s: graph with no agent: not applicable line missing", lang)
+		}
+		for _, k := range []string{"html.none", "html.step.3.none"} {
+			if !strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
+				t.Errorf("%s: graph with no finding: no %s", lang, k)
+			}
+		}
+		for _, k := range []string{"html.today.incomplete", "html.rest.incomplete"} {
+			if strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
+				t.Errorf("%s: graph built, but %s", lang, k)
+			}
+		}
 	}
 }
 

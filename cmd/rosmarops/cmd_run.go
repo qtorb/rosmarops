@@ -56,6 +56,17 @@ func newRunCmd() *cli.Command {
 	}
 }
 
+// runInput, runCanAsk and newScanContext are the console's input, whether
+// it can ask, and the scan's context under the global cap; tests replace
+// them.
+var (
+	runInput       io.Reader = os.Stdin
+	runCanAsk                = func() bool { return canAsk(os.Stdin, os.Stdout) }
+	newScanContext           = func() (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), scan.GlobalTimeout)
+	}
+)
+
 func runRun(inv cli.Invocation) (err error) {
 	start := time.Now()
 	lang := inv.Flags["lang"]
@@ -79,10 +90,6 @@ func runRun(inv cli.Invocation) (err error) {
 			}
 		}()
 	}
-	// Invariant §6: every scanner and subprocess runs under the global cap.
-	ctx, cancel := context.WithTimeout(context.Background(), scan.GlobalTimeout)
-	defer cancel()
-
 	// Load config: a scheduled review reads only ~/.rosmarops/config.json,
 	// never one in its working directory (J3).
 	resolve := config.ResolveConfigPath
@@ -135,7 +142,7 @@ func runRun(inv cli.Invocation) (err error) {
 	// against the references init recorded; a change is confirmed in the
 	// console or the run stops with a red report. A scheduled review never
 	// reads input.
-	ask := asker{in: os.Stdin, out: os.Stdout, terminal: canAsk(os.Stdin, os.Stdout), cat: cat}
+	ask := asker{in: runInput, out: os.Stdout, terminal: runCanAsk(), cat: cat}
 	if unattended {
 		ask.in, ask.out, ask.terminal = strings.NewReader(""), io.Discard, false
 	}
@@ -146,6 +153,11 @@ func runRun(inv cli.Invocation) (err error) {
 	if err != nil {
 		return err
 	}
+	// Invariant §6: every scanner and subprocess runs under the global cap,
+	// which counts from after the integrity questions: the time a person
+	// takes to answer is not the scan's (J13).
+	ctx, cancel := newScanContext()
+	defer cancel()
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
 
 	var (

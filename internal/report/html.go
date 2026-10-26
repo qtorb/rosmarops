@@ -423,8 +423,12 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<div class="score" role="img" aria-label="%s" style="color:%s">%d<span class="of">%s</span></div>`,
 			html.EscapeString(strconv.Itoa(*a.Value)+of), bandVar[a.Band], *a.Value, html.EscapeString(of))
 	default:
+		// No graph: nothing was read, never «no AI agent found» (J14).
 		reason := index.ReasonNotApplicable
-		if len(v.Index.Agents) > 0 {
+		switch {
+		case !v.Coverage.GraphBuilt:
+			reason = index.ReasonCoverage
+		case len(v.Index.Agents) > 0:
 			reason = v.Index.Agents[0].Unavailable
 		}
 		c.w(`<div class="unavail">%s</div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
@@ -588,7 +592,11 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	if !found {
 		c.w(`<section class="now" aria-labelledby="step2">`)
 		c.stepHead(2, "p", "step2", c.t("html.step.2", nil), "", true)
-		c.w(`<p class="none">%s</p></section>`, c.t("html.none", nil))
+		none := "html.none"
+		if !c.v.Coverage.GraphBuilt {
+			none = "html.today.incomplete" // the review did not finish (J14)
+		}
+		c.w(`<p class="none">%s</p></section>`, c.t(none, nil))
 		return
 	}
 	p := c.params(f)
@@ -688,7 +696,11 @@ func (c htmlCtx) renderStep3(todayID string) {
 	n := strconv.Itoa(len(rows))
 	c.stepHead(3, "h2", "step3", c.t("html.step.3", nil), html.EscapeString(c.cat.Plural("html.step.3.hint", len(rows), map[string]string{"count": n})), false)
 	if len(rows) == 0 {
-		c.w(`<p class="empty">%s</p></section>`, c.t("html.step.3.none", nil))
+		empty := "html.step.3.none"
+		if !c.v.Coverage.GraphBuilt {
+			empty = "html.rest.incomplete" // the review did not finish (J14)
+		}
+		c.w(`<p class="empty">%s</p></section>`, c.t(empty, nil))
 		return
 	}
 	for i, f := range rows {
@@ -1173,7 +1185,7 @@ func HTMLKeys() []string {
 	}
 	// v3
 	keys = append(keys, "html.step.1", "html.step.1.counts", "html.step.2", "html.step.2.hint", "html.step.3",
-		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.today.fixes",
+		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.rest.incomplete", "html.today.fixes", "html.today.incomplete",
 		"html.step.1.other", "html.unknown.body.cursor", "html.today.projection.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
