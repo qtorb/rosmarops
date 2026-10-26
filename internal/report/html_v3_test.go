@@ -140,13 +140,20 @@ func TestRenderHTML_TwoScores(t *testing.T) {
 		if !strings.Contains(page, `<p class="sagent">Cursor · `) {
 			t.Errorf("%s: agent · band line not Cursor's", lang)
 		}
+		// What we don't know left the HTML (v3 §17.1): the .ai.md keeps a
+		// paragraph per agent; the HTML has the assumptions' window.
+		ai := report.RenderAIExport(v, cat, "/h")
+		visible := regexp.MustCompile(`(?s)<template id="ai-export">.*?</template>`).ReplaceAllString(page, "")
 		for _, p := range []string{
 			cat.Text("html.unknown.body", map[string]string{"agent": "Claude Code"}),
 			cat.Text("html.unknown.body.cursor", map[string]string{"agent": "Cursor"}),
 		} {
-			if !strings.Contains(page, `<p>`+htmlEscape(p)+`</p>`) {
-				t.Errorf("%s: no paragraph %q", lang, p)
+			if !strings.Contains(ai, p) || strings.Contains(visible, htmlEscape(p)) {
+				t.Errorf("%s: paragraph %q not in the .ai.md only", lang, p)
 			}
+		}
+		if !strings.Contains(page, `<li>`+htmlEscape(cat.Text("html.assume.claude-code", nil))+`</li>`) {
+			t.Errorf("%s: no assumptions line of Claude Code", lang)
 		}
 		if !strings.Contains(page, `<template id="card-txt">`) || !strings.Contains(page, htmlEscape(" · Cursor · "+strconv.Itoa(low)+"/100")) {
 			t.Errorf("%s: the card is not the lowest score's", lang)

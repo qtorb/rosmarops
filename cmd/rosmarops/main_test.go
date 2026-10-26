@@ -20,7 +20,9 @@ func TestHelpKeysMatchTheTree(t *testing.T) {
 			}
 		}
 		for _, f := range c.Flags {
-			seen[f.Usage] = true
+			if !f.Hidden { // a hidden flag has no help text (--unattended)
+				seen[f.Usage] = true
+			}
 		}
 		for _, s := range c.Subs {
 			walk(s)

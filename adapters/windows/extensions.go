@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/proc"
 )
 
 // extensionRecord mirrors a single entry in
@@ -96,6 +97,7 @@ func tryListEnabledIDs(ctx context.Context) map[string]struct{} {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx10, "code", "--list-extensions")
+	proc.Hide(cmd)
 	cmd.WaitDelay = subprocessWaitDelay // code.cmd starts a child that holds stdout
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout

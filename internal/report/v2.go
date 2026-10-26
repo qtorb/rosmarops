@@ -21,6 +21,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
 	"github.com/qtorb/rosmarops/internal/schemas"
 )
 
@@ -44,8 +45,12 @@ type V2 struct {
 	// AgentsOverview is «how your agents work» (decision 2026-10-25, cómo
 	// trabajan tus agentes, cálculo, T10): one element per detected agent.
 	AgentsOverview []rules.OverviewAgent `json:"agents_overview"`
-	Coverage       V2Coverage            `json:"coverage"`
-	Legacy         V2Legacy              `json:"legacy"`
+	// NotificationUnavailable is why a scheduled review's notification did
+	// not show (decision 2026-10-26, integridad y revisión semanal, J7);
+	// absent otherwise.
+	NotificationUnavailable string     `json:"notification_unavailable,omitempty"`
+	Coverage                V2Coverage `json:"coverage"`
+	Legacy                  V2Legacy   `json:"legacy"`
 	// Silenced is the test data the user silenced (M10–M11), always
 	// shown; Signals the red technical-report categories (adjustment B).
 	Silenced rules.Silenced `json:"silenced"`
@@ -73,6 +78,10 @@ type V2 struct {
 	// {projects} (v3 §15.2).
 	radiusProj map[string]map[string]int
 	repoRoots  []string
+	// integrityNotChecked is V2Input's (v3 §17.5).
+	integrityNotChecked bool
+	exePath             string
+	weekly              scheduledtasks.Weekly
 }
 
 // NextMemory is findings-memory.json after this run, to write.
@@ -184,6 +193,19 @@ type V2Input struct {
 	// probe of agents_overview, annex 2). Both optional.
 	ClaudeSettings *platform.ClaudeSettingsScan
 	Home           string
+
+	// IntegrityNotChecked: the state could not be read, so this run checked
+	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
+	// informe HTML v3 §17.5).
+	IntegrityNotChecked bool
+
+	// ExePath is the absolute path of the rosmarops.exe that made the report
+	// and Weekly what the scheduled tasks say about its weekly review (J4,
+	// J5; v3 §17.3). NotificationUnavailable is the reason a scheduled
+	// review's notification will not show (J7), empty otherwise.
+	ExePath                 string
+	Weekly                  scheduledtasks.Weekly
+	NotificationUnavailable string
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -222,6 +244,12 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Posture:       []rules.Posture{},
 		repos:         len(in.RepoRoots),
 		repoRoots:     in.RepoRoots,
+
+		integrityNotChecked: in.IntegrityNotChecked,
+		exePath:             in.ExePath,
+		weekly:              in.Weekly,
+
+		NotificationUnavailable: in.NotificationUnavailable,
 	}
 	v2Status := finding.StatusYellow // no graph: fail-secure
 	var res rules.Result

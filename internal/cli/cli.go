@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
@@ -30,11 +31,14 @@ var HelpKeys = []string{
 	"cli.flag.lang", "cli.flag.repos_under", "cli.help.more", "cli.usage",
 }
 
-// Flag is a string flag; Usage is its catalog code.
+// Flag is a string flag; Usage is its catalog code. Bool makes it a switch
+// ("--name", value "true" or "false"); Hidden leaves it out of the help.
 type Flag struct {
 	Name    string
 	Default string
 	Usage   string
+	Bool    bool
+	Hidden  bool
 }
 
 // AnyArgs accepts any number of arguments.
@@ -175,7 +179,12 @@ func parse(cmd *Command, path, args []string) (Invocation, error) {
 	fs := flag.NewFlagSet(strings.Join(path, " "), flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	values := map[string]*string{}
+	switches := map[string]*bool{}
 	for _, f := range cmd.Flags {
+		if f.Bool {
+			switches[f.Name] = fs.Bool(f.Name, false, f.Usage)
+			continue
+		}
 		values[f.Name] = fs.String(f.Name, f.Default, f.Usage)
 	}
 	var flags, positional []string
@@ -187,11 +196,13 @@ func parse(cmd *Command, path, args []string) (Invocation, error) {
 			i = len(args)
 		case strings.HasPrefix(a, "--") && len(a) > 2:
 			name, _, hasValue := strings.Cut(a[2:], "=")
-			if _, known := values[name]; !known {
+			_, known := values[name]
+			_, isSwitch := switches[name]
+			if !known && !isSwitch {
 				return Invocation{}, fmt.Errorf("unknown flag: --%s", name)
 			}
 			flags = append(flags, a)
-			if !hasValue && i+1 < len(args) {
+			if !hasValue && !isSwitch && i+1 < len(args) {
 				flags = append(flags, args[i+1])
 				i++
 			}
@@ -210,6 +221,9 @@ func parse(cmd *Command, path, args []string) (Invocation, error) {
 	inv := Invocation{Path: path, Flags: map[string]string{}, Args: positional}
 	for name, v := range values {
 		inv.Flags[name] = *v
+	}
+	for name, v := range switches {
+		inv.Flags[name] = strconv.FormatBool(*v)
 	}
 	return inv, nil
 }
@@ -254,6 +268,9 @@ func (p Program) help(cmd *Command, path, args []string) error {
 		flags := append([]Flag{}, cmd.Flags...)
 		sort.Slice(flags, func(i, j int) bool { return flags[i].Name < flags[j].Name })
 		for _, f := range flags {
+			if f.Hidden {
+				continue
+			}
 			fmt.Fprintf(&b, "  --%s  %s\n", f.Name, cat.Text(f.Usage, nil))
 		}
 	}

@@ -162,13 +162,18 @@ func (s *sandbox) setRepoRoots(t *testing.T) {
 	mustWrite(t, s.configPath(), string(out))
 }
 
-// runAll runs init, baseline and run in order. wrap, when non-nil, turns the
+// runAll runs init, baseline, run and a scheduled review (run --unattended,
+// decision 2026-10-26, J3) in order. wrap, when non-nil, turns the
 // rosmarops argv into the argv actually executed (e.g. under strace) for the
 // given step.
 func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []string) {
 	t.Helper()
-	for _, step := range []string{"init", "baseline", "run"} {
-		argv := []string{s.binary, step}
+	steps := []struct{ step, args string }{
+		{"init", "init"}, {"baseline", "baseline"}, {"run", "run"}, {"unattended", "run --unattended"},
+	}
+	for _, st := range steps {
+		step := st.step
+		argv := append([]string{s.binary}, strings.Fields(st.args)...)
 		if wrap != nil {
 			argv = wrap(step, argv)
 		}
@@ -179,7 +184,7 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 		var exitErr *exec.ExitError
 		switch {
 		case err == nil:
-		case errors.As(err, &exitErr) && step == "run":
+		case errors.As(err, &exitErr) && (step == "run" || step == "unattended"):
 			// A yellow or red run exits non-zero; the run still completed.
 			t.Logf("rosmarops run exit code %d", exitErr.ExitCode())
 		default:
@@ -192,7 +197,7 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 	reports := filepath.Join(s.home, ".rosmarops", "reports")
 	// Every file of the run, the BV-40 ones included, lands in the reports
 	// directory: the write test covers them.
-	for _, f := range []string{"graph.v2.json", "report.v2.json", "report.html", "index-history.json", "findings-memory.json"} {
+	for _, f := range []string{"graph.v2.json", "report.v2.json", "report.html", "index-history.json", "findings-memory.json", "last-scheduled-run-log.txt"} {
 		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
 			t.Fatalf("run did not complete: no %s in %s: %v", f, reports, err)
 		}

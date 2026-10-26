@@ -187,7 +187,7 @@ func TestTriang2_Step1(t *testing.T) {
 	}
 }
 
-// §15.8–§15.9: ai.limits in the HTML; the .ai.md's no-secrets line, the
+// §15.9 (§15.8 replaced by §17.5): the .ai.md's no-secrets line, the
 // total with two agents, and today's finding not repeated.
 func TestTriang2_AIExportAndLimits(t *testing.T) {
 	g := v2Graph(t)
@@ -196,11 +196,17 @@ func TestTriang2_AIExportAndLimits(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, one)
-		more := page[strings.Index(page, `<div class="more">`):]
-		if !strings.Contains(more, "<p>"+htmlEscape(cat.Text("ai.limits", nil))+"</p>") {
-			t.Errorf("%s: no ai.limits in «What we don't know»", lang)
+		// v3 §17.5 (BV-68) replaces §15.8: the limits are in the
+		// assumptions' window (html.assume.scope); ai.limits stays in the
+		// .ai.md.
+		dlg := page[strings.Index(page, `<dialog id="as-dialog"`):]
+		if !strings.Contains(dlg, "<li>"+htmlEscape(cat.Text("html.assume.scope", nil))+"</li>") {
+			t.Errorf("%s: no html.assume.scope in the assumptions' window", lang)
 		}
 		ai := report.RenderAIExport(one, cat, "/h")
+		if !strings.Contains(ai, cat.Text("ai.limits", nil)) {
+			t.Errorf("%s: the .ai.md lacks ai.limits", lang)
+		}
 		if !strings.HasPrefix(ai, cat.Text("ai.instruction", nil)+"\n\n"+cat.Text("ai.no_secrets", nil)+"\n\n") {
 			t.Errorf("%s: no ai.no_secrets after the instruction", lang)
 		}

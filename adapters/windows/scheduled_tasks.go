@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,11 +15,31 @@ import (
 // psTaskRecord mirrors one element of the JSON array emitted by the PowerShell
 // scheduled-task enumeration command.
 type psTaskRecord struct {
-	Name     string `json:"Name"`
-	Path     string `json:"Path"`
-	Triggers string `json:"Triggers"` // comma-separated CIM class names
-	Actions  string `json:"Actions"`  // pipe-separated executable paths
-	Date     string `json:"Date"`     // ISO-8601 registration date, may be empty
+	Name      string       `json:"Name"`
+	Path      string       `json:"Path"`
+	Triggers  string       `json:"Triggers"` // comma-separated CIM class names
+	Actions   string       `json:"Actions"`  // pipe-separated executable paths
+	Date      string       `json:"Date"`     // ISO-8601 registration date, may be empty
+	RosmarOps *psRosmarOps `json:"RosmarOps"`
+}
+
+// psRosmarOps is the detail of a task that runs rosmarops.exe (J5).
+type psRosmarOps struct {
+	Count            int         `json:"Count"`
+	Execute          string      `json:"Execute"`
+	Expanded         string      `json:"Expanded"`
+	Arguments        string      `json:"Arguments"`
+	WorkingDirectory string      `json:"WorkingDirectory"`
+	UserID           string      `json:"UserId"`
+	LogonType        string      `json:"LogonType"`
+	RunLevel         string      `json:"RunLevel"`
+	Triggers         []psTrigger `json:"Triggers"`
+}
+
+type psTrigger struct {
+	Class string `json:"Class"`
+	Days  string `json:"Days"`
+	Start string `json:"Start"`
 }
 
 // ListScheduledTasks implements platform.Platform.
@@ -46,10 +67,26 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 		`Path=$task.TaskPath;` +
 		`Triggers=$triggers;` +
 		`Actions=$actions;` +
-		`Date=if($task.Date){"$($task.Date)"}else{''}` +
+		`Date=if($task.Date){"$($task.Date)"}else{''};` +
+		// J5: for a task with a rosmarops.exe action only, its detail.
+		`RosmarOps=$(` +
+		`$ra=@($task.Actions);` +
+		`$m=@($ra | Where-Object {$_.Execute -and ((Split-Path -Leaf ([Environment]::ExpandEnvironmentVariables("$($_.Execute)").Trim('"'))) -ieq 'rosmarops.exe')});` +
+		`if($m.Count -gt 0){$a0=$m[0];` +
+		`[PSCustomObject]@{` +
+		`Count=$ra.Count;` +
+		`Execute="$($a0.Execute)";` +
+		`Expanded=[Environment]::ExpandEnvironmentVariables("$($a0.Execute)").Trim('"');` +
+		`Arguments="$($a0.Arguments)";` +
+		`WorkingDirectory="$($a0.WorkingDirectory)";` +
+		`UserId="$($task.Principal.UserId)";` +
+		`LogonType="$($task.Principal.LogonType)";` +
+		`RunLevel="$($task.Principal.RunLevel)";` +
+		`Triggers=@($task.Triggers | ForEach-Object {[PSCustomObject]@{Class=$_.CimClass.CimClassName;Days="$($_.DaysOfWeek)";Start="$($_.StartBoundary)"}})` +
+		`}}else{$null})` +
 		`}` +
 		`});` +
-		`ConvertTo-Json -InputObject $t -Depth 1 -Compress`
+		`ConvertTo-Json -InputObject $t -Depth 4 -Compress`
 
 	raw, err := runPS(ctx, psCmd)
 	if err != nil {
@@ -77,9 +114,26 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 			SHA256:          taskSHA256(r.Name, r.Path, r.Triggers, r.Actions),
 			HasLogonTrigger: hasLogonTrigger(r.Triggers),
 			Date:            parseTaskDate(r.Date),
+			RosmarOps:       r.RosmarOps.task(),
 		})
 	}
 	return tasks, nil
+}
+
+// task is the platform form of the detail; nil stays nil.
+func (r *psRosmarOps) task() *platform.RosmarOpsTask {
+	if r == nil {
+		return nil
+	}
+	t := &platform.RosmarOpsTask{
+		Actions: r.Count, Execute: r.Execute, ExecuteExpanded: r.Expanded, Arguments: r.Arguments,
+		WorkingDirectory: r.WorkingDirectory, UserID: r.UserID, LogonType: r.LogonType, RunLevel: r.RunLevel,
+	}
+	for _, tr := range r.Triggers {
+		days, _ := strconv.Atoi(strings.TrimSpace(tr.Days))
+		t.Triggers = append(t.Triggers, platform.TaskTrigger{Class: tr.Class, DaysOfWeek: days, Start: tr.Start})
+	}
+	return t
 }
 
 // taskSHA256 computes the canonical SHA-256 for a scheduled task.

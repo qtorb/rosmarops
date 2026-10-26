@@ -17,6 +17,7 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 - **It never changes your files, settings, repositories, keys or agents.** It reads. The report tells you what to change; you, or your own agent with your approval, make the change.
 - **It never prints a secret in full.** Not in the report, not in its logs, not in its state.
 - **It never writes outside its own folders** (see claim 3).
+- **It never creates scheduled tasks.** The report gives you the exact command for a weekly review; you, or your agent with your approval, create the task.
 
 ---
 
@@ -32,7 +33,8 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 | 6 | The export for your AI never includes secrets | The «Copy for your AI» text contains no secret values, previews or fingerprints, and replaces your user folder with `~`. If you paste it into an AI in the cloud, it leaves your computer because you paste it, and the report says so next to the button. Checked by `no_full_secret_leak_test.go`. |
 | 7 | The share card identifies nothing | The card contains only the score, the band, the counts, the date and the method version. `tests/trust/no_identity_in_card_test.go` checks it. |
 | 8 | Its configuration is plain data | `config.json` is JSON with no executable content, validated against `schemas/config.v1.json` every time it is read. |
-| 9 | It checks its own integrity | On start, RosmarOps hashes its own executable and its configuration and compares them with the values it accepted last time. If the program changed, it stops with a red report. If the configuration changed, it asks you in the console whether you made the change; if you say no, or nobody answers, it stops with a red report. **Limit:** this catches accidental corruption and simple tampering. It does not stop an attacker who can change the program, the configuration and the state together. |
+| 9 | It checks its own integrity | The first time you set it up, RosmarOps records a fingerprint of its own program and of its configuration. On every later run it compares them. If the configuration changed, it shows you what changed and asks whether you made the change. If the program changed, it shows the old and new version and fingerprint and asks whether you installed it; compare the new fingerprint with the one published for that release. If you say no, nobody answers, or it is running as a scheduled review, it stops with a red report. If its state is lost, it treats that as a change, never as a fresh start. **Limit:** this catches unintended changes to the program and its configuration. It does not protect against someone who can already write with your user account: a replaced program does not check itself. For that, check the attestation and the published checksum (see «At release»). |
+| 10 | The weekly review notification names nothing | When a scheduled review finishes, Windows shows a notification with an agent's name, its score and the counts: no repositories, services, paths or secrets in its text. RosmarOps registers nothing in Windows: the notification appears under Windows PowerShell's app identity. Windows keeps it in its notification center with the path to the report, so that clicking it opens the report. | `tests/trust/no_identity_in_notification_test.go` checks the text. |
 
 ---
 

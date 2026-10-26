@@ -71,10 +71,10 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 			}
 		}
 
-		// v3 §7: one h1, five h2 (step 1, today's action, step 3, §11's
-		// section and its window, v3 §16), the score an image named by its
-		// value.
-		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 5 {
+		// v3 §7: one h1, six h2 (step 1, today's action, step 3, §11's
+		// section and its window, v3 §16, and the assumptions' window, §17.5),
+		// the score an image named by its value.
+		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 6 {
 			t.Errorf("%s: headings h1 %d, h2 %d", lang, strings.Count(page, "<h1"), strings.Count(page, "<h2"))
 		}
 		of := cat.Text("html.index.of", nil)
@@ -132,9 +132,9 @@ func TestRenderHTML_Memory(t *testing.T) {
 		raw, _ := os.ReadFile(path)
 		p2 := string(raw)
 		box = memoryBox(t, p2, cat)
+		// v3 §17.2: one line of counts (a finding gone), no series.
 		for _, want := range []string{
-			htmlEscape(cat.Text("html.memory.evolution", map[string]string{"series": "", "x": ""})),
-			htmlEscape(strings.SplitN(cat.Text("memory.counts", nil), "{", 2)[0]),
+			htmlEscape(strings.SplitN(cat.Text("html.since.counts", nil), "{", 2)[0]),
 			`<a href="` + gone + `.html">` + gone + `.html</a>`,
 		} {
 			if !strings.Contains(box, want) {
@@ -144,7 +144,7 @@ func TestRenderHTML_Memory(t *testing.T) {
 		// BV-55, v3 §6.2: the fold's label counts its lines.
 		n := len(run2.Memory.Moved) + len(run2.Memory.NoLongerObserved)
 		fold := `<details><summary>` + htmlEscape(cat.Plural("html.memory.more", n, map[string]string{"count": strconv.Itoa(n)})) + `</summary>`
-		if !strings.Contains(box, fold) || strings.Contains(box, htmlEscape(cat.Text("html.memory.title", nil))+" · ") {
+		if !strings.Contains(box, fold) || strings.Contains(box, " → ") {
 			t.Errorf("%s: memory fold not %q: %s", lang, fold, box)
 		}
 		// v3 §5: the verdict as text in each row.
@@ -160,10 +160,11 @@ func TestRenderHTML_Memory(t *testing.T) {
 	}
 }
 
-// memoryBox is the memory block of the More strip, after its heading.
+// memoryBox is column 1 of the bottom strip, «Since the last review»
+// (v3 §17.2), after its heading.
 func memoryBox(t *testing.T, page string, cat catalog.Catalog) string {
 	t.Helper()
-	head := `<div class="more"><div><h3>` + htmlEscape(cat.Text("html.memory.title", nil)) + `</h3>`
+	head := `<div class="more"><div><h3>` + htmlEscape(cat.Text("html.since.title", nil)) + `</h3>`
 	i := strings.Index(page, head)
 	if i < 0 {
 		t.Fatal("no memory block")

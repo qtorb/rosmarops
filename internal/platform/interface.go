@@ -413,6 +413,37 @@ type ScheduledTask struct {
 
 	// Date is the task registration date (UTC). Zero value means unknown.
 	Date time.Time
+
+	// RosmarOps is the detail of a task with an action whose executable is
+	// named rosmarops.exe (decision 2026-10-26, integridad y revisión
+	// semanal, J5); nil for any other task.
+	RosmarOps *RosmarOpsTask
+}
+
+// RosmarOpsTask is what is read of a task that runs rosmarops.exe (J5): its
+// number of actions; of its first rosmarops.exe action, the executable as
+// registered and normalized (environment variables expanded, without
+// quotes), the arguments and the working directory; its principal; and its
+// triggers.
+type RosmarOpsTask struct {
+	Actions          int
+	Execute          string // as registered
+	ExecuteExpanded  string // variables expanded, quotes removed
+	Arguments        string
+	WorkingDirectory string
+	UserID           string
+	LogonType        string // e.g. "Interactive"
+	RunLevel         string // "Limited" or "Highest"
+	Triggers         []TaskTrigger
+}
+
+// TaskTrigger is one trigger: its CIM class (MSFT_TaskWeeklyTrigger, …),
+// DaysOfWeek (Sunday = 1 … Saturday = 64, weekly triggers) and
+// StartBoundary as registered (its time of day is the run's time).
+type TaskTrigger struct {
+	Class      string
+	DaysOfWeek int
+	Start      string
 }
 
 // DefenderExclusion describes one Windows Defender exclusion entry.

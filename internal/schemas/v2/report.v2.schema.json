@@ -55,6 +55,15 @@
       },
       "description": "How your agents work (decision 2026-10-25, cómo trabajan tus agentes, cálculo, T10): one element per detected agent, empty without a graph. Codes only; texts come from the catalog."
     },
+    "notification_unavailable": {
+      "enum": [
+        "disabled_for_application",
+        "disabled_for_user",
+        "disabled_by_group_policy",
+        "disabled_by_manifest"
+      ],
+      "description": "Only in a scheduled review whose Windows notification did not show (decision 2026-10-26, integridad y revisión semanal, J7): ToastNotifier.Setting as a code. Absent otherwise."
+    },
     "coverage": {
       "$ref": "#/definitions/coverage"
     },

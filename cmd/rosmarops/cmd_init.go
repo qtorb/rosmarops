@@ -9,6 +9,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -80,10 +81,32 @@ func runInit(inv cli.Invocation) error {
 	}
 	slog.Info("config created", "path", cfgPath)
 
-	// Write default state.
+	reportDir := cfg.ReportDirectory
+	if reportDir == "" {
+		reportDir, err = report.DefaultReportDir()
+		if err != nil {
+			return fmt.Errorf("resolve report dir: %w", err)
+		}
+	}
+
+	// Write default state, with the integrity references of this binary and
+	// this configuration, and the accepted copy (decision 2026-10-26,
+	// integridad y revisión semanal, J1).
 	st, err := state.DefaultState(version)
 	if err != nil {
 		return fmt.Errorf("create state: %w", err)
+	}
+	self, err := hash.Self()
+	if err != nil {
+		return fmt.Errorf("hash binary: %w", err)
+	}
+	cfgRaw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	st.Integrity.VigilBinarySHA256, st.Integrity.ConfigSHA256 = self, hash.Bytes(cfgRaw)
+	if err := writeAcceptedCopy(reportDir, cfgRaw); err != nil {
+		return err
 	}
 	if err := state.SaveState(stPath, st); err != nil {
 		return fmt.Errorf("write state: %w", err)
@@ -93,13 +116,6 @@ func runInit(inv cli.Invocation) error {
 	fmt.Printf("RosmarOps initialized.\n\n")
 	fmt.Printf("  Config: %s\n", cfgPath)
 	fmt.Printf("  State:  %s\n\n", stPath)
-	reportDir := cfg.ReportDirectory
-	if reportDir == "" {
-		reportDir, err = report.DefaultReportDir()
-		if err != nil {
-			return fmt.Errorf("resolve report dir: %w", err)
-		}
-	}
 	fmt.Printf("Next step:\n")
 	fmt.Printf("  Run 'rosmarops run' to scan this computer.\n")
 	fmt.Printf("  Results are written to %s.\n", reportDir)

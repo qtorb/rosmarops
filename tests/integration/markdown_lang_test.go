@@ -56,7 +56,9 @@ func TestMarkdownAlwaysEnglish(t *testing.T) {
 		}
 	}
 	consoles := map[string]string{} // --lang: the run's standard output
-	for _, argv := range [][]string{{"init"}, {"run", "--lang", "en"}, {"run", "--lang", "es"}, {"run", "--lang", "es"}} {
+	// init records the configuration (BV-68, J1): the repo_roots edited
+	// after it are accepted with baseline, as a person would confirm them.
+	for _, argv := range [][]string{{"init"}, {"baseline"}, {"run", "--lang", "en"}, {"run", "--lang", "es"}, {"run", "--lang", "es"}} {
 		cmd := exec.Command(bin, argv...)
 		cmd.Dir, cmd.Env = root, env
 		out, err := cmd.Output()

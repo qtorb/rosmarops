@@ -27,10 +27,10 @@ section.ov{margin-top:28px;border-top:1px solid var(--line);padding-top:20px}
 .ovs .ovp{display:inline-block;margin:0 6px 0 0;vertical-align:1px}
 .ovne{font-size:14px;color:var(--mut);margin:0 0 4px}
 #ov-open{margin-top:8px}
-dialog#ov-dialog{width:min(1100px,calc(100% - 32px));max-height:calc(100vh - 64px);overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:24px}
-dialog#ov-dialog::backdrop{background:rgba(0,0,0,.6)}
-dialog#ov-dialog.inline{position:static}
-#ov-close{float:right;margin:0 0 8px 12px}
+dialog#ov-dialog,dialog#as-dialog{width:min(1100px,calc(100% - 32px));max-height:calc(100vh - 64px);overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:24px}
+dialog#ov-dialog::backdrop,dialog#as-dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog#ov-dialog.inline,dialog#as-dialog.inline{position:static}
+#ov-close,#as-close{float:right;margin:0 0 8px 12px}
 #ov-dlg-title{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0 0 4px}
 .ovi{font-size:15px;color:var(--mut);max-width:880px;margin:0 0 14px}
 .ovl{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--mut);margin:0 0 12px}
@@ -415,14 +415,6 @@ func (c htmlCtx) renderOverviewDialog() {
 	}
 	c.w(`</div><p class="ovf">%s</p></dialog>`, c.t("html.ov.foot", nil))
 }
-
-// overviewJS opens and closes the window (v3 §16.2): showModal, close, Esc
-// natively, the focus back on #ov-open; without showModal the window shows
-// in place under the section.
-const overviewJS = `var oo=document.getElementById('ov-open'),od=document.getElementById('ov-dialog'),oc=document.getElementById('ov-close');
-if(oo&&od){oo.addEventListener('click',function(){od.hidden=false;if(typeof od.showModal==='function'){od.showModal()}else{od.classList.add('inline');od.setAttribute('open','');oo.parentNode.insertBefore(od,oo.nextSibling)}});
-od.addEventListener('close',function(){od.hidden=true;oo.focus()});
-oc.addEventListener('click',function(){if(typeof od.close==='function'&&typeof od.showModal==='function'){od.close()}else{od.removeAttribute('open');od.hidden=true;oo.focus()}})}`
 
 // headScore is the rest of a column's small (§11.3): the attributes and
 // the score line in its band's colour, or the unavailable line.

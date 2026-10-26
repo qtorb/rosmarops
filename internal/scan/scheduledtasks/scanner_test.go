@@ -17,7 +17,7 @@ var recentDate = time.Now().UTC().Add(-2 * 24 * time.Hour) // 2 days ago
 var oldDate = time.Now().UTC().Add(-10 * 24 * time.Hour) // 10 days ago
 
 func TestScanScheduledTasks_NoTasks_NoFindings(t *testing.T) {
-	result := scheduledtasks.ScanScheduledTasks(nil, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(nil, nil, nil, scheduledtasks.Self{})
 	if len(result.Findings) != 0 {
 		t.Errorf("no tasks: want 0 findings, got %d", len(result.Findings))
 	}
@@ -27,7 +27,7 @@ func TestScanScheduledTasks_NewTask_YellowFinding(t *testing.T) {
 	tasks := []platform.ScheduledTask{
 		{Name: "MyNewTask", Path: `\`, SHA256: fakeSHA("task1"), HasLogonTrigger: false, Date: recentDate},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil, scheduledtasks.Self{})
 
 	if len(result.Findings) != 1 {
 		t.Fatalf("new task: want 1 finding, got %d", len(result.Findings))
@@ -45,7 +45,7 @@ func TestScanScheduledTasks_NewTaskWithLogon_RedFinding(t *testing.T) {
 	tasks := []platform.ScheduledTask{
 		{Name: "EvilLogonTask", Path: `\`, SHA256: fakeSHA("evil"), HasLogonTrigger: true, Date: recentDate},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil, scheduledtasks.Self{})
 
 	if len(result.Findings) != 1 {
 		t.Fatalf("logon task: want 1 finding, got %d", len(result.Findings))
@@ -70,7 +70,7 @@ func TestScanScheduledTasks_KnownTask_NoFinding(t *testing.T) {
 	baseline := []state.ScheduledTaskBase{
 		{Name: "KnownTask", SHA256: sha},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, baseline, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, baseline, nil, scheduledtasks.Self{})
 	if len(result.Findings) != 0 {
 		t.Errorf("known task: want 0 findings, got %d", len(result.Findings))
 	}
@@ -83,7 +83,7 @@ func TestScanScheduledTasks_AllowListed_Suppressed(t *testing.T) {
 	allow := []config.AllowEntryID{
 		{ID: "AllowedTask", Note: "known dev tool logon trigger"},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, allow)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, allow, scheduledtasks.Self{})
 	if len(result.Findings) != 0 {
 		t.Errorf("allow-listed logon task: want 0 findings, got %d", len(result.Findings))
 	}
@@ -96,7 +96,7 @@ func TestScanScheduledTasks_OldTask_Ignored(t *testing.T) {
 	tasks := []platform.ScheduledTask{
 		{Name: "OldTask", Path: `\`, SHA256: fakeSHA("old"), HasLogonTrigger: false, Date: oldDate},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil, scheduledtasks.Self{})
 	if len(result.Findings) != 0 {
 		t.Errorf("old task: want 0 findings (outside window), got %d", len(result.Findings))
 	}
@@ -109,7 +109,7 @@ func TestScanScheduledTasks_ModifiedTask_Finding(t *testing.T) {
 	tasks := []platform.ScheduledTask{
 		{Name: "ModTask", Path: `\`, SHA256: fakeSHA("new-version"), HasLogonTrigger: false, Date: recentDate},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, baseline, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, baseline, nil, scheduledtasks.Self{})
 	if len(result.Findings) != 1 {
 		t.Fatalf("modified task: want 1 finding, got %d", len(result.Findings))
 	}
@@ -121,7 +121,7 @@ func TestScanScheduledTasks_NewBaselineBuilt(t *testing.T) {
 		{Name: "TaskB", SHA256: fakeSHA("b"), Date: recentDate},
 		{Name: "OldTask", SHA256: fakeSHA("old"), Date: oldDate}, // outside window
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil, scheduledtasks.Self{})
 	// Old task should not appear in new baseline (outside window).
 	if len(result.NewBaseline) != 2 {
 		t.Errorf("NewBaseline len = %d, want 2 (old task excluded)", len(result.NewBaseline))
@@ -133,7 +133,7 @@ func TestScanScheduledTasks_ZeroDate_IncludedConservatively(t *testing.T) {
 	tasks := []platform.ScheduledTask{
 		{Name: "UnknownDateTask", SHA256: fakeSHA("unk"), Date: time.Time{}},
 	}
-	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil)
+	result := scheduledtasks.ScanScheduledTasks(tasks, nil, nil, scheduledtasks.Self{})
 	if len(result.Findings) != 1 {
 		t.Errorf("zero-date task: want 1 finding, got %d", len(result.Findings))
 	}

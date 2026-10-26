@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/qtorb/rosmarops/internal/proc"
 )
 
 // psTimeout is the default wall-clock limit for any single PowerShell call.
@@ -43,6 +45,7 @@ func runPS(ctx context.Context, command string) ([]byte, error) {
 	cmd := exec.CommandContext(callCtx, "powershell.exe",
 		"-NonInteractive", "-NoProfile",
 		"-Command", command)
+	proc.Hide(cmd) // no window of its own (J3)
 	cmd.WaitDelay = subprocessWaitDelay
 
 	var stdout, stderr bytes.Buffer

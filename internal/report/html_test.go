@@ -61,8 +61,8 @@ func TestRenderHTML(t *testing.T) {
 			t.Errorf("%s: html lang", lang)
 		}
 		last := -1
-		// v3: the three steps, then the More strip.
-		for _, k := range []string{"html.step.1", "html.index.name", "html.step.2", "html.today.fixes", "html.step.3", "html.memory.title", "html.unknown.title", "html.ai.title", "html.card.title"} {
+		// v3: the three steps, then the bottom strip's three columns (§17).
+		for _, k := range []string{"html.step.1", "html.index.name", "html.step.2", "html.today.fixes", "html.step.3", "html.since.title", "html.weekly.title", "html.agentfix.title"} {
 			i := strings.Index(page, htmlEscape(cat.Text(k, nil)))
 			if i <= last {
 				t.Errorf("%s: %s out of order (%d after %d)", lang, k, i, last)

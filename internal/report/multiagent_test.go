@@ -23,6 +23,13 @@ import (
 // come first in each group, so that only v3 §10 can bring Cursor's up.
 func twoAgents(t *testing.T) report.V2 {
 	t.Helper()
+	return twoAgentsAfter(t, 35, 29)
+}
+
+// twoAgentsAfter is twoAgents with the previous run's scores prevCC (Claude
+// Code) and prevCU (Cursor).
+func twoAgentsAfter(t *testing.T, prevCC, prevCU int) report.V2 {
+	t.Helper()
 	g := v2GraphFull(t, []platform.CredentialEntry{
 		{Path: "/src/a/dashboard/.env.local", Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
 	}, []string{"/src/a/CLAUDE.md"})
@@ -35,7 +42,7 @@ func twoAgents(t *testing.T) report.V2 {
 			Scope:  index.EntryScope{Agents: []string{"Claude Code", "Cursor"}, Repos: 2},
 		}
 	}
-	history := []index.Entry{entry("2026-10-20", 41, 33), entry("2026-10-22", 35, 29)}
+	history := []index.Entry{entry("2026-10-20", 41, 33), entry("2026-10-22", prevCC, prevCU)}
 	v, _ := report.BuildV2(report.V2Input{
 		Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Bases: bases, Base: bases[knowledge.ClaudeCodeProduct],
 		RepoRoots: []string{"/src/a", "/src/b"}, Families: [][]string{{"/src/a"}, {"/src/b"}},
@@ -126,10 +133,12 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 		} else {
 			t.Errorf("%s: today's finding has no projection: test would be vacuous", lang)
 		}
-		ci := strings.Index(page, htmlEscape(cat.Text("html.memory.evolution.agent", map[string]string{"agent": "Cursor", "series": "33 → 29 → " + strconv.Itoa(*cursor.Value)})))
-		cl := strings.Index(page, htmlEscape(cat.Text("html.memory.evolution.agent", map[string]string{"agent": "Claude Code", "series": "41 → 35 → " + strconv.Itoa(*claude.Value)})))
-		if ci < 0 || cl < 0 || ci > cl {
-			t.Errorf("%s: memory series Cursor %d, Claude Code %d", lang, ci, cl)
+		// v3 §17.2: a line per agent whose score changed, in step 1's order;
+		// no series.
+		ci := strings.Index(page, htmlEscape(cat.Text("html.since.score", map[string]string{"agent": "Cursor", "prev": "29", "now": strconv.Itoa(*cursor.Value)})))
+		cl := strings.Index(page, htmlEscape(cat.Text("html.since.score", map[string]string{"agent": "Claude Code", "prev": "35", "now": strconv.Itoa(*claude.Value)})))
+		if ci < 0 || cl < 0 || ci > cl || strings.Contains(page, "33 → 29") {
+			t.Errorf("%s: score lines Cursor %d, Claude Code %d", lang, ci, cl)
 		}
 		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
 		groups := strings.Split(step3, `<div class="grp">`)[1:]
@@ -150,7 +159,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // v3, at BV-61 with v3 §11's section, checked to be the only change, and at
 // BV-62 the launchers' one/other line, at BV-63 with the changes of v3 §15,
 // at BV-64 with the launcher's write way (own_config_writable, score 27),
-// at BV-66 with §11 folded into a summary and a window (v3 §16);
+// at BV-66 with §11 folded into a summary and a window (v3 §16), at BV-68
+// with the bottom strip of v3 §17 (checked: nothing else changes);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

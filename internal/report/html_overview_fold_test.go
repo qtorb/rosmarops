@@ -36,7 +36,7 @@ func TestRenderHTML_OverviewFolded(t *testing.T) {
 		if !strings.HasSuffix(page[:strings.Index(page, "</main>")], "</dialog>") {
 			t.Errorf("%s: the window is not at the end of main", lang)
 		}
-		for _, js := range []string{"showModal()", ".close()", "oo.focus()", "classList.add('inline')"} {
+		for _, js := range []string{"showModal()", ".close()", "o.focus()", "classList.add('inline')"} {
 			if !strings.Contains(page, js) {
 				t.Errorf("%s: script lacks %s", lang, js)
 			}
@@ -94,7 +94,7 @@ func TestRenderHTML_OverviewNoEvaluated(t *testing.T) {
 		v.AgentsOverview = keep
 	})
 	page := renderHTML(t, "es", v)
-	if strings.Contains(page, `id="ov-open"`) || strings.Contains(page, `<dialog`) || strings.Contains(page, `<table class="ovt"`) {
+	if strings.Contains(page, `id="ov-open"`) || strings.Contains(page, `id="ov-dialog"`) || strings.Contains(page, `<table class="ovt"`) {
 		t.Error("a button or a window with no evaluated agent")
 	}
 	if !strings.Contains(ovFolded(t, page), `<p class="ovne"><b>Cline</b>`) {

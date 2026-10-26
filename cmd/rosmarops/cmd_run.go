@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	windowsadapter "github.com/qtorb/rosmarops/adapters/windows"
@@ -20,6 +23,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
@@ -42,24 +46,51 @@ var runLangs = map[string]bool{"en": true, "es": true}
 func newRunCmd() *cli.Command {
 	return &cli.Command{
 		Name: "run", Short: "cli.cmd.run.short", Long: "cli.cmd.run.long", Args: cli.AnyArgs,
-		Flags:  []cli.Flag{{Name: "lang", Default: catalog.DefaultLang, Usage: "cli.flag.lang"}},
+		Flags: []cli.Flag{
+			{Name: "lang", Default: catalog.DefaultLang, Usage: "cli.flag.lang"},
+			// A scheduled review (decision 2026-10-26, integridad y revisión
+			// semanal, J3): left out of the help, which has no text for it.
+			{Name: "unattended", Bool: true, Hidden: true},
+		},
 		Before: integrityCheck,
 		Run:    runRun,
 	}
 }
 
-func runRun(inv cli.Invocation) error {
+func runRun(inv cli.Invocation) (err error) {
 	start := time.Now()
 	lang := inv.Flags["lang"]
 	if !runLangs[lang] {
 		return fmt.Errorf("lang_unsupported: %q (en, es)", lang)
 	}
+	// A scheduled review (J3): no window, never reads input, its log in
+	// the reports directory.
+	unattended := inv.Flags["unattended"] == "true"
+	var runLog *deferredLog
+	if unattended {
+		freeConsole()
+		runLog = &deferredLog{}
+		slog.SetDefault(slog.New(slog.NewTextHandler(runLog, nil)))
+		defer func() {
+			if err != nil {
+				slog.Error("scheduled run failed", "err", err)
+				if dir, dirErr := report.DefaultReportDir(); dirErr == nil {
+					_ = runLog.attach(dir) // a failure before the reports directory was known
+				}
+			}
+		}()
+	}
 	// Invariant §6: every scanner and subprocess runs under the global cap.
 	ctx, cancel := context.WithTimeout(context.Background(), scan.GlobalTimeout)
 	defer cancel()
 
-	// Load config.
-	cfgPath, err := config.ResolveConfigPath()
+	// Load config: a scheduled review reads only ~/.rosmarops/config.json,
+	// never one in its working directory (J3).
+	resolve := config.ResolveConfigPath
+	if unattended {
+		resolve = config.HomeConfigPath
+	}
+	cfgPath, err := resolve()
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
 	}
@@ -91,27 +122,30 @@ func runRun(inv cli.Invocation) error {
 		}
 	}
 
+	if unattended {
+		if err := runLog.attach(reportDir); err != nil {
+			return err
+		}
+	}
+
 	cat, err := catalog.Load(lang)
 	if err != nil {
 		return fmt.Errorf("message catalog: %w", err)
 	}
-	// A configuration changed since the last baseline: the person confirms
-	// it, or invariant 8 applies unchanged (decision 2026-10-24, memoria,
-	// adjustment A; informe HTML v3 §9.6).
-	if h := st.Integrity.ConfigSHA256; stErr == nil && h != zeroHash && h != "" {
-		cur, hashErr := hash.File(cfgPath)
-		if hashErr == nil && cur != h {
-			ok, confirmErr := confirmConfig(confirmation{in: os.Stdin, out: os.Stdout, terminal: canAsk(os.Stdin, os.Stdout)}, cat, &st, stPath, cfgPath, reportDir)
-			if confirmErr != nil {
-				return confirmErr
-			}
-			if !ok {
-				abortWithIntegrityFailure("config_hash_changed",
-					"Config file hash does not match the last baseline.",
-					"If you edited rosmarops.config.json intentionally, run 'rosmarops baseline'. "+
-						"If not, inspect the file for unexpected changes.")
-			}
-		}
+	// Integrity (J1–J3): the state, the binary and the configuration
+	// against the references init recorded; a change is confirmed in the
+	// console or the run stops with a red report. A scheduled review never
+	// reads input.
+	ask := asker{in: os.Stdin, out: os.Stdout, terminal: canAsk(os.Stdin, os.Stdout), cat: cat}
+	if unattended {
+		ask.in, ask.out, ask.terminal = strings.NewReader(""), io.Discard, false
+	}
+	integrityNotChecked, err := integrityRun{
+		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: reportDir,
+		unattended: unattended, lang: lang, selfHash: hash.Self,
+	}.check()
+	if err != nil {
+		return err
 	}
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
 
@@ -129,6 +163,20 @@ func runRun(inv cli.Invocation) error {
 			Message: "state unavailable: fresh local salt; fingerprints and host_id not comparable with previous runs",
 		})
 	}
+
+	// This RosmarOps, for its own weekly review (decision 2026-10-26,
+	// integridad y revisión semanal, J4–J6).
+	exePath, exeErr := os.Executable()
+	if exeErr != nil {
+		slog.Warn("run: could not resolve the executable's path", "err", exeErr)
+	}
+	langs := make([]string, 0, len(runLangs))
+	for l := range runLangs {
+		langs = append(langs, l)
+	}
+	sort.Strings(langs)
+	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs}
+	weekly := scheduledtasks.Weekly{State: scheduledtasks.WeeklyNone}
 
 	// Resolve home dir once — used by the MCP writable-path check.
 	homeDir, homeDirErr := os.UserHomeDir()
@@ -319,8 +367,9 @@ func runRun(inv cli.Invocation) error {
 		// --- Scheduled tasks scanner (M7) ---
 		{Name: "scheduledtasks", Run: func(ctx context.Context) func() {
 			currentTasks, tasksErr := plat.ListScheduledTasks(ctx)
-			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks)
+			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks, self)
 			return func() {
+				weekly = scheduledtasks.WeeklyOf(currentTasks, self)
 				if tasksErr != nil {
 					slog.Warn("scheduledtasks: could not list tasks", "err", tasksErr)
 					scanErrors = append(scanErrors, finding.ScanError{
@@ -413,6 +462,16 @@ func runRun(inv cli.Invocation) error {
 	if saltErr != nil {
 		return fmt.Errorf("findings memory: %w", saltErr)
 	}
+	// A scheduled review's notification (J7): whether Windows will show it,
+	// read before the report so that this report says so.
+	notificationUnavailable := ""
+	if unattended {
+		if setting, err := notify.Run(ctx, ""); err != nil {
+			slog.Warn("notify: setting not read", "err", err)
+		} else if code, off := notify.Unavailable(setting); off {
+			notificationUnavailable = code
+		}
+	}
 	v2, ruled := report.BuildV2(report.V2Input{
 		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: cfg.RepoRoots,
 		Families: families, V1: r, GeneratedAt: time.Now(),
@@ -420,6 +479,8 @@ func runRun(inv cli.Invocation) error {
 		Salt: salt, Memory: mem, MemoryReset: memReset,
 		Rotated: cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
+		IntegrityNotChecked: integrityNotChecked,
+		ExePath:             exePath, Weekly: weekly,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -465,6 +526,14 @@ func runRun(inv cli.Invocation) error {
 	}
 
 	// Print summary.
+	if unattended {
+		// The notification, last (J7): agent, score and counts.
+		if text, ok := report.NotificationText(v2, cat); ok && notificationUnavailable == "" {
+			notifyText(text, filepath.Join(reportDir, report.HTMLFileName))
+		}
+		slog.Info("scheduled run finished", "status", v2.Status)
+		return nil
+	}
 	fmt.Print("\n" + report.ConsoleSummary(v2, cat, mdPath))
 
 	return nil

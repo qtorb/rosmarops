@@ -76,6 +76,7 @@ func runBaseline(cli.Invocation) error {
 	// changes next).
 	st.Integrity.VigilBinarySHA256 = binaryHash
 	st.Integrity.ConfigSHA256 = configHash
+	st.EngineVersion = version // the version the binary reference is of (J2)
 	copyDir := ""
 	if cfgLoadErr == nil {
 		copyDir = cfg.ReportDirectory

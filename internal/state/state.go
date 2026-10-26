@@ -170,6 +170,13 @@ func (s State) Salt() ([]byte, error) {
 // DefaultState returns a minimal valid v2 State for a first-time init, with a
 // fresh local salt. Integrity hashes are set to zeroSHA256 until
 // `rosmarops baseline` populates them.
+// NeverRun is the last_run of a state no run has updated yet.
+const NeverRun = "0001-01-01T00:00:00Z"
+
+// HasRun reports a state an earlier run already updated (decision
+// 2026-10-26, integridad y revisión semanal, J1).
+func (s State) HasRun() bool { return s.LastRun != "" && s.LastRun != NeverRun }
+
 func DefaultState(engineVersion string) (State, error) {
 	salt, err := NewSalt()
 	if err != nil {
@@ -178,7 +185,7 @@ func DefaultState(engineVersion string) (State, error) {
 	return State{
 		SchemaVersion:    SchemaVersion,
 		EngineVersion:    engineVersion,
-		LastRun:          "0001-01-01T00:00:00Z",
+		LastRun:          NeverRun,
 		LocalSalt:        salt,
 		ConsecutiveGreen: 0,
 		Integrity: Integrity{

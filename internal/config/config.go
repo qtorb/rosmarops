@@ -141,6 +141,17 @@ func DefaultConfig() Config {
 	}
 }
 
+// HomeConfigPath is ~/.rosmarops/config.json, the only configuration a
+// scheduled review reads, never one in the working directory (decision
+// 2026-10-26, integridad y revisión semanal, J3).
+func HomeConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".rosmarops", "config.json"), nil
+}
+
 // ResolveConfigPath returns the path RosmarOps will use for the config file.
 // It prefers ./rosmarops.config.json in the current directory, falling back to
 // ~/.rosmarops/config.json.

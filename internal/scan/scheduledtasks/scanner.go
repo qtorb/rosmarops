@@ -72,10 +72,13 @@ type ScanResult struct {
 //
 // The returned NewBaseline contains all tasks within the recency window
 // (replacing the old baseline entirely — old tasks age out naturally).
+//
+// RosmarOps's own weekly review (self.Owns, J6) is no finding.
 func ScanScheduledTasks(
 	tasks []platform.ScheduledTask,
 	baseline []state.ScheduledTaskBase,
 	allowList []config.AllowEntryID,
+	self Self,
 ) ScanResult {
 	cutoff := time.Now().UTC().Add(-SeenWithinDays * 24 * time.Hour)
 
@@ -112,6 +115,12 @@ func ScanScheduledTasks(
 		baselinedSHA, inBaseline := blByName[normName(t.Name)]
 		if inBaseline && baselinedSHA == t.SHA256 {
 			continue // known, unchanged — no finding
+		}
+
+		// Its own weekly review (decision 2026-10-26, integridad y revisión
+		// semanal, J6).
+		if self.Owns(t) {
+			continue
 		}
 
 		// New or modified task — check allow-list.

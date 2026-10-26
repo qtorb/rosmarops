@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
@@ -63,7 +64,9 @@ func newRootCmd() *cli.Command {
 //   - Computed hash ≠ stored hash (and stored hash ≠ zeroHash) → abort.
 //   - Writes a minimal RED report and exits with code 2.
 func integrityCheck(path []string) error {
-	if path[0] == "init" || path[0] == "baseline" {
+	// run checks its own integrity, with the person's answer when there is
+	// a console (decision 2026-10-26, integridad y revisión semanal, J1–J3).
+	if path[0] == "init" || path[0] == "baseline" || path[0] == "run" {
 		return nil
 	}
 
@@ -92,7 +95,7 @@ func integrityCheck(path []string) error {
 			slog.Error("integrity: could not hash binary", "err", err)
 			abortWithIntegrityFailure("binary_hash_changed",
 				"Could not verify binary integrity: "+err.Error(),
-				"Run 'rosmarops baseline' after verifying the binary is trustworthy.")
+				"Run 'rosmarops baseline' after verifying the binary is trustworthy.", abortOptions{lang: catalog.DefaultLang})
 		}
 		if selfHash != st.Integrity.VigilBinarySHA256 {
 			slog.Error("integrity: binary hash mismatch",
@@ -101,15 +104,10 @@ func integrityCheck(path []string) error {
 			abortWithIntegrityFailure("binary_hash_changed",
 				"RosmarOps binary hash does not match the last baseline.",
 				"If you updated RosmarOps intentionally, run 'rosmarops baseline'. "+
-					"If not, do not run RosmarOps again — treat as potential compromise.")
+					"If not, do not run RosmarOps again — treat as potential compromise.", abortOptions{lang: catalog.DefaultLang})
 		}
 	}
 
-	// Check config hash. run asks first whether the person made the change
-	// (adjustment A): it checks the config itself, before scanning.
-	if path[0] == "run" {
-		return nil
-	}
 	if st.Integrity.ConfigSHA256 == zeroHash || st.Integrity.ConfigSHA256 == "" {
 		slog.Warn("integrity: config baseline not set — run 'rosmarops baseline' to establish it")
 	} else {
@@ -132,7 +130,7 @@ func integrityCheck(path []string) error {
 				abortWithIntegrityFailure("config_hash_changed",
 					"Config file hash does not match the last baseline.",
 					"If you edited rosmarops.config.json intentionally, run 'rosmarops baseline'. "+
-						"If not, inspect the file for unexpected changes.")
+						"If not, inspect the file for unexpected changes.", abortOptions{lang: catalog.DefaultLang, configRejected: true})
 			}
 		}
 	}
@@ -140,9 +138,20 @@ func integrityCheck(path []string) error {
 	return nil
 }
 
-// abortWithIntegrityFailure writes a minimal RED report, logs the finding,
-// and exits with code 2. This function never returns.
-func abortWithIntegrityFailure(category, why, action string) {
+// abortOptions are what an integrity abort's report needs beyond the
+// finding: the report's language, whether nobody confirmed a configuration
+// change, and whether it is a scheduled review (decision 2026-10-26,
+// integridad y revisión semanal, J2, J3; informe HTML v3 §17.6).
+type abortOptions struct {
+	lang           string
+	configRejected bool
+	unattended     bool
+}
+
+// abortWithIntegrityFailure writes a minimal RED report (Markdown, JSON and
+// a red report.html), logs the finding, shows a scheduled review's
+// notification, and exits with code 2. This function never returns.
+func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 	f := finding.Finding{
 		ID:              category + ":" + truncatedTimeID(),
 		Severity:        finding.SeverityRed,
@@ -166,6 +175,18 @@ func abortWithIntegrityFailure(category, why, action string) {
 			slog.Error("integrity abort: could not write report", "err", err)
 		} else {
 			fmt.Fprintln(os.Stderr, "INTEGRITY FAILURE — see report:", mdPath)
+			cat, catErr := catalog.Load(o.lang)
+			if catErr != nil {
+				cat, _ = catalog.Load(catalog.DefaultLang)
+			}
+			base := strings.TrimSuffix(filepath.Base(mdPath), ".md")
+			page := report.RenderAbortHTML(cat, time.Now(), time.Local, base, o.configRejected, o.unattended)
+			htmlPath, err := report.WriteAbortHTML(reportDir, page)
+			if err != nil {
+				slog.Error("integrity abort: could not write report.html", "err", err)
+			} else if o.unattended {
+				notifyText(cat.Text("notify.aborted", nil), htmlPath)
+			}
 		}
 	}
 

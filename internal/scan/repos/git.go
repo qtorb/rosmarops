@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/qtorb/rosmarops/internal/proc"
 )
 
 // gitLsFiles returns the list of files tracked by git in repoRoot.
@@ -174,6 +176,7 @@ const gitWaitDelay = 2 * time.Second
 // inherits the global one).
 func runGitBytes(ctx context.Context, repoRoot string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, gitHardening...), args...)...)
+	proc.Hide(cmd) // no window of its own (J3)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), gitEnv...)
 	cmd.WaitDelay = gitWaitDelay
@@ -283,6 +286,7 @@ func gitStreamDiffs(ctx context.Context, repoRoot string, hashes []string, read 
 		"--src-prefix=a/", "--dst-prefix=b/", // whatever diff.noprefix says: "+++ b/<file>"
 	}
 	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, gitHardening...), args...)...)
+	proc.Hide(cmd) // no window of its own (J3)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), gitEnv...)
 	cmd.WaitDelay = gitWaitDelay

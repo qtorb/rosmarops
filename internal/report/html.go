@@ -69,7 +69,7 @@ func htmlCSS() string {
 		fmt.Fprintf(&light, "--%s:%s;", t.Name, t.Light)
 		fmt.Fprintf(&dark, "--%s:%s;", t.Name, t.Dark)
 	}
-	return ":root{" + strings.TrimSuffix(light.String(), ";") + "}\n@media (prefers-color-scheme:dark){:root{" + strings.TrimSuffix(dark.String(), ";") + "}}\n" + htmlRules + overviewCSS
+	return ":root{" + strings.TrimSuffix(light.String(), ";") + "}\n@media (prefers-color-scheme:dark){:root{" + strings.TrimSuffix(dark.String(), ";") + "}}\n" + htmlRules + overviewCSS + moreCSS
 }
 
 const htmlRules = `*{box-sizing:border-box}
@@ -147,18 +147,18 @@ pre{background:var(--code);padding:10px 12px;font-size:13px;white-space:pre-wrap
 .sig .n{color:var(--mut)}
 .rot{font-size:15px;margin:0 0 12px;padding-left:20px}
 .cov p,.cov ul{margin:0}
-.more{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;border-top:1px solid var(--line);margin-top:20px;padding-top:14px}
-.more h3{font-size:14px;font-weight:700;margin:0 0 4px}
+.more{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;border-top:1px solid var(--line);margin-top:20px;padding-top:14px}
+.more h3{font-size:14px;font-weight:700;margin:0 0 6px}
 .more p{font-size:14px;color:var(--mut);line-height:1.45;margin:0 0 8px}
 .more details>summary{font-size:14px;color:var(--mut);min-height:44px;display:flex;align-items:center;cursor:pointer}
 button.b2{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--ink);font-size:14px;font-weight:600;margin:0 6px 6px 0}
-.foot{font-size:13px;color:var(--mut);margin:8px 0 0}
+.foot{font-size:13px;color:var(--mut);margin:12px 0 0}
 button.i{width:28px;height:28px;min-height:28px;padding:0;margin:0 2px;border:2px solid var(--mut);background:transparent;color:var(--mut);border-radius:50%;position:relative;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;font:700 14px Georgia,serif;text-transform:none;letter-spacing:0}
 button.i::after{content:"";position:absolute;inset:-8px}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 .gl{display:block;background:var(--bg);border-left:4px solid var(--mut);border-radius:6px;padding:8px 12px;margin:8px 0;font-size:15px;font-weight:400;line-height:1.5;color:var(--ink);text-transform:none;letter-spacing:normal}
 .gl[hidden]{display:none}
-@media (max-width:1099px){.flow{grid-template-columns:minmax(0,1fr);row-gap:36px}.line{display:none}.more{grid-template-columns:repeat(2,minmax(0,1fr))}.tchip{white-space:normal}}
+@media (max-width:1099px){.flow{grid-template-columns:minmax(0,1fr);row-gap:36px}.line{display:none}.more{grid-template-columns:minmax(0,1fr);row-gap:20px}.tchip{white-space:normal}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}details[open]>summary .chev{transform:none}}`
 
 // htmlJS is the only script (informe HTML v1 §6, v2 §7): copy a prompt,
@@ -331,32 +331,13 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.w(`</ul></div>`)
 	}
 
-	// §6.2 More: memory, what we don't know, your AI, the card.
-	c.w(`<div class="more"><div>`)
-	c.renderMemory()
-	c.w(`</div><div><h3>%s</h3>`, c.t("html.unknown.title", nil))
-	for _, a := range v.Index.Scope.Evaluated {
-		c.w(`<p>%s</p>`, c.t(unknownBody(a), map[string]string{"agent": a}))
-	}
-	c.w(`<p>%s</p>`, c.t("ai.limits", nil)) // v3 §15.8
-	c.w(`</div><div><h3>%s</h3><p>%s</p><button type="button" class="b2" id="ai-copy" data-done="%s">%s</button><span class="live" aria-live="polite"></span><button type="button" class="b2" id="ai-download" data-file="rosmarops-ai-%s.md">%s</button><template id="ai-export">%s</template></div>`,
-		c.t("html.ai.title", nil), c.t("html.ai.note", nil), c.t("html.fix.copied", nil), c.t("html.ai.copy", nil), local.Format("2006-01-02"), c.t("html.ai.download", nil),
-		html.EscapeString(RenderAIExport(v, cat, home)))
-	c.w(`<div><h3>%s</h3><p>%s</p>`, c.t("html.card.title", nil), c.t("html.card.note", nil))
-	if a, ok := c.scored(); ok {
-		if svg, text, ok := index.Card(*a, v.Silenced.Count, local, cat); ok {
-			day := local.Format("2006-01-02")
-			c.w(`<button type="button" class="b2" id="card-button" data-svg="rosmarops-card-%s.svg" data-txt="rosmarops-card-%s.txt">%s</button><template id="card-svg">%s</template><template id="card-txt">%s</template>`,
-				day, day, c.t("html.card.button", nil), svg, html.EscapeString(text))
-		}
-	}
-	c.w(`</div></div>`)
-
-	// §6.3 Footer: the technical report (the agents not evaluated moved to
-	// step 1, v3 §13.1).
-	c.w(`<p class="foot">%s</p>`, c.t("html.legacy.pointer", map[string]string{"file": v.base + ".md"}))
+	// §17 The bottom strip: since the last review, the weekly review, fix
+	// it with your agent; the footer with the analysis assumptions.
+	c.renderMore(local)
+	c.renderFoot()
 	c.renderOverviewDialog() // v3 §16.2: at the end of main
-	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+overviewJS)
+	c.renderAssumeDialog()   // v3 §17.5
+	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS)
 	return sb.String()
 }
 
@@ -526,7 +507,11 @@ func (c htmlCtx) renderStep1() {
 	if v.Index.HistoryReset {
 		c.w(`<br>%s`, c.t("html.history.reset", nil))
 	}
-	c.w(`</p></section>`)
+	c.w(`</p>`)
+	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
+		c.w(`<p class="meta warn">%s</p>`, c.t("html.integrity.not_checked", nil))
+	}
+	c.w(`</section>`)
 }
 
 // gitEnvHelp is the «i» env after cred_in_git's impact, only when the key
@@ -848,68 +833,6 @@ func (c htmlCtx) assumptions(f rules.Finding) {
 	}
 }
 
-// renderMemory is the memory block of the More strip (v3 §6.2, v2 §5): the
-// first run's line, or the evolution, the counts and the reason; the
-// moved and gone lines folded.
-func (c htmlCtx) renderMemory() {
-	m := c.v.Memory
-	c.w(`<h3>%s</h3>`, c.t("html.memory.title", nil))
-	for _, a := range c.v.NewAgents {
-		c.w(`<p>%s</p>`, c.t("html.memory.new_agent", map[string]string{"agent": a}))
-	}
-	for _, s := range c.v.NewMCP { // v3 §13.3
-		c.w(`<p>%s</p>`, c.t("html.memory.new_mcp", map[string]string{"name": s}))
-	}
-	if !c.v.memoryPrev {
-		c.w(`<p>%s</p>`, c.t("html.memory.first", nil))
-		return
-	}
-	join := func(ns []int) string {
-		out := make([]string, len(ns))
-		for i, n := range ns {
-			out[i] = strconv.Itoa(n)
-		}
-		return strings.Join(out, " → ")
-	}
-	if len(c.v.Index.Scope.Evaluated) > 1 {
-		// One series per agent, in step 1's order (v3 §10.4).
-		for _, a := range c.scoredAgents() {
-			if s := c.v.seriesBy[a.Agent]; len(s) > 0 {
-				c.w(`<p>%s</p>`, c.t("html.memory.evolution.agent", map[string]string{"agent": a.Agent, "series": join(s)}))
-			}
-		}
-	} else if len(c.v.series) > 0 {
-		c.w(`<p>%s</p>`, c.t("html.memory.evolution", map[string]string{"series": join(c.v.series)}))
-	}
-	c.w(`<p class="mcounts">%s</p>`, c.t("memory.counts", map[string]string{
-		"new": strconv.Itoa(m.Counts[memory.VerdictNew]), "still": strconv.Itoa(m.Counts[memory.VerdictStillObserved]),
-		"gone": strconv.Itoa(m.Counts[memory.VerdictNoLongerObserved]), "again": strconv.Itoa(m.Counts[memory.VerdictObservedAgain]),
-	}))
-	if m.Reason != "" {
-		c.w(`<p>%s</p>`, c.t("memory.not_comparable", map[string]string{"reason": c.cat.Text("memory.reason."+m.Reason, nil)}))
-	}
-	var lines []string
-	for _, mv := range m.Moved {
-		lines = append(lines, c.t("memory.moved", map[string]string{"rule": mv.Rule}))
-	}
-	for _, g := range m.NoLongerObserved {
-		report := html.EscapeString(g.LastReport)
-		if name := g.LastReport + ".html"; c.exists(name) {
-			report = `<a href="` + html.EscapeString(name) + `">` + html.EscapeString(name) + `</a>`
-		}
-		lines = append(lines, c.withHTML("memory.no_longer_observed.line", map[string]string{
-			"severity": c.cat.Text("severity."+g.Severity, nil), "rule": g.Rule, "open_since": g.OpenSince,
-		}, "last_report", report))
-	}
-	if len(lines) > 0 {
-		c.w(`<details><summary>%s</summary>`, html.EscapeString(c.cat.Plural("html.memory.more", len(lines), map[string]string{"count": strconv.Itoa(len(lines))})))
-		for _, l := range lines {
-			c.w(`<p>%s</p>`, l)
-		}
-		c.w(`</details>`)
-	}
-}
-
 // withHTML is key's text, escaped, with the parameter name replaced by the
 // markup raw.
 func (c htmlCtx) withHTML(key string, p map[string]string, name, raw string) string {
@@ -1225,12 +1148,12 @@ func HTMLKeys() []string {
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.delta", "html.index.not_comparable.rules",
 		"html.index.not_comparable.scope", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable",
-		"html.card.button", "html.card.note", "html.card.counts", "html.card.method",
+		"html.card.button", "html.card.counts", "html.card.method",
 		"html.count.repos", "html.none",
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",
-		"html.unknown.title", "html.unknown.body", "html.coverage.title", "html.coverage.body",
+		"html.unknown.body", "html.coverage.title", "html.coverage.body",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
 		"html.fix.title", "html.fix.step1", "html.fix.step2", "html.fix.step3", "html.fix.copy", "html.fix.copied",
 		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
@@ -1240,9 +1163,9 @@ func HTMLKeys() []string {
 		"html.f.cred.others.one", "html.f.cred.others.other",
 		// v2
 		"html.index.unchanged", "html.legacy.pointer",
-		"html.ai.note", "html.ai.copy", "html.ai.download",
+		"html.ai.copy", "html.ai.download",
 		"ai.instruction", "ai.what", "ai.today", "ai.findings", "ai.limits", "ai.more",
-		"html.memory.title", "html.memory.first", "html.memory.evolution",
+		"html.memory.first",
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
 		"severity.red", "severity.yellow",
@@ -1250,8 +1173,8 @@ func HTMLKeys() []string {
 	}
 	// v3
 	keys = append(keys, "html.step.1", "html.step.1.counts", "html.step.2", "html.step.2.hint", "html.step.3",
-		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.today.fixes", "html.ai.title", "html.card.title",
-		"html.step.1.other", "html.unknown.body.cursor", "html.today.projection.agent", "html.memory.evolution.agent")
+		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.today.fixes",
+		"html.step.1.other", "html.unknown.body.cursor", "html.today.projection.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
@@ -1265,6 +1188,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
 	// v3 §14 (BV-57)
 	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
+	// v3 §17 (BV-68)
+	keys = append(keys, moreKeys()...)
 	// v3 §15 (BV-63)
 	keys = append(keys, "html.gain.if_gone", "html.gain.agent.if_gone", "html.fix.none", "html.step.1.counts.multi",
 		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.same_as_today")

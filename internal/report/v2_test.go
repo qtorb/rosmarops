@@ -104,17 +104,21 @@ func buildV2(t *testing.T, g *graph.Graph, v1 report.Report) report.V2 {
 }
 
 // reservedKeys are signed texts the binary cannot emit: the launcher's
-// message (a .bat cannot read the catalog), the rejected configuration line
-// (its minimal report has no HTML) and the HTML's legacy section (gone from
-// the HTML in informe HTML v2 §3).
+// message (a .bat cannot read the catalog) and the HTML's legacy section
+// (gone from the HTML in informe HTML v2 §3).
 var reservedKeys = []string{
 	"html.console.open",
 	// agents_overview carries session_env_not_readable as a code; the HTML
 	// says it with html.ov.data.session_env (v3 §11.4, line 9)
 	"unknown.session_env_not_readable",
-	// the minimal red report of a rejected configuration has no HTML
-	// (v3 §9.5, §9.6)
-	"html.config.rejected",
+	// the notification says where the report is only if its click cannot
+	// open it (decision 2026-10-26, integridad y revisión semanal, J7):
+	// pending the check on Windows
+	"notify.where",
+	// gone from the HTML in informe HTML v3 §17 (the bottom strip's
+	// titles and notes, and the score's series); the .ai.md keeps its texts
+	"html.memory.title", "html.memory.evolution", "html.memory.evolution.agent", "html.unknown.title",
+	"html.ai.title", "html.ai.note", "html.card.title", "html.card.note",
 	"html.legacy.title", "html.legacy.body", "html.legacy.none",
 	// gone from the HTML in informe HTML v3 (traffic light, counters, today
 	// tag and chip)

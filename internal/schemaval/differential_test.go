@@ -549,3 +549,29 @@ func TestDifferential_AgentsOverviewRows(t *testing.T) {
 		}
 	}
 }
+
+// J7 (decision 2026-10-26, integridad y revisión semanal): the optional
+// notification_unavailable takes only its four reasons. Own validator and
+// oracle agree.
+func TestDifferential_NotificationUnavailable(t *testing.T) {
+	p := compileAll(t)["report.v2"]
+	raw, err := os.ReadFile(filepath.Join("testdata", "valid", "report.v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for value, want := range map[any]bool{
+		"disabled_for_application": true, "disabled_for_user": true, "disabled_by_group_policy": true, "disabled_by_manifest": true,
+		"enabled": false, "": false, 3: false, "C:/Users/x/report.html": false,
+	} {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		doc["notification_unavailable"] = value
+		b, _ := json.Marshal(doc)
+		own, oracle, _ := verdicts(t, p, b)
+		if own != want || oracle != want {
+			t.Errorf("%v: own %v, oracle %v, want %v", value, own, oracle, want)
+		}
+	}
+}

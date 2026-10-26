@@ -49,6 +49,10 @@ var staticKeys = []string{
 	"console.progress.agents", "console.progress.repos", "console.progress.report",
 	"console.config_changed", "console.config_change.rotated", "console.config_change.fixture", "console.config_change.other",
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
+	// BV-68: the integrity questions and a scheduled review's notification
+	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
+	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
+	"notify.aborted",
 }
 
 // CatalogKeys returns every code the v2 Markdown and the run's console
