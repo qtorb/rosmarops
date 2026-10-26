@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -140,17 +141,19 @@ func integrityCheck(path []string) error {
 
 // abortOptions are what an integrity abort's report needs beyond the
 // finding: the report's language, whether nobody confirmed a configuration
-// change, and whether it is a scheduled review (decision 2026-10-26,
-// integridad y revisión semanal, J2, J3; informe HTML v3 §17.6).
+// change, whether the state was lost (J11: its own headline), and whether
+// it is a scheduled review (decision 2026-10-26, integridad y revisión
+// semanal, J2, J3; informe HTML v3 §17.6).
 type abortOptions struct {
 	lang           string
 	configRejected bool
+	stateLost      bool
 	unattended     bool
 }
 
 // abortWithIntegrityFailure writes a minimal RED report (Markdown, JSON and
 // a red report.html), logs the finding, shows a scheduled review's
-// notification, and exits with code 2. This function never returns.
+// notification or opens the report, and exits with code 2. This function never returns.
 func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 	f := finding.Finding{
 		ID:              category + ":" + truncatedTimeID(),
@@ -164,6 +167,13 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 		IsNewSinceLast:  true,
 	}
 
+	if o.stateLost {
+		// The Markdown is English (BV-45); the v1 category stays
+		// binary_hash_changed, its list being closed.
+		if en, err := catalog.Load(catalog.DefaultLang); err == nil {
+			f.Title = en.Text("html.integrity.state_lost", nil)
+		}
+	}
 	r := report.Build(version, []finding.Finding{f}, nil, 0, 0, 0, 0, nil)
 
 	reportDir, err := report.DefaultReportDir()
@@ -180,12 +190,12 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 				cat, _ = catalog.Load(catalog.DefaultLang)
 			}
 			base := strings.TrimSuffix(filepath.Base(mdPath), ".md")
-			page := report.RenderAbortHTML(cat, time.Now(), time.Local, base, o.configRejected, o.unattended)
+			page := report.RenderAbortHTML(cat, time.Now(), time.Local, base, o.configRejected, o.stateLost, o.unattended)
 			htmlPath, err := report.WriteAbortHTML(reportDir, page)
 			if err != nil {
 				slog.Error("integrity abort: could not write report.html", "err", err)
 			} else if o.unattended {
-				notifyText(cat.Text("notify.aborted", nil), htmlPath)
+				defaultNotifier.announce(context.Background(), cat.Text("notify.aborted", nil), htmlPath)
 			}
 		}
 	}

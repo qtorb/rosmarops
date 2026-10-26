@@ -82,8 +82,9 @@ func fakeTasks(state string) []platform.ScheduledTask {
 var v17Self = scheduledtasks.Self{Exe: v17Exe, Domain: "PC", User: "ana", Langs: []string{"en", "es"}}
 
 // §17.3: the three states of column 2 from a fake adapter; the command,
-// literal, in the hidden pre and in «by hand»; the notification line only
-// when the notification did not show.
+// literal, in the hidden pre and in «by hand»; the agent note under the
+// button with no task or another exe's, not with its own (J11); the
+// notification line only when the notification did not show.
 func TestRenderHTML_WeeklyStates(t *testing.T) {
 	for _, state := range []string{"none", "own", "other"} {
 		weekly := scheduledtasks.WeeklyOf(fakeTasks(state), v17Self)
@@ -98,7 +99,7 @@ func TestRenderHTML_WeeklyStates(t *testing.T) {
 				esc := func(k string, p map[string]string) string { return htmlEscape(cat.Text(k, p)) }
 				cmd := html.EscapeString(report.WeeklyCommand(v17Exe, lang))
 				copyBlock := strings.Contains(col, `<pre hidden>`+esc("html.weekly.prompt", nil)+"\n\n"+cmd+`</pre><button type="button" class="wide"`) &&
-					strings.Contains(col, esc("html.fix.copy.generic", nil)+`</button><span class="live" aria-live="polite"></span>`) &&
+					strings.Contains(col, esc("html.fix.copy.generic", nil)+`</button><span class="live" aria-live="polite"></span><p class="note">`+esc("html.weekly.agent_note", nil)+`</p><details class="manual">`) &&
 					strings.Contains(col, `<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>`+esc("html.fix.manual", nil)+`</summary><p>`+esc("html.weekly.manual.step", nil)+`</p><pre>`+cmd+`</pre></details>`)
 				if !strings.HasPrefix(col, `<h3>`+esc("html.weekly.title", nil)+`</h3>`) {
 					t.Errorf("%s %s: column 2 is not «%s»", state, lang, cat.Text("html.weekly.title", nil))
@@ -110,7 +111,8 @@ func TestRenderHTML_WeeklyStates(t *testing.T) {
 					}
 				case "own":
 					on := esc("html.weekly.on", map[string]string{"day": cat.Text("html.day.friday", nil), "time": "09:00"})
-					if !strings.Contains(col, `<p>`+on+`</p>`) || strings.Contains(col, "<button") || strings.Contains(col, "<pre") {
+					if !strings.Contains(col, `<p>`+on+`</p>`) || strings.Contains(col, "<button") || strings.Contains(col, "<pre") ||
+						strings.Contains(col, esc("html.weekly.agent_note", nil)) {
 						t.Errorf("%s %s: no %q, or a button:\n%s", state, lang, on, col)
 					}
 				case "other":

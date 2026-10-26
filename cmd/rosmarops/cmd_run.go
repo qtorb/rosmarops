@@ -23,7 +23,6 @@ import (
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
-	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
@@ -464,13 +463,9 @@ func runRun(inv cli.Invocation) (err error) {
 	}
 	// A scheduled review's notification (J7): whether Windows will show it,
 	// read before the report so that this report says so.
-	notificationUnavailable := ""
+	var nt notice
 	if unattended {
-		if setting, err := notify.Run(ctx, ""); err != nil {
-			slog.Warn("notify: setting not read", "err", err)
-		} else if code, off := notify.Unavailable(setting); off {
-			notificationUnavailable = code
-		}
+		nt = defaultNotifier.probe(ctx)
 	}
 	v2, ruled := report.BuildV2(report.V2Input{
 		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: cfg.RepoRoots,
@@ -480,7 +475,7 @@ func runRun(inv cli.Invocation) (err error) {
 		Rotated: cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
 		IntegrityNotChecked: integrityNotChecked,
-		ExePath:             exePath, Weekly: weekly,
+		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -527,10 +522,10 @@ func runRun(inv cli.Invocation) (err error) {
 
 	// Print summary.
 	if unattended {
-		// The notification, last (J7): agent, score and counts.
-		if text, ok := report.NotificationText(v2, cat); ok && notificationUnavailable == "" {
-			notifyText(text, filepath.Join(reportDir, report.HTMLFileName))
-		}
+		// The notice, last (J7, J9): agent, score and counts, or the report
+		// opened.
+		text, ok := report.NotificationText(v2, cat)
+		defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName)))
 		slog.Info("scheduled run finished", "status", v2.Status)
 		return nil
 	}

@@ -15,8 +15,9 @@ import (
 // §17.6): the header, the red headline, the line of a configuration change
 // nobody confirmed (configRejected), under the headline the line of a
 // scheduled review that did not run (unattended), and the pointer to the
-// Markdown report mdBase. Only catalog texts; no script.
-func RenderAbortHTML(cat catalog.Catalog, at time.Time, loc *time.Location, mdBase string, configRejected, unattended bool) string {
+// Markdown report mdBase. A lost state has its own headline (J11). Only
+// catalog texts; no script.
+func RenderAbortHTML(cat catalog.Catalog, at time.Time, loc *time.Location, mdBase string, configRejected, stateLost, unattended bool) string {
 	if loc == nil {
 		loc = time.Local
 	}
@@ -27,7 +28,11 @@ func RenderAbortHTML(cat catalog.Catalog, at time.Time, loc *time.Location, mdBa
 	if configRejected {
 		page += `<p style="color:var(--red);font-size:15px;font-weight:600;margin:0 0 8px">` + t("html.config.rejected", nil) + `</p>`
 	}
-	page += `<h1 class="hl">` + t("html.status.red", nil) + `</h1>`
+	headline := "html.status.red"
+	if stateLost {
+		headline = "html.integrity.state_lost"
+	}
+	page += `<h1 class="hl">` + t(headline, nil) + `</h1>`
 	if unattended {
 		page += `<p class="meta">` + t("html.unattended.pending", nil) + `</p>`
 	}

@@ -11,3 +11,8 @@ import (
 func Run(context.Context, string) (string, error) {
 	return "", errors.New("notify: not on Windows")
 }
+
+// OpenReport is Windows-only: elsewhere no report is opened.
+func OpenReport(string) error {
+	return errors.New("notify: not on Windows")
+}

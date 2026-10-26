@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +13,6 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/hash"
-	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -95,18 +93,19 @@ func (r integrityRun) recordReferences(self string) error {
 // run's integrity was not checked. Every rejection aborts with a red report
 // and never returns.
 func (r integrityRun) check() (notChecked bool, err error) {
-	abort := func(category, why, action string, configRejected bool) {
+	abort := func(category, why, action string, o abortOptions) {
 		do := r.abort
 		if do == nil {
 			do = abortWithIntegrityFailure
 		}
-		do(category, why, action, abortOptions{lang: r.lang, configRejected: configRejected, unattended: r.unattended})
+		o.lang, o.unattended = r.lang, r.unattended
+		do(category, why, action, o)
 	}
 	self, err := r.selfHash()
 	if err != nil {
 		slog.Error("integrity: could not hash binary", "err", err)
 		abort("binary_hash_changed", "Could not verify binary integrity: "+err.Error(),
-			"Run 'rosmarops baseline' after verifying the binary is trustworthy.", false)
+			"Run 'rosmarops baseline' after verifying the binary is trustworthy.", abortOptions{})
 		return false, errAborted
 	}
 	t := func(key string, p map[string]string) string { return r.ask.cat.Text(key, p) }
@@ -121,7 +120,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		fmt.Fprintln(r.ask.out, t("console.state_lost", nil))
 		if !r.ask.ask("console.state_confirm") {
 			abort("binary_hash_changed", "RosmarOps lost its integrity reference: the state was lost or reset.",
-				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.", false)
+				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.", abortOptions{stateLost: true})
 			return false, errAborted
 		}
 		return r.stErr != nil, r.recordReferences(self)
@@ -141,7 +140,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			slog.Error("integrity: binary hash mismatch", "stored", old[:16]+"…", "computed", self[:16]+"…")
 			abort("binary_hash_changed", "RosmarOps binary hash does not match the last baseline.",
 				"If you updated RosmarOps intentionally, run it by hand and confirm. "+
-					"If not, do not run RosmarOps again — treat as potential compromise.", false)
+					"If not, do not run RosmarOps again — treat as potential compromise.", abortOptions{})
 			return false, errAborted
 		}
 		r.st.Integrity.VigilBinarySHA256 = self
@@ -159,19 +158,11 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		if !ok {
 			abort("config_hash_changed", "Config file hash does not match the last baseline.",
 				"If you edited the configuration intentionally, run RosmarOps by hand and confirm the change. "+
-					"If not, inspect the file for unexpected changes.", true)
+					"If not, inspect the file for unexpected changes.", abortOptions{configRejected: true})
 			return false, errAborted
 		}
 	}
 	return false, nil
-}
-
-// notifyText shows a scheduled review's notification with text, opening
-// reportPath on click (J7); a failure is logged, never fatal.
-func notifyText(text, reportPath string) {
-	if _, err := notify.Run(context.Background(), notify.ToastXML(text, notify.FileURI(reportPath))); err != nil {
-		slog.Warn("notify: notification not shown", "err", err)
-	}
 }
 
 // ScheduledLogName is the log of a scheduled review, in the reports

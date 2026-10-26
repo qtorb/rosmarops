@@ -20,7 +20,7 @@ import (
 // window shares §16.2's).
 const moreCSS = `
 .more button.wide{margin-top:4px}
-.more .cardl{font-size:13px;margin:6px 0 0}
+.more .cardl,.more .note{font-size:13px;margin:6px 0 0}
 .more .sep{height:8px}
 .warn{color:var(--amb)}
 .foot #as-open{margin:0 12px 0 0}
@@ -124,7 +124,8 @@ func (c htmlCtx) renderWeekly() {
 
 // renderWeeklyCopy is the block that copies the command, as in step 2: the
 // hidden pre with the instruction and the command, the main button, the
-// live notice, and «I'd rather do it by hand» with the visible command.
+// live notice, the note on the agent the button is for (J11), and «I'd
+// rather do it by hand» with the visible command.
 func (c htmlCtx) renderWeeklyCopy() {
 	if c.v.exePath == "" {
 		return // the executable's path is not known: no command to give
@@ -132,8 +133,8 @@ func (c htmlCtx) renderWeeklyCopy() {
 	cmd := html.EscapeString(WeeklyCommand(c.v.exePath, c.cat.Lang()))
 	c.w(`<pre hidden>%s
 
-%s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
-		c.t("html.weekly.prompt", nil), cmd, c.t("html.fix.copied", nil), c.t("html.fix.copy.generic", nil))
+%s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span><p class="note">%s</p>`,
+		c.t("html.weekly.prompt", nil), cmd, c.t("html.fix.copied", nil), c.t("html.fix.copy.generic", nil), c.t("html.weekly.agent_note", nil))
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><p>%s</p><pre>%s</pre></details>`,
 		c.t("html.fix.manual", nil), c.t("html.weekly.manual.step", nil), cmd)
 }
@@ -191,10 +192,10 @@ dlg('ov-open','ov-dialog','ov-close');dlg('as-open','as-dialog','as-close');`
 func moreKeys() []string {
 	keys := []string{
 		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score",
-		"html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe",
+		"html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
 		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope",
-		"html.integrity.not_checked", "html.unattended.pending", "html.config.rejected",
+		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",
 	}
 	for _, d := range []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"} {
 		keys = append(keys, "html.day."+d)

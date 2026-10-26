@@ -184,7 +184,8 @@ func TestBinaryChangedUnattended(t *testing.T) {
 		t.Fatalf("exit %d, want 2", code)
 	}
 	page, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "report.html"))
-	if err != nil || !strings.Contains(string(page), catalogText(t, "en", "html.unattended.pending")) {
+	if err != nil || !strings.Contains(string(page), catalogText(t, "en", "html.unattended.pending")) ||
+		!strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.status.red")+`</h1>`) {
 		t.Errorf("red report: %v", err)
 	}
 }
@@ -211,6 +212,10 @@ func TestStateLostUnattended(t *testing.T) {
 	readJSON(t, stPath, &st)
 	if st.Integrity.Binary != zero || st.Integrity.Config != zero {
 		t.Errorf("references fixed in silence: %+v", st.Integrity)
+	}
+	page, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "report.html"))
+	if err != nil || !strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.integrity.state_lost")+`</h1>`) {
+		t.Errorf("headline is not html.integrity.state_lost: %v", err)
 	}
 }
 
@@ -240,9 +245,30 @@ func TestStateDeletedOrUnreadable(t *testing.T) {
 			if c.content == "" && err == nil || c.content != "" && string(raw) != c.content {
 				t.Errorf("%s %v: the state was rewritten", c.name, args)
 			}
-			page, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "report.html"))
-			if err != nil || !strings.Contains(string(page), catalogText(t, "en", "html.status.red")) {
-				t.Errorf("%s %v: no red report.html: %v", c.name, args, err)
+			// J11: the red report says the state was lost, in the HTML and
+			// the Markdown; the v1 JSON keeps binary_hash_changed.
+			reports := filepath.Join(home, ".rosmarops", "reports")
+			page, err := os.ReadFile(filepath.Join(reports, "report.html"))
+			if err != nil || !strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.integrity.state_lost")+`</h1>`) {
+				t.Errorf("%s %v: report.html headline is not html.integrity.state_lost: %v", c.name, args, err)
+			}
+			mds, _ := filepath.Glob(filepath.Join(reports, "report-*__RED__*.md"))
+			jsons, _ := filepath.Glob(filepath.Join(reports, "report-*__RED__*.json"))
+			if len(mds) != 1 || len(jsons) != 1 {
+				t.Fatalf("%s %v: red reports %v %v", c.name, args, mds, jsons)
+			}
+			md, _ := os.ReadFile(mds[0])
+			if !strings.Contains(string(md), html.UnescapeString(catalogText(t, "en", "html.integrity.state_lost"))) {
+				t.Errorf("%s %v: the Markdown does not say the state was lost:\n%s", c.name, args, md)
+			}
+			var v1 struct {
+				Findings []struct {
+					Category string `json:"category"`
+				} `json:"findings"`
+			}
+			readJSON(t, jsons[0], &v1)
+			if len(v1.Findings) != 1 || v1.Findings[0].Category != "binary_hash_changed" {
+				t.Errorf("%s %v: v1 findings %+v", c.name, args, v1.Findings)
 			}
 		}
 	}
@@ -273,5 +299,12 @@ func TestUnattendedConfigAndLog(t *testing.T) {
 	}
 	if strings.Contains(string(log), "rosmarops.config.json") {
 		t.Errorf("the log names the local configuration:\n%s", log)
+	}
+	// J10: the log says what happened to the notice (here, not on
+	// Windows: no notification and no report opened).
+	for _, want := range []string{"notify: failed err=", "notify: report not opened err="} {
+		if !strings.Contains(string(log), want) {
+			t.Errorf("no %q in the log:\n%s", want, log)
+		}
 	}
 }

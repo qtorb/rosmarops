@@ -160,7 +160,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // BV-62 the launchers' one/other line, at BV-63 with the changes of v3 §15,
 // at BV-64 with the launcher's write way (own_config_writable, score 27),
 // at BV-66 with §11 folded into a summary and a window (v3 §16), at BV-68
-// with the bottom strip of v3 §17 (checked: nothing else changes);
+// with the bottom strip of v3 §17 (checked: nothing else changes), at
+// BV-69 with the plan B pitch and the agent note's style (checked);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
