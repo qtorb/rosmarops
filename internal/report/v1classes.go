@@ -58,8 +58,8 @@ func agentExtension(f finding.Finding) (string, bool) {
 	if f.Category != "vscode_extension_new" {
 		return "", false
 	}
-	name, ok := knowledge.AgentExtensions[strings.ToLower(f.Evidence.ExtensionID)]
-	return name, ok
+	e, ok := knowledge.AgentExtensions[strings.ToLower(f.Evidence.ExtensionID)]
+	return e.Name, ok
 }
 
 // technical reports whether a v1 finding stays in the technical report.
@@ -105,31 +105,6 @@ var SignalOrder = []string{
 	"dependency_lifecycle_script_network", "shell_profile_modified", "av_exclusion_new", "scheduled_task_new",
 	"global_package_new", "npm_registry_non_standard", "suspicious_script_unexpected_location",
 	"vscode_workspace_trust_disabled",
-}
-
-// newAgents are the agents new since the last run (M5): a new agent
-// extension, by name, sorted. A new MCP server is not an agent (v3 §13.3):
-// newMCPServers.
-func newAgents(fs []finding.Finding) []string {
-	var out []string
-	for _, f := range fs {
-		if name, ok := agentExtension(f); ok {
-			out = append(out, name)
-		}
-	}
-	return uniqueSorted(out)
-}
-
-// newMCPServers are the MCP servers new since the last run
-// (mcp_server_new), by name, sorted (v3 §13.3).
-func newMCPServers(fs []finding.Finding) []string {
-	var out []string
-	for _, f := range fs {
-		if f.Category == "mcp_server_new" && f.Evidence.MCPServer != "" {
-			out = append(out, f.Evidence.MCPServer)
-		}
-	}
-	return uniqueSorted(out)
 }
 
 // envFilesTracked counts the .env files tracked by git that hold no

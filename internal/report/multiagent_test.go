@@ -146,8 +146,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 }
 
 // BV-51 point 7: with one agent, the HTML is the golden page (rendered at
-// BV-56, after the signed wording of v3 §13; before, at 7b41e35 with the
-// changes of BV-51 and BV-54). A change to it is a change to review.
+// BV-56, after the signed wording of v3 §13, and at BV-59 the card's method
+// v3; before, at 7b41e35 with the changes of BV-51 and BV-54). A change to
+// it is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
 	g := v2Graph(t)
 	v1 := report.Build("t", nil, nil, 0, 0, 0, 0, nil)

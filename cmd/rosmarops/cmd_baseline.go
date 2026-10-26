@@ -14,7 +14,6 @@ import (
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
-	"github.com/qtorb/rosmarops/internal/scan/mcp"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 	"github.com/qtorb/rosmarops/internal/scan/shellprofile"
@@ -112,30 +111,11 @@ func runBaseline(cli.Invocation) error {
 		fmt.Printf("  %-8s  %d extension(s) baselined\n", "vscode", len(extBaseline))
 	}
 
-	// Snapshot MCP servers (M5).
+	// MCP servers have no reference since decision 2026-10-26 (agentes y
+	// MCP nuevos, A4): a new one is the v2 memory's.
 	var repoRoots []string
 	if cfgLoadErr == nil {
 		repoRoots = cfg.RepoRoots
-	}
-	mcpScan, mcpErr := plat.ListMCPServers(ctx, repoRoots)
-	currentMCP := mcpScan.Servers
-	if mcpErr != nil {
-		slog.Warn("baseline: could not list MCP servers", "err", mcpErr)
-		fmt.Printf("  %-8s  WARNING: could not list MCP servers: %v\n", "mcp", mcpErr)
-	} else {
-		now := time.Now().UTC().Format(time.RFC3339)
-		mcpBaseline := make([]state.MCPServerBaseline, 0, len(currentMCP))
-		for _, s := range currentMCP {
-			mcpBaseline = append(mcpBaseline, state.MCPServerBaseline{
-				Client:        strings.ToLower(s.Client),
-				Name:          s.Name,
-				CommandSHA256: mcp.CommandSHA256(s.Command, s.Args, s.EnvKeys),
-				FirstSeen:     now,
-			})
-		}
-		st.Baselines.MCPServers = mcpBaseline
-		slog.Info("baseline: MCP servers", "count", len(mcpBaseline))
-		fmt.Printf("  %-8s  %d server(s) baselined\n", "mcp", len(mcpBaseline))
 	}
 
 	// Snapshot repo baselines (M6).

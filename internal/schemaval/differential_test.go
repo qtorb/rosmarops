@@ -20,11 +20,11 @@ import (
 )
 
 // The differential test (decision 2026-10-25, sustituir gojsonschema, G3):
-// over the eight schemas, the own validator and gojsonschema, the oracle,
+// over the nine schemas, the own validator and gojsonschema, the oracle,
 // give the same verdict on every valid fixture and on every document broken
 // from them. gojsonschema is linked into this test only.
 
-// schemaSet are the eight schemas, keyed by the prefix of their fixtures in
+// schemaSet are the nine schemas, keyed by the prefix of their fixtures in
 // testdata/valid.
 var schemaSet = map[string][]byte{
 	"config.v1":          schemas.ConfigSchema,
@@ -35,6 +35,7 @@ var schemaSet = map[string][]byte{
 	"report.v2":          schemas.ReportV2Schema,
 	"index-history.v1":   schemas.IndexHistorySchema,
 	"findings-memory.v1": schemas.FindingsMemorySchema,
+	"findings-memory.v2": schemas.FindingsMemoryV2Schema,
 }
 
 // pair is one schema compiled by both validators.
@@ -463,5 +464,21 @@ func TestValidate_ErrorFormat(t *testing.T) {
 	}
 	if _, err := s.Validate([]byte(`{} {}`)); err == nil {
 		t.Error("trailing data accepted")
+	}
+}
+
+// Decision 2026-10-26 (agentes y MCP nuevos, A2): in findings-memory.v2,
+// agent_refs holds salted references only; both validators refuse a name
+// or a path in clear, and accept the references.
+func TestDifferential_FindingsMemoryV2AgentRefs(t *testing.T) {
+	p := compileAll(t)["findings-memory.v2"]
+	doc := func(refs string) []byte {
+		return []byte(`{"schema_version":2,"salt_ref":"0123456789abcdef","runs":1,"last_checked":{"run":1,"date":"2026-10-26","rules_version":"1","knowledge_version":"k","agents":["Claude Code"],"repos":1,"agent_refs":[` + refs + `]},"entries":[]}`)
+	}
+	for refs, want := range map[string]bool{`"0123456789abcdef"`: true, `"Claude Code"`: false, `"C:/Users/x/.claude.json"`: false} {
+		own, oracle, _ := verdicts(t, p, doc(refs))
+		if own != want || oracle != want {
+			t.Errorf("agent_refs %s: own %v, oracle %v, want %v", refs, own, oracle, want)
+		}
 	}
 }

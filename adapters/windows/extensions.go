@@ -21,7 +21,13 @@ type extensionRecord struct {
 	Identifier struct {
 		ID string `json:"id"`
 	} `json:"identifier"`
-	Version string `json:"version"`
+	Version  string `json:"version"`
+	Metadata struct {
+		// InstalledTimestamp is the install date in milliseconds since
+		// the epoch; VS Code writes it in the metadata of each entry, which
+		// is optional (A5).
+		InstalledTimestamp int64 `json:"installedTimestamp"`
+	} `json:"metadata"`
 }
 
 // ListVSCodeExtensions implements platform.Platform.
@@ -68,11 +74,15 @@ func (w *WindowsPlatform) ListVSCodeExtensions(ctx context.Context) ([]platform.
 		if enabledSet != nil {
 			_, enabled = enabledSet[id]
 		}
-		exts = append(exts, platform.VSCodeExtension{
+		ext := platform.VSCodeExtension{
 			ID:      id,
 			Version: r.Version,
 			Enabled: enabled,
-		})
+		}
+		if ms := r.Metadata.InstalledTimestamp; ms > 0 {
+			ext.InstalledAt = time.UnixMilli(ms).UTC()
+		}
+		exts = append(exts, ext)
 	}
 
 	return exts, nil

@@ -547,3 +547,53 @@ func TestNoise_TemplatesPostureLine(t *testing.T) {
 		t.Errorf("test data changed: %d → %d", listed.TestData.Count, missing.TestData.Count)
 	}
 }
+
+// Decision 2026-10-26 (agentes y MCP nuevos, A7): with the report.testdata
+// block and no posture line, the Markdown has no posture.none.
+func TestNoise_NoPostureNoneWithTestData(t *testing.T) {
+	v := noiseReport(t)
+	cat, _ := catalog.Load("en")
+	md := report.RenderV2Markdown(v, cat, time.UTC)
+	_, posture, _ := strings.Cut(md, "## "+cat.Text("section.posture", nil)+"\n")
+	posture, _, _ = strings.Cut(posture, "\n## ")
+	for _, p := range v.Posture {
+		if p.Count > 0 && !(p.Code == rules.PostureInTemplatesOnly) {
+			t.Fatalf("scenario: posture line %s", p.Code)
+		}
+	}
+	if v.TestData.Count == 0 {
+		t.Fatal("scenario: no test data")
+	}
+	if strings.Contains(posture, cat.Text("posture.none", nil)) {
+		t.Errorf("posture.none with the test-data block: %s", posture)
+	}
+}
+
+// A5: a first run of the extensions collector says so in the technical
+// report, with the 7-day variant when some were reported.
+func TestFirstRunLine(t *testing.T) {
+	cat, _ := catalog.Load("en")
+	g := v2Graph(t)
+	for _, c := range []struct {
+		fr  *report.VSCodeFirstRun
+		key string
+	}{
+		{&report.VSCodeFirstRun{Recorded: 12}, "legacy.vscode.first_run"},
+		{&report.VSCodeFirstRun{Recorded: 12, Recent: 2}, "legacy.vscode.first_run.recent"},
+		{nil, ""},
+	} {
+		base, _ := knowledge.ClaudeCode()
+		v, _ := report.BuildV2(report.V2Input{
+			Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Base: base, RepoRoots: []string{"/src/a"},
+			V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: v2Now, VSCodeFirstRun: c.fr,
+		})
+		md := report.RenderV2Markdown(v, cat, time.UTC)
+		_, legacy, _ := strings.Cut(md, "## "+cat.Text("section.legacy", nil)+"\n")
+		for _, k := range []string{"legacy.vscode.first_run", "legacy.vscode.first_run.recent"} {
+			line := cat.Text(k, map[string]string{"count": "12"})
+			if got := strings.Contains(legacy, line+"\n"); got != (k == c.key) {
+				t.Errorf("%v: line %s present %v", c.fr, k, got)
+			}
+		}
+	}
+}

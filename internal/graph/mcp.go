@@ -15,6 +15,7 @@ import (
 const (
 	AgentAIClient  = "ai_client"
 	AgentMCPServer = "mcp_server"
+	AgentExtension = "extension" // an agent extension of an editor (extensions.go)
 )
 
 // clientDisplayNames maps a client product to the name shown in reports.

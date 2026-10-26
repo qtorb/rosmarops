@@ -51,11 +51,25 @@ var AllVerdicts = []string{VerdictNew, VerdictStillObserved, VerdictObservedAgai
 const (
 	ReasonRulesChanged = "rules_changed"
 	ReasonScopeChanged = "scope_changed"
+	ReasonSaltChanged  = "salt_changed" // A2: the local salt is not the memory's
 )
 
-// File mirrors schemas/v2/findings-memory.v1.schema.json.
+// saltRefLabel is the fixed label of salt_ref (A2), not host_id's.
+const saltRefLabel = "rosmarops/findings-memory/salt-ref/v1"
+
+// SaltRef is the salt's reference in the memory: HMAC-SHA256 of the label
+// with the salt, 16 hex.
+func SaltRef(salt []byte) string { return hash.Keyed(salt, []byte(saltRefLabel))[:16] }
+
+// SchemaVersion is the version written (decision 2026-10-26, agentes y MCP
+// nuevos, A2); version 1 is still read.
+const SchemaVersion = 2
+
+// File mirrors schemas/v2/findings-memory.v2.schema.json (and v1, read
+// without SaltRef and AgentRefs).
 type File struct {
 	SchemaVersion int      `json:"schema_version"`
+	SaltRef       string   `json:"salt_ref,omitempty"`
 	Runs          int      `json:"runs"`
 	LastChecked   *Checked `json:"last_checked"`
 	Entries       []Entry  `json:"entries"`
@@ -70,6 +84,9 @@ type Checked struct {
 	KnowledgeVersion string   `json:"knowledge_version"`
 	Agents           []string `json:"agents"`
 	Repos            int      `json:"repos"`
+	// AgentRefs are the salted references of the agents seen in that run,
+	// by comparison key (A1). nil: no base (a v1 memory).
+	AgentRefs *[]string `json:"agent_refs,omitempty"`
 }
 
 // Entry is one finding's memory.
@@ -110,8 +127,19 @@ type Run struct {
 	RulesVersion, KnowledgeVersion string
 	Agents                         []string // evaluated agents
 	Repos                          int
-	// Complete: the graph was built and every evaluated agent covered.
+	// Complete: the graph was built and no agent configuration source
+	// failed (A1).
 	Complete bool
+	// Seen are the agents of this run, by comparison key (A1).
+	Seen []SeenAgent
+}
+
+// SeenAgent is one agent of the run: its comparison key (A1), whether it is
+// an MCP server, and its name for the report.
+type SeenAgent struct {
+	Key  string
+	MCP  bool
+	Name string
 }
 
 // Root is the run's memory in report.v2.json.
@@ -121,6 +149,13 @@ type Root struct {
 	Moved            []Moved        `json:"moved"`
 	Reason           string         `json:"reason,omitempty"`
 	Reset            bool           `json:"reset"`
+
+	// NewAgents and NewMCP are the agents and MCP servers new since the
+	// last checked run, by name, sorted (A1); none without a base.
+	// SaltChanged: the local salt is not the memory's (A2).
+	NewAgents   []string `json:"-"`
+	NewMCP      []string `json:"-"`
+	SaltChanged bool     `json:"-"`
 }
 
 // Gone is a finding no longer observed: no detail, only what the memory
@@ -149,7 +184,8 @@ func ref(salt []byte, id string) string { return hash.Keyed(salt, []byte(id))[:1
 // memory, the verdict of each current finding (by finding id) and the run's
 // root object (M1, M4).
 func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]rules.FindingMemory, Root) {
-	next := File{SchemaVersion: 1, Runs: prev.Runs + 1, LastChecked: prev.LastChecked}
+	saltRef := SaltRef(salt)
+	next := File{SchemaVersion: SchemaVersion, SaltRef: saltRef, Runs: prev.Runs + 1, LastChecked: prev.LastChecked}
 	byMid := map[string]Entry{}
 	for _, e := range prev.Entries {
 		byMid[e.Mid] = e
@@ -158,6 +194,8 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 	for _, v := range AllVerdicts {
 		root.Counts[v] = 0
 	}
+	// A2: another salt, nothing compares (a v1 memory has no salt_ref).
+	root.SaltChanged = prev.SaltRef != "" && prev.SaltRef != saltRef
 	if b := prev.LastChecked; b != nil {
 		switch {
 		case b.RulesVersion != run.RulesVersion || b.KnowledgeVersion != run.KnowledgeVersion:
@@ -165,6 +203,26 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 		case !sameSet(b.Agents, run.Agents) || float64(run.Repos) < 0.9*float64(b.Repos):
 			root.Reason = ReasonScopeChanged
 		}
+	}
+	notComparable := root.Reason != "" || root.SaltChanged
+
+	// A1: the agents and MCP servers not in the last checked run's.
+	if b := prev.LastChecked; b != nil && b.AgentRefs != nil && !root.SaltChanged {
+		base := map[string]bool{}
+		for _, r := range *b.AgentRefs {
+			base[r] = true
+		}
+		for _, a := range run.Seen {
+			if base[ref(salt, a.Key)] {
+				continue
+			}
+			if a.MCP {
+				root.NewMCP = append(root.NewMCP, a.Name)
+			} else {
+				root.NewAgents = append(root.NewAgents, a.Name)
+			}
+		}
+		root.NewAgents, root.NewMCP = uniqueSorted(root.NewAgents), uniqueSorted(root.NewMCP)
 	}
 
 	verdicts := map[string]rules.FindingMemory{}
@@ -188,7 +246,7 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 			e.OpenSince = run.Date
 		default:
 			verdict = VerdictNew
-			if root.Reason != "" {
+			if notComparable {
 				verdict = VerdictNotComparable
 			}
 			e = Entry{Mid: mid, FirstSeen: run.Date, OpenSince: run.Date}
@@ -214,7 +272,7 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 		case !run.Complete:
 			// Not read is not clean: the finding stays open (§1.5).
 			e.LastVerdict = VerdictNotChecked
-		case root.Reason != "":
+		case notComparable:
 			e.LastVerdict, e.Open = VerdictNotComparable, false
 		default:
 			e.LastVerdict, e.Open = VerdictNoLongerObserved, false
@@ -246,7 +304,17 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 	}
 
 	if run.Complete {
-		next.LastChecked = &Checked{Run: next.Runs, Date: run.Date, RulesVersion: run.RulesVersion, KnowledgeVersion: run.KnowledgeVersion, Agents: sortedCopy(run.Agents), Repos: run.Repos}
+		agentRefs := make([]string, 0, len(run.Seen))
+		for _, a := range run.Seen {
+			agentRefs = append(agentRefs, ref(salt, a.Key))
+		}
+		if agentRefs = uniqueSorted(agentRefs); agentRefs == nil {
+			agentRefs = []string{} // a base with no agent
+		}
+		next.LastChecked = &Checked{
+			Run: next.Runs, Date: run.Date, RulesVersion: run.RulesVersion, KnowledgeVersion: run.KnowledgeVersion,
+			Agents: sortedCopy(run.Agents), Repos: run.Repos, AgentRefs: &agentRefs,
+		}
 	}
 	for _, e := range byMid {
 		next.Entries = append(next.Entries, e)
@@ -311,6 +379,22 @@ func overlap(a, b []string) bool {
 	return false
 }
 
+func uniqueSorted(ss []string) []string {
+	if len(ss) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range ss {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func sortedCopy(ss []string) []string {
 	out := append([]string{}, ss...)
 	sort.Strings(out)
@@ -330,8 +414,20 @@ func sameSet(a, b []string) bool {
 	return true
 }
 
+// validate validates raw against the schema of its schema_version: 1 or 2
+// (A2, the same pattern as the state). Any other version does not validate.
 func validate(raw []byte) error {
-	s, err := schemaval.Compile(schemas.FindingsMemorySchema)
+	var head struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return fmt.Errorf("parse findings memory: %w", err)
+	}
+	schema := schemas.FindingsMemoryV2Schema
+	if head.SchemaVersion == 1 {
+		schema = schemas.FindingsMemorySchema
+	}
+	s, err := schemaval.Compile(schema)
 	if err != nil {
 		return fmt.Errorf("compile findings memory schema: %w", err)
 	}
@@ -355,7 +451,7 @@ func validate(raw []byte) error {
 // memory starts again: reset is true, for the report to say so (as I9).
 func Read(dir string) (f File, reset bool, err error) {
 	path := filepath.Join(dir, FileName)
-	f = File{SchemaVersion: 1, Entries: []Entry{}}
+	f = File{SchemaVersion: SchemaVersion, Entries: []Entry{}}
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return f, false, nil
@@ -382,9 +478,9 @@ func Read(dir string) (f File, reset bool, err error) {
 	return f, true, nil
 }
 
-// Write validates f and writes dir/findings-memory.json.
+// Write validates f and writes dir/findings-memory.json, always as v2.
 func Write(dir string, f File) error {
-	f.SchemaVersion = 1
+	f.SchemaVersion = SchemaVersion
 	if f.Entries == nil {
 		f.Entries = []Entry{}
 	}

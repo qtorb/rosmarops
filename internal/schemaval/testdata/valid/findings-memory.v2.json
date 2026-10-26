@@ -1,0 +1,167 @@
+{
+  "schema_version": 2,
+  "salt_ref": "0123456789abcdef",
+  "runs": 2,
+  "last_checked": {
+    "run": 2,
+    "date": "2026-10-25",
+    "rules_version": "1",
+    "knowledge_version": "2026-10-24",
+    "agents": [
+      "Claude Code",
+      "Cursor"
+    ],
+    "repos": 3,
+    "agent_refs": [
+      "1a2b3c4d5e6f7a8b",
+      "9c8d7e6f5a4b3c2d"
+    ]
+  },
+  "entries": [
+    {
+      "mid": "0ae4813a2b227df3",
+      "rule": "foreign_agent_instructions_writable",
+      "severity": "yellow",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "edb3e79adee1da9b",
+      "creds": []
+    },
+    {
+      "mid": "65ca9ff90dc05988",
+      "rule": "cred_read_and_send",
+      "severity": "yellow",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "new",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "edb3e79adee1da9b",
+      "creds": [
+        "fa560938672dbe6b"
+      ]
+    },
+    {
+      "mid": "69519cc13287548c",
+      "rule": "cred_read_and_send",
+      "severity": "red",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "edb3e79adee1da9b",
+      "creds": [
+        "28a7efefa80bc014",
+        "e57ee38f8096d790"
+      ]
+    },
+    {
+      "mid": "8a068a0e15ea9512",
+      "rule": "cred_read_and_send",
+      "severity": "yellow",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "new",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "8a9636cd0ab2bde6",
+      "creds": [
+        "fa560938672dbe6b"
+      ]
+    },
+    {
+      "mid": "90365b5455bd4545",
+      "rule": "own_config_writable",
+      "severity": "red",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "edb3e79adee1da9b",
+      "creds": []
+    },
+    {
+      "mid": "9c84c98cccc6af51",
+      "rule": "foreign_agent_config_writable",
+      "severity": "red",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "8a9636cd0ab2bde6",
+      "creds": []
+    },
+    {
+      "mid": "b4f5fb1abeab7dac",
+      "rule": "cred_read_and_send",
+      "severity": "red",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "8a9636cd0ab2bde6",
+      "creds": [
+        "28a7efefa80bc014",
+        "e57ee38f8096d790"
+      ]
+    },
+    {
+      "mid": "d024bc92150c7344",
+      "rule": "own_instructions_writable",
+      "severity": "yellow",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "8a9636cd0ab2bde6",
+      "creds": []
+    },
+    {
+      "mid": "d64dd6fcbc7874a7",
+      "rule": "foreign_agent_config_writable",
+      "severity": "red",
+      "first_seen": "2026-10-25",
+      "open_since": "2026-10-25",
+      "last_seen": "2026-10-25",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-10-25__RED__5R-4Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "edb3e79adee1da9b",
+      "creds": []
+    }
+  ]
+}

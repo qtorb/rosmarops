@@ -6,13 +6,20 @@ package vscode
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/state"
 )
+
+// SeenWithinDays is the window of a first run (decision 2026-10-26, agentes
+// y MCP nuevos, A5): an extension installed in the last 7 days is reported
+// even with no reference yet, as the scheduled tasks' window.
+const SeenWithinDays = 7
 
 // Finding text approved by human owner (2026-05-21).
 const (
@@ -37,13 +44,31 @@ const (
 type ScanResult struct {
 	Findings         []finding.Finding
 	AllowListedCount int // extensions suppressed by the allow-list this run
+
+	// NewBaseline is every current extension, with the first_seen of the
+	// ones already in the reference. The caller persists it to
+	// state.Baselines.VSCodeExtensions on every run (A5).
+	NewBaseline []state.VSCodeExtension
+
+	// FirstRun: there was no reference; the extensions were recorded as
+	// the starting point (Recorded of them), and only the ones installed
+	// in the last SeenWithinDays days reported (Recent of them).
+	FirstRun bool
+	Recorded int
+	Recent   int
 }
 
 // ScanExtensions returns findings for VS Code extensions present in current
-// but absent from baseline, excluding any whose id is allow-listed.
+// but absent from baseline, excluding any whose id is allow-listed and the
+// agent extensions, which the v2 graph and its memory cover (decision
+// 2026-10-26, agentes y MCP nuevos, A3, A5).
 //
 // Baseline key: lowercase(id)+"@"+version. A version update introduces a new
-// finding until the next `rosmarops baseline` establishes the new version as trusted.
+// finding until the next run, which records the new version (A5: the
+// reference is updated on every run, as the other collectors'). With an empty
+// reference (a first run) nothing is reported but the extensions installed in
+// the last SeenWithinDays days, by their install date when extensions.json has
+// one.
 //
 // # Hash-depth trade-off
 //
@@ -58,11 +83,26 @@ func ScanExtensions(
 	current []platform.VSCodeExtension,
 	baseline []state.VSCodeExtension,
 	allowList []config.AllowEntryID,
+	now time.Time,
 ) ScanResult {
 	// Build lookup sets for O(1) checks.
-	baselineSet := make(map[string]struct{}, len(baseline))
+	baselineSet := make(map[string]string, len(baseline)) // key → first_seen
 	for _, b := range baseline {
-		baselineSet[strings.ToLower(b.ID)+"@"+b.Version] = struct{}{}
+		baselineSet[strings.ToLower(b.ID)+"@"+b.Version] = b.FirstSeen
+	}
+	firstRun := len(baseline) == 0
+	stamp := now.UTC().Format(time.RFC3339)
+	res := ScanResult{FirstRun: firstRun, NewBaseline: make([]state.VSCodeExtension, 0, len(current))}
+	for _, ext := range current {
+		key := strings.ToLower(ext.ID) + "@" + ext.Version
+		seen, ok := baselineSet[key]
+		if !ok || seen == "" {
+			seen = stamp
+		}
+		res.NewBaseline = append(res.NewBaseline, state.VSCodeExtension{ID: strings.ToLower(ext.ID), Version: ext.Version, FirstSeen: seen})
+	}
+	if firstRun {
+		res.Recorded = len(current)
 	}
 
 	allowed := make(map[string]struct{}, len(allowList))
@@ -80,9 +120,18 @@ func ScanExtensions(
 		if _, inBaseline := baselineSet[key]; inBaseline {
 			continue
 		}
+		if _, agent := knowledge.AgentExtensions[strings.ToLower(ext.ID)]; agent {
+			continue // a new agent is the memory's (A3)
+		}
+		if firstRun && (ext.InstalledAt.IsZero() || now.Sub(ext.InstalledAt) > SeenWithinDays*24*time.Hour) {
+			continue // the starting point (A5)
+		}
 		if _, isAllowed := allowed[strings.ToLower(ext.ID)]; isAllowed {
 			allowListedCount++
 			continue
+		}
+		if firstRun {
+			res.Recent++
 		}
 
 		f := finding.NewFinding(
@@ -105,10 +154,8 @@ func ScanExtensions(
 		findings = append(findings, f)
 	}
 
-	return ScanResult{
-		Findings:         findings,
-		AllowListedCount: allowListedCount,
-	}
+	res.Findings, res.AllowListedCount = findings, allowListedCount
+	return res
 }
 
 // findingID returns a deterministic finding ID for a vscode_extension_new event.

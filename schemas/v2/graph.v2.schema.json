@@ -99,7 +99,7 @@
     },
 
     "agent": {
-      "$comment": "ai_client: type + product + canonical configuration folder; mcp_server: type + product + canonical config file + name [+ JSON Pointer when not /mcpServers/<name>]",
+      "$comment": "ai_client: type + product + canonical configuration folder; mcp_server: type + product + canonical config file + name [+ JSON Pointer when not /mcpServers/<name>]; extension: \"agent_ext_\" + sha256(\"extension\", editor, lowercase extension id)[:16], the version excluded; platform is the product code, config_path the extensions folder",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "type", "platform", "config_path", "discovered_at"],

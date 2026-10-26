@@ -16,9 +16,11 @@ import (
 
 // Version is index_version: it goes up when the weights, K, the bands or
 // the coverage conditions change (I7). Version 2 adds cred_in_git
-// (decision 2026-10-24, memoria, M8); the weights of version 1 are kept
-// for the double calculation of I7.
-const Version = 2
+// (decision 2026-10-24, memoria, M8); version 3 counts the agent extensions
+// as agents present, not evaluated (decision 2026-10-26, agentes y MCP
+// nuevos, A3), with the weights of version 2. The weights of versions 1 and
+// 2 are kept for the double calculation of I7.
+const Version = 3
 
 // K is the constant of the formula (I3).
 const K = 80.0
@@ -157,8 +159,8 @@ type Input struct {
 func weightOf(f rules.Finding) float64 { return weightIn(Version, f) }
 
 // weightIn is a finding's weight in an index version: version 1 has no
-// cred_in_git (weight 0); version 2 weighs it 20 when red, ×1.5 with a
-// remote in some member, and 8 when yellow.
+// cred_in_git (weight 0); versions 2 and 3 weigh it 20 when red, ×1.5 with
+// a remote in some member, and 8 when yellow. Version 3 changes no weight.
 func weightIn(version int, f rules.Finding) float64 {
 	if f.Rule == rules.RuleCredInGit {
 		if version < 2 {
@@ -243,9 +245,15 @@ func Compute(in Input) Index {
 	}
 	agents := append([]Agent{}, in.Agents...)
 	sort.SliceStable(agents, func(i, j int) bool { return agents[i].Name < agents[j].Name })
+	// Detected, not evaluated: one per product code, an ai_client and an
+	// extension of one product joined (A3).
+	pending := map[string]bool{}
 	for _, a := range agents {
 		if !in.Inference[a.Product] {
-			idx.Scope.NotEvaluated = append(idx.Scope.NotEvaluated, a.Name)
+			if !pending[a.Product] {
+				pending[a.Product] = true
+				idx.Scope.NotEvaluated = append(idx.Scope.NotEvaluated, a.Name)
+			}
 			continue
 		}
 		idx.Scope.Evaluated = append(idx.Scope.Evaluated, a.Name)

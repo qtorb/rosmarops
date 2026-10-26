@@ -305,6 +305,8 @@
   "legacy.group.one": "1 finding",
   "legacy.group.other": "{count} findings",
   "legacy.none": "No legacy findings.",
+  "legacy.vscode.first_run": "First run: recorded {count} VS Code extensions as the starting point. From the next run, any new one is reported.",
+  "legacy.vscode.first_run.recent": "First run: recorded {count} VS Code extensions as the starting point. Those installed in the last 7 days are reported below. From the next run, any new one is reported.",
   "memory.counts": "Since the last run — New: {new} · Still observed: {still} · No longer observed: {gone} · Observed again: {again}",
   "memory.moved": "A {rule} finding looks moved or merged: it disappeared from one place and appeared in another with the same credential.",
   "memory.new_agent": "New agent since the last run: {agent}",

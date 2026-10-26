@@ -35,6 +35,7 @@ var staticKeys = []string{
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
 	"findings.none", "posture.none", "coverage.none", "legacy.none",
+	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
 	// BV-43
@@ -270,10 +271,12 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		}
 		w("- %s\n", cat.Plural(p.Code, p.Count, params))
 	}
-	if !shown {
-		w("%s\n", t("posture.none", nil))
+	switch {
+	case shown:
+		w("\n")
+	case v.TestData.Count == 0: // A7: the test-data block below says it
+		w("%s\n\n", t("posture.none", nil))
 	}
-	w("\n")
 
 	// Keys treated as test data by default (v3 §12.4): always shown, with
 	// their files.
@@ -362,6 +365,14 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 
 	// 6. Other checks (legacy).
 	w("## %s\n\n", t("section.legacy", nil))
+	// A first run of the extensions collector says so (A5).
+	if fr := v.vscodeFirstRun; fr != nil {
+		key := "legacy.vscode.first_run"
+		if fr.Recent > 0 {
+			key = "legacy.vscode.first_run.recent"
+		}
+		w("%s\n\n", t(key, map[string]string{"count": strconv.Itoa(fr.Recorded)}))
+	}
 	if len(v.Legacy.Groups) == 0 {
 		w("%s\n\n", t("legacy.none", nil))
 	}

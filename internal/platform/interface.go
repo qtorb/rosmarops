@@ -25,6 +25,11 @@ type VSCodeExtension struct {
 	// all extensions are reported as Enabled=true (conservative: safer
 	// to report a disabled extension than to silently miss it).
 	Enabled bool
+
+	// InstalledAt is the install date extensions.json records
+	// (metadata.installedTimestamp, milliseconds), zero when it has none
+	// (decision 2026-10-26, agentes y MCP nuevos, A5).
+	InstalledAt time.Time
 }
 
 // MCPScan is the result of reading all known MCP client config files.

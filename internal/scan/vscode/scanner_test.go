@@ -3,6 +3,7 @@ package vscode_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
@@ -25,10 +26,17 @@ func allowed(id string) config.AllowEntryID {
 	return config.AllowEntryID{ID: id, Note: "approved"}
 }
 
+// now is the run's time; notFirst is a reference that is not empty, so the
+// run is not a first run (decision 2026-10-26, agentes y MCP nuevos, A5).
+var (
+	now      = time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	notFirst = []state.VSCodeExtension{baselined("seen.before", "1.0.0")}
+)
+
 // tests
 
 func TestScanExtensions_EmptyCurrentAndBaseline(t *testing.T) {
-	r := vscode.ScanExtensions(nil, nil, nil)
+	r := vscode.ScanExtensions(nil, nil, nil, now)
 	if len(r.Findings) != 0 {
 		t.Errorf("expected 0 findings, got %d", len(r.Findings))
 	}
@@ -37,12 +45,12 @@ func TestScanExtensions_EmptyCurrentAndBaseline(t *testing.T) {
 	}
 }
 
-func TestScanExtensions_NoBaseline_AllNew(t *testing.T) {
+func TestScanExtensions_NotInReference_AllNew(t *testing.T) {
 	current := []platform.VSCodeExtension{
 		ext("ms-python.python", "2026.4.0", true),
 		ext("eamodio.gitlens", "17.12.2", true),
 	}
-	r := vscode.ScanExtensions(current, nil, nil)
+	r := vscode.ScanExtensions(current, notFirst, nil, now)
 	if len(r.Findings) != 2 {
 		t.Fatalf("expected 2 findings, got %d", len(r.Findings))
 	}
@@ -72,7 +80,7 @@ func TestScanExtensions_InBaseline_NoFindings(t *testing.T) {
 	baseline := []state.VSCodeExtension{
 		baselined("ms-python.python", "2026.4.0"),
 	}
-	r := vscode.ScanExtensions(current, baseline, nil)
+	r := vscode.ScanExtensions(current, baseline, nil, now)
 	if len(r.Findings) != 0 {
 		t.Fatalf("expected 0 findings, got %d", len(r.Findings))
 	}
@@ -80,11 +88,11 @@ func TestScanExtensions_InBaseline_NoFindings(t *testing.T) {
 
 func TestScanExtensions_AllowListed_Suppressed(t *testing.T) {
 	current := []platform.VSCodeExtension{
-		ext("saoudrizwan.claude-dev", "3.84.0", true),
+		ext("ritwickdey.liveserver", "5.7.10", true),
 	}
-	r := vscode.ScanExtensions(current, nil, []config.AllowEntryID{
-		allowed("saoudrizwan.claude-dev"),
-	})
+	r := vscode.ScanExtensions(current, notFirst, []config.AllowEntryID{
+		allowed("ritwickdey.liveserver"),
+	}, now)
 	if len(r.Findings) != 0 {
 		t.Fatalf("expected 0 findings (allow-listed), got %d", len(r.Findings))
 	}
@@ -101,7 +109,7 @@ func TestScanExtensions_VersionUpgrade_IsNewFinding(t *testing.T) {
 	baseline := []state.VSCodeExtension{
 		baselined("eamodio.gitlens", "17.11.0"),
 	}
-	r := vscode.ScanExtensions(current, baseline, nil)
+	r := vscode.ScanExtensions(current, baseline, nil, now)
 	if len(r.Findings) != 1 {
 		t.Fatalf("expected 1 finding for version upgrade, got %d", len(r.Findings))
 	}
@@ -115,7 +123,7 @@ func TestScanExtensions_DisabledExtension_StillReported(t *testing.T) {
 	current := []platform.VSCodeExtension{
 		ext("suspicious.extension", "1.0.0", false),
 	}
-	r := vscode.ScanExtensions(current, nil, nil)
+	r := vscode.ScanExtensions(current, notFirst, nil, now)
 	if len(r.Findings) != 1 {
 		t.Fatalf("expected 1 finding for disabled extension, got %d", len(r.Findings))
 	}
@@ -136,7 +144,7 @@ func TestScanExtensions_CaseInsensitiveID(t *testing.T) {
 	baseline := []state.VSCodeExtension{
 		baselined("ms-python.python", "2026.4.0"),
 	}
-	r := vscode.ScanExtensions(current, baseline, nil)
+	r := vscode.ScanExtensions(current, baseline, nil, now)
 	if len(r.Findings) != 0 {
 		t.Fatalf("expected 0 findings (case-insensitive match), got %d", len(r.Findings))
 	}
@@ -146,8 +154,8 @@ func TestScanExtensions_FindingID_DeterministicAndPrefixed(t *testing.T) {
 	current := []platform.VSCodeExtension{
 		ext("ms-python.python", "2026.4.0", true),
 	}
-	r1 := vscode.ScanExtensions(current, nil, nil)
-	r2 := vscode.ScanExtensions(current, nil, nil)
+	r1 := vscode.ScanExtensions(current, notFirst, nil, now)
+	r2 := vscode.ScanExtensions(current, notFirst, nil, now)
 	if len(r1.Findings) != 1 || len(r2.Findings) != 1 {
 		t.Fatal("expected 1 finding per call")
 	}
@@ -164,7 +172,7 @@ func TestScanExtensions_EvidenceExtensionID(t *testing.T) {
 	current := []platform.VSCodeExtension{
 		ext("github.vscode-github-actions", "0.31.5", true),
 	}
-	r := vscode.ScanExtensions(current, nil, nil)
+	r := vscode.ScanExtensions(current, notFirst, nil, now)
 	if len(r.Findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(r.Findings))
 	}
@@ -185,7 +193,7 @@ func TestScanExtensions_MixedBaselineAndNew(t *testing.T) {
 	allowList := []config.AllowEntryID{
 		allowed("ritwickdey.liveserver"),
 	}
-	r := vscode.ScanExtensions(current, baseline, allowList)
+	r := vscode.ScanExtensions(current, baseline, allowList, now)
 	if len(r.Findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d: %v", len(r.Findings), r.Findings)
 	}
@@ -194,5 +202,55 @@ func TestScanExtensions_MixedBaselineAndNew(t *testing.T) {
 	}
 	if r.AllowListedCount != 1 {
 		t.Errorf("expected allow-listed count 1, got %d", r.AllowListedCount)
+	}
+}
+
+// Decision 2026-10-26 (agentes y MCP nuevos, A5): a first run (empty
+// reference) records every extension as the starting point and reports only
+// the ones installed in the last 7 days (with an install date); the
+// reference to persist holds them all.
+func TestScanExtensions_FirstRun(t *testing.T) {
+	old := ext("ms-python.python", "2026.4.0", true)
+	old.InstalledAt = now.Add(-30 * 24 * time.Hour)
+	undated := ext("eamodio.gitlens", "17.12.2", true)
+	recent := ext("ritwickdey.liveserver", "5.7.10", true)
+	recent.InstalledAt = now.Add(-2 * 24 * time.Hour)
+	r := vscode.ScanExtensions([]platform.VSCodeExtension{old, undated}, nil, nil, now)
+	if len(r.Findings) != 0 || !r.FirstRun || r.Recorded != 2 || r.Recent != 0 || len(r.NewBaseline) != 2 {
+		t.Errorf("first run, none recent: %+v", r)
+	}
+	r = vscode.ScanExtensions([]platform.VSCodeExtension{old, undated, recent}, nil, nil, now)
+	if len(r.Findings) != 1 || r.Findings[0].Evidence.ExtensionID != "ritwickdey.liveserver" || r.Recent != 1 || r.Recorded != 3 {
+		t.Errorf("first run, one recent: %+v", r)
+	}
+}
+
+// A5: the reference is updated on every run: two runs with the same
+// extensions, the second reports nothing; first_seen is kept.
+func TestScanExtensions_ReferenceUpdatedEveryRun(t *testing.T) {
+	current := []platform.VSCodeExtension{ext("ms-python.python", "2026.4.0", true)}
+	r1 := vscode.ScanExtensions(current, notFirst, nil, now)
+	if len(r1.Findings) != 1 || len(r1.NewBaseline) != 1 || r1.NewBaseline[0].FirstSeen != now.Format(time.RFC3339) {
+		t.Fatalf("run 1: %+v", r1)
+	}
+	r2 := vscode.ScanExtensions(current, r1.NewBaseline, nil, now.Add(24*time.Hour))
+	if len(r2.Findings) != 0 || r2.FirstRun || r2.NewBaseline[0].FirstSeen != r1.NewBaseline[0].FirstSeen {
+		t.Errorf("run 2: %+v", r2)
+	}
+	// With nothing else, the status can be green again (L59.5).
+	if st := finding.Reducer(r2.Findings, 0); st != finding.StatusGreen {
+		t.Errorf("run 2 status %s", st)
+	}
+}
+
+// A3, A5: an agent extension never gives vscode_extension_new, first run or
+// not, recent or not: the graph and its memory cover it.
+func TestScanExtensions_AgentExtensionsNotReported(t *testing.T) {
+	copilot := ext("GitHub.Copilot", "1.300.0", true)
+	copilot.InstalledAt = now.Add(-time.Hour)
+	for _, base := range [][]state.VSCodeExtension{nil, notFirst} {
+		if r := vscode.ScanExtensions([]platform.VSCodeExtension{copilot}, base, nil, now); len(r.Findings) != 0 || len(r.NewBaseline) != 1 {
+			t.Errorf("reference %v: %+v", base, r)
+		}
 	}
 }

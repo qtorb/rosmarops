@@ -162,14 +162,20 @@ func runRun(inv cli.Invocation) error {
 		// listed.
 		buildGraph   func(graph.Repos)
 		repoFindings []finding.Finding
+		// vscodeExts are the extensions listed, for the graph's extension
+		// agents (A3); vscodeFirstRun is set on a first run (A5).
+		vscodeExts     []platform.VSCodeExtension
+		vscodeFirstRun *report.VSCodeFirstRun
 	)
 	salt, saltErr := st.Salt()
 	graphDone := false
 	steps := []scan.Step{
-		// --- VS Code extensions scanner (M4) ---
+		// --- VS Code extensions scanner (M4). The reference is updated on
+		// every run, as the other collectors' (decision 2026-10-26, agentes
+		// y MCP nuevos, A5); the agent extensions go to the graph (A3). ---
 		{Name: "vscode", Run: func(ctx context.Context) func() {
 			currentExts, extErr := plat.ListVSCodeExtensions(ctx)
-			extResult := vscode.ScanExtensions(currentExts, st.Baselines.VSCodeExtensions, cfg.AllowList.Extensions)
+			extResult := vscode.ScanExtensions(currentExts, st.Baselines.VSCodeExtensions, cfg.AllowList.Extensions, start)
 			return func() {
 				if extErr != nil {
 					slog.Warn("vscode: could not list extensions", "err", extErr)
@@ -177,16 +183,24 @@ func runRun(inv cli.Invocation) error {
 						Scope:   "vscode",
 						Message: extErr.Error(),
 					})
+					return
 				}
+				vscodeExts = currentExts
 				findings = append(findings, extResult.Findings...)
 				allowListedTotal += extResult.AllowListedCount
+				st.Baselines.VSCodeExtensions = extResult.NewBaseline
+				if extResult.FirstRun && extResult.Recorded > 0 {
+					vscodeFirstRun = &report.VSCodeFirstRun{Recorded: extResult.Recorded, Recent: extResult.Recent}
+				}
 			}
 		}},
 
 		// --- MCP server scanner (M5) ---
 		{Name: "mcp", Run: func(ctx context.Context) func() {
 			scanned, listErr := plat.ListMCPServers(ctx, cfg.RepoRoots)
-			mcpResult := mcp.ScanMCPServers(scanned.Servers, st.Baselines.MCPServers, cfg.AllowList.MCPServers, homeDir)
+			// Only the servers a client loads (A4); no reference: new and
+			// modified servers are the v2 memory's, or retired.
+			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir)
 			return func() {
 				mcpScan, mcpErr = scanned, listErr
 				if mcpErr != nil {
@@ -237,7 +251,7 @@ func runRun(inv cli.Invocation) error {
 				// The graph is built once the repositories are scanned: the
 				// secrets committed in them are part of it (CTO-7 §2.2).
 				buildGraph = func(repoGraph graph.Repos) {
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
 					if graphErr == nil {
 						built, builtSHA = g, graphSHA
 					}
@@ -402,6 +416,7 @@ func runRun(inv cli.Invocation) error {
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 		Salt: salt, Memory: mem, MemoryReset: memReset,
 		Rotated: cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
+		VSCodeFirstRun: vscodeFirstRun,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -475,6 +490,7 @@ func writeGraph(
 	cursor platform.CursorScan,
 	instructions platform.InstructionScan,
 	credFiles platform.CredentialFileScan,
+	exts []platform.VSCodeExtension,
 	repoGraph graph.Repos,
 	repoRoots []string,
 	home string,
@@ -500,6 +516,7 @@ func writeGraph(
 		return fail(err)
 	}
 	frag = graph.AddInstructions(frag, instructions, now)
+	frag = graph.AddExtensions(frag, exts, filepath.Join(home, ".vscode", "extensions"), now)
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
 	}

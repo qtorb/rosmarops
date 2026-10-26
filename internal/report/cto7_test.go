@@ -78,8 +78,9 @@ func TestCTO7Report(t *testing.T) {
 	if v.Silenced.Count != 1 || len(v.Signals) != 2 || v.Signals[0].Category != "git_hook_with_network" || v.Signals[0].Count != 2 {
 		t.Fatalf("silenced %+v, signals %+v", v.Silenced, v.Signals)
 	}
-	// v3 §13.3: the new MCP server is not an agent.
-	if strings.Join(v.NewAgents, ",") != "Cline" || strings.Join(v.NewMCP, ",") != "browser" {
+	// BV-59, A1: new agents and MCP servers come from the v2 memory, not
+	// from the v1 findings; with no memory, none.
+	if len(v.NewAgents) != 0 || len(v.NewMCP) != 0 {
 		t.Errorf("new agents %v, new MCP servers %v", v.NewAgents, v.NewMCP)
 	}
 	credID := v.Findings[0].Params.CredID
@@ -102,8 +103,6 @@ func TestCTO7Report(t *testing.T) {
 			`<h3>` + htmlEscape(cat.Text("html.signals.title", nil)) + `</h3>`,
 			htmlEscape(cat.Text("html.signal.git_hook_with_network", nil)) + ` <span class="n">· 2</span>`,
 			htmlEscape(cat.Text("html.signal.av_exclusion_new", nil)) + `</li>`,
-			htmlEscape(cat.Text("html.memory.new_agent", map[string]string{"agent": "Cline"})),
-			htmlEscape(cat.Text("html.memory.new_mcp", map[string]string{"name": "browser"})),
 			htmlEscape(cat.Text("html.card.silenced", map[string]string{"count": "1"})),
 		} {
 			if !strings.Contains(page, want) {
@@ -133,7 +132,6 @@ func TestCTO7Report(t *testing.T) {
 		cat.Text("unknown.remote_visibility_unknown", nil),
 		cat.Plural("report.silenced", 1, map[string]string{"count": "1"}),
 		cat.Text("report.silenced.entry", map[string]string{"repo": "/src/b", "path": "**/*_test.go", "note": "fake keys in tests", "expires_on": "2027-10-01"}),
-		cat.Text("memory.new_mcp", map[string]string{"name": "browser"}),
 		credID,
 	} {
 		if !strings.Contains(md, want) {

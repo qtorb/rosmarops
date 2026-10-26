@@ -498,13 +498,17 @@ func TestBuildV2_LegacyMembers(t *testing.T) {
 			t.Errorf("%s still in the technical report", gone)
 		}
 	}
-	// v3 §13.3: a new MCP server is not an agent.
-	if len(v.NewAgents) != 0 || !reflect.DeepEqual(v.NewMCP, []string{"fs"}) {
+	// BV-59, A1: a v1 mcp_server_new is not a new MCP server; the memory
+	// says what is new.
+	if len(v.NewAgents) != 0 || len(v.NewMCP) != 0 {
 		t.Errorf("new agents %v, new MCP servers %v", v.NewAgents, v.NewMCP)
 	}
 	cat, _ := catalog.Load("")
 	md := report.RenderV2Markdown(v, cat, time.UTC)
-	for _, want := range []string{"- `ms-python.python`", "- `Updater`", cat.Text("memory.new_mcp", map[string]string{"name": "fs"})} {
+	if strings.Contains(md, cat.Text("memory.new_mcp", map[string]string{"name": "fs"})) {
+		t.Error("a v1 mcp_server_new is a new MCP server")
+	}
+	for _, want := range []string{"- `ms-python.python`", "- `Updater`"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("legacy member %s missing", want)
 		}

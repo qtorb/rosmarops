@@ -353,9 +353,20 @@ func checkPaths(e Entry) error {
 // extension id (lowercase), with their product name: a new one is a new
 // agent in the report's memory; every other new extension stays in the
 // technical report.
-var AgentExtensions = map[string]string{
-	"saoudrizwan.claude-dev": "Cline",
-	"continue.continue":      "Continue",
-	"github.copilot":         "GitHub Copilot",
-	"github.copilot-chat":    "GitHub Copilot",
+//
+// Each has a stable product code (decision 2026-10-26, agentes y MCP
+// nuevos, A3): «detected, not evaluated yet» joins an ai_client and an
+// extension of one product by it.
+var AgentExtensions = map[string]AgentExtension{
+	"saoudrizwan.claude-dev": {Name: "Cline", Product: "cline"},
+	"continue.continue":      {Name: "Continue", Product: "continue"},
+	"github.copilot":         {Name: "GitHub Copilot", Product: "github-copilot"},
+	"github.copilot-chat":    {Name: "GitHub Copilot", Product: "github-copilot"},
+}
+
+// AgentExtension is an agent extension's name for the reports and product
+// code.
+type AgentExtension struct {
+	Name    string
+	Product string
 }

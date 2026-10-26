@@ -49,8 +49,8 @@ type V2 struct {
 	// TestData are the keys treated as test data by default (decision
 	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
 	TestData rules.TestData `json:"-"`
-	// NewAgents are the agents new since the last run (M5), NewMCP the MCP
-	// servers (v3 §13.3).
+	// NewAgents are the agents new since the last checked run, NewMCP the
+	// MCP servers (v3 §13.3; decision 2026-10-26, agentes y MCP nuevos, A1).
 	NewAgents  []string         `json:"-"`
 	NewMCP     []string         `json:"-"`
 	repos      int              // configured repositories
@@ -59,10 +59,19 @@ type V2 struct {
 	base       string           // the run's report base name
 	series     []int            // the evaluated agent's comparable scores, oldest first
 	seriesBy   map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
+	// vscodeFirstRun is the first run of the extensions collector (A5).
+	vscodeFirstRun *VSCodeFirstRun
 }
 
 // NextMemory is findings-memory.json after this run, to write.
 func (v V2) NextMemory() memory.File { return v.nextMemory }
+
+// VSCodeFirstRun is a first run of the VS Code extensions collector (A5):
+// Recorded extensions taken as the starting point, Recent of them reported
+// because they were installed in the last 7 days.
+type VSCodeFirstRun struct {
+	Recorded, Recent int
+}
 
 // V2Provenance is the graph's provenance, the SHA-256 of the graph.v2.json
 // evaluated, and the rules version (graph and hash null when no graph was
@@ -153,6 +162,10 @@ type V2Input struct {
 	Rotated    []config.AllowEntryRotated
 	Fixtures   []config.AllowEntryTestFixture
 	ConfigFile string
+
+	// VSCodeFirstRun is set on the first run of the VS Code extensions
+	// collector (decision 2026-10-26, agentes y MCP nuevos, A5).
+	VSCodeFirstRun *VSCodeFirstRun
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -249,7 +262,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Groups: groupLegacy(tech, fams, reportedFiles(v.Findings)),
 	}
 	v.Signals = signals(in.V1.Findings)
-	v.NewAgents, v.NewMCP = newAgents(in.V1.Findings), newMCPServers(in.V1.Findings)
+	v.vscodeFirstRun = in.VSCodeFirstRun
 	if v.Silenced.Entries == nil {
 		v.Silenced.Entries = []rules.SilencedEntry{}
 	}
@@ -282,17 +295,18 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 // (fail-secure).
 // applyMemory sets each finding's verdict and the run's memory against the
 // last checked run (memoria, M1–M4). The run is complete when the graph was
-// built and no evaluated agent lacks coverage.
+// built and no agent configuration source failed (decision 2026-10-26,
+// agentes y MCP nuevos, A1): the base of the findings' verdicts and of the
+// new agents and MCP servers.
 func applyMemory(v *V2, in V2Input) {
 	run := memory.Run{
 		Date: in.GeneratedAt.Local().Format("2006-01-02"), Report: FilenameV2(in.V1, *v),
 		RulesVersion: rules.Version, KnowledgeVersion: in.Base.Version,
-		Agents: v.Index.Scope.Evaluated, Repos: len(in.RepoRoots), Complete: in.Graph != nil,
+		Agents: v.Index.Scope.Evaluated, Repos: len(in.RepoRoots),
+		Complete: in.Graph != nil && len(v.Coverage.SourcesFailed) == 0,
 	}
-	for _, a := range v.Index.Agents {
-		if a.Unavailable == index.ReasonCoverage {
-			run.Complete = false
-		}
+	if in.Graph != nil {
+		run.Seen = seenAgents(*in.Graph)
 	}
 	cur := make([]memory.Finding, 0, len(v.Findings))
 	for _, f := range v.Findings {
@@ -315,6 +329,7 @@ func applyMemory(v *V2, in V2Input) {
 		v.Findings[i].Memory = &m
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
+	v.NewAgents, v.NewMCP = root.NewAgents, root.NewMCP // A1: from the memory, not from v1
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).
@@ -327,8 +342,13 @@ func buildIndex(in V2Input, res rules.Result, v V2) index.Index {
 	}
 	if in.Graph != nil {
 		for _, n := range in.Graph.Nodes {
-			if n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient {
+			switch {
+			case n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient:
 				ii.Agents = append(ii.Agents, index.Agent{ID: n.ID, Name: n.Name, Product: n.Platform, ConfigDir: n.ConfigPath})
+			case n.Kind == graph.KindAgent && n.Type == graph.AgentExtension:
+				// An agent extension is present, never evaluated (A3): the
+				// machine score is then not available (I5).
+				ii.Agents = append(ii.Agents, index.Agent{ID: n.ID, Name: n.Name, Product: n.Platform})
 			}
 		}
 	}

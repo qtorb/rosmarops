@@ -47,7 +47,13 @@ var ReportV2Schema []byte
 var IndexHistorySchema []byte
 
 // FindingsMemorySchema is the embedded v2/findings-memory.v1.schema.json
-// schema.
+// schema. It is kept to read v1 memories.
 //
 //go:embed v2/findings-memory.v1.schema.json
 var FindingsMemorySchema []byte
+
+// FindingsMemoryV2Schema is the embedded v2/findings-memory.v2.schema.json
+// schema (decision 2026-10-26, agentes y MCP nuevos, A2).
+//
+//go:embed v2/findings-memory.v2.schema.json
+var FindingsMemoryV2Schema []byte
