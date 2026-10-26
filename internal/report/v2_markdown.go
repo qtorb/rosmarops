@@ -44,7 +44,7 @@ var staticKeys = []string{
 	"report.silenced.one", "report.silenced.other", "report.silenced.entry",
 	"report.testdata.one", "report.testdata.other", "report.testdata.entry",
 	"report.silenced.expired.one", "report.silenced.expired.other",
-	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent",
+	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent", "memory.new_mcp",
 	"console.progress.agents", "console.progress.repos", "console.progress.report",
 	"console.config_changed", "console.config_change.rotated", "console.config_change.fixture", "console.config_change.other",
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
@@ -255,10 +255,13 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 
 	// Memory (BV-43): only when there is an earlier memory to compare with,
 	// or a new agent (M5).
-	if !v.memoryPrev && len(v.NewAgents) > 0 {
+	if !v.memoryPrev && len(v.NewAgents)+len(v.NewMCP) > 0 {
 		w("## %s\n\n", t("section.memory", nil))
 		for _, a := range v.NewAgents {
 			w("%s\n\n", t("memory.new_agent", map[string]string{"agent": a}))
+		}
+		for _, s := range v.NewMCP { // v3 §13.3
+			w("%s\n\n", t("memory.new_mcp", map[string]string{"name": s}))
 		}
 	}
 	if v.memoryPrev {
@@ -266,6 +269,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("## %s\n\n", t("section.memory", nil))
 		for _, a := range v.NewAgents {
 			w("%s\n\n", t("memory.new_agent", map[string]string{"agent": a}))
+		}
+		for _, s := range v.NewMCP { // v3 §13.3
+			w("%s\n\n", t("memory.new_mcp", map[string]string{"name": s}))
 		}
 		w("%s\n", t("memory.counts", map[string]string{
 			"new": strconv.Itoa(m.Counts[memory.VerdictNew]), "still": strconv.Itoa(m.Counts[memory.VerdictStillObserved]),

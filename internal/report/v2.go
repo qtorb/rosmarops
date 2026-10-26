@@ -49,8 +49,10 @@ type V2 struct {
 	// TestData are the keys treated as test data by default (decision
 	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
 	TestData rules.TestData `json:"-"`
-	// NewAgents are the agents new since the last run (M5).
+	// NewAgents are the agents new since the last run (M5), NewMCP the MCP
+	// servers (v3 §13.3).
 	NewAgents  []string         `json:"-"`
+	NewMCP     []string         `json:"-"`
 	repos      int              // configured repositories
 	nextMemory memory.File      // findings-memory.json after this run
 	memoryPrev bool             // an earlier findings-memory.json was read
@@ -247,7 +249,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Groups: groupLegacy(tech, fams, reportedFiles(v.Findings)),
 	}
 	v.Signals = signals(in.V1.Findings)
-	v.NewAgents = newAgents(in.V1.Findings)
+	v.NewAgents, v.NewMCP = newAgents(in.V1.Findings), newMCPServers(in.V1.Findings)
 	if v.Silenced.Entries == nil {
 		v.Silenced.Entries = []rules.SilencedEntry{}
 	}

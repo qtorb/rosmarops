@@ -320,3 +320,59 @@ func TestNoise_CountsByRow(t *testing.T) {
 		}
 	}
 }
+
+// BV-56, v3 §13, with the real case: the header says what RosmarOps did,
+// not what left the computer; the scale under the score; the coverage line;
+// step 3's hint without «when you have time»; rotate_credential's last line
+// is html.after.rotate, in the HTML and the export for your AI. With an
+// agent detected and not evaluated, the coverage line names it, and the
+// footer no longer does.
+func TestNoise_Wording(t *testing.T) {
+	v := noiseReport(t)
+	var today rules.Finding
+	for _, f := range v.Findings {
+		if f.ID == v.Today.FindingID {
+			today = f
+		}
+	}
+	if today.Rule != rules.RuleCredInGit {
+		t.Fatalf("today is %s, not cred_in_git", today.Rule)
+	}
+	g := v2Graph(t)
+	one := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		_, head, _ := strings.Cut(page, `<body><main>`)
+		head, _, _ = strings.Cut(head, `</p>`)
+		if strings.Contains(head, "nada ha salido") || strings.Contains(head, "nothing left") ||
+			!strings.Contains(head, htmlEscape(cat.Text("html.header", map[string]string{"date": ""}))[:20]) {
+			t.Errorf("%s: header %q", lang, head)
+		}
+		if !strings.Contains(page, `</p><p class="scale">`+htmlEscape(cat.Text("html.index.scale", nil))+`</p>`) {
+			t.Errorf("%s: no scale under the score's agent line", lang)
+		}
+		if all := htmlEscape(cat.Text("html.step.1.coverage.all", map[string]string{"evaluated": listNames(cat, []string{"Claude Code", "Cursor"})})); !strings.Contains(page, "<br>"+all) {
+			t.Errorf("%s: no coverage line %q", lang, all)
+		}
+		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
+		step3, _, _ = strings.Cut(step3, `</section>`)
+		hint := regexp.MustCompile(`<span class="hint">([^<]*)</span>`).FindStringSubmatch(step3)
+		if hint == nil || strings.Contains(hint[1], "cuando tengas tiempo") || strings.Contains(hint[1], "when you have time") {
+			t.Errorf("%s: step 3 hint %v", lang, hint)
+		}
+		after := htmlEscape(cat.Text("html.after.rotate", nil))
+		if !strings.Contains(page, `<p class="after">`+after+`</p></div></section>`) || strings.Contains(page, htmlEscape(cat.Text("html.after.full", nil))+`</p></div></section>`) {
+			t.Errorf("%s: step 2 does not end with html.after.rotate", lang)
+		}
+		if ai := report.RenderAIExport(v, cat, "/h"); !strings.Contains(ai, cat.Text("html.after.rotate", nil)+"\n") {
+			t.Errorf("%s: the export for your AI lacks html.after.rotate", lang)
+		}
+		p1 := renderHTML(t, lang, one)
+		cov := htmlEscape(cat.Text("html.step.1.coverage", map[string]string{"evaluated": "Claude Code", "pending": "Cursor"}))
+		_, foot, _ := strings.Cut(p1, `<p class="foot">`)
+		if !strings.Contains(p1, "<br>"+cov) || strings.Contains(foot, "Cursor") {
+			t.Errorf("%s: coverage %q, footer %q", lang, cov, foot)
+		}
+	}
+}

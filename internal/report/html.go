@@ -94,6 +94,7 @@ a{color:var(--ink);text-decoration:underline}
 h1.hl{font-size:21px;font-weight:700;line-height:1.3;margin:0 0 12px}
 .meta{font-size:15px;color:var(--mut);line-height:1.7;margin:0}
 .sagent{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 10px}
+.scale{font-size:14px;color:var(--mut);margin:0 0 10px}
 .tbox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 22px}
 .tbox h2{font-size:20px;font-weight:700;line-height:1.3;margin:0 0 8px}
 .lbl{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mut)}
@@ -345,12 +346,9 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	}
 	c.w(`</div></div>`)
 
-	// §6.3 Footer: the agents not evaluated and the technical report.
-	foot := c.t("html.legacy.pointer", map[string]string{"file": v.base + ".md"})
-	if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 {
-		foot = c.t("html.index.not_evaluated", map[string]string{"agents": listNames(cat, ne)}) + " · " + foot
-	}
-	c.w(`<p class="foot">%s</p>`, foot)
+	// §6.3 Footer: the technical report (the agents not evaluated moved to
+	// step 1, v3 §13.1).
+	c.w(`<p class="foot">%s</p>`, c.t("html.legacy.pointer", map[string]string{"file": v.base + ".md"}))
 	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS)
 	return sb.String()
 }
@@ -447,6 +445,7 @@ func (c htmlCtx) renderStep1() {
 	// The score's agent and band, right under it (v3 §10.1).
 	if scored {
 		c.w(`<p class="sagent">%s · %s%s</p>`, html.EscapeString(a.Agent), c.t("band."+a.Band, nil), c.help("agent"))
+		c.w(`<p class="scale">%s</p>`, c.t("html.index.scale", nil)) // v3 §13.1
 	}
 
 	// The headline (h1): the first finding of the score's agent (v3 §10.2),
@@ -478,6 +477,14 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.testdata", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
 	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
+	// Which agents are evaluated, and which detected but not yet (v3 §13.1).
+	if ev := v.Index.Scope.Evaluated; len(ev) > 0 {
+		if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 {
+			c.w(`<br>%s`, c.t("html.step.1.coverage", map[string]string{"evaluated": listNames(c.cat, ev), "pending": listNames(c.cat, ne)}))
+		} else {
+			c.w(`<br>%s`, c.t("html.step.1.coverage.all", map[string]string{"evaluated": listNames(c.cat, ev)}))
+		}
+	}
 	if scored {
 		switch cmp := a.Comparison; cmp.Status {
 		case index.CompareDirect:
@@ -593,7 +600,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	after := "html.after.full"
 	if a.Code == rules.ActionRotateCredential {
 		c.renderRotate(f, a, true)
-		c.w(`<p class="after">%s</p></div></section>`, c.t(after, p))
+		c.w(`<p class="after">%s</p></div></section>`, c.t("html.after.rotate", p)) // v3 §13.2
 		return
 	}
 	if a.Code == rules.ActionRemoveFromDisk {
@@ -733,6 +740,9 @@ func (c htmlCtx) renderMemory() {
 	for _, a := range c.v.NewAgents {
 		c.w(`<p>%s</p>`, c.t("html.memory.new_agent", map[string]string{"agent": a}))
 	}
+	for _, s := range c.v.NewMCP { // v3 §13.3
+		c.w(`<p>%s</p>`, c.t("html.memory.new_mcp", map[string]string{"name": s}))
+	}
 	if !c.v.memoryPrev {
 		c.w(`<p>%s</p>`, c.t("html.memory.first", nil))
 		return
@@ -825,7 +835,7 @@ func (c htmlCtx) renderFix(f rules.Finding, a rules.Action, titleKey string) {
 	c.w(`<div class="fix"><div class="fix-t">%s</div>`, c.t(titleKey, p))
 	if a.Code == rules.ActionRotateCredential {
 		c.renderRotate(f, a, false)
-		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t("html.after.full", p))
+		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t("html.after.rotate", p)) // v3 §13.2
 		return
 	}
 	if a.Code == rules.ActionRemoveFromDisk {
@@ -1027,7 +1037,7 @@ func HTMLKeys() []string {
 	keys := []string{
 		"html.doc_title", "html.header", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.delta", "html.index.not_comparable.rules",
-		"html.index.not_comparable.scope", "html.index.not_evaluated", "html.index.unavailable",
+		"html.index.not_comparable.scope", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable",
 		"html.card.button", "html.card.note", "html.card.counts", "html.card.method",
 		"html.count.repos", "html.none",
@@ -1065,6 +1075,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
 	// BV-55: the memory fold's label (v3 §6.2)
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
+	// v3 §13 (BV-56)
+	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}

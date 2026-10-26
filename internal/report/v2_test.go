@@ -117,6 +117,8 @@ var reservedKeys = []string{
 	// tag and chip)
 	"html.status.sub", "html.count.red", "html.count.yellow", "html.counts.label",
 	"html.today.tag", "html.today.time", "html.today.chip",
+	// gone from the footer: the agents not evaluated are in step 1 (v3 §13.1)
+	"html.index.not_evaluated",
 }
 
 // allEmitted is every code the Markdown, the console and the HTML can emit,
@@ -496,12 +498,13 @@ func TestBuildV2_LegacyMembers(t *testing.T) {
 			t.Errorf("%s still in the technical report", gone)
 		}
 	}
-	if !reflect.DeepEqual(v.NewAgents, []string{"fs"}) {
-		t.Errorf("new agents %v", v.NewAgents)
+	// v3 §13.3: a new MCP server is not an agent.
+	if len(v.NewAgents) != 0 || !reflect.DeepEqual(v.NewMCP, []string{"fs"}) {
+		t.Errorf("new agents %v, new MCP servers %v", v.NewAgents, v.NewMCP)
 	}
 	cat, _ := catalog.Load("")
 	md := report.RenderV2Markdown(v, cat, time.UTC)
-	for _, want := range []string{"- `ms-python.python`", "- `Updater`", cat.Text("memory.new_agent", map[string]string{"agent": "fs"})} {
+	for _, want := range []string{"- `ms-python.python`", "- `Updater`", cat.Text("memory.new_mcp", map[string]string{"name": "fs"})} {
 		if !strings.Contains(md, want) {
 			t.Errorf("legacy member %s missing", want)
 		}

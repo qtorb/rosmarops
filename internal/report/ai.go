@@ -139,6 +139,9 @@ func (c htmlCtx) aiAction(f rules.Finding, a rules.Action) string {
 		after = map[string]string{
 			rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
 		}[a.Completeness]
+		if a.Code == rules.ActionRotateCredential {
+			after = "html.after.rotate" // v3 §13.2
+		}
 	}
 	fmt.Fprintf(&b, "%s\n\n", c.cat.Text(after, p))
 	return b.String()

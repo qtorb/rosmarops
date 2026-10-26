@@ -107,16 +107,26 @@ var SignalOrder = []string{
 	"vscode_workspace_trust_disabled",
 }
 
-// newAgents are the agents new since the last run (M5): a new MCP server
-// (mcp_server_new) or a new agent extension, by name, sorted.
+// newAgents are the agents new since the last run (M5): a new agent
+// extension, by name, sorted. A new MCP server is not an agent (v3 §13.3):
+// newMCPServers.
 func newAgents(fs []finding.Finding) []string {
+	var out []string
+	for _, f := range fs {
+		if name, ok := agentExtension(f); ok {
+			out = append(out, name)
+		}
+	}
+	return uniqueSorted(out)
+}
+
+// newMCPServers are the MCP servers new since the last run
+// (mcp_server_new), by name, sorted (v3 §13.3).
+func newMCPServers(fs []finding.Finding) []string {
 	var out []string
 	for _, f := range fs {
 		if f.Category == "mcp_server_new" && f.Evidence.MCPServer != "" {
 			out = append(out, f.Evidence.MCPServer)
-		}
-		if name, ok := agentExtension(f); ok {
-			out = append(out, name)
 		}
 	}
 	return uniqueSorted(out)
