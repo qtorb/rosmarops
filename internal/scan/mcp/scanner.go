@@ -48,8 +48,8 @@ const (
 		"invocation, achieving arbitrary code execution inside your AI agent without any " +
 		"visible config change."
 
-	actionMCPServerWritable = "Check whether the path is a recognized toolchain bin directory " +
-		"(see docs/agent-paths.md for the approved list). If it is a legitimate tool not yet " +
+	actionMCPServerWritable = "Check whether the path is a recognized toolchain bin directory. " +
+		"If it is a legitimate tool not yet " +
 		"in the list, open an issue to add it. Otherwise, move the binary to a trusted managed " +
 		"location (e.g., install via Volta, nvm, Cargo, or Go toolchain) and update the MCP " +
 		"server config to point to the new path."
@@ -70,7 +70,7 @@ const (
 // dropped under .claude\plugins\<x>\bin\ must not be auto-trusted — detecting such
 // drift is exactly RosmarOps's purpose.
 //
-// Owner-approved 2026-05-21. See docs/agent-paths.md for full rationale.
+// Owner-approved 2026-05-21.
 var safeSubpaths = []string{
 	".volta/bin/",
 	".nvm/",

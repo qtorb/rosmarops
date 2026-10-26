@@ -42,6 +42,7 @@ var staticKeys = []string{
 	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged,
 	// BV-50
 	"report.silenced.one", "report.silenced.other", "report.silenced.entry",
+	"report.testdata.one", "report.testdata.other", "report.testdata.entry",
 	"report.silenced.expired.one", "report.silenced.expired.other",
 	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent",
 	"console.progress.agents", "console.progress.repos", "console.progress.report",
@@ -152,13 +153,23 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	// agent when there are several.
 	writeSharedAssumptions(&sb, cat, v.Findings)
 
-	// 3. Findings, in the order of §2.
+	// 3. Findings, in the order of §2; one per credential and rule in
+	// several agents (v3 §12.4), with the agents joined.
 	w("## %s\n\n", t("section.findings", nil))
 	if len(v.Findings) == 0 {
 		w("%s\n\n", t("findings.none", nil))
 	}
+	rows, done := credRows(v), map[*credRow]bool{}
 	for _, f := range v.Findings {
+		r := rows[f.ID]
+		if done[r] {
+			continue
+		}
+		done[r], f = true, r.rep
 		p := findingParams(f)
+		if len(r.agents) > 1 {
+			p["agent"] = listNames(cat, r.agents)
+		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t("finding."+f.Rule+".title", p))
 		meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
 		if f.Radius != "" {
@@ -213,6 +224,16 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("%s\n", t("posture.none", nil))
 	}
 	w("\n")
+
+	// Keys treated as test data by default (v3 §12.4): always shown, with
+	// their files.
+	if td := v.TestData; td.Count > 0 {
+		w("%s\n\n", cat.Plural("report.testdata", td.Count, map[string]string{"count": strconv.Itoa(td.Count)}))
+		for _, f := range td.Files {
+			w("- %s\n", t("report.testdata.entry", map[string]string{"repo": f.Repo, "path": f.Path}))
+		}
+		w("\n")
+	}
 
 	// Test data silenced by the user (M10–M11): always shown.
 	if sl := v.Silenced; len(sl.Entries) > 0 {

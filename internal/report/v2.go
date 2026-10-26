@@ -46,6 +46,9 @@ type V2 struct {
 	// shown; Signals the red technical-report categories (adjustment B).
 	Silenced rules.Silenced `json:"silenced"`
 	Signals  []Signal       `json:"signals"`
+	// TestData are the keys treated as test data by default (decision
+	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
+	TestData rules.TestData `json:"-"`
 	// NewAgents are the agents new since the last run (M5).
 	NewAgents  []string         `json:"-"`
 	repos      int              // configured repositories
@@ -197,7 +200,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
 			ConfigFile: in.ConfigFile, Now: in.GeneratedAt,
 		})
-		v.Silenced = res.Silenced
+		v.Silenced, v.TestData = res.Silenced, res.TestData
 		v.Findings, v.Today, v.Posture = res.Findings, res.Today, res.Posture
 		if v.Findings == nil {
 			v.Findings = []rules.Finding{}

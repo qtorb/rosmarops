@@ -200,8 +200,10 @@ type Result struct {
 	// finding), for the posture score.
 	MediumReadable map[string]map[string]bool
 
-	// Silenced is the test data the user silenced (M10–M11).
+	// Silenced is the test data the user silenced (M10–M11), TestData the
+	// keys treated as test data by default (decision 2026-10-26).
 	Silenced Silenced
+	TestData TestData
 }
 
 // LauncherRule is one shell rule counted through the launcher table.
@@ -390,9 +392,10 @@ func Evaluate(in Input) Result {
 		}
 		posture[code][cred] = class
 	}
-	// Test data (M10): a silenced key gives no finding at all, in git or
-	// read by an agent; it is counted and shown instead.
-	git, silenced, silencedCreds := gitFindings(in, nodes, scopes, observed, addPosture)
+	// Test data (M10, and by default since decision 2026-10-26): a
+	// silenced key gives no finding at all, in git or read by an agent; it
+	// is counted and shown instead.
+	git, silenced, testData, silencedCreds := gitFindings(in, nodes, scopes, observed, addPosture)
 	var perCred []Finding
 	for p, edges := range reaches {
 		if silencedCreds[p.cred] {
@@ -439,7 +442,7 @@ func Evaluate(in Input) Result {
 		f.Actions = actionsFor(in, view(agentOf(*f)), *f, nodes)
 	}
 	res.Findings = append(res.Findings, git...)
-	res.Silenced = silenced
+	res.Silenced, res.TestData = silenced, testData
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
 	}

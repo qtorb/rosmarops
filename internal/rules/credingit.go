@@ -58,6 +58,64 @@ type SilencedEntry struct {
 	Count     int    `json:"count"`
 }
 
+// TestData are the credentials treated as test data by default (decision
+// 2026-10-26, ruido del informe, point 1): every location of the key is in
+// a test or template file. They give no cred_in_git finding and do not
+// count in the score; they are always shown, with their files.
+type TestData struct {
+	Count int
+	Files []TestDataFile
+}
+
+// TestDataFile is one file of a key treated as test data.
+type TestDataFile struct {
+	Repo string
+	Path string
+}
+
+// testDirs are the path segments of a test file (point 1), any case.
+var testDirs = map[string]bool{
+	"test": true, "tests": true, "__tests__": true, "testdata": true, "fixtures": true,
+	"fixture": true, "__fixtures__": true, "spec": true, "specs": true,
+}
+
+// testDataNames are the file names of a test or template file (point 1).
+var testDataNames = []string{
+	"*_test.*", "*.test.*", "*.spec.*", "test_*.py",
+	".env.example", ".env.sample", ".env.template", "template.env", "*.example", "*.sample", "*.template",
+}
+
+// isTestDataFile reports a repository-relative file that is a test or
+// template file by the criterion of point 1: a test segment, or a test or
+// template name. Compared without case, as Windows names are.
+func isTestDataFile(rel string) bool {
+	segs := strings.Split(strings.ToLower(strings.ReplaceAll(rel, `\`, "/")), "/")
+	for _, s := range segs {
+		if testDirs[s] {
+			return true
+		}
+	}
+	for _, pat := range testDataNames {
+		if ok, _ := path.Match(pat, segs[len(segs)-1]); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// repoRelative is the repository and repository-relative path of an
+// absolute file inside one of roots.
+func repoRelative(roots []string, file string) (string, string, bool) {
+	cf := graph.CanonicalPath(file)
+	for _, r := range roots {
+		cr := strings.TrimSuffix(graph.CanonicalPath(r), "/")
+		if cr != "" && strings.HasPrefix(cf, cr+"/") {
+			return r, strings.ReplaceAll(file, `\`, "/")[len(cr)+1:], true
+		}
+	}
+	return "", "", false
+}
+
 // FixtureGuardHit is one guard that kept an entry from applying somewhere:
 // FixtureIgnoredScope or FixtureFingerprintMatch, with the entry.
 type FixtureGuardHit struct {
@@ -130,8 +188,10 @@ func credentialSource(o occurrence, collectorFiles map[string]bool) bool {
 // for a high class, yellow for medium or unclassified; a low credential or
 // one committed only in templates is posture. A finding every occurrence
 // of which a test-data entry covers, with no other location of its key, is
-// silenced instead.
-func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string, observed map[string]bool, addPosture func(code, cred, class string)) ([]Finding, Silenced, map[string]bool) {
+// silenced instead; one whose every location is a test or template file is
+// test data by default (decision 2026-10-26, point 1), counted in TestData.
+// The map returned holds the keys of both: they give no finding at all.
+func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string, observed map[string]bool, addPosture func(code, cred, class string)) ([]Finding, Silenced, TestData, map[string]bool) {
 	silencedCreds := map[string]bool{}
 	g := in.Graph
 	occ := in.occurrences(g)
@@ -155,8 +215,16 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 			}
 		}
 	}
+	roots := append([]string(nil), in.RepoRoots...)
+	for _, os := range occ {
+		for _, o := range os {
+			roots = append(roots, o.Repo)
+		}
+	}
 	collectorFiles := map[string]bool{}
-	collectorLoc := map[string]bool{} // credential → has a location outside its commits
+	collectorLoc := map[string]bool{}            // credential → has a location outside its commits
+	collectorOther := map[string]bool{}          // … one that is not a test or template file in a repository
+	collectorTest := map[string][]TestDataFile{} // … the ones that are
 	for _, n := range g.Nodes {
 		if n.Kind != graph.KindCredential {
 			continue
@@ -175,11 +243,18 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 			for _, f := range graph.CredentialFiles(graph.Node{Locations: []string{loc}}) {
 				collectorFiles[graph.CanonicalPath(f)] = true
 			}
+			if repo, rel, ok := repoRelative(roots, memberFile(loc)); ok && isTestDataFile(rel) {
+				collectorTest[n.ID] = append(collectorTest[n.ID], TestDataFile{Repo: repo, Path: rel})
+			} else {
+				collectorOther[n.ID] = true
+			}
 		}
 	}
 
 	today := in.Now.Format("2006-01-02")
 	var sil Silenced
+	var td TestData
+	tdFiles := map[TestDataFile]bool{}
 	type entryHits struct {
 		count     int
 		scope, fp bool
@@ -213,9 +288,28 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 		for _, o := range os {
 			allTpl = allTpl && isTemplate(o.File)
 		}
+		// Test data by default (decision 2026-10-26, point 1): every
+		// location in git and in the collector is a test or template file.
+		testData := len(os) > 0 && !collectorOther[id]
+		for _, o := range os {
+			testData = testData && isTestDataFile(o.File)
+		}
+		countTestData := func() { // no finding at all, as a silenced key
+			td.Count++
+			silencedCreds[id] = true
+			for _, o := range os {
+				tdFiles[TestDataFile{Repo: o.Repo, Path: o.File}] = true
+			}
+			for _, f := range collectorTest[id] {
+				tdFiles[f] = true
+			}
+		}
 		if class == ClassLow || allTpl {
 			if allTpl {
 				addPosture(PostureInTemplatesOnly, id, class)
+				if class != ClassLow && testData {
+					countTestData()
+				}
 			}
 			continue
 		}
@@ -246,9 +340,13 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 				}
 				continue
 			}
-			for i := range matched {
-				hits[i].fp = true // guard 2: the same key outside test data
-			}
+		}
+		if testData {
+			countTestData()
+			continue
+		}
+		for i := range matched {
+			hits[i].fp = true // guard 2: the same key outside test data
 		}
 		out = append(out, gitFinding(in, cred, edges[id], nodes, scopes[id], class, observed[id], today))
 	}
@@ -275,7 +373,14 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 	if sil.Entries == nil {
 		sil.Entries = []SilencedEntry{}
 	}
-	return out, sil, silencedCreds
+	for f := range tdFiles {
+		td.Files = append(td.Files, f)
+	}
+	sort.Slice(td.Files, func(i, j int) bool {
+		a, b := td.Files[i], td.Files[j]
+		return a.Repo < b.Repo || a.Repo == b.Repo && a.Path < b.Path
+	})
+	return out, sil, td, silencedCreds
 }
 
 // gitFinding is the cred_in_git finding of one credential: its repositories

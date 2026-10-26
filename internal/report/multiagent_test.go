@@ -150,7 +150,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // line, now right under the score.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
 	g := v2Graph(t)
-	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	v1 := report.Build("t", nil, nil, 0, 0, 0, 0, nil)
+	v1.GeneratedAt = "2026-10-25T12:00:00Z" // the day the golden page was rendered (its report name)
+	v := buildV2(t, &g, v1)
 	for _, lang := range []string{"en", "es"} {
 		raw, err := os.ReadFile("testdata/html_one_agent_bv50." + lang + ".html")
 		if err != nil {
@@ -166,6 +168,9 @@ func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
 		want = strings.Replace(want, `<h1 class="hl">`, `<p class="sagent">`+line[1]+`</p><h1 class="hl">`, 1)
 		want = strings.Replace(want, ".meta{font-size:15px;color:var(--mut);line-height:1.7;margin:0}",
 			".meta{font-size:15px;color:var(--mut);line-height:1.7;margin:0}\n.sagent{font-size:15px;font-weight:600;color:var(--ink);margin:0 0 10px}", 1)
+		// BV-54: the fold of step 3's rows past the eighth (v3 §12.3).
+		const rowX = "details.row>summary .x{font-size:13px;color:var(--mut);min-width:86px;text-align:right;white-space:nowrap}\n"
+		want = strings.Replace(want, rowX, rowX+"details.rest>summary{display:flex;gap:8px;align-items:center;min-height:44px;font-size:15px;font-weight:600;color:var(--ink);list-style:none;cursor:pointer}\n", 1)
 		if got := renderHTML(t, lang, v); got != want {
 			i := 0
 			for i < len(got) && i < len(want) && got[i] == want[i] {

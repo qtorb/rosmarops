@@ -5,6 +5,7 @@ import (
 	"html"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -119,6 +120,7 @@ details.row>summary{display:flex;gap:10px;align-items:center;min-height:44px;fon
 details>summary::-webkit-details-marker{display:none}
 details.row>summary .t{flex:1;min-width:0;line-height:1.3;padding:6px 0}
 details.row>summary .x{font-size:13px;color:var(--mut);min-width:86px;text-align:right;white-space:nowrap}
+details.rest>summary{display:flex;gap:8px;align-items:center;min-height:44px;font-size:15px;font-weight:600;color:var(--ink);list-style:none;cursor:pointer}
 .chev{color:var(--mut);transition:transform .15s}
 details[open]>summary .chev{transform:rotate(90deg)}
 .rb{padding:0 0 12px 20px;font-size:15px}
@@ -208,6 +210,7 @@ type htmlCtx struct {
 	score  map[string]*index.AgentIndex // agent id → its score
 	gloss  *int                         // the last help id, g1, g2…
 	exists func(name string) bool       // a file of the reports directory exists
+	rows   map[string]*credRow          // finding id → its row (v3 §12.2)
 }
 
 // help is the «i» of term (§4): the button and, right after it, its hidden
@@ -270,7 +273,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	}
 	local := at.In(loc)
 	var sb strings.Builder
-	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists}
+	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists, rows: credRows(v)}
 	for i := range v.Index.Agents {
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
@@ -471,6 +474,9 @@ func (c htmlCtx) renderStep1() {
 	if n := v.Silenced.Count; n > 0 {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
+	if n := v.TestData.Count; n > 0 { // v3 §12.1
+		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.testdata", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
 	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
 	if scored {
 		switch cmp := a.Comparison; cmp.Status {
@@ -569,7 +575,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	c.w(`<section class="now" aria-labelledby="today-title">`)
 	c.stepHead(2, "p", "", c.t("html.step.2", nil), hint, true)
 	c.w(`<div class="tbox"><h2 id="today-title">%s</h2><div class="lbl">%s</div><p class="tf">%s%s%s</p><p class="imp">%s`,
-		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.title(f), c.masterHelp(f), c.others(f), c.impact(f))
+		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.rowTitle(f), c.masterHelp(f), c.others(f), c.impact(f))
 	if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
 		c.w(` %s%s`, c.t("html.today.reach", p), c.help("auto"))
 	}
@@ -627,38 +633,53 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	c.w(`<p class="after">%s%s</p></div></section>`, c.t(after, p), env)
 }
 
-// renderStep3 is v3 §5: every finding but today's, in two groups.
+// step3Cap is how many rows step 3 shows before the rest fold (v3 §12.3).
+const step3Cap = 8
+
+// renderStep3 is v3 §5: every row but today's, in two groups; one row per
+// credential (§12.2), the first step3Cap shown and the rest folded (§12.3).
 func (c htmlCtx) renderStep3(todayID string) {
 	var list []rules.Finding
 	for _, f := range c.v.Findings {
-		if f.ID != todayID {
+		if r := c.rows[f.ID]; !slices.Contains(r.ids, todayID) {
 			list = append(list, f)
 		}
-	}
-	c.w(`<section aria-labelledby="step3">`)
-	n := strconv.Itoa(len(list))
-	c.stepHead(3, "h2", "step3", c.t("html.step.3", nil), html.EscapeString(c.cat.Plural("html.step.3.hint", len(list), map[string]string{"count": n})), false)
-	if len(list) == 0 {
-		c.w(`<p class="empty">%s</p></section>`, c.t("html.step.3.none", nil))
-		return
 	}
 	// Within each group, the score's agent's rows first, each agent in the
 	// report's order (v3 §10.5).
 	if a, ok := c.scored(); ok {
 		sort.SliceStable(list, func(i, j int) bool { return c.ofScoredAgent(list[i], a) && !c.ofScoredAgent(list[j], a) })
 	}
+	var rows []rules.Finding
 	for _, sev := range []string{rules.SeverityRed, rules.SeverityYellow} {
-		first := true
+		done := map[*credRow]bool{}
 		for _, f := range list {
-			if f.Severity != sev {
-				continue
+			if r := c.rows[f.ID]; f.Severity == sev && !done[r] {
+				done[r] = true
+				rows = append(rows, r.rep)
 			}
-			if first {
-				c.w(`<div class="grp"><span class="dot" style="background:%s"></span>%s</div>`, sevFill(sev), c.t("html.group."+sev, nil))
-				first = false
-			}
-			c.renderRow(f)
 		}
+	}
+	c.w(`<section aria-labelledby="step3">`)
+	n := strconv.Itoa(len(rows))
+	c.stepHead(3, "h2", "step3", c.t("html.step.3", nil), html.EscapeString(c.cat.Plural("html.step.3.hint", len(rows), map[string]string{"count": n})), false)
+	if len(rows) == 0 {
+		c.w(`<p class="empty">%s</p></section>`, c.t("html.step.3.none", nil))
+		return
+	}
+	for i, f := range rows {
+		if i == step3Cap {
+			rest := len(rows) - step3Cap
+			c.w(`<details class="rest"><summary><span class="chev" aria-hidden="true">›</span>%s</summary>`,
+				html.EscapeString(c.cat.Plural("html.step.3.more", rest, map[string]string{"count": strconv.Itoa(rest)})))
+		}
+		if i == 0 || i == step3Cap || f.Severity != rows[i-1].Severity {
+			c.w(`<div class="grp"><span class="dot" style="background:%s"></span>%s</div>`, sevFill(f.Severity), c.t("html.group."+f.Severity, nil))
+		}
+		c.renderRow(f)
+	}
+	if len(rows) > step3Cap {
+		c.w(`</details>`)
 	}
 	c.w(`</section>`)
 }
@@ -668,7 +689,7 @@ func (c htmlCtx) renderStep3(todayID string) {
 func (c htmlCtx) renderRow(f rules.Finding) {
 	p := c.params(f)
 	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb"><p>%s%s</p>`,
-		c.title(f), c.verdict(f), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
+		c.rowTitle(f), c.verdict(f), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
 	}
@@ -933,6 +954,18 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	return c.cat.Text("html.f."+f.Rule+".title", p)
 }
 
+// rowTitle is the title of the finding's row (v3 §12.2): with the agents
+// of its credential and rule joined, escaped.
+func (c htmlCtx) rowTitle(f rules.Finding) string {
+	r := c.rows[f.ID]
+	if r == nil || len(r.agents) < 2 {
+		return c.title(f)
+	}
+	p := c.params(f)
+	p["agent"] = listNames(c.cat, r.agents)
+	return html.EscapeString(c.cat.Text("html.f.cred.title", p))
+}
+
 // masterHelp is the «i» of master after the title of a finding whose
 // credential is the Supabase service_role key (§4).
 func (c htmlCtx) masterHelp(f rules.Finding) string {
@@ -1028,6 +1061,8 @@ func HTMLKeys() []string {
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic",
 		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
 		"html.signals.title", "html.signals.note", "html.index.method_change")
+	// v3 §12 (BV-54)
+	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}
