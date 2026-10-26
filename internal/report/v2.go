@@ -622,7 +622,7 @@ func FilenameV2(r Report, v V2) string {
 // ConsoleSummary is the run's two console lines, from the catalog
 // (BV-39): the status and the v2 and legacy counts, then the report path.
 func ConsoleSummary(v V2, cat catalog.Catalog, path string) string {
-	red, yellow := V2Counts(v)
+	red, yellow := RowCounts(v) // BV-55: rows, as the report shows them
 	summary := cat.Text("console.summary", map[string]string{
 		"status": cat.Text("report.status."+v.Status, nil),
 		"red":    strconv.Itoa(red), "yellow": strconv.Itoa(yellow),

@@ -176,6 +176,8 @@
   "html.memory.evolution": "Tu nota en el tiempo: {series}",
   "html.memory.evolution.agent": "{agent}: {series}",
   "html.memory.first": "Es la primera ejecución: a partir de la próxima, aquí verás qué ha cambiado.",
+  "html.memory.more.one": "Ver 1 cambio",
+  "html.memory.more.other": "Ver los {count} cambios",
   "html.memory.new_agent": "Agente nuevo desde la vez anterior: {agent}",
   "html.memory.title": "Memoria",
   "html.none": "Nada que arreglar hoy.",

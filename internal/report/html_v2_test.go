@@ -140,6 +140,12 @@ func TestRenderHTML_Memory(t *testing.T) {
 				t.Errorf("%s: memory box lacks %q: %s", lang, want, box)
 			}
 		}
+		// BV-55, v3 §6.2: the fold's label counts its lines.
+		n := len(run2.Memory.Moved) + len(run2.Memory.NoLongerObserved)
+		fold := `<details><summary>` + htmlEscape(cat.Plural("html.memory.more", n, map[string]string{"count": strconv.Itoa(n)})) + `</summary>`
+		if !strings.Contains(box, fold) || strings.Contains(box, htmlEscape(cat.Text("html.memory.title", nil))+" · ") {
+			t.Errorf("%s: memory fold not %q: %s", lang, fold, box)
+		}
 		// v3 §5: the verdict as text in each row.
 		rows := strings.Count(p2, `<details class="row">`)
 		still := htmlEscape(cat.Text("html.verdict.still", map[string]string{"date": cat.DayMonthLabel(v2Now)}))

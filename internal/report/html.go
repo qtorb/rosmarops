@@ -469,7 +469,7 @@ func (c htmlCtx) renderStep1() {
 		headline = c.t("html.index.perfect", nil)
 	}
 	c.w(`<h1 class="hl">%s</h1><p class="meta">`, headline)
-	red, yellow := V2Counts(v)
+	red, yellow := RowCounts(v)
 	c.w(`%s`, c.t("html.step.1.counts", map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
 	if n := v.Silenced.Count; n > 0 {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
@@ -775,7 +775,7 @@ func (c htmlCtx) renderMemory() {
 		}, "last_report", report))
 	}
 	if len(lines) > 0 {
-		c.w(`<details><summary>%s · %d</summary>`, c.t("html.memory.title", nil), len(lines))
+		c.w(`<details><summary>%s</summary>`, html.EscapeString(c.cat.Plural("html.memory.more", len(lines), map[string]string{"count": strconv.Itoa(len(lines))})))
 		for _, l := range lines {
 			c.w(`<p>%s</p>`, l)
 		}
@@ -1063,6 +1063,8 @@ func HTMLKeys() []string {
 		"html.signals.title", "html.signals.note", "html.index.method_change")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
+	// BV-55: the memory fold's label (v3 §6.2)
+	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}

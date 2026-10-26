@@ -229,6 +229,8 @@
   "html.memory.evolution": "Your score over time: {series}",
   "html.memory.evolution.agent": "{agent}: {series}",
   "html.memory.first": "This is the first run: from the next one on, this shows what changed.",
+  "html.memory.more.one": "Show 1 change",
+  "html.memory.more.other": "Show the {count} changes",
   "html.memory.new_agent": "New agent since last time: {agent}",
   "html.memory.title": "Memory",
   "html.none": "Nothing to fix today.",

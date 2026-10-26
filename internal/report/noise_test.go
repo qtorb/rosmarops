@@ -268,3 +268,55 @@ func TestNoise_Step3Cap(t *testing.T) {
 		}
 	}
 }
+
+// BV-55 point 1: every count of findings the user sees counts rows as v3
+// §12.2 groups them: step 1 and the console add up to the rows of steps 2
+// and 3; the report's file name keeps counting findings. One credential
+// within two agents' reach adds 1, not 2.
+func TestNoise_CountsByRow(t *testing.T) {
+	full := noiseReport(t)
+	only := cloneV2(full)
+	only.Today, only.Findings = rules.Today{}, nil
+	for _, f := range full.Findings {
+		if f.Params.Scope == "service_role" {
+			only.Findings = append(only.Findings, f)
+		}
+	}
+	if len(only.Findings) != 2 {
+		t.Fatalf("%d service_role findings, want one per agent", len(only.Findings))
+	}
+	for name, v := range map[string]report.V2{"real case": full, "one key, two agents": only} {
+		red, yellow := report.RowCounts(v)
+		fr, fy := report.V2Counts(v)
+		if fr+fy <= red+yellow {
+			t.Fatalf("%s: rows %d+%d, findings %d+%d: test would be vacuous", name, red, yellow, fr, fy)
+		}
+		if name == "one key, two agents" && red+yellow != 1 {
+			t.Errorf("%s: rows %d+%d", name, red, yellow)
+		}
+		for _, lang := range []string{"en", "es"} {
+			cat, _ := catalog.Load(lang)
+			page := renderHTML(t, lang, v)
+			counts := htmlEscape(cat.Text("html.step.1.counts", map[string]string{"red": fmt.Sprint(red), "yellow": fmt.Sprint(yellow)}))
+			if !strings.Contains(page, `<p class="meta">`+counts) {
+				t.Errorf("%s %s: step 1 lacks %q", name, lang, counts)
+			}
+			shown := strings.Count(page, `<div class="tbox">`)
+			_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
+			step3, _, _ = strings.Cut(step3, `</section>`)
+			if shown += strings.Count(step3, `<details class="row">`); shown != red+yellow {
+				t.Errorf("%s %s: %d rows in steps 2 and 3, counts %d+%d", name, lang, shown, red, yellow)
+			}
+			line := cat.Text("console.summary", map[string]string{
+				"status": cat.Text("report.status."+v.Status, nil), "red": fmt.Sprint(red), "yellow": fmt.Sprint(yellow),
+				"legacy_red": fmt.Sprint(v.Legacy.Counts.Red), "legacy_yellow": fmt.Sprint(v.Legacy.Counts.Yellow),
+			})
+			if got := report.ConsoleSummary(v, cat, "/r/report.md"); !strings.HasPrefix(got, line+"\n") {
+				t.Errorf("%s %s: console %q, want %q", name, lang, got, line)
+			}
+		}
+		if fn := report.FilenameV2(report.Report{GeneratedAt: v.GeneratedAt}, v); !strings.HasSuffix(fn, fmt.Sprintf("__%dR-%dY", fr, fy)) {
+			t.Errorf("%s: file name %s does not count findings", name, fn)
+		}
+	}
+}

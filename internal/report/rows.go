@@ -55,6 +55,28 @@ func credRows(v V2) map[string]*credRow {
 	return out
 }
 
+// RowCounts are the red and yellow rows of the report (BV-55): the
+// findings as v3 §12.2 groups them, one row per credential and rule in
+// several agents, so they add up to the rows of steps 2 and 3. Every count
+// of findings the user sees is this; the report's file name keeps counting
+// findings (V2Counts).
+func RowCounts(v V2) (red, yellow int) {
+	seen := map[*credRow]bool{}
+	for _, r := range credRows(v) {
+		if seen[r] {
+			continue
+		}
+		seen[r] = true
+		switch r.rep.Severity {
+		case rules.SeverityRed:
+			red++
+		case rules.SeverityYellow:
+			yellow++
+		}
+	}
+	return red, yellow
+}
+
 // agentRank orders a finding by its agent as v3 §3 point 6 does: the
 // evaluated agents by score, lowest first, ties by name; then the others,
 // by name.
