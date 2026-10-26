@@ -2,14 +2,14 @@
 
 **See what your AI coding agents can reach on your computer — and how one agent can change another.**
 
-RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code and Cursor; Cline is detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
+RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code and Cursor; Cline, GitHub Copilot and Continue are detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
 
 - which keys each agent can read without asking you;
 - whether it can send them out, and who decides that: you, another AI model, or nobody;
 - which agents can rewrite another agent's configuration or instructions;
 - which keys are saved in git.
 
-You get a visual report with one thing to do today, the exact setting to change, and a score per agent. It reads only. It never changes anything and never connects to the network.
+You get a visual report with a score per agent, the first thing to do with the exact setting to change, and a table of how each agent works: who decides what it does (nobody, another AI model, or you) and how far it reaches. It reads only. It never changes anything and never connects to the network.
 
 ---
 
@@ -20,7 +20,7 @@ You get a visual report with one thing to do today, the exact setting to change,
 3. Extract the whole zip, then double-click `rosmarops-run.bat` (or `rosmarops-ejecutar.bat` for the report in Spanish).
 4. The report opens in your browser when it finishes (up to 5 minutes).
 
-Run it again after you change something: the report remembers the previous run and tells you what is new, what is still there and what is no longer observed.
+Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, and which agents or MCP servers are new.
 
 ## Check the download
 
@@ -50,9 +50,10 @@ To reproduce the released `rosmarops.exe` exactly, build the tagged commit from 
 
 | Agent or source | What RosmarOps reads |
 |---|---|
-| Claude Code | Its settings at every level (managed, user, project, local), permission rules and modes, hooks, MCP servers, `CLAUDE.md` and rules |
+| Claude Code | Its settings at every level (managed, user, project, local), permission rules and modes, hooks, MCP servers, `CLAUDE.md` and rules, and the environment settings that choose where it sends your requests |
 | Cursor | `~/.cursor` and each project's `.cursor`: permissions, sandbox, MCP servers, hooks, rules, and Claude Code hooks that Cursor also loads |
 | Cline | Its MCP servers (scored in a later version) |
+| VS Code extensions | Which AI agent extensions are installed (Cline, GitHub Copilot, Continue), to list them as detected; any other new extension is listed in the technical report |
 | Credentials | `.env` files in your repositories, MCP `env` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
 
@@ -61,6 +62,7 @@ To reproduce the released `rosmarops.exe` exactly, build the tagged commit from 
 - What an agent does while it runs. RosmarOps reads configuration at rest.
 - Settings that live only inside an app's database or on a vendor's servers (for example, the mode you pick in Cursor's settings), and anything you set only in one terminal session. The report states what it assumes in those cases.
 - Whether a key in git was actually pushed to a public place.
+- Whether a key you declared rotated was really revoked at the provider. RosmarOps records your statement and says so.
 
 Whatever it could not read is listed in the report and never counted as clean.
 

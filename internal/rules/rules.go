@@ -27,7 +27,7 @@ import (
 // Version is the rules version recorded in the report's provenance, and
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
-	Version     = "1"
+	Version     = "2"
 	RuleVersion = "2"
 )
 
