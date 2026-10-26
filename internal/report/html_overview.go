@@ -223,7 +223,8 @@ func (o overviewText) lines(a rules.OverviewAgent, c rules.OverviewCell) []strin
 		n := *d.PreapprovedRules
 		out = append(out, o.cat.Plural("html.ov.data.preapproved", n, map[string]string{"count": strconv.Itoa(n)}))
 		if d.LauncherRules != nil && *d.LauncherRules > 0 {
-			out = append(out, o.cat.Text("html.ov.data.launchers", map[string]string{"count": strconv.Itoa(*d.LauncherRules)}))
+			n := *d.LauncherRules
+			out = append(out, o.cat.Plural("html.ov.data.launchers", n, map[string]string{"count": strconv.Itoa(n)}))
 		}
 	}
 	if c.Row == rules.RowSendsOut && has(d.Excluded, rules.ExcludedDocumentedNetworkExceptions) {
@@ -437,7 +438,7 @@ func overviewKeys() []string {
 		"html.ov.title", "html.ov.intro", "html.ov.foot", "html.ov.cell", "html.ov.changes.none",
 		"html.ov.row.reads_files.sub", "html.ov.row.model_provider.sub",
 		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.ignore_env",
-		"html.ov.data.not_a_finding", "html.ov.data.preapproved.one", "html.ov.data.preapproved.other", "html.ov.data.launchers",
+		"html.ov.data.not_a_finding", "html.ov.data.preapproved.one", "html.ov.data.preapproved.other", "html.ov.data.launchers.one", "html.ov.data.launchers.other",
 		"html.ov.data.net_exceptions", "html.ov.data.no_targets_out", "html.ov.data.byo_key_routed", "html.ov.data.session_env",
 		"html.ov.data.run_everything", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",
 		"html.ov.head.not_evaluated.no_inference", "html.ov.head.not_evaluated.coverage", "html.ov.tag.assumed",

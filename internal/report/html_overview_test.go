@@ -167,11 +167,16 @@ func TestRenderHTML_OverviewCombinations(t *testing.T) {
 			c.Data.PreapprovedRules, c.Data.LauncherRules = ip(1), ip(0)
 			return c
 		}(), want: []text{{"html.ov.data.preapproved.one", map[string]string{"count": "1"}, "em"}}},
+		{name: "preapproved and 1 launcher", row: rules.RowRunsCommands, cell: func() rules.OverviewCell {
+			c := ovc(nobody, rules.ScopeMachine, cf)
+			c.Data.PreapprovedRules, c.Data.LauncherRules = ip(3), ip(1)
+			return c
+		}(), want: []text{{"html.ov.data.preapproved.other", map[string]string{"count": "3"}, "em"}, {"html.ov.data.launchers.one", map[string]string{"count": "1"}, "em"}}},
 		{name: "preapproved and launchers", row: rules.RowRunsCommands, cell: func() rules.OverviewCell {
 			c := ovc(nobody, rules.ScopeMachine, mixed)
 			c.Data.PreapprovedRules, c.Data.LauncherRules = ip(147), ip(2)
 			return c
-		}(), want: []text{{"html.ov.data.preapproved.other", map[string]string{"count": "147"}, "em"}, {"html.ov.data.launchers", map[string]string{"count": "2"}, "em"}, {"html.ov.tag.mixed", nil, "tag"}}},
+		}(), want: []text{{"html.ov.data.preapproved.other", map[string]string{"count": "147"}, "em"}, {"html.ov.data.launchers.other", map[string]string{"count": "2"}, "em"}, {"html.ov.tag.mixed", nil, "tag"}}},
 		{name: "net_exceptions and no_targets_out", row: rules.RowSendsOut, cell: func() rules.OverviewCell {
 			c := ovc(nobody, rules.ScopeAnyDestination, cf)
 			c.Data.Excluded, c.NoFindingReason = []string{rules.ExcludedDocumentedNetworkExceptions}, sp(rules.NoFindingNoTargets)
@@ -376,6 +381,24 @@ func TestRenderV2Markdown_Overview(t *testing.T) {
 	for _, m := range regexp.MustCompile(`<em>([^<]*)</em>`).FindAllStringSubmatch(page, -1) {
 		if strings.Contains(sec, m[1]) || strings.Contains(sec, html.UnescapeString(m[1])) {
 			t.Errorf("secondary line in the Markdown: %q", m[1])
+		}
+	}
+}
+
+// BV-62: the launchers' line is a one/other pair, literal in en and es.
+func TestRenderHTML_OverviewLaunchersPlural(t *testing.T) {
+	want := map[string]map[int]string{
+		"en": {1: "1 of them can run any code", 2: "2 of them can run any code"},
+		"es": {1: "1 de ellos puede ejecutar cualquier código", 2: "2 de ellos pueden ejecutar cualquier código"},
+	}
+	for lang, byN := range want {
+		for n, line := range byN {
+			c := ovc(rules.DeciderNobody, rules.ScopeMachine, rules.OriginConfigured)
+			c.Data.PreapprovedRules, c.Data.LauncherRules = ip(5), ip(n)
+			sec := ovSection(t, renderHTML(t, lang, ovReport(t, map[string]rules.OverviewCell{rules.RowRunsCommands: c}, nil, nil)))
+			if !strings.Contains(sec, "<em>"+htmlEscape(line)+"</em>") {
+				t.Errorf("%s %d: no %q", lang, n, line)
+			}
 		}
 	}
 }
