@@ -233,16 +233,7 @@ func Compute(in Input) Index {
 		Agents: []AgentIndex{},
 		Scope:  Scope{Evaluated: []string{}, NotEvaluated: []string{}, Repos: in.Repos},
 	}
-	byAgent := map[string][]rules.Finding{}
-	var machine []rules.Finding // no agent: in every agent's score
-	for _, f := range in.Findings {
-		switch {
-		case rules.IsMachineFinding(f):
-			machine = append(machine, f)
-		case len(f.Evidence.Nodes) > 0:
-			byAgent[f.Evidence.Nodes[0]] = append(byAgent[f.Evidence.Nodes[0]], f)
-		}
-	}
+	byAgent, machine := groupFindings(in.Findings)
 	agents := append([]Agent{}, in.Agents...)
 	sort.SliceStable(agents, func(i, j int) bool { return agents[i].Name < agents[j].Name })
 	// Detected, not evaluated: one per product code, an ai_client and an
@@ -350,6 +341,52 @@ func agentIndex(in Input, a Agent, fs []rules.Finding) AgentIndex {
 		ai.Comparison.PrevIndexVersion = prev.IndexVersion
 	}
 	return ai
+}
+
+// groupFindings are the findings by agent id and those with no agent, which
+// weigh in every agent's score.
+func groupFindings(fs []rules.Finding) (map[string][]rules.Finding, []rules.Finding) {
+	byAgent := map[string][]rules.Finding{}
+	var machine []rules.Finding
+	for _, f := range fs {
+		switch {
+		case rules.IsMachineFinding(f):
+			machine = append(machine, f)
+		case len(f.Evidence.Nodes) > 0:
+			byAgent[f.Evidence.Nodes[0]] = append(byAgent[f.Evidence.Nodes[0]], f)
+		}
+	}
+	return byAgent, machine
+}
+
+// ActionProjections are, per evaluated agent with a score, the score after
+// each radius_only action of its findings, computed as today's projection
+// (I6, project): the line of each row whose action only narrows the reach
+// (informe HTML v3 §15.3). Not part of the index.
+func ActionProjections(in Input) map[string]map[string]int {
+	out := map[string]map[string]int{}
+	byAgent, machine := groupFindings(in.Findings)
+	for _, a := range in.Agents {
+		if !in.Inference[a.Product] || !covered(in, a) {
+			continue
+		}
+		fs := append(append([]rules.Finding{}, byAgent[a.ID]...), machine...)
+		posture := float64(postureWeight * in.MediumReadable[a.ID])
+		for _, f := range fs {
+			for _, act := range f.Actions {
+				if act.Completeness != rules.CompletenessRadiusOnly {
+					continue
+				}
+				if p, ok := project(fs, rules.Today{ActionID: act.ID}, posture); ok {
+					if out[a.ID] == nil {
+						out[a.ID] = map[string]int{}
+					}
+					out[a.ID][act.ID] = p.Value
+				}
+			}
+		}
+	}
+	return out
 }
 
 // project applies today's action to the agent's findings (I6, §3): a

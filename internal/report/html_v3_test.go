@@ -89,7 +89,11 @@ func TestRenderHTML_V3Headline(t *testing.T) {
 			v := cloneV2(base)
 			v.Findings[0].Rule = r
 			v.Findings[0].Params.Agent = "Agent X"
-			want := htmlEscape(cat.Text("html.headline."+r, map[string]string{"agent": "Agent X"}))
+			key := "html.headline." + r
+			if r == rules.RuleCredInGit { // one cred_in_git finding: the singular (v3 §15.4)
+				key += ".one"
+			}
+			want := htmlEscape(cat.Text(key, map[string]string{"agent": "Agent X"}))
 			if m := h1.FindStringSubmatch(renderHTML(t, lang, v)); m == nil || m[1] != want {
 				t.Errorf("%s %s: h1 %v, want %q", lang, r, m, want)
 			}

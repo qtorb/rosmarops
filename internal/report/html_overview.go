@@ -159,7 +159,11 @@ func (o overviewText) main(agent string, c rules.OverviewCell) string {
 	case c.Scope == rules.ScopeNone:
 		return o.cat.Text("html.ov.decider."+c.Decider, nil)
 	}
-	return o.cat.Text("html.ov.cell", map[string]string{
+	key := "html.ov.cell"
+	if c.Row == rules.RowChangesOtherAgents { // config or instructions (v3 §15.6)
+		key = "html.ov.cell.changes"
+	}
+	return o.cat.Text(key, map[string]string{
 		"decider": o.cat.Text("html.ov.decider."+c.Decider, nil), "scope": o.scope(c.Row, c.Scope, c.Data),
 	})
 }
@@ -197,7 +201,7 @@ func (o overviewText) lines(a rules.OverviewAgent, c rules.OverviewCell) []strin
 		return false
 	}
 	if c.Also != nil {
-		out = append(out, o.cat.Text("html.ov.also."+c.Also.Decider, map[string]string{"scope": o.scope(c.Row, c.Also.Scope, d)}))
+		out = append(out, o.also(c))
 	}
 	if c.Row == rules.RowReadsFiles && d.CredentialsReachable != nil {
 		n, high := *d.CredentialsReachable, 0
@@ -214,7 +218,11 @@ func (o overviewText) lines(a rules.OverviewAgent, c rules.OverviewCell) []strin
 		}
 	}
 	if c.Row == rules.RowReadsFiles && has(d.Excluded, rules.ExcludedDefaultIgnoreFileTools) {
-		out = append(out, o.cat.Text("html.ov.data.ignore_env", nil))
+		key := "html.ov.data.ignore_env"
+		if c.Also != nil { // another way reaches further (v3 §15.6)
+			key = "html.ov.data.ignore_env.also"
+		}
+		out = append(out, o.cat.Text(key, nil))
 	}
 	if c.Row == rules.RowWritesFiles && c.NoFindingReason != nil && *c.NoFindingReason == rules.NoFindingNotAFinding {
 		out = append(out, o.cat.Text("html.ov.data.not_a_finding", nil))
@@ -243,6 +251,11 @@ func (o overviewText) lines(a rules.OverviewAgent, c rules.OverviewCell) []strin
 		out = append(out, o.cat.Text("html.ov.data.run_everything", nil))
 	}
 	return out
+}
+
+// also is a cell's also line (§11.4, line 1).
+func (o overviewText) also(c rules.OverviewCell) string {
+	return o.cat.Text("html.ov.also."+c.Also.Decider, map[string]string{"scope": o.scope(c.Row, c.Also.Scope, c.Data)})
 }
 
 // isCursor reports Cursor's column (anexo 2, point 5, of the calculation).
@@ -409,6 +422,9 @@ func renderOverviewMarkdown(v V2, cat catalog.Catalog, w func(string, ...any)) {
 					if tags := o.tags(cell); len(tags) > 0 {
 						text += " (" + strings.Join(tags, ", ") + ")"
 					}
+					if cell.Also != nil { // v3 §15.6
+						text += "; " + o.also(cell)
+					}
 				}
 				w(" | %s", mdCell(text))
 			}
@@ -437,7 +453,7 @@ func overviewKeys() []string {
 	keys := []string{
 		"html.ov.title", "html.ov.intro", "html.ov.foot", "html.ov.cell", "html.ov.changes.none",
 		"html.ov.row.reads_files.sub", "html.ov.row.model_provider.sub",
-		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.ignore_env",
+		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.ignore_env", "html.ov.data.ignore_env.also", "html.ov.cell.changes",
 		"html.ov.data.not_a_finding", "html.ov.data.preapproved.one", "html.ov.data.preapproved.other", "html.ov.data.launchers.one", "html.ov.data.launchers.other",
 		"html.ov.data.net_exceptions", "html.ov.data.no_targets_out", "html.ov.data.byo_key_routed", "html.ov.data.session_env",
 		"html.ov.data.run_everything", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",

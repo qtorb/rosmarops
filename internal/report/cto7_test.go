@@ -91,14 +91,14 @@ func TestCTO7Report(t *testing.T) {
 			t.Errorf("%s: key rendered %s", lang, m)
 		}
 		for _, want := range []string{
-			`<h1 class="hl">` + htmlEscape(cat.Text("html.headline.cred_in_git", nil)) + `</h1>`,
+			`<h1 class="hl">` + htmlEscape(cat.Text("html.headline.cred_in_git.one", nil)) + `</h1>`, // one key in git (v3 §15.4)
 			`<h2 id="today-title">` + htmlEscape(cat.Text("html.action.rotate_credential.title", nil)) + `</h2>`,
 			htmlEscape(cat.Text("html.f.cred_in_git.title", map[string]string{"cred_name": cat.Text("html.cred.stripe.name", nil)})),
 			htmlEscape(cat.Text("html.f.cred_in_git.impact.remote", nil)),
 			`<ol class="rot"><li>` + htmlEscape(cat.Text("html.fix.rotate.step1", nil)) + `</li>`,
 			htmlEscape(cat.Text("html.agent.prompt.rotated", map[string]string{"file": "%USERPROFILE%/.rosmarops/config.json"})),
 			credID, `&#34;note&#34;: &#34;&#34;`,
-			htmlEscape(cat.Text("html.fix.copy.generic", nil)),
+			htmlEscape(cat.Text("html.fix.copy.rotated", nil)), // v3 §15.1
 			htmlEscape(cat.Plural("html.silenced", 1, map[string]string{"count": "1"})),
 			`<h3>` + htmlEscape(cat.Text("html.signals.title", nil)) + `</h3>`,
 			htmlEscape(cat.Text("html.signal.git_hook_with_network", nil)) + ` <span class="n">· 2</span>`,

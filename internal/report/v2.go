@@ -68,6 +68,11 @@ type V2 struct {
 	// agentNames are the graph's agent names by node id, for the target
 	// agents of agents_overview (v3 §11.4).
 	agentNames map[string]string
+	// radiusProj are, per agent id and radius_only action id, the score
+	// after that action (I6; v3 §15.3); repoRoots the configured roots, for
+	// {projects} (v3 §15.2).
+	radiusProj map[string]map[string]int
+	repoRoots  []string
 }
 
 // NextMemory is findings-memory.json after this run, to write.
@@ -216,6 +221,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Findings:      []rules.Finding{},
 		Posture:       []rules.Posture{},
 		repos:         len(in.RepoRoots),
+		repoRoots:     in.RepoRoots,
 	}
 	v2Status := finding.StatusYellow // no graph: fail-secure
 	var res rules.Result
@@ -259,7 +265,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.Coverage.AgentsUnsupported = []graph.AgentUnsupported{}
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
-	v.Index = buildIndex(in, res, v)
+	v.Index, v.radiusProj = buildIndex(in, res, v)
 	v.AgentsOverview = agentsOverview(res.AgentsOverview, v.Index)
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.
@@ -371,7 +377,7 @@ func applyMemory(v *V2, in V2Input) {
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).
-func buildIndex(in V2Input, res rules.Result, v V2) index.Index {
+func buildIndex(in V2Input, res rules.Result, v V2) (index.Index, map[string]map[string]int) {
 	ii := index.Input{
 		GraphBuilt: in.Graph != nil, Inference: inference(in.bases()),
 		Findings: v.Findings, Today: v.Today, MediumReadable: map[string]int{},
@@ -400,7 +406,7 @@ func buildIndex(in V2Input, res rules.Result, v V2) index.Index {
 		idx.Machine = index.Score{Unavailable: index.ReasonCoverage}
 	}
 	idx.HistoryReset = in.HistoryReset
-	return idx
+	return idx, index.ActionProjections(ii)
 }
 
 func statusRank(s finding.Status) int {

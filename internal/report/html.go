@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"sort"
@@ -337,6 +338,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	for _, a := range v.Index.Scope.Evaluated {
 		c.w(`<p>%s</p>`, c.t(unknownBody(a), map[string]string{"agent": a}))
 	}
+	c.w(`<p>%s</p>`, c.t("ai.limits", nil)) // v3 §15.8
 	c.w(`</div><div><h3>%s</h3><p>%s</p><button type="button" class="b2" id="ai-copy" data-done="%s">%s</button><span class="live" aria-live="polite"></span><button type="button" class="b2" id="ai-download" data-file="rosmarops-ai-%s.md">%s</button><template id="ai-export">%s</template></div>`,
 		c.t("html.ai.title", nil), c.t("html.ai.note", nil), c.t("html.fix.copied", nil), c.t("html.ai.copy", nil), local.Format("2006-01-02"), c.t("html.ai.download", nil),
 		html.EscapeString(RenderAIExport(v, cat, home)))
@@ -467,13 +469,21 @@ func (c htmlCtx) renderStep1() {
 				}
 			}
 		}
-		headline = c.t("html.headline."+f.Rule, map[string]string{"agent": f.Params.Agent})
+		key := "html.headline." + f.Rule
+		if f.Rule == rules.RuleCredInGit && c.countRule(rules.RuleCredInGit) == 1 {
+			key = "html.headline.cred_in_git.one" // v3 §15.4
+		}
+		headline = c.t(key, map[string]string{"agent": f.Params.Agent})
 	case scored && *a.Value == 100:
 		headline = c.t("html.index.perfect", nil)
 	}
 	c.w(`<h1 class="hl">%s</h1><p class="meta">`, headline)
 	red, yellow := RowCounts(v)
-	c.w(`%s`, c.t("html.step.1.counts", map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
+	counts := "html.step.1.counts"
+	if len(v.Index.Scope.Evaluated) > 1 { // v3 §15.4
+		counts = "html.step.1.counts.multi"
+	}
+	c.w(`%s`, c.t(counts, map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
 	if n := v.Silenced.Count; n > 0 {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
@@ -548,7 +558,7 @@ func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 	c.w(`<pre hidden>%s
 
 %s</pre><button type="button"%s data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
-		c.t("html.agent.prompt.rotated", pp), html.EscapeString(a.Value), class, c.t("html.fix.copied", p), c.t("html.fix.copy.generic", p))
+		c.t("html.agent.prompt.rotated", pp), html.EscapeString(a.Value), class, c.t("html.fix.copied", p), c.t("html.fix.copy.rotated", p))
 	mp := copyParams(p)
 	mp["file"] = userPath(a.File, c.home, "~")
 	// By hand, the entry inside its list, nested in full (v3 §14.3).
@@ -728,11 +738,13 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.renderMultiRow(f)
 		return
 	}
-	if g := c.gain(f, "html.gain"); g != "" {
+	if g := c.gain(f, false); g != "" {
 		c.w(`%s`, g)
 	}
 	if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
+	} else {
+		c.w(`<p>%s</p>`, c.t("html.fix.none", p)) // v3 §15.3
 	}
 	c.w(`<details class="tech"><summary>%s</summary><p>%s `, c.t("html.tech", nil), c.t("html.tech.where", nil))
 	c.where(f.Evidence.Locations)
@@ -741,19 +753,51 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	c.w(`</ul></details></div></details>`)
 }
 
-// gain is the p.gain line of f with key (html.gain, or html.gain.agent
-// with {agent}): the score of f's agent without f, when it has one.
-func (c htmlCtx) gain(f rules.Finding, key string) string {
+// gain is the p.gain line of f (v3 §15.3), html.gain.agent… in a merged
+// row's agent block: with a full action, the score of f's agent without f;
+// with a radius_only action, the score after that action, projected as
+// today's (I6); with a partial action or none, html.gain.if_gone with the
+// score without f.
+func (c htmlCtx) gain(f rules.Finding, agent bool) string {
 	a, ok := c.agentScore(f)
 	if !ok || a.Value == nil {
 		return ""
 	}
+	key := "html.gain"
+	if agent {
+		key = "html.gain.agent"
+	}
 	for _, wt := range a.Weights {
-		if wt.FindingID == f.ID {
-			return `<p class="gain">` + c.t(key, map[string]string{"agent": f.Params.Agent, "now": strconv.Itoa(*a.Value), "then": strconv.Itoa(wt.Without)}) + `</p>`
+		if wt.FindingID != f.ID {
+			continue
 		}
+		then := wt.Without
+		act, has := rules.BestAction(f, c.v.Findings)
+		switch {
+		case has && act.Completeness == rules.CompletenessFull:
+		case has && act.Completeness == rules.CompletenessRadiusOnly:
+			v, ok := c.v.radiusProj[a.AgentID][act.ID]
+			if !ok {
+				return ""
+			}
+			then = v
+		default:
+			key += ".if_gone"
+		}
+		return `<p class="gain">` + c.t(key, map[string]string{"agent": f.Params.Agent, "now": strconv.Itoa(*a.Value), "then": strconv.Itoa(then)}) + `</p>`
 	}
 	return ""
+}
+
+// countRule is the number of findings of rule.
+func (c htmlCtx) countRule(rule string) int {
+	n := 0
+	for _, f := range c.v.Findings {
+		if f.Rule == rule {
+			n++
+		}
+	}
+	return n
 }
 
 // renderMultiRow is the rest of a merged row's body (v3 §14.1): a fix box
@@ -763,7 +807,7 @@ func (c htmlCtx) renderMultiRow(f rules.Finding) {
 	ms := c.members(f)
 	for _, m := range ms {
 		if a, ok := rules.BestAction(m, c.v.Findings); ok {
-			c.renderFixBox(m, a, c.t("html.fix.title.agent", map[string]string{"agent": m.Params.Agent}), c.gain(m, "html.gain.agent"))
+			c.renderFixBox(m, a, c.t("html.fix.title.agent", map[string]string{"agent": m.Params.Agent}), c.gain(m, true))
 		}
 	}
 	var locs []string
@@ -981,7 +1025,41 @@ func (c htmlCtx) params(f rules.Finding) map[string]string {
 	p["repos"] = strconv.Itoa(c.v.repos)
 	p["cred_name"] = c.cat.Text("html.cred."+c.credKey(f)+".name", nil)
 	p["family"] = familyName(f)
+	p["projects"] = listNames(c.cat, c.projects(f))
 	return p
+}
+
+// projects are the folder names of the repositories the finding's
+// locations are in, sorted, each once (v3 §15.2); a location outside every
+// repository gives its folder's name.
+func (c htmlCtx) projects(f rules.Finding) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, l := range f.Evidence.Locations {
+		files := graph.CredentialFiles(graph.Node{Locations: []string{l}})
+		if len(files) != 1 {
+			continue
+		}
+		file, best := strings.ReplaceAll(files[0], `\`, "/"), ""
+		for _, r := range c.v.repoRoots {
+			if graph.Within(r, files[0]) && len(r) > len(best) {
+				best = r
+			}
+		}
+		dir := best
+		if dir == "" {
+			if i := strings.LastIndex(file, "/"); i > 0 {
+				dir = file[:i]
+			}
+		}
+		name := path.Base(strings.ReplaceAll(dir, `\`, "/"))
+		if name != "" && name != "." && name != "/" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // familyName is the name of the family of the finding's first member, or
@@ -1175,7 +1253,7 @@ func HTMLKeys() []string {
 		"html.step.1.other", "html.unknown.body.cursor", "html.today.projection.agent", "html.memory.evolution.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
-		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic",
+		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
 		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
 		"html.signals.title", "html.signals.note", "html.index.method_change")
 	// v3 §12 (BV-54)
@@ -1186,6 +1264,9 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
 	// v3 §14 (BV-57)
 	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
+	// v3 §15 (BV-63)
+	keys = append(keys, "html.gain.if_gone", "html.gain.agent.if_gone", "html.fix.none", "html.step.1.counts.multi",
+		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.same_as_today")
 	// v3 §11 (BV-61)
 	keys = append(keys, overviewKeys()...)
 	for _, sg := range SignalOrder {

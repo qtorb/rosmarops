@@ -75,12 +75,12 @@ func TestRenderV2Markdown_Memory(t *testing.T) {
 		moved        string
 	}{
 		{
-			"en", "Since the last run — New: ",
+			"en", "Findings since the last run — New: ",
 			"A red finding (" + gone.Rule + "), open since " + gone.OpenSince + ", is no longer observed. Details: " + gone.LastReport + ".md. No longer observed does not mean fixed.",
 			"A " + run2.Memory.Moved[0].Rule + " finding looks moved or merged: it disappeared from one place and appeared in another with the same credential.",
 		},
 		{
-			"es", "Desde la ejecución anterior — Nuevos: ",
+			"es", "Avisos desde la ejecución anterior — Nuevos: ",
 			"Un aviso urgente (" + gone.Rule + "), abierto desde " + gone.OpenSince + ", ya no se observa. Detalle: " + gone.LastReport + ".md. Que ya no se observe no quiere decir que esté resuelto.",
 			"Un aviso (" + run2.Memory.Moved[0].Rule + ") parece movido o unido: desapareció de un sitio y apareció en otro con la misma clave.",
 		},

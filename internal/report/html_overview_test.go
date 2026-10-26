@@ -141,7 +141,12 @@ func TestRenderHTML_OverviewCombinations(t *testing.T) {
 			c.Also = &rules.OverviewAlso{Decider: model, Scope: rules.ScopeMachine}
 			c.Data.Excluded = []string{rules.ExcludedDefaultIgnoreFileTools}
 			return c
-		}(), want: []text{{"html.ov.also.model", map[string]string{"scope": "@html.ov.scope.files.machine"}, "em"}, {"html.ov.data.ignore_env", nil, "em"}}},
+		}(), want: []text{{"html.ov.also.model", map[string]string{"scope": "@html.ov.scope.files.machine"}, "em"}, {"html.ov.data.ignore_env.also", nil, "em"}}},
+		{name: "ignore_env without also", row: rules.RowReadsFiles, cursor: true, cell: func() rules.OverviewCell {
+			c := ovc(nobody, rules.ScopeSameProject, pd)
+			c.Data.Excluded = []string{rules.ExcludedDefaultIgnoreFileTools}
+			return c
+		}(), want: []text{{"html.ov.data.ignore_env", nil, "em"}}},
 		{name: "creds zero", row: rules.RowReadsFiles, cell: func() rules.OverviewCell {
 			c := ovc(nobody, rules.ScopeMachine, pd)
 			c.Data.CredentialsReachable, c.Data.CredentialsReachableHigh = ip(0), ip(0)
@@ -265,7 +270,10 @@ func TestRenderHTML_OverviewCombinations(t *testing.T) {
 			if tc.class != "" && !strings.Contains(cell, `<span class="ovp `+tc.class+`" aria-hidden="true">`) {
 				t.Errorf("%s %s: no %s dot in %s", lang, tc.name, tc.class, cell)
 			}
-			if tc.name == "changes config" && !strings.Contains(cell, htmlEscape(cat.Text("html.ov.scope.changes.config", map[string]string{"agents": "agent_client_0123456789abcdef"}))) {
+			if tc.name == "changes config" && !strings.Contains(cell, "<b>"+htmlEscape(cat.Text("html.ov.cell.changes", map[string]string{
+				"decider": cat.Text("html.ov.decider.model", nil),
+				"scope":   cat.Text("html.ov.scope.changes.config", map[string]string{"agents": "agent_client_0123456789abcdef"}),
+			}))+"</b>") {
 				t.Errorf("%s: target agents not named: %s", lang, cell)
 			}
 			if tc.cell.Decider == rules.DeciderNotApplicable && !strings.Contains(cell, `<span class="ovp" aria-hidden="true"></span>`) {
@@ -377,8 +385,23 @@ func TestRenderV2Markdown_Overview(t *testing.T) {
 	if !strings.Contains(sec, "**Claude Code** · "+strings.SplitN(cat.Text("html.ov.head.knowledge", map[string]string{"date": ""}), " ", 2)[0]) {
 		t.Errorf("no knowledge line:\n%s", sec)
 	}
+	// The also line follows the tags (v3 §15.6); no other secondary line.
+	alsos := 0
+	for _, a := range v.AgentsOverview {
+		for _, c := range a.Rows {
+			if c.Also != nil {
+				alsos++
+			}
+		}
+	}
+	if alsos == 0 || strings.Count(sec, "); "+cat.Text("html.ov.also.model", nil)[:8]) != alsos {
+		t.Errorf("%d also lines, want %d after the tags:\n%s", strings.Count(sec, "); "), alsos, sec)
+	}
 	page := ovSection(t, renderHTML(t, "en", v))
 	for _, m := range regexp.MustCompile(`<em>([^<]*)</em>`).FindAllStringSubmatch(page, -1) {
+		if strings.HasPrefix(html.UnescapeString(m[1]), cat.Text("html.ov.also.model", nil)[:8]) {
+			continue
+		}
 		if strings.Contains(sec, m[1]) || strings.Contains(sec, html.UnescapeString(m[1])) {
 			t.Errorf("secondary line in the Markdown: %q", m[1])
 		}

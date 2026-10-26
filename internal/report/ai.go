@@ -31,7 +31,7 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	}
 
 	var head strings.Builder
-	fmt.Fprintf(&head, "%s\n\n%s\n\n", cat.Text("ai.instruction", nil), cat.Text("ai.what", nil))
+	fmt.Fprintf(&head, "%s\n\n%s\n\n%s\n\n", cat.Text("ai.instruction", nil), cat.Text("ai.no_secrets", nil), cat.Text("ai.what", nil))
 	for _, a := range v.Index.Agents {
 		if a.Value == nil {
 			continue
@@ -39,6 +39,11 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 		counts := cat.Text("html.card.counts", map[string]string{"red": strconv.Itoa(a.Red), "yellow": strconv.Itoa(a.Yellow)})
 		fmt.Fprintf(&head, "%s · %s · %d/100 (%s) · %s\n\n", cat.Text("html.index.name", nil), a.Agent, *a.Value, cat.Text("band."+a.Band, nil), counts)
 	}
+	if len(v.Index.Scope.Evaluated) > 1 { // the step 1 counts, across agents (v3 §15.9)
+		red, yellow := RowCounts(v)
+		fmt.Fprintf(&head, "%s\n\n", cat.Text("ai.counts.total", map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
+	}
+	today := false // «If you do only one thing today» is written
 	for _, f := range v.Findings {
 		if f.ID != v.Today.FindingID {
 			continue
@@ -47,6 +52,7 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 			if a.ID != v.Today.ActionID {
 				continue
 			}
+			today = true
 			p := c.params(f)
 			fmt.Fprintf(&head, "## %s\n\n### %s\n\n%s", cat.Text("ai.today", nil), c.titleText(f), c.impactText(f))
 			if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
@@ -79,9 +85,15 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	line := make([]string, len(v.Findings))
 	for i, f := range v.Findings {
 		var b strings.Builder
-		fmt.Fprintf(&b, "### %s\n\n%s\n\n", c.titleText(f), c.impactText(f))
-		if a, ok := rules.BestAction(f, v.Findings); ok {
-			b.WriteString(c.aiAction(f, a))
+		switch {
+		case f.ID == v.Today.FindingID && today:
+			// Already above, in «If you do only one thing today» (v3 §15.9).
+			fmt.Fprintf(&b, "### %s\n\n%s\n\n", c.titleText(f), cat.Text("ai.same_as_today", nil))
+		default:
+			fmt.Fprintf(&b, "### %s\n\n%s\n\n", c.titleText(f), c.impactText(f))
+			if a, ok := rules.BestAction(f, v.Findings); ok {
+				b.WriteString(c.aiAction(f, a))
+			}
 		}
 		for _, l := range f.Evidence.Locations {
 			fmt.Fprintf(&b, "- `%s`\n", userPath(l, home, "~"))
