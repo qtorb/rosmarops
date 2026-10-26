@@ -3,7 +3,7 @@
   "action.ask_edit_rule.label": "Ask before edits to these files",
   "action.ask_read_rule.how": "Add this rule to permissions.ask in {file}. {agent}'s file tools, and commands that name the file, will ask you first. Commands that search whole folders can still read it.",
   "action.ask_read_rule.label": "Ask before reading this file",
-  "action.block_reads_outside.how": "Set this in {file}. {agent} then asks before reading files outside the project it is working in, in every mode.",
+  "action.block_reads_outside.how": "Set this in {file}. {agent}'s file tools then refuse files outside the project it is working in, in every mode, and the file-reading commands it recognises in the shell ask you before reading them.",
   "action.block_reads_outside.label": "Stop reads outside the current project",
   "action.file_missing": "This file does not exist yet. Create it with exactly this content:",
   "action.manual_default_mode.how": "Set this in {file}. {agent} starts every session asking before it acts, instead of in auto mode. This changes how you work day to day.",

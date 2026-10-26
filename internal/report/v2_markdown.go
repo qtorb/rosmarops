@@ -260,7 +260,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	w("## %s\n\n", t("section.posture", nil))
 	shown := false
 	for _, p := range v.Posture {
-		if p.Count == 0 {
+		if p.Count == 0 || p.Code == rules.PostureInTemplatesOnly && listedAsTestData(p, v.TestData) {
 			continue
 		}
 		shown = true
@@ -513,6 +513,25 @@ func actionParams(f rules.Finding, a rules.Action) map[string]string {
 
 // whyKey is a finding's why text: cred_in_git's says whether a repository
 // declares a remote (§9.2).
+// listedAsTestData reports a posture line every credential of which is in
+// the report.testdata list (v3 §14.5, as amended in BV-58): the list then
+// says it all. One credential missing, and the line stays as it was.
+func listedAsTestData(p rules.Posture, td rules.TestData) bool {
+	if td.Count == 0 || len(p.Creds()) == 0 {
+		return false
+	}
+	listed := map[string]bool{}
+	for _, c := range td.Creds {
+		listed[c] = true
+	}
+	for _, c := range p.Creds() {
+		if !listed[c] {
+			return false
+		}
+	}
+	return true
+}
+
 func whyKey(f rules.Finding) string {
 	if f.Rule == rules.RuleCredInGit {
 		if f.Params.HasRemote != nil && *f.Params.HasRemote {

@@ -65,6 +65,7 @@ type SilencedEntry struct {
 type TestData struct {
 	Count int
 	Files []TestDataFile
+	Creds []string // the credentials' ids, sorted
 }
 
 // TestDataFile is one file of a key treated as test data.
@@ -296,6 +297,7 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 		}
 		countTestData := func() { // no finding at all, as a silenced key
 			td.Count++
+			td.Creds = append(td.Creds, id)
 			silencedCreds[id] = true
 			for _, o := range os {
 				tdFiles[TestDataFile{Repo: o.Repo, Path: o.File}] = true
@@ -376,6 +378,7 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 	for f := range tdFiles {
 		td.Files = append(td.Files, f)
 	}
+	sort.Strings(td.Creds)
 	sort.Slice(td.Files, func(i, j int) bool {
 		a, b := td.Files[i], td.Files[j]
 		return a.Repo < b.Repo || a.Repo == b.Repo && a.Path < b.Path

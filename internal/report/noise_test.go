@@ -28,7 +28,7 @@ import (
 // *_test.go, tests/*.test.mjs, .env.example and the history of test files
 // of /src/tool; and the Supabase service_role key of /src/a, within Claude
 // Code's and Cursor's reach.
-func noiseReport(t *testing.T) report.V2 {
+func noiseReport(t *testing.T, extra ...platform.CredentialEntry) report.V2 {
 	t.Helper()
 	salt := []byte("0123456789abcdef0123456789abcdef")
 	id := graph.Identifier(salt)
@@ -70,6 +70,7 @@ func noiseReport(t *testing.T) report.V2 {
 	cf := platform.CredentialFileScan{Entries: []platform.CredentialEntry{
 		{Path: "/src/a/dashboard/.env.local", Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
 	}}
+	cf.Entries = append(cf.Entries, extra...)
 	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{}, cf, graph.Repos{Findings: v1Findings}, salt, v2Now)
 	if err != nil {
 		t.Fatal(err)
@@ -509,5 +510,40 @@ func TestNoise_NoEmptyWhatToDo(t *testing.T) {
 	md := report.RenderV2Markdown(v, cat, time.UTC)
 	if strings.Contains(md, "#### "+cat.Text("finding.part.todo", nil)) {
 		t.Error("markdown has a «What to do» with no action")
+	}
+}
+
+// v3 §14.5 as amended in BV-58: the line of credentials only in templates
+// is left out only when every credential it counts is in the report.testdata
+// list. With the real case, the .env.example key of /src/tool is both, so
+// the line goes; add a key in an untracked .env.example that only the
+// collector reads, which the list does not hold, and the line stays, with
+// the same count it would have had.
+func TestNoise_TemplatesPostureLine(t *testing.T) {
+	cat, _ := catalog.Load("en")
+	line := func(v report.V2) (int, bool) {
+		for _, p := range v.Posture {
+			if p.Code == rules.PostureInTemplatesOnly {
+				params := map[string]string{"count": fmt.Sprint(p.Count)}
+				for c, n := range p.ByClass {
+					params[c] = fmt.Sprint(n)
+				}
+				return p.Count, strings.Contains(report.RenderV2Markdown(v, cat, time.UTC), "- "+cat.Plural(p.Code, p.Count, params)+"\n")
+			}
+		}
+		return 0, false
+	}
+	listed := noiseReport(t)
+	if n, shown := line(listed); n != 1 || shown || listed.TestData.Count == 0 {
+		t.Errorf("all listed: count %d, line shown %v, test data %d", n, shown, listed.TestData.Count)
+	}
+	missing := noiseReport(t, platform.CredentialEntry{
+		Path: "/src/b/.env.example", Line: 10, Key: "DATABASE_URL", Value: secrets.NewSecretValue("postgres://app:apppass@db.example.com:5432/app"),
+	})
+	if n, shown := line(missing); n != 2 || !shown {
+		t.Errorf("one not listed: count %d, line shown %v", n, shown)
+	}
+	if missing.TestData.Count != listed.TestData.Count {
+		t.Errorf("test data changed: %d → %d", listed.TestData.Count, missing.TestData.Count)
 	}
 }

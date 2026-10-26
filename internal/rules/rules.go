@@ -297,7 +297,11 @@ type Posture struct {
 	Code    string         `json:"code"`
 	Count   int            `json:"count"`
 	ByClass map[string]int `json:"by_class"`
+	creds   []string       // the credentials counted, sorted
 }
+
+// Creds are the ids of the credentials the posture line counts, sorted.
+func (p Posture) Creds() []string { return p.creds }
 
 // way is one element a finding stands on: an inferred edge, or an egress
 // path (a capability: no edge exists for "can send it out").
@@ -453,10 +457,12 @@ func Evaluate(in Input) Result {
 		for _, c := range AllClasses {
 			p.ByClass[c] = 0
 		}
-		for _, class := range posture[code] {
+		for cred, class := range posture[code] {
 			p.Count++
 			p.ByClass[class]++
+			p.creds = append(p.creds, cred)
 		}
+		sort.Strings(p.creds)
 		res.Posture = append(res.Posture, p)
 	}
 	sort.Slice(res.Launchers, func(i, j int) bool { return res.Launchers[i].Capability < res.Launchers[j].Capability })
