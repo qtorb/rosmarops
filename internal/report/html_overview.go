@@ -21,7 +21,17 @@ import (
 // overviewCSS is §11's style, with the narrow layout of §11.6.
 const overviewCSS = `
 section.ov{margin-top:28px;border-top:1px solid var(--line);padding-top:20px}
-#ov-title{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0 0 4px}
+#ov-title{font-size:17px;font-weight:700;margin:0 0 8px}
+.ovs{font-size:15px;color:var(--ink);line-height:1.5;margin:0 0 4px}
+.ovs b{font-weight:700}
+.ovs .ovp{display:inline-block;margin:0 6px 0 0;vertical-align:1px}
+.ovne{font-size:14px;color:var(--mut);margin:0 0 4px}
+#ov-open{margin-top:8px}
+dialog#ov-dialog{width:min(1100px,calc(100% - 32px));max-height:calc(100vh - 64px);overflow:auto;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:24px}
+dialog#ov-dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog#ov-dialog.inline{position:static}
+#ov-close{float:right;margin:0 0 8px 12px}
+#ov-dlg-title{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0 0 4px}
 .ovi{font-size:15px;color:var(--mut);max-width:880px;margin:0 0 14px}
 .ovl{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--mut);margin:0 0 12px}
 .ovl span{display:inline-flex;align-items:center;gap:7px}
@@ -296,15 +306,67 @@ func overviewNotes(cat catalog.Catalog, cols, notEval []rules.OverviewAgent) []o
 	return out
 }
 
-// renderOverview writes section.ov (§11.1–§11.7); nothing without
-// agents_overview or with no agent in it.
+// renderOverview writes section.ov folded (v3 §16.1): the title, a summary
+// line per evaluated agent, the agents detected but not evaluated and the
+// button that opens the window; nothing without agents_overview.
 func (c htmlCtx) renderOverview() {
 	if len(c.v.AgentsOverview) == 0 {
 		return
 	}
-	o := overviewText{cat: c.cat, names: c.v.agentNames}
 	cols := overviewColumns(c.v)
-	c.w(`<section class="ov" aria-labelledby="ov-title"><h2 id="ov-title">%s</h2><p class="ovi">%s</p>`, c.t("html.ov.title", nil), c.t("html.ov.intro", nil))
+	c.w(`<section class="ov" aria-labelledby="ov-title"><h2 id="ov-title">%s</h2>`, c.t("html.ov.title", nil))
+	for _, a := range cols {
+		if line := c.overviewSummary(a); line != "" {
+			c.w(`<p class="ovs"><b>%s</b> · %s.</p>`, html.EscapeString(a.Agent), line)
+		}
+	}
+	var pending []string
+	for _, n := range overviewNotes(c.cat, nil, overviewNotEvaluated(c.v)) {
+		pending = append(pending, `<b>`+html.EscapeString(n.name)+`</b> · `+html.EscapeString(n.text))
+	}
+	if len(pending) > 0 {
+		c.w(`<p class="ovne">%s</p>`, strings.Join(pending, " · "))
+	}
+	if len(cols) > 0 {
+		c.w(`<button type="button" class="b2" id="ov-open">%s</button>`, c.t("html.ov.open", nil))
+	}
+	c.w(`</section>`)
+}
+
+// overviewSummary is an agent's summary groups (v3 §16.1): per decider, in
+// the order nobody, model, you, blocked, its dot and html.ov.summary.<decider>
+// with the verbs of the rows it decides, in T1's order; model_provider, a
+// changes_other_agents cell with scope none and a not_evaluated cell do not
+// count. Empty without groups.
+func (c htmlCtx) overviewSummary(a rules.OverviewAgent) string {
+	var groups []string
+	for _, d := range overviewDeciders {
+		var verbs []string
+		for _, cell := range a.Rows {
+			if cell.Decider != d || cell.Row == rules.RowModelProvider || cell.Row == rules.RowChangesOtherAgents && cell.Scope == rules.ScopeNone {
+				continue
+			}
+			verbs = append(verbs, c.cat.Text("html.ov.verb."+cell.Row, nil))
+		}
+		if len(verbs) > 0 {
+			groups = append(groups, `<span class="ovp `+d+`" aria-hidden="true"></span>`+
+				c.t("html.ov.summary."+d, map[string]string{"actions": listNames(c.cat, verbs)}))
+		}
+	}
+	return strings.Join(groups, " · ")
+}
+
+// renderOverviewDialog writes the window of v3 §16.2 at the end of main:
+// the whole of §11.2–§11.5 (title, intro, legend, table, knowledge lines
+// and foot) and the close button. None without an evaluated agent.
+func (c htmlCtx) renderOverviewDialog() {
+	cols := overviewColumns(c.v)
+	if len(cols) == 0 {
+		return
+	}
+	o := overviewText{cat: c.cat, names: c.v.agentNames}
+	c.w(`<dialog id="ov-dialog" aria-labelledby="ov-dlg-title" hidden><button type="button" class="b2" id="ov-close">%s</button><h2 id="ov-dlg-title">%s</h2><p class="ovi">%s</p>`,
+		c.t("html.ov.close", nil), c.t("html.ov.title", nil), c.t("html.ov.intro", nil))
 	present := map[string]bool{}
 	for _, a := range cols {
 		for _, cell := range a.Rows {
@@ -320,30 +382,27 @@ func (c htmlCtx) renderOverview() {
 	if legend.Len() > 0 {
 		c.w(`<div class="ovl">%s</div>`, legend.String())
 	}
-	if len(cols) > 0 {
-		c.w(`<table class="ovt"><thead><tr><td></td>`)
-		for _, a := range cols {
-			c.w(`<th scope="col">%s<small%s</small></th>`, html.EscapeString(a.Agent), c.headScore(a))
-		}
-		c.w(`</tr></thead><tbody>`)
-		for i, row := range rules.AllOverviewRows {
-			sub := ""
-			if row == rules.RowReadsFiles || row == rules.RowModelProvider {
-				sub = `<small>` + c.t("html.ov.row."+row+".sub", nil) + `</small>`
-			}
-			c.w(`<tr><th scope="row">%s%s</th>`, c.t("html.ov.row."+row, nil), sub)
-			for _, a := range cols {
-				c.w(`<td data-agent="%s">`, html.EscapeString(a.Agent))
-				if i < len(a.Rows) {
-					c.renderOverviewCell(o, a, a.Rows[i])
-				}
-				c.w(`</td>`)
-			}
-			c.w(`</tr>`)
-		}
-		c.w(`</tbody></table>`)
+	c.w(`<table class="ovt"><thead><tr><td></td>`)
+	for _, a := range cols {
+		c.w(`<th scope="col">%s<small%s</small></th>`, html.EscapeString(a.Agent), c.headScore(a))
 	}
-	c.w(`<div class="ovn">`)
+	c.w(`</tr></thead><tbody>`)
+	for i, row := range rules.AllOverviewRows {
+		sub := ""
+		if row == rules.RowReadsFiles || row == rules.RowModelProvider {
+			sub = `<small>` + c.t("html.ov.row."+row+".sub", nil) + `</small>`
+		}
+		c.w(`<tr><th scope="row">%s%s</th>`, c.t("html.ov.row."+row, nil), sub)
+		for _, a := range cols {
+			c.w(`<td data-agent="%s">`, html.EscapeString(a.Agent))
+			if i < len(a.Rows) {
+				c.renderOverviewCell(o, a, a.Rows[i])
+			}
+			c.w(`</td>`)
+		}
+		c.w(`</tr>`)
+	}
+	c.w(`</tbody></table><div class="ovn">`)
 	for _, n := range overviewNotes(c.cat, cols, overviewNotEvaluated(c.v)) {
 		c.w(`<p><b>%s</b>`, html.EscapeString(n.name))
 		if n.text != "" {
@@ -354,8 +413,16 @@ func (c htmlCtx) renderOverview() {
 		}
 		c.w(`</p>`)
 	}
-	c.w(`</div><p class="ovf">%s</p></section>`, c.t("html.ov.foot", nil))
+	c.w(`</div><p class="ovf">%s</p></dialog>`, c.t("html.ov.foot", nil))
 }
+
+// overviewJS opens and closes the window (v3 §16.2): showModal, close, Esc
+// natively, the focus back on #ov-open; without showModal the window shows
+// in place under the section.
+const overviewJS = `var oo=document.getElementById('ov-open'),od=document.getElementById('ov-dialog'),oc=document.getElementById('ov-close');
+if(oo&&od){oo.addEventListener('click',function(){od.hidden=false;if(typeof od.showModal==='function'){od.showModal()}else{od.classList.add('inline');od.setAttribute('open','');oo.parentNode.insertBefore(od,oo.nextSibling)}});
+od.addEventListener('close',function(){od.hidden=true;oo.focus()});
+oc.addEventListener('click',function(){if(typeof od.close==='function'&&typeof od.showModal==='function'){od.close()}else{od.removeAttribute('open');od.hidden=true;oo.focus()}})}`
 
 // headScore is the rest of a column's small (§11.3): the attributes and
 // the score line in its band's colour, or the unavailable line.
@@ -456,14 +523,17 @@ func overviewKeys() []string {
 		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.ignore_env", "html.ov.data.ignore_env.also", "html.ov.cell.changes",
 		"html.ov.data.not_a_finding", "html.ov.data.preapproved.one", "html.ov.data.preapproved.other", "html.ov.data.launchers.one", "html.ov.data.launchers.other",
 		"html.ov.data.net_exceptions", "html.ov.data.no_targets_out", "html.ov.data.byo_key_routed", "html.ov.data.session_env",
-		"html.ov.data.run_everything", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",
+		"html.ov.data.run_everything", "html.ov.open", "html.ov.close", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",
 		"html.ov.head.not_evaluated.no_inference", "html.ov.head.not_evaluated.coverage", "html.ov.tag.assumed",
 	}
 	for _, r := range rules.AllOverviewRows {
 		keys = append(keys, "html.ov.row."+r)
+		if r != rules.RowModelProvider {
+			keys = append(keys, "html.ov.verb."+r)
+		}
 	}
 	for _, d := range overviewDeciders {
-		keys = append(keys, "html.ov.legend."+d, "html.ov.decider."+d)
+		keys = append(keys, "html.ov.legend."+d, "html.ov.decider."+d, "html.ov.summary."+d)
 	}
 	for _, d := range []string{rules.DeciderNobody, rules.DeciderModel, rules.DeciderYou} {
 		keys = append(keys, "html.ov.also."+d)

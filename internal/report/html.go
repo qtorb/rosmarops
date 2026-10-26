@@ -355,7 +355,8 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	// §6.3 Footer: the technical report (the agents not evaluated moved to
 	// step 1, v3 §13.1).
 	c.w(`<p class="foot">%s</p>`, c.t("html.legacy.pointer", map[string]string{"file": v.base + ".md"}))
-	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS)
+	c.renderOverviewDialog() // v3 §16.2: at the end of main
+	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+overviewJS)
 	return sb.String()
 }
 

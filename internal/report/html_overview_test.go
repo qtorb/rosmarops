@@ -15,8 +15,18 @@ import (
 
 // Informe HTML v3 §11.9: «How your agents work».
 
-// ovSection is the page's section.ov.
+// ovSection is the content of §11.2–§11.5: the window of v3 §16.2.
 func ovSection(t *testing.T, page string) string {
+	t.Helper()
+	s := regexp.MustCompile(`(?s)<dialog id="ov-dialog".*?</dialog>`).FindString(page)
+	if s == "" {
+		t.Fatal("no dialog#ov-dialog")
+	}
+	return s
+}
+
+// ovFolded is the page's section.ov (v3 §16.1).
+func ovFolded(t *testing.T, page string) string {
 	t.Helper()
 	s := regexp.MustCompile(`(?s)<section class="ov".*?</section>`).FindString(page)
 	if s == "" {
@@ -36,7 +46,8 @@ func TestRenderHTML_OverviewRealCase(t *testing.T) {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
 		sec := ovSection(t, page)
-		if i, j := strings.Index(page, `<div class="flow">`), strings.Index(page, `<div class="more">`); !(i < strings.Index(page, sec) && strings.Index(page, sec) < j) {
+		folded := ovFolded(t, page)
+		if i, j := strings.Index(page, `<div class="flow">`), strings.Index(page, `<div class="more">`); !(i < strings.Index(page, folded) && strings.Index(page, folded) < j) {
 			t.Errorf("%s: the section is not between .flow and .more", lang)
 		}
 		cols := regexp.MustCompile(`<th scope="col">([^<]*)<small`).FindAllStringSubmatch(sec, -1)

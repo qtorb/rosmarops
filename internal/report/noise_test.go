@@ -375,6 +375,7 @@ func TestNoise_Wording(t *testing.T) {
 		p1 := renderHTML(t, lang, one)
 		cov := htmlEscape(cat.Text("html.step.1.coverage", map[string]string{"evaluated": "Claude Code", "pending": "Cursor"}))
 		_, foot, _ := strings.Cut(p1, `<p class="foot">`)
+		foot, _, _ = strings.Cut(foot, `</p>`) // the footer only: the window follows it (v3 §16.2)
 		if !strings.Contains(p1, "<br>"+cov) || strings.Contains(foot, "Cursor") {
 			t.Errorf("%s: coverage %q, footer %q", lang, cov, foot)
 		}
