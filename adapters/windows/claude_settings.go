@@ -13,6 +13,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
 
 // settingsFile is the only part of a Claude Code settings file RosmarOps
@@ -333,9 +334,15 @@ func readBounded(path string) ([]byte, platform.MCPSourceStatus, string) {
 // values").
 const vscodeModeKey = "claudeCode.initialPermissionMode"
 
-// readVSCodeMode reads only claudeCode.initialPermissionMode from VS Code's
-// user settings.json (decision 2026-10-24, D7); every other key is
-// discarded. The file is decoded as strict JSON: VS Code allows comments and
+// vscodeEnvKey is the VS Code setting of the environment variables the
+// Claude Code extension starts the session with, a list of {name, value}
+// (decision 2026-10-25, cómo trabajan tus agentes, cálculo, T12).
+const vscodeEnvKey = "claudeCode.environmentVariables"
+
+// readVSCodeMode reads only claudeCode.initialPermissionMode and
+// claudeCode.environmentVariables from VS Code's user settings.json
+// (decision 2026-10-24, D7; T12); every other key is discarded, and the
+// variables' values are kept as secrets. The file is decoded as strict JSON: VS Code allows comments and
 // trailing commas, and such a file goes to coverage as parse_error. nil when
 // the file does not exist.
 func readVSCodeMode(path, configDir string) *platform.VSCodeModeSetting {
@@ -356,6 +363,17 @@ func readVSCodeMode(path, configDir string) *platform.VSCodeModeSetting {
 		var mode string
 		if json.Unmarshal(m, &mode) == nil {
 			v.Mode = mode
+		}
+	}
+	if e, ok := keys[vscodeEnvKey]; ok {
+		var vars []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		}
+		if json.Unmarshal(e, &vars) == nil {
+			for _, ev := range vars {
+				v.Env = append(v.Env, platform.EnvVar{Key: ev.Name, Value: secrets.NewSecretValue(ev.Value)})
+			}
 		}
 	}
 	return v

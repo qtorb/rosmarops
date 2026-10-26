@@ -19,7 +19,7 @@ const (
 	cursorTerminalRule     = "terminalAllowlist:"
 	cursorMCPRule          = "mcpAllowlist:"
 	cursorReadBoundaryRule = "readBoundary=workspace"
-	cursorInsecureNoneRule = "type=insecure_none"
+	CursorInsecureNoneRule = "type=insecure_none"
 	cursorReadwriteRule    = "additionalReadwritePaths="
 
 	// ScopeSandboxNone is the target of a sandbox.json "type":
@@ -94,7 +94,7 @@ func FromCursor(scan platform.CursorScan, settings platform.ClaudeSettingsScan, 
 			}
 			if f.SandboxType == "insecure_none" {
 				c.add(Node{Type: CapWriteFiles, Approval: ApprovalAllow, TargetScope: ScopeSandboxNone, InForce: true},
-					cursorInsecureNoneRule, "/type", patterns)
+					CursorInsecureNoneRule, "/type", patterns)
 			}
 			for i, p := range f.AdditionalReadwritePaths {
 				c.add(Node{Type: CapWriteFiles, Approval: ApprovalAllow, TargetScope: secrets.RedactMatches(p, patterns), InForce: true},

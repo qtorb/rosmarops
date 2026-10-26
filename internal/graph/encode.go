@@ -15,9 +15,10 @@ const SchemaVersion = 2
 // layer exists.
 const RulesVersion = "0"
 
-// KnowledgeVersion is the product knowledge-base version recorded in
-// provenance (see internal/knowledge).
-const KnowledgeVersion = knowledge.Version
+// KnowledgeVersion is the knowledge version recorded in provenance: the
+// composite of every embedded base (decision 2026-10-25, cómo trabajan tus
+// agentes, cálculo, T9).
+const KnowledgeVersion = knowledge.Composite
 
 // HostIDUnset is a placeholder provenance host_id for graphs built in tests.
 // Real runs use HostID(salt).

@@ -151,6 +151,7 @@
   "unknown.process_runs_as_user": "Assumes {agent} runs as your user account, with your file permissions.",
   "unknown.read_deny_partial": "A rule covers this file for the file tools, but shell commands can still read it.",
   "unknown.sandbox_platform_unknown": "Cursor does not document how its sandbox works on Windows; assumes it behaves as documented for other systems.",
+  "unknown.session_env_not_readable": "Assumes no environment variable set only in a terminal session changes where {agent} sends its requests; those cannot be seen from disk.",
   "unknown.shell_write_unchecked": "Relies on shell commands, which can write anywhere your user can; RosmarOps cannot see which commands will run.",
   "unknown.team_policy_unknown": "Assumes no team policy from a Cursor admin dashboard overrides your local settings; RosmarOps cannot see it.",
   "unknown.third_party_imports_setting_not_readable": "Assumes Cursor's Third-Party Imports setting is on, as it is by default. The setting is not stored where RosmarOps can read it.",

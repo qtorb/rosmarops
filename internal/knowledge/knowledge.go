@@ -11,6 +11,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -25,10 +26,24 @@ const (
 // provenance.knowledge_version in the graph.
 const Version = "2026-10-24"
 
-// CursorVersion is the version of the embedded Cursor base (cursor.json). In
-// this cut the graph's knowledge_version stays Claude Code's Version
-// (decision 2026-10-25, Cursor, annex 2 point 3).
+// CursorVersion is the version of the embedded Cursor base (cursor.json).
 const CursorVersion = "2026-10-25"
+
+// Composite is the knowledge_version recorded in the graph's and the
+// report's provenance: every embedded base as product@version, sorted by
+// product and joined with ";" (decision 2026-10-25, cómo trabajan tus
+// agentes, cálculo, T9). A change in any base changes it.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CursorProduct + "@" + CursorVersion
+
+// CompositeOf is the composite knowledge_version of bases.
+func CompositeOf(bases map[string]Base) string {
+	parts := make([]string, 0, len(bases))
+	for _, b := range bases {
+		parts = append(parts, b.Product+"@"+b.Version)
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ";")
+}
 
 //go:embed claude-code.json
 var claudeCodeJSON []byte

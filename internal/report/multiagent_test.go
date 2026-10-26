@@ -30,7 +30,7 @@ func twoAgents(t *testing.T) report.V2 {
 	n := func(v int) *int { return &v }
 	entry := func(day string, cc, cu int) index.Entry {
 		return index.Entry{
-			Date: day, IndexVersion: index.Version, RulesVersion: rules.Version, KnowledgeVersion: bases[knowledge.ClaudeCodeProduct].Version,
+			Date: day, IndexVersion: index.Version, RulesVersion: rules.Version, KnowledgeVersion: knowledge.CompositeOf(bases),
 			Agents: []index.EntryAgent{{Agent: "Claude Code", Value: n(cc)}, {Agent: "Cursor", Value: n(cu)}},
 			Scope:  index.EntryScope{Agents: []string{"Claude Code", "Cursor"}, Repos: 2},
 		}
@@ -146,9 +146,10 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 }
 
 // BV-51 point 7: with one agent, the HTML is the golden page (rendered at
-// BV-56, after the signed wording of v3 §13, and at BV-59 the card's method
-// v3; before, at 7b41e35 with the changes of BV-51 and BV-54). A change to
-// it is a change to review.
+// BV-56, after the signed wording of v3 §13, at BV-59 the card's method
+// v3, and at BV-61 with v3 §11's section, checked to be the only change;
+// before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
+// is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
 	g := v2Graph(t)
 	v1 := report.Build("t", nil, nil, 0, 0, 0, 0, nil)

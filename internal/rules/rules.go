@@ -10,6 +10,7 @@
 package rules
 
 import (
+	"log/slog"
 	"path"
 	"sort"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/platform"
 )
 
 // Version is the rules version recorded in the report's provenance, and
@@ -171,6 +173,12 @@ type Input struct {
 	Fixtures   []config.AllowEntryTestFixture
 	ConfigFile string
 	Now        time.Time
+
+	// ClaudeSettings is the Claude Code settings scan, for the model
+	// provider's variables (T12); Home the user's home folder, for the
+	// probe's target outside the roots (annex 2). Both optional.
+	ClaudeSettings *platform.ClaudeSettingsScan
+	Home           string
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -204,6 +212,10 @@ type Result struct {
 	// keys treated as test data by default (decision 2026-10-26).
 	Silenced Silenced
 	TestData TestData
+
+	// AgentsOverview is the report's agents_overview section (decision
+	// 2026-10-25, cómo trabajan tus agentes, cálculo).
+	AgentsOverview []OverviewAgent
 }
 
 // LauncherRule is one shell rule counted through the launcher table.
@@ -466,6 +478,33 @@ func Evaluate(in Input) Result {
 		res.Posture = append(res.Posture, p)
 	}
 	sort.Slice(res.Launchers, func(i, j int) bool { return res.Launchers[i].Capability < res.Launchers[j].Capability })
+
+	// agents_overview (decision 2026-10-25, cómo trabajan tus agentes,
+	// cálculo): from the same views and findings, and the probe's targets.
+	oi := overviewInputs{
+		in: in, nodes: nodes, view: view, findings: res.Findings, scopes: scopes,
+		reaches: map[string]map[string]bool{}, foreign: map[string][]graph.Edge{},
+	}
+	for p := range reaches {
+		if oi.reaches[p.agent] == nil {
+			oi.reaches[p.agent] = map[string]bool{}
+		}
+		oi.reaches[p.agent][p.cred] = true
+	}
+	for _, e := range g.Edges {
+		if e.Type != graph.EdgeWritesConfigOf {
+			continue
+		}
+		if to := nodes[nodes[e.To].Configures]; to.ID != "" && to.Platform != nodes[e.From].Platform {
+			oi.foreign[e.From] = append(oi.foreign[e.From], e)
+		}
+	}
+	probe, err := graph.Probe(g, in.RepoRoots, in.Home)
+	if err != nil {
+		slog.Warn("rules: agents overview probe", "err", err)
+	}
+	oi.probe = probe
+	res.AgentsOverview = overview(oi)
 	return res
 }
 

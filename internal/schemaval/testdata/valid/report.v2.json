@@ -952,6 +952,421 @@
       }
     }
   ],
+  "agents_overview": [
+    {
+      "agent": "Claude Code",
+      "agent_id": "agent_client_bdb15d5cca16cad3",
+      "evaluated": true,
+      "not_evaluated_reason": null,
+      "knowledge": {
+        "date": "2026-10-24",
+        "stale": false
+      },
+      "rows": [
+        {
+          "row": "reads_files",
+          "decider": "nobody",
+          "scope": "machine",
+          "origin": "product_default",
+          "assumed": false,
+          "also": null,
+          "data": {
+            "projects": 4,
+            "credentials_reachable": 5,
+            "credentials_reachable_high": 3,
+            "ways": [
+              "bash_read_only",
+              "file_tools",
+              "mode_auto"
+            ],
+            "assumptions": [
+              "bash_tool_available",
+              "no_pretooluse_hook_blocks",
+              "process_runs_as_user",
+              "version_behaves_as_documented"
+            ],
+            "finding_ids": [
+              "f_5af6d5d2db2da60c",
+              "f_7d625ecc8fde742c"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "writes_files",
+          "decider": "model",
+          "scope": "machine",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "projects": 4,
+            "edit_allow_rules": 0,
+            "excluded": [
+              "protected_paths"
+            ],
+            "ways": [
+              "mode_auto"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "auto_mode_available",
+              "no_pretooluse_hook_blocks",
+              "process_runs_as_user",
+              "ui_mode_choice_unknown",
+              "version_behaves_as_documented"
+            ]
+          },
+          "no_finding_reason": "not_a_finding",
+          "pending": null
+        },
+        {
+          "row": "runs_commands",
+          "decider": "model",
+          "scope": "machine",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "preapproved_rules": 0,
+            "launcher_rules": 0,
+            "ways": [
+              "egress_auto"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "auto_mode_available",
+              "process_runs_as_user",
+              "ui_mode_choice_unknown",
+              "version_behaves_as_documented"
+            ]
+          },
+          "no_finding_reason": "feeds_other_findings",
+          "pending": null
+        },
+        {
+          "row": "sends_out",
+          "decider": "model",
+          "scope": "any_destination",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "excluded": [
+              "documented_network_exceptions"
+            ],
+            "ways": [
+              "egress_auto"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "auto_mode_available",
+              "process_runs_as_user",
+              "ui_mode_choice_unknown",
+              "version_behaves_as_documented"
+            ],
+            "finding_ids": [
+              "f_5af6d5d2db2da60c",
+              "f_7d625ecc8fde742c"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "changes_other_agents",
+          "decider": "model",
+          "scope": "config",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "target_agents": [
+              "agent_client_eff28b66e768d72e"
+            ],
+            "ways": [
+              "mode_auto"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "auto_mode_available",
+              "no_pretooluse_hook_blocks",
+              "process_runs_as_user",
+              "ui_mode_choice_unknown",
+              "version_behaves_as_documented"
+            ],
+            "finding_ids": [
+              "f_8df0de99295f2817"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "model_provider",
+          "decider": "not_applicable",
+          "scope": "none",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "assumptions": [
+              "session_env_not_readable"
+            ],
+            "recipient": "anthropic_api"
+          },
+          "no_finding_reason": null,
+          "pending": null
+        }
+      ]
+    },
+    {
+      "agent": "Cursor",
+      "agent_id": "agent_client_eff28b66e768d72e",
+      "evaluated": true,
+      "not_evaluated_reason": null,
+      "knowledge": {
+        "date": "2026-10-25",
+        "stale": false
+      },
+      "rows": [
+        {
+          "row": "reads_files",
+          "decider": "nobody",
+          "scope": "same_project",
+          "origin": "product_default",
+          "assumed": false,
+          "also": {
+            "decider": "model",
+            "scope": "machine"
+          },
+          "data": {
+            "projects": 4,
+            "credentials_reachable": 5,
+            "credentials_reachable_high": 3,
+            "excluded": [
+              "default_ignore_file_tools"
+            ],
+            "ways": [
+              "file_tools",
+              "mode_auto_review"
+            ],
+            "assumptions": [
+              "process_runs_as_user",
+              "team_policy_unknown",
+              "version_behaves_as_documented"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "writes_files",
+          "decider": "nobody",
+          "scope": "same_project",
+          "origin": "product_default",
+          "assumed": false,
+          "also": {
+            "decider": "model",
+            "scope": "machine"
+          },
+          "data": {
+            "projects": 4,
+            "edit_allow_rules": 0,
+            "excluded": [
+              "sandbox_protected_paths"
+            ],
+            "ways": [
+              "file_tools_write",
+              "mode_auto_review"
+            ],
+            "assumptions": [
+              "process_runs_as_user",
+              "team_policy_unknown",
+              "version_behaves_as_documented"
+            ]
+          },
+          "no_finding_reason": "not_a_finding",
+          "pending": null
+        },
+        {
+          "row": "runs_commands",
+          "decider": "model",
+          "scope": "sandbox",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "preapproved_rules": 0,
+            "launcher_rules": 0,
+            "ways": [
+              "egress_auto_review"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "ide_run_mode_not_readable",
+              "process_runs_as_user",
+              "team_policy_unknown",
+              "version_behaves_as_documented"
+            ]
+          },
+          "no_finding_reason": "feeds_other_findings",
+          "pending": null
+        },
+        {
+          "row": "sends_out",
+          "decider": "model",
+          "scope": "any_destination",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "excluded": [
+              "documented_network_exceptions"
+            ],
+            "ways": [
+              "egress_auto_review"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "ide_run_mode_not_readable",
+              "process_runs_as_user",
+              "team_policy_unknown",
+              "version_behaves_as_documented"
+            ],
+            "finding_ids": [
+              "f_4a6fab317fd3ef42",
+              "f_5b1132f82ccfb29b"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "changes_other_agents",
+          "decider": "model",
+          "scope": "config",
+          "origin": "product_default",
+          "assumed": true,
+          "also": null,
+          "data": {
+            "target_agents": [
+              "agent_client_bdb15d5cca16cad3"
+            ],
+            "ways": [
+              "mode_auto_review"
+            ],
+            "assumptions": [
+              "auto_classifier_permits",
+              "ide_run_mode_not_readable",
+              "process_runs_as_user",
+              "shell_write_unchecked",
+              "team_policy_unknown",
+              "version_behaves_as_documented"
+            ],
+            "finding_ids": [
+              "f_d7ab94f6c4a719e5"
+            ]
+          },
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "model_provider",
+          "decider": "not_applicable",
+          "scope": "none",
+          "origin": "product_default",
+          "assumed": false,
+          "also": null,
+          "data": {
+            "recipient": "vendor_backend",
+            "byo_key_still_routed": true
+          },
+          "no_finding_reason": null,
+          "pending": null
+        }
+      ]
+    },
+    {
+      "agent": "Cline",
+      "agent_id": "agent_client_0123456789abcdef",
+      "evaluated": false,
+      "not_evaluated_reason": "no_inference",
+      "knowledge": {
+        "date": null,
+        "stale": false
+      },
+      "rows": [
+        {
+          "row": "reads_files",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "writes_files",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "runs_commands",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "sends_out",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "changes_other_agents",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        },
+        {
+          "row": "model_provider",
+          "decider": "not_evaluated",
+          "scope": "none",
+          "origin": "none",
+          "assumed": false,
+          "also": null,
+          "data": {},
+          "no_finding_reason": null,
+          "pending": null
+        }
+      ]
+    }
+  ],
   "coverage": {
     "graph_built": true,
     "sources_read": 6,

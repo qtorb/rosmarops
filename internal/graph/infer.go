@@ -50,26 +50,9 @@ const (
 // repoRoots are the configured repository roots; home is the user's home
 // folder ("~/" in permission patterns and protected paths).
 func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
-	bases, err := knowledge.All()
+	p, err := prepare(g)
 	if err != nil {
-		return Graph{}, fmt.Errorf("knowledge base: %w", err)
-	}
-	base := bases[knowledge.ClaudeCodeProduct]
-	prot, ok := base.Entry(kbProtectedPaths)
-	if !ok {
-		return Graph{}, fmt.Errorf("knowledge base: no %s entry", kbProtectedPaths)
-	}
-	nodes := make(map[string]Node, len(g.Nodes))
-	for _, n := range g.Nodes {
-		nodes[n.ID] = n
-	}
-	caps := map[string][]Node{}
-	for _, e := range g.Edges {
-		if e.Type == EdgeHas {
-			if c, ok := nodes[e.To]; ok && c.Kind == KindCapability {
-				caps[e.From] = append(caps[e.From], c)
-			}
-		}
+		return Graph{}, err
 	}
 	edges := map[string]Edge{}
 	for _, e := range g.Edges {
@@ -81,11 +64,11 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		}
 		var inferred []Edge
 		switch client.Platform {
-		case base.Product:
-			in := newInference(client, caps[client.ID], nodes, base, prot, repoRoots, home)
+		case p.claude.Product:
+			in := p.claudeInference(client, repoRoots, home)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		case knowledge.CursorProduct:
-			in := newCursorInference(client, caps[client.ID], nodes, bases[knowledge.CursorProduct], repoRoots)
+			in := p.cursorInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {
@@ -97,7 +80,7 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 	// A Claude Code hook that Cursor loads rests on Cursor's Third-Party
 	// Imports setting, on by default and not readable at rest (annex).
 	for id, e := range edges {
-		if r, ok := nodes[e.To]; ok && e.Type == EdgeWritesConfigOf && r.Type == ResourceAgentExecutable && r.ID == CursorImportedHookID(r.Path, r.Configures) {
+		if r, ok := p.nodes[e.To]; ok && e.Type == EdgeWritesConfigOf && r.Type == ResourceAgentExecutable && r.ID == CursorImportedHookID(r.Path, r.Configures) {
 			e.Assumptions = append(e.Assumptions, AssumeThirdPartyImportsNotReadable)
 			edges[id] = e
 		}
@@ -108,6 +91,49 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 	}
 	sort.Slice(g.Edges, func(i, j int) bool { return g.Edges[i].ID < g.Edges[j].ID })
 	return g, nil
+}
+
+// prepared are the inputs every inference of a graph starts from: the
+// knowledge bases, Claude Code's protected paths, the nodes by id and each
+// client's capabilities. Infer and Probe build their inferences from it, so
+// both see exactly the same inputs.
+type prepared struct {
+	claude, cursor knowledge.Base
+	prot           knowledge.Entry
+	nodes          map[string]Node
+	caps           map[string][]Node
+}
+
+func prepare(g Graph) (prepared, error) {
+	bases, err := knowledge.All()
+	if err != nil {
+		return prepared{}, fmt.Errorf("knowledge base: %w", err)
+	}
+	p := prepared{claude: bases[knowledge.ClaudeCodeProduct], cursor: bases[knowledge.CursorProduct], nodes: make(map[string]Node, len(g.Nodes)), caps: map[string][]Node{}}
+	prot, ok := p.claude.Entry(kbProtectedPaths)
+	if !ok {
+		return prepared{}, fmt.Errorf("knowledge base: no %s entry", kbProtectedPaths)
+	}
+	p.prot = prot
+	for _, n := range g.Nodes {
+		p.nodes[n.ID] = n
+	}
+	for _, e := range g.Edges {
+		if e.Type == EdgeHas {
+			if c, ok := p.nodes[e.To]; ok && c.Kind == KindCapability {
+				p.caps[e.From] = append(p.caps[e.From], c)
+			}
+		}
+	}
+	return p, nil
+}
+
+func (p prepared) claudeInference(client Node, repoRoots []string, home string) inference {
+	return newInference(client, p.caps[client.ID], p.nodes, p.claude, p.prot, repoRoots, home)
+}
+
+func (p prepared) cursorInference(client Node, repoRoots []string) cursorInference {
+	return newCursorInference(client, p.caps[client.ID], p.nodes, p.cursor, repoRoots)
 }
 
 // inference holds what one Claude Code client's edges are inferred from.
@@ -328,57 +354,74 @@ func union(ids, add []string) []string {
 // On the Bash and mode ways, read_deny_partial is added when R(f) holds for
 // some f the way uses, and those rules join derived_from.
 func (in inference) reaches(all []Node) []Edge {
-	blockReads := false
-	for _, c := range in.inForce {
-		blockReads = blockReads || c.Rule == ruleBlockReadsOutside
-	}
 	var out []Edge
 	for _, cred := range all {
 		if cred.Kind != KindCredential {
 			continue
 		}
-		files := credentialFiles(cred)
-		// use reports whether a way uses f, and collects the rules R(f) of
-		// the files it uses.
-		way := func(use func(f string, inside bool) bool) (bool, []string) {
-			used, rules := false, []string(nil)
-			for _, f := range files {
-				if use(f, in.withinRoots(f)) {
-					used = true
-					rules = union(rules, in.readRules(f))
-				}
-			}
-			return used, rules
+		for _, w := range in.readWays(credentialFiles(cred)) {
+			out = append(out, in.edge(EdgeReaches, cred.ID, w.v, w.assumptions, w.rules))
 		}
-		add := func(v via, partial bool, rules []string) {
-			a := append([]string{}, v.assumptions...)
-			if partial && len(rules) > 0 {
-				a = append(a, AssumeReadDenyPartial)
-			} else {
-				rules = nil
+	}
+	return out
+}
+
+// inferredWay is one way the inference finds for a file or set of files: the
+// via, the assumptions of its edge and the rules it derives from beyond the
+// client, the capability and the target.
+type inferredWay struct {
+	v                  via
+	assumptions, rules []string
+}
+
+// readWays are the ways Claude Code reads one of files, as reaches describes
+// (the edges of a credential holding them). Probe asks it the same.
+func (in inference) readWays(files []string) []inferredWay {
+	blockReads := false
+	for _, c := range in.inForce {
+		blockReads = blockReads || c.Rule == ruleBlockReadsOutside
+	}
+	// use reports whether a way uses f, and collects the rules R(f) of
+	// the files it uses.
+	way := func(use func(f string, inside bool) bool) (bool, []string) {
+		used, rules := false, []string(nil)
+		for _, f := range files {
+			if use(f, in.withinRoots(f)) {
+				used = true
+				rules = union(rules, in.readRules(f))
 			}
-			out = append(out, in.edge(EdgeReaches, cred.ID, v, a, rules))
 		}
-		if in.fileVia != nil {
-			if ok, _ := way(func(f string, inside bool) bool { return inside && len(in.readRules(f)) == 0 }); ok {
-				add(via{*in.fileVia, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, false, nil)
-			}
+		return used, rules
+	}
+	var out []inferredWay
+	add := func(v via, partial bool, rules []string) {
+		a := append([]string{}, v.assumptions...)
+		if partial && len(rules) > 0 {
+			a = append(a, AssumeReadDenyPartial)
+		} else {
+			rules = nil
 		}
-		if in.bashVia != nil && !in.shellRules("Bash") {
+		out = append(out, inferredWay{v, a, rules})
+	}
+	if in.fileVia != nil {
+		if ok, _ := way(func(f string, inside bool) bool { return inside && len(in.readRules(f)) == 0 }); ok {
+			add(via{*in.fileVia, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, false, nil)
+		}
+	}
+	if in.bashVia != nil && !in.shellRules("Bash") {
+		if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
+			add(via{*in.bashVia, baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)}, true, rules)
+		}
+	}
+	if in.modeCap != nil {
+		switch in.mode {
+		case permissionModeBypass:
 			if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
-				add(via{*in.bashVia, baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)}, true, rules)
+				add(via{*in.modeCap, append(baseAssumptions(), in.modeAssumptions()...)}, true, rules)
 			}
-		}
-		if in.modeCap != nil {
-			switch in.mode {
-			case permissionModeBypass:
-				if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
-					add(via{*in.modeCap, append(baseAssumptions(), in.modeAssumptions()...)}, true, rules)
-				}
-			case permissionModeAuto:
-				if ok, rules := way(func(_ string, inside bool) bool { return inside }); ok {
-					add(via{*in.modeCap, append(baseAssumptions(AssumeAutoClassifierPermits), in.modeAssumptions()...)}, true, rules)
-				}
+		case permissionModeAuto:
+			if ok, rules := way(func(_ string, inside bool) bool { return inside }); ok {
+				add(via{*in.modeCap, append(baseAssumptions(AssumeAutoClassifierPermits), in.modeAssumptions()...)}, true, rules)
 			}
 		}
 	}
@@ -410,44 +453,54 @@ func (in inference) writes(all []Node) []Edge {
 		if !ok {
 			continue
 		}
-		protected := in.protected.protected(file)
-		edit := in.editRules(file)
-		hook := func(extra ...string) []string {
-			return baseAssumptions(append([]string{AssumeNoPreToolUseHookBlocks}, extra...)...)
+		for _, w := range in.writeWays(file) {
+			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, w.v, w.assumptions, w.rules))
 		}
-		// blocked: the way needs no deny or ask on p. partial: E(p) keeps
-		// the way, with edit_rule_partial.
-		blocked := func(v via) {
-			if len(edit) == 0 {
-				out = append(out, in.edge(EdgeWritesConfigOf, res.ID, v, v.assumptions, nil))
-			}
+	}
+	return out
+}
+
+// writeWays are the ways Claude Code writes file without approval, as writes
+// describes (the edges of a resource in it). Probe asks it the same.
+func (in inference) writeWays(file string) []inferredWay {
+	var out []inferredWay
+	protected := in.protected.protected(file)
+	edit := in.editRules(file)
+	hook := func(extra ...string) []string {
+		return baseAssumptions(append([]string{AssumeNoPreToolUseHookBlocks}, extra...)...)
+	}
+	// blocked: the way needs no deny or ask on p. partial: E(p) keeps
+	// the way, with edit_rule_partial.
+	blocked := func(v via) {
+		if len(edit) == 0 {
+			out = append(out, inferredWay{v, v.assumptions, nil})
 		}
-		partial := func(v via) {
-			a, rules := v.assumptions, []string(nil)
-			if len(edit) > 0 {
-				a, rules = append(append([]string{}, a...), AssumeEditRulePartial), edit
-			}
-			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, v, a, rules))
+	}
+	partial := func(v via) {
+		a, rules := v.assumptions, []string(nil)
+		if len(edit) > 0 {
+			a, rules = append(append([]string{}, a...), AssumeEditRulePartial), edit
 		}
-		if in.modeCap != nil {
-			switch {
-			case in.mode == permissionModeAcceptEdits && in.withinRoots(file) && !protected:
-				blocked(via{*in.modeCap, hook(in.modeAssumptions()...)})
-			case in.mode == permissionModeBypass:
-				partial(via{*in.modeCap, hook(in.modeAssumptions()...)})
-			case in.mode == permissionModeAuto && !protected:
-				partial(via{*in.modeCap, hook(append([]string{AssumeAutoClassifierPermits}, in.modeAssumptions()...)...)})
-			}
+		out = append(out, inferredWay{v, a, rules})
+	}
+	if in.modeCap != nil {
+		switch {
+		case in.mode == permissionModeAcceptEdits && in.withinRoots(file) && !protected:
+			blocked(via{*in.modeCap, hook(in.modeAssumptions()...)})
+		case in.mode == permissionModeBypass:
+			partial(via{*in.modeCap, hook(in.modeAssumptions()...)})
+		case in.mode == permissionModeAuto && !protected:
+			partial(via{*in.modeCap, hook(append([]string{AssumeAutoClassifierPermits}, in.modeAssumptions()...)...)})
 		}
-		for _, c := range in.inForce {
-			switch {
-			case c.Type == CapWriteFiles && c.Approval == ApprovalAllow && !protected &&
-				matchRulePath(c.TargetScope, c.Approval, in.scopeOf(c), file):
-				blocked(via{c, hook()})
-			case c.Type == CapExecuteShell && c.Approval == ApprovalAllow && c.TargetScope == scopeAll &&
-				!in.shellRules(shellTool(c.Rule)):
-				partial(via{c, hook(AssumeShellWriteUnchecked)})
-			}
+	}
+	for _, c := range in.inForce {
+		switch {
+		case c.Type == CapWriteFiles && c.Approval == ApprovalAllow && !protected &&
+			matchRulePath(c.TargetScope, c.Approval, in.scopeOf(c), file):
+			blocked(via{c, hook()})
+		case c.Type == CapExecuteShell && c.Approval == ApprovalAllow && c.TargetScope == scopeAll &&
+			!in.shellRules(shellTool(c.Rule)):
+			partial(via{c, hook(AssumeShellWriteUnchecked)})
 		}
 	}
 	return out

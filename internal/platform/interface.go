@@ -340,11 +340,14 @@ type CredentialFailure struct {
 
 // VSCodeModeSetting is the claudeCode.initialPermissionMode key of VS Code's
 // user settings.json (decision 2026-10-24, D7). Mode is empty when the key
-// is not set; Status and Reason are the read outcome of the file.
+// is not set; Status and Reason are the read outcome of the file. Env is
+// its claudeCode.environmentVariables, values kept as secrets (decision
+// 2026-10-25, cómo trabajan tus agentes, cálculo, T12).
 type VSCodeModeSetting struct {
 	Path      string
 	ConfigDir string // Claude Code's configuration folder (its client)
 	Mode      string
+	Env       []EnvVar
 	Status    MCPSourceStatus
 	Reason    string
 }

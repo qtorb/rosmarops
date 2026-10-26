@@ -68,7 +68,7 @@ func htmlCSS() string {
 		fmt.Fprintf(&light, "--%s:%s;", t.Name, t.Light)
 		fmt.Fprintf(&dark, "--%s:%s;", t.Name, t.Dark)
 	}
-	return ":root{" + strings.TrimSuffix(light.String(), ";") + "}\n@media (prefers-color-scheme:dark){:root{" + strings.TrimSuffix(dark.String(), ";") + "}}\n" + htmlRules
+	return ":root{" + strings.TrimSuffix(light.String(), ";") + "}\n@media (prefers-color-scheme:dark){:root{" + strings.TrimSuffix(dark.String(), ";") + "}}\n" + htmlRules + overviewCSS
 }
 
 const htmlRules = `*{box-sizing:border-box}
@@ -292,6 +292,9 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.renderStep2(today, hasToday)
 	c.renderStep3(today.ID)
 	c.w(`</div>`)
+
+	// §11 How your agents work: right after the steps.
+	c.renderOverview()
 
 	// §6.1 What we could not read, only with coverage gaps.
 	cov := v.Coverage
@@ -1183,6 +1186,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
 	// v3 §14 (BV-57)
 	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
+	// v3 §11 (BV-61)
+	keys = append(keys, overviewKeys()...)
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}

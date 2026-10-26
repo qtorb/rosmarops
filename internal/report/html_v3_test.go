@@ -30,8 +30,8 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 			t.Errorf("%s: %d h1", lang, strings.Count(page, "<h1"))
 		}
 		labels := regexp.MustCompile(`<section[^>]*aria-labelledby="([^"]+)"`).FindAllStringSubmatch(page, -1)
-		if len(labels) != 3 {
-			t.Errorf("%s: %d labelled sections, want 3", lang, len(labels))
+		if len(labels) != 4 { // the three steps and §11's section
+			t.Errorf("%s: %d labelled sections, want 4", lang, len(labels))
 		}
 		for _, l := range labels {
 			if !strings.Contains(page, `id="`+l[1]+`"`) {

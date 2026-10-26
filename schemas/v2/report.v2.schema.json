@@ -13,6 +13,7 @@
     "today",
     "findings",
     "posture",
+    "agents_overview",
     "coverage",
     "legacy",
     "index",
@@ -46,6 +47,13 @@
       "items": {
         "$ref": "#/definitions/posture"
       }
+    },
+    "agents_overview": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/overviewAgent"
+      },
+      "description": "How your agents work (decision 2026-10-25, cómo trabajan tus agentes, cálculo, T10): one element per detected agent, empty without a graph. Codes only; texts come from the catalog."
     },
     "coverage": {
       "$ref": "#/definitions/coverage"
@@ -1214,6 +1222,571 @@
           "minimum": 1
         }
       }
+    },
+    "overviewAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent",
+        "agent_id",
+        "evaluated",
+        "not_evaluated_reason",
+        "knowledge",
+        "rows"
+      ],
+      "properties": {
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agent_id": {
+          "$ref": "#/definitions/id"
+        },
+        "evaluated": {
+          "type": "boolean"
+        },
+        "not_evaluated_reason": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "no_inference",
+                "coverage",
+                "graph_missing"
+              ]
+            }
+          ]
+        },
+        "knowledge": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "date",
+            "stale"
+          ],
+          "properties": {
+            "date": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                }
+              ],
+              "description": "The date of the agent's knowledge base; null without a base."
+            },
+            "stale": {
+              "type": "boolean",
+              "description": "90 days or more between date and the run."
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/overviewCell"
+          },
+          "description": "The six rows of T1, in their order; all not_evaluated when the agent is not evaluated."
+        }
+      },
+      "description": "One detected agent (§6): an ai_client and an extension of one product are one agent."
+    },
+    "overviewCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "row",
+        "decider",
+        "scope",
+        "origin",
+        "assumed",
+        "also",
+        "data",
+        "no_finding_reason",
+        "pending"
+      ],
+      "properties": {
+        "row": {
+          "enum": [
+            "reads_files",
+            "writes_files",
+            "runs_commands",
+            "sends_out",
+            "changes_other_agents",
+            "model_provider"
+          ]
+        },
+        "decider": {
+          "$ref": "#/definitions/overviewDecider"
+        },
+        "scope": {
+          "enum": [
+            "machine",
+            "same_project",
+            "sandbox",
+            "any_destination",
+            "listed_destinations",
+            "config",
+            "instructions",
+            "none"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "product_default",
+            "configured",
+            "mixed",
+            "none",
+            "product_default_not_checked_here"
+          ],
+          "description": "product_default_not_checked_here is reserved (§5)."
+        },
+        "assumed": {
+          "type": "boolean",
+          "description": "The winning way carries a premise assumption (§2.3)."
+        },
+        "also": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "decider",
+                "scope"
+              ],
+              "properties": {
+                "decider": {
+                  "$ref": "#/definitions/overviewDecider"
+                },
+                "scope": {
+                  "enum": [
+                    "machine",
+                    "same_project",
+                    "sandbox",
+                    "any_destination",
+                    "listed_destinations",
+                    "config",
+                    "instructions",
+                    "none"
+                  ]
+                }
+              }
+            }
+          ],
+          "description": "At most one less permissive way with a wider scope (T2)."
+        },
+        "data": {
+          "$ref": "#/definitions/overviewData"
+        },
+        "no_finding_reason": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "no_targets",
+                "not_a_finding",
+                "feeds_other_findings"
+              ]
+            }
+          ]
+        },
+        "pending": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "model_provider_research"
+              ]
+            }
+          ],
+          "description": "Reserved (T1)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "reads_files"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "machine",
+                  "same_project",
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "machine",
+                          "same_project",
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "writes_files"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "machine",
+                  "same_project",
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "machine",
+                          "same_project",
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "runs_commands"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "machine",
+                  "sandbox",
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "machine",
+                          "sandbox",
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "sends_out"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "any_destination",
+                  "listed_destinations",
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "any_destination",
+                          "listed_destinations",
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "changes_other_agents"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "config",
+                  "instructions",
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "config",
+                          "instructions",
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "model_provider"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "scope": {
+                "enum": [
+                  "none"
+                ]
+              },
+              "also": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "enum": [
+                          "none"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row": {
+                "const": "model_provider"
+              }
+            },
+            "required": [
+              "row"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decider": {
+                "enum": [
+                  "not_applicable",
+                  "not_evaluated"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "decider": {
+                "not": {
+                  "const": "not_applicable"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "description": "One cell (§2): who decides, how far, from where. Each row uses only its scopes (T4); not_applicable only in model_provider (T12)."
+    },
+    "overviewDecider": {
+      "enum": [
+        "nobody",
+        "model",
+        "you",
+        "blocked",
+        "not_evaluated",
+        "not_applicable"
+      ]
+    },
+    "overviewData": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projects": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "credentials_reachable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "credentials_reachable_high": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "preapproved_rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "launcher_rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edit_allow_rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/id"
+          }
+        },
+        "excluded": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "protected_paths",
+              "sandbox_protected_paths",
+              "default_ignore_file_tools",
+              "documented_network_exceptions"
+            ]
+          }
+        },
+        "ways": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/code"
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/code"
+          }
+        },
+        "finding_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/findingId"
+          }
+        },
+        "recipient": {
+          "enum": [
+            "anthropic_api",
+            "custom_gateway",
+            "aws_bedrock",
+            "google_vertex",
+            "microsoft_foundry",
+            "anthropic_aws",
+            "vendor_backend",
+            "not_readable"
+          ],
+          "description": "Only the code: never a URL or a host (T12)."
+        },
+        "byo_key_still_routed": {
+          "type": "boolean"
+        }
+      },
+      "description": "Ids, numbers and codes a cell's text may cite (§2.4, T6, T12); each field only where it makes sense."
     }
   }
 }

@@ -505,3 +505,47 @@ func TestDifferential_ReportV2SaltChanged(t *testing.T) {
 		}
 	}
 }
+
+// T4, T12 (decision 2026-10-25, cómo trabajan tus agentes, cálculo): each
+// row of agents_overview uses only its scopes, also's included;
+// not_applicable is model_provider's alone; recipient is a code, never a
+// host. Own validator and oracle agree.
+func TestDifferential_AgentsOverviewRows(t *testing.T) {
+	p := compileAll(t)["report.v2"]
+	raw, err := os.ReadFile(filepath.Join("testdata", "valid", "report.v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		row  int
+		mod  func(cell map[string]any)
+		want bool
+	}{
+		{"unchanged", 0, func(map[string]any) {}, true},
+		{"reads sandbox", 0, func(c map[string]any) { c["scope"] = "sandbox" }, false},
+		{"runs same_project", 2, func(c map[string]any) { c["scope"] = "same_project" }, false},
+		{"sends machine", 3, func(c map[string]any) { c["scope"] = "machine" }, false},
+		{"changes any_destination", 4, func(c map[string]any) { c["scope"] = "any_destination" }, false},
+		{"provider machine", 5, func(c map[string]any) { c["scope"] = "machine" }, false},
+		{"also out of row", 0, func(c map[string]any) { c["also"] = map[string]any{"decider": "model", "scope": "config"} }, false},
+		{"also in row", 0, func(c map[string]any) { c["also"] = map[string]any{"decider": "model", "scope": "machine"} }, true},
+		{"reads not_applicable", 0, func(c map[string]any) { c["decider"] = "not_applicable" }, false},
+		{"provider nobody", 5, func(c map[string]any) { c["decider"] = "nobody" }, false},
+		{"recipient host", 5, func(c map[string]any) { c["data"].(map[string]any)["recipient"] = "api.example.com" }, false},
+		{"data prose", 0, func(c map[string]any) { c["data"].(map[string]any)["text"] = "reads everything" }, false},
+	}
+	for _, tc := range cases {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		agent := doc["agents_overview"].([]any)[0].(map[string]any)
+		tc.mod(agent["rows"].([]any)[tc.row].(map[string]any))
+		b, _ := json.Marshal(doc)
+		own, oracle, _ := verdicts(t, p, b)
+		if own != tc.want || oracle != tc.want {
+			t.Errorf("%s: own %v, oracle %v, want %v", tc.name, own, oracle, tc.want)
+		}
+	}
+}

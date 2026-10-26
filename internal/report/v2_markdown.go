@@ -78,6 +78,7 @@ func CatalogKeys() []string {
 	for _, p := range rules.AllPostures {
 		keys = append(keys, p+".one", p+".other")
 	}
+	keys = append(keys, overviewKeys()...) // v3 §11.8
 	sort.Strings(keys)
 	return keys
 }
@@ -305,6 +306,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("\n")
 		}
 	}
+
+	// How your agents work (v3 §11.8): after the posture, before the memory.
+	renderOverviewMarkdown(v, cat, w)
 
 	// Memory (BV-43): only when there is an earlier memory to compare with,
 	// or a new agent (M5).

@@ -19,6 +19,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/schemas"
 )
@@ -40,8 +41,11 @@ type V2 struct {
 	Memory        memory.Root     `json:"memory"`
 	Findings      []rules.Finding `json:"findings"`
 	Posture       []rules.Posture `json:"posture"`
-	Coverage      V2Coverage      `json:"coverage"`
-	Legacy        V2Legacy        `json:"legacy"`
+	// AgentsOverview is «how your agents work» (decision 2026-10-25, cómo
+	// trabajan tus agentes, cálculo, T10): one element per detected agent.
+	AgentsOverview []rules.OverviewAgent `json:"agents_overview"`
+	Coverage       V2Coverage            `json:"coverage"`
+	Legacy         V2Legacy              `json:"legacy"`
 	// Silenced is the test data the user silenced (M10–M11), always
 	// shown; Signals the red technical-report categories (adjustment B).
 	Silenced rules.Silenced `json:"silenced"`
@@ -61,6 +65,9 @@ type V2 struct {
 	seriesBy   map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
 	// vscodeFirstRun is the first run of the extensions collector (A5).
 	vscodeFirstRun *VSCodeFirstRun
+	// agentNames are the graph's agent names by node id, for the target
+	// agents of agents_overview (v3 §11.4).
+	agentNames map[string]string
 }
 
 // NextMemory is findings-memory.json after this run, to write.
@@ -166,6 +173,12 @@ type V2Input struct {
 	// VSCodeFirstRun is set on the first run of the VS Code extensions
 	// collector (decision 2026-10-26, agentes y MCP nuevos, A5).
 	VSCodeFirstRun *VSCodeFirstRun
+
+	// ClaudeSettings is the Claude Code settings scan the graph was built
+	// from (the model provider row, T12); Home the user's home folder (the
+	// probe of agents_overview, annex 2). Both optional.
+	ClaudeSettings *platform.ClaudeSettingsScan
+	Home           string
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -213,9 +226,15 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		res = rules.Evaluate(rules.Input{
 			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
 			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
-			ConfigFile: in.ConfigFile, Now: in.GeneratedAt,
+			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
 		})
 		v.Silenced, v.TestData = res.Silenced, res.TestData
+		v.agentNames = map[string]string{}
+		for _, n := range g.Nodes {
+			if n.Kind == graph.KindAgent {
+				v.agentNames[n.ID] = n.Name
+			}
+		}
 		v.Findings, v.Today, v.Posture = res.Findings, res.Today, res.Posture
 		if v.Findings == nil {
 			v.Findings = []rules.Finding{}
@@ -241,6 +260,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
 	v.Index = buildIndex(in, res, v)
+	v.AgentsOverview = agentsOverview(res.AgentsOverview, v.Index)
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.
 	tech := technicalFindings(in.V1.Findings)
@@ -291,6 +311,24 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	return v, res
 }
 
+// agentsOverview is the rules' overview with every evaluated agent whose
+// score is unavailable for coverage turned into not_evaluated coverage
+// (decision 2026-10-25, cómo trabajan tus agentes, cálculo, §5). No graph:
+// none.
+func agentsOverview(ov []rules.OverviewAgent, idx index.Index) []rules.OverviewAgent {
+	out := make([]rules.OverviewAgent, 0, len(ov))
+	for _, a := range ov {
+		for _, ai := range idx.Agents {
+			if a.Evaluated && ai.AgentID == a.AgentID && ai.Unavailable == index.ReasonCoverage {
+				r := rules.NotEvaluatedCoverage
+				a.Evaluated, a.NotEvaluatedReason, a.Rows = false, &r, rules.NotEvaluatedRows()
+			}
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
 // statusRank orders statuses; anything unknown counts as yellow
 // (fail-secure).
 // applyMemory sets each finding's verdict and the run's memory against the
@@ -301,7 +339,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 func applyMemory(v *V2, in V2Input) {
 	run := memory.Run{
 		Date: in.GeneratedAt.Local().Format("2006-01-02"), Report: FilenameV2(in.V1, *v),
-		RulesVersion: rules.Version, KnowledgeVersion: in.Base.Version,
+		RulesVersion: rules.Version, KnowledgeVersion: knowledge.CompositeOf(in.bases()),
 		Agents: v.Index.Scope.Evaluated, Repos: len(in.RepoRoots),
 		Complete: in.Graph != nil && len(v.Coverage.SourcesFailed) == 0,
 	}
@@ -338,7 +376,7 @@ func buildIndex(in V2Input, res rules.Result, v V2) index.Index {
 		GraphBuilt: in.Graph != nil, Inference: inference(in.bases()),
 		Findings: v.Findings, Today: v.Today, MediumReadable: map[string]int{},
 		SourcesFailed: v.Coverage.SourcesFailed, Repos: len(in.RepoRoots),
-		RulesVersion: rules.Version, KnowledgeVersion: in.Base.Version, Previous: in.Previous,
+		RulesVersion: rules.Version, KnowledgeVersion: knowledge.CompositeOf(in.bases()), Previous: in.Previous,
 	}
 	if in.Graph != nil {
 		for _, n := range in.Graph.Nodes {

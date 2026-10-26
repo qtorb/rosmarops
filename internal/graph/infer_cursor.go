@@ -76,7 +76,7 @@ func newCursorInference(client Node, caps []Node, nodes map[string]Node, base kn
 		switch {
 		case c.Rule == cursorReadBoundaryRule:
 			boundary[c.AppliesIn] = true
-		case c.Rule == cursorInsecureNoneRule:
+		case c.Rule == CursorInsecureNoneRule:
 			in.insecure[c.AppliesIn] = true
 		case strings.HasPrefix(c.Rule, cursorReadwriteRule):
 			in.readwrite = append(in.readwrite, c.TargetScope)
@@ -243,40 +243,56 @@ func (in cursorInference) reaches(all []Node) []Edge {
 		if cred.Kind != KindCredential {
 			continue
 		}
-		files := credentialFiles(cred)
-		usedBy := func(use func(f string, inside bool) bool) bool {
-			for _, f := range files {
-				_, inside := in.rootOf(f)
-				if use(f, inside) {
-					return true
-				}
+		for _, w := range in.readWays(credentialFiles(cred)) {
+			out = append(out, in.edge(EdgeReaches, cred.ID, w.cap, w.assumptions))
+		}
+	}
+	return out
+}
+
+// cursorWay is one way the Cursor inference finds: the capability it goes
+// through and the assumptions of its edge.
+type cursorWay struct {
+	cap         Node
+	assumptions []string
+}
+
+// readWays are the ways Cursor reads one of files, as reaches describes (the
+// edges of a credential holding them). Probe asks it the same.
+func (in cursorInference) readWays(files []string) []cursorWay {
+	var out []cursorWay
+	usedBy := func(use func(f string, inside bool) bool) bool {
+		for _, f := range files {
+			_, inside := in.rootOf(f)
+			if use(f, inside) {
+				return true
 			}
+		}
+		return false
+	}
+	if in.fileRead != nil && len(in.ignored) > 0 && usedBy(func(f string, inside bool) bool {
+		if !inside {
 			return false
 		}
-		if in.fileRead != nil && len(in.ignored) > 0 && usedBy(func(f string, inside bool) bool {
-			if !inside {
-				return false
-			}
-			root, _ := in.rootOf(f)
-			rel, _ := relTo(root, f)
-			return !ignoredAnyDepth(in.ignored, rel)
-		}) {
-			out = append(out, in.edge(EdgeReaches, cred.ID, *in.fileRead, cursorBase()))
-		}
-		if in.modeCap != nil && usedBy(func(_ string, inside bool) bool { return inside || !in.readBoundary }) {
-			out = append(out, in.edge(EdgeReaches, cred.ID, *in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)))
-		}
-		if len(files) == 0 {
-			continue
-		}
-		for _, c := range in.allowlist {
-			reads, _, launcher := CursorAllowlistClass(c.TargetScope, in.base)
-			switch {
-			case reads:
-				out = append(out, in.edge(EdgeReaches, cred.ID, c, cursorBase()))
-			case launcher:
-				out = append(out, in.edge(EdgeReaches, cred.ID, c, cursorBase(AssumeCodeLauncherRule)))
-			}
+		root, _ := in.rootOf(f)
+		rel, _ := relTo(root, f)
+		return !ignoredAnyDepth(in.ignored, rel)
+	}) {
+		out = append(out, cursorWay{*in.fileRead, cursorBase()})
+	}
+	if in.modeCap != nil && usedBy(func(_ string, inside bool) bool { return inside || !in.readBoundary }) {
+		out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)})
+	}
+	if len(files) == 0 {
+		return out
+	}
+	for _, c := range in.allowlist {
+		reads, _, launcher := CursorAllowlistClass(c.TargetScope, in.base)
+		switch {
+		case reads:
+			out = append(out, cursorWay{c, cursorBase()})
+		case launcher:
+			out = append(out, cursorWay{c, cursorBase(AssumeCodeLauncherRule)})
 		}
 	}
 	return out
@@ -305,27 +321,45 @@ func (in cursorInference) writes(all []Node) []Edge {
 		if !ok {
 			continue
 		}
-		_, inside := in.rootOf(file)
-		protected := in.isProtected(file)
-		if in.fileWrite != nil && res.Type == ResourceAgentInstructions && inside && !protected {
-			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.fileWrite, cursorBase(AssumeConfigFileProtectionUnknown)))
+		for _, w := range in.writeWays(file, res.Type) {
+			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, w.cap, w.assumptions))
 		}
-		if in.modeCap != nil {
-			readwrite := false
-			for _, p := range in.readwrite {
-				readwrite = readwrite || within(p, file)
-			}
-			switch {
-			case inside && (!protected || in.insecureFor(file)), !inside && readwrite:
-				out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)))
-			case !inside:
-				out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.modeCap, cursorModeAssumptions(AssumeShellWriteUnchecked)))
-			}
+	}
+	return out
+}
+
+// writeWays are the ways Cursor writes file without a person, as writes
+// describes for a resource of type resType (the edges of a resource in it);
+// resType "" is a file that is no agent resource, which only Probe asks.
+func (in cursorInference) writeWays(file, resType string) []cursorWay {
+	var out []cursorWay
+	_, inside := in.rootOf(file)
+	protected := in.isProtected(file)
+	switch {
+	case in.fileWrite != nil && resType == ResourceAgentInstructions && inside && !protected:
+		out = append(out, cursorWay{*in.fileWrite, cursorBase(AssumeConfigFileProtectionUnknown)})
+	case in.fileWrite != nil && resType == "" && inside && !protected:
+		// A file that is no agent resource (decision 2026-10-25, cómo
+		// trabajan tus agentes, cálculo, annex 2, point 3): the file tools
+		// "modify workspace files without approval, except for configuration
+		// files". Infer has only agent resources; Probe asks with "".
+		out = append(out, cursorWay{*in.fileWrite, cursorBase()})
+	}
+	if in.modeCap != nil {
+		readwrite := false
+		for _, p := range in.readwrite {
+			readwrite = readwrite || within(p, file)
 		}
-		for _, c := range in.allowlist {
-			if _, _, launcher := CursorAllowlistClass(c.TargetScope, in.base); launcher {
-				out = append(out, in.edge(EdgeWritesConfigOf, res.ID, c, cursorBase(AssumeCodeLauncherRule, AssumeShellWriteUnchecked)))
-			}
+		switch {
+		case inside && (!protected || in.insecureFor(file)), !inside && readwrite:
+			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)})
+		case !inside:
+			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeShellWriteUnchecked)})
+		}
+	}
+	for _, c := range in.allowlist {
+		if _, _, launcher := CursorAllowlistClass(c.TargetScope, in.base); launcher {
+			out = append(out, cursorWay{c, cursorBase(AssumeCodeLauncherRule, AssumeShellWriteUnchecked)})
 		}
 	}
 	return out

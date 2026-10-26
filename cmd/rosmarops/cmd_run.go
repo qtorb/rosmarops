@@ -157,7 +157,10 @@ func runRun(inv cli.Invocation) error {
 		credFiles platform.CredentialFileScan
 		built     *graph.Graph // the graph written this run, for the v2 report
 		builtSHA  string
-		families  [][]string
+		// builtSettings is the Claude Code settings scan the graph was built
+		// from, for the model provider row (T12).
+		builtSettings *platform.ClaudeSettingsScan
+		families      [][]string
 		// buildGraph is set by the graph step once the agents' sources are
 		// listed.
 		buildGraph   func(graph.Repos)
@@ -253,7 +256,7 @@ func runRun(inv cli.Invocation) error {
 				buildGraph = func(repoGraph graph.Repos) {
 					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
 					if graphErr == nil {
-						built, builtSHA = g, graphSHA
+						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
 					if graphErr != nil {
 						slog.Warn("graph: v2 graph not written", "err", graphErr)
@@ -416,7 +419,7 @@ func runRun(inv cli.Invocation) error {
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 		Salt: salt, Memory: mem, MemoryReset: memReset,
 		Rotated: cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
-		VSCodeFirstRun: vscodeFirstRun,
+		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {

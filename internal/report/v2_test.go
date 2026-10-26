@@ -109,6 +109,9 @@ func buildV2(t *testing.T, g *graph.Graph, v1 report.Report) report.V2 {
 // the HTML in informe HTML v2 §3).
 var reservedKeys = []string{
 	"html.console.open",
+	// agents_overview carries session_env_not_readable as a code; the HTML
+	// says it with html.ov.data.session_env (v3 §11.4, line 9)
+	"unknown.session_env_not_readable",
 	// the minimal red report of a rejected configuration has no HTML
 	// (v3 §9.5, §9.6)
 	"html.config.rejected",

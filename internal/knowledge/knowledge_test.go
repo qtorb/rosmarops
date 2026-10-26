@@ -122,3 +122,22 @@ func TestClaudeCode_Mitigations(t *testing.T) {
 		}
 	}
 }
+
+// T9 (decision 2026-10-25, cómo trabajan tus agentes, cálculo): the
+// composite knowledge_version names every embedded base, sorted, and
+// changes with any of them.
+func TestComposite(t *testing.T) {
+	bases, err := knowledge.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := knowledge.CompositeOf(bases); got != knowledge.Composite || !strings.HasPrefix(got, "claude-code@") || !strings.Contains(got, ";cursor@") {
+		t.Fatalf("composite %q, const %q", got, knowledge.Composite)
+	}
+	c := bases[knowledge.CursorProduct]
+	c.Version = "2026-11-01"
+	bases[knowledge.CursorProduct] = c
+	if knowledge.CompositeOf(bases) == knowledge.Composite {
+		t.Error("a change in cursor.json does not change the composite")
+	}
+}
