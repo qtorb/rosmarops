@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"os"
@@ -547,8 +548,25 @@ func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 		c.t("html.agent.prompt.rotated", pp), html.EscapeString(a.Value), class, c.t("html.fix.copied", p), c.t("html.fix.copy.generic", p))
 	mp := copyParams(p)
 	mp["file"] = userPath(a.File, c.home, "~")
+	// By hand, the entry inside its list, nested in full (v3 §14.3).
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
-		c.t("html.fix.manual", p), c.manualOpen(mp), c.t("html.fix.manual.add", p), html.EscapeString(a.Value), c.t("html.fix.manual.save", p))
+		c.t("html.fix.manual", p), c.manualOpen(mp), c.t("html.fix.manual.rotated", p), html.EscapeString(rotatedNested(a.Value)), c.t("html.fix.manual.save", p))
+}
+
+// rotatedNested is the rotate_credential entry inside
+// {"allow_list": {"rotated_credentials": [entry]}}, indented by 2 spaces
+// as the entry is (v3 §14.3). An entry that is not a JSON object is
+// returned as it is.
+func rotatedNested(entry string) string {
+	var e map[string]any
+	if json.Unmarshal([]byte(entry), &e) != nil {
+		return entry
+	}
+	out, err := json.MarshalIndent(map[string]any{"allow_list": map[string]any{"rotated_credentials": []any{e}}}, "", "  ")
+	if err != nil {
+		return entry
+	}
+	return string(out)
 }
 
 // adjustActions are the actions that change a settings file (v3 §4: the
@@ -703,18 +721,66 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	if f.Radius == rules.RadiusAnyProject {
 		c.w(`<p><span class="chip-any">%s</span></p>`, c.t("html.chip.any_project", p))
 	}
-	if a, ok := c.agentScore(f); ok && a.Value != nil {
-		for _, wt := range a.Weights {
-			if wt.FindingID == f.ID {
-				c.w(`<p class="gain">%s</p>`, c.t("html.gain", map[string]string{"now": strconv.Itoa(*a.Value), "then": strconv.Itoa(wt.Without)}))
-			}
-		}
+	if c.multi(f) {
+		c.renderMultiRow(f)
+		return
+	}
+	if g := c.gain(f, "html.gain"); g != "" {
+		c.w(`%s`, g)
 	}
 	if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	}
 	c.w(`<details class="tech"><summary>%s</summary><p>%s `, c.t("html.tech", nil), c.t("html.tech.where", nil))
-	locs := f.Evidence.Locations
+	c.where(f.Evidence.Locations)
+	c.w(`</p><p>%s</p><ul>`, c.t("html.tech.confidence."+f.Confidence, p))
+	c.assumptions(f)
+	c.w(`</ul></details></div></details>`)
+}
+
+// gain is the p.gain line of f with key (html.gain, or html.gain.agent
+// with {agent}): the score of f's agent without f, when it has one.
+func (c htmlCtx) gain(f rules.Finding, key string) string {
+	a, ok := c.agentScore(f)
+	if !ok || a.Value == nil {
+		return ""
+	}
+	for _, wt := range a.Weights {
+		if wt.FindingID == f.ID {
+			return `<p class="gain">` + c.t(key, map[string]string{"agent": f.Params.Agent, "now": strconv.Itoa(*a.Value), "then": strconv.Itoa(wt.Without)}) + `</p>`
+		}
+	}
+	return ""
+}
+
+// renderMultiRow is the rest of a merged row's body (v3 §14.1): a fix box
+// per agent with its own action, gain and texts; one details.tech with the
+// locations joined and each agent's confidence and assumptions.
+func (c htmlCtx) renderMultiRow(f rules.Finding) {
+	ms := c.members(f)
+	for _, m := range ms {
+		if a, ok := rules.BestAction(m, c.v.Findings); ok {
+			c.renderFixBox(m, a, c.t("html.fix.title.agent", map[string]string{"agent": m.Params.Agent}), c.gain(m, "html.gain.agent"))
+		}
+	}
+	var locs []string
+	for _, m := range ms {
+		locs = append(locs, m.Evidence.Locations...)
+	}
+	c.w(`<details class="tech"><summary>%s</summary><p>%s `, c.t("html.tech", nil), c.t("html.tech.where", nil))
+	c.where(uniqueSorted(locs))
+	c.w(`</p>`)
+	for _, m := range ms {
+		c.w(`<p><b>%s</b></p><p>%s</p><ul>`, html.EscapeString(m.Params.Agent), c.t("html.tech.confidence."+m.Confidence, c.params(m)))
+		c.assumptions(m)
+		c.w(`</ul>`)
+	}
+	c.w(`</details></div></details>`)
+}
+
+// where is the «Where» line's locations: the first five, then how many
+// more.
+func (c htmlCtx) where(locs []string) {
 	for i, l := range locs {
 		if i == 5 {
 			c.w(` %s`, c.t("html.tech.more", map[string]string{"count": strconv.Itoa(len(locs) - 5)}))
@@ -722,13 +788,16 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		}
 		c.w(`<code>%s</code> `, html.EscapeString(l))
 	}
-	c.w(`</p><p>%s</p><ul>`, c.t("html.tech.confidence."+f.Confidence, p))
+}
+
+// assumptions are f's own assumptions as list items, with f's params.
+func (c htmlCtx) assumptions(f rules.Finding) {
+	p := c.params(f)
 	for _, a := range f.Evidence.Assumptions {
 		if !sharedAssumption[a] {
 			c.w(`<li>%s</li>`, c.t("unknown."+a, p))
 		}
 	}
-	c.w(`</ul></details></div></details>`)
 }
 
 // renderMemory is the memory block of the More strip (v3 §6.2, v2 §5): the
@@ -831,8 +900,14 @@ func (c htmlCtx) verdict(f rules.Finding) string {
 // renderFix is the fix box of v1 §5 for action a, titled titleKey: the
 // body of a step 3 row (v3 §5), whose only «i» is config.
 func (c htmlCtx) renderFix(f rules.Finding, a rules.Action, titleKey string) {
+	c.renderFixBox(f, a, c.t(titleKey, c.params(f)), "")
+}
+
+// renderFixBox is renderFix with its title, and a gain line after it (the
+// boxes of a merged row, v3 §14.1), already escaped.
+func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain string) {
 	p := c.params(f)
-	c.w(`<div class="fix"><div class="fix-t">%s</div>`, c.t(titleKey, p))
+	c.w(`<div class="fix"><div class="fix-t">%s</div>%s`, title, gain)
 	if a.Code == rules.ActionRotateCredential {
 		c.renderRotate(f, a, false)
 		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t("html.after.rotate", p)) // v3 §13.2
@@ -973,7 +1048,30 @@ func (c htmlCtx) rowTitle(f rules.Finding) string {
 	}
 	p := c.params(f)
 	p["agent"] = listNames(c.cat, r.agents)
-	return html.EscapeString(c.cat.Text("html.f.cred.title", p))
+	return html.EscapeString(c.cat.Text("html.f.cred.title.multi", p)) // v3 §14.1
+}
+
+// members are the findings of f's row, in the row's order (v3 §12.2).
+func (c htmlCtx) members(f rules.Finding) []rules.Finding {
+	r := c.rows[f.ID]
+	if r == nil {
+		return []rules.Finding{f}
+	}
+	byID := map[string]rules.Finding{}
+	for _, x := range c.v.Findings {
+		byID[x.ID] = x
+	}
+	out := make([]rules.Finding, 0, len(r.ids))
+	for _, id := range r.ids {
+		out = append(out, byID[id])
+	}
+	return out
+}
+
+// multi reports a row of more than one agent (v3 §14.1).
+func (c htmlCtx) multi(f rules.Finding) bool {
+	r := c.rows[f.ID]
+	return r != nil && len(r.agents) > 1
 }
 
 // masterHelp is the «i» of master after the title of a finding whose
@@ -1026,7 +1124,13 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	}
 	out := c.cat.Text(key, p)
 	if f.Rule == rules.RuleCredReadable {
-		out += " " + c.cat.Text("html.f.cred_readable.extra", p)
+		if c.multi(f) { // v3 §14.1: the agents of the row
+			pm := copyParams(p)
+			pm["agent"] = listNames(c.cat, c.rows[f.ID].agents)
+			out += " " + c.cat.Text("html.f.cred_readable.extra.multi", pm)
+		} else {
+			out += " " + c.cat.Text("html.f.cred_readable.extra", p)
+		}
 	}
 	return out
 }
@@ -1077,6 +1181,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	// v3 §13 (BV-56)
 	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
+	// v3 §14 (BV-57)
+	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}

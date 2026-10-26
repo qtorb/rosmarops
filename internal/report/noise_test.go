@@ -1,7 +1,9 @@
 package report_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,6 +12,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -132,7 +135,7 @@ func TestNoise_RealCase(t *testing.T) {
 		if !strings.Contains(meta, "<br>"+line+"<br>") {
 			t.Errorf("%s: step 1 lacks %q: %s", lang, line, meta)
 		}
-		want := htmlEscape(cat.Text("html.f.cred.title", map[string]string{
+		want := htmlEscape(cat.Text("html.f.cred.title.multi", map[string]string{
 			"cred_name": cat.Text("html.cred.supabase.service_role.name", nil),
 			"agent":     listNames(cat, rowAgents(v)),
 		}))
@@ -374,5 +377,137 @@ func TestNoise_Wording(t *testing.T) {
 		if !strings.Contains(p1, "<br>"+cov) || strings.Contains(foot, "Cursor") {
 			t.Errorf("%s: coverage %q, footer %q", lang, cov, foot)
 		}
+	}
+}
+
+// v3 §14.6, a merged row of two agents in the HTML: two fix boxes, each
+// with its agent's title, gain and copy button; one details.tech, whose
+// assumptions name one agent each, never the agents joined; the findings
+// of the row share their locations (the same credential). In the
+// Markdown, the .multi texts and no «… and … uses»/«works as its».
+func TestNoise_MergedRow(t *testing.T) {
+	v := noiseReport(t)
+	var row []rules.Finding
+	for _, f := range v.Findings {
+		if f.Params.Scope == "service_role" {
+			row = append(row, f)
+		}
+	}
+	if len(row) != 2 || strings.Join(row[0].Evidence.Locations, ",") != strings.Join(row[1].Evidence.Locations, ",") {
+		t.Fatalf("row %d findings, locations differ or test vacuous", len(row))
+	}
+	agents := rowAgents(v)
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		title := htmlEscape(cat.Text("html.f.cred.title.multi", map[string]string{"cred_name": cat.Text("html.cred.supabase.service_role.name", nil), "agent": listNames(cat, agents)}))
+		_, body, ok := strings.Cut(page, `<span class="t">`+title+`</span>`)
+		if !ok {
+			t.Fatalf("%s: no merged row %q", lang, title)
+		}
+		body, _, _ = strings.Cut(body, `</div></details>`)
+		boxes := strings.Split(body, `<div class="fix">`)[1:]
+		if len(boxes) != 2 {
+			t.Fatalf("%s: %d fix boxes", lang, len(boxes))
+		}
+		for i, a := range agents {
+			b := boxes[i]
+			if !strings.HasPrefix(b, `<div class="fix-t">`+htmlEscape(cat.Text("html.fix.title.agent", map[string]string{"agent": a}))+`</div><p class="gain">`) ||
+				!strings.Contains(b, htmlEscape(cat.Text("html.fix.copy", map[string]string{"agent": a}))+`</button>`) {
+				t.Errorf("%s: box %d is not %s's: %.300s", lang, i, a, b)
+			}
+		}
+		if strings.Contains(body, `<p class="gain">`+htmlEscape(strings.SplitN(cat.Text("html.gain", nil), "{", 2)[0])) {
+			t.Errorf("%s: the row keeps its single gain line", lang)
+		}
+		if n := strings.Count(body, `<details class="tech">`); n != 1 {
+			t.Errorf("%s: %d details.tech", lang, n)
+		}
+		joined := listNames(cat, agents)
+		for _, ul := range regexp.MustCompile(`<ul>(.*?)</ul>`).FindAllStringSubmatch(body, -1) {
+			if strings.Contains(ul[1], htmlEscape(joined)) {
+				t.Errorf("%s: assumptions with the agents joined: %s", lang, ul[1])
+			}
+		}
+		for _, a := range agents {
+			if !strings.Contains(body, `<p><b>`+a+`</b></p>`) {
+				t.Errorf("%s: no assumptions heading for %s", lang, a)
+			}
+		}
+	}
+	cat, _ := catalog.Load("en")
+	md := report.RenderV2Markdown(v, cat, time.UTC)
+	joined := listNames(cat, agents)
+	for _, never := range []string{joined + " uses", joined + " works as its"} {
+		if strings.Contains(md, never) {
+			t.Errorf("markdown has %q", never)
+		}
+	}
+	if !strings.Contains(md, cat.Text("finding.cred_read_and_send.what.multi", map[string]string{"agent": joined})) {
+		t.Error("markdown lacks the .multi «What happens»")
+	}
+	for _, a := range agents {
+		if !strings.Contains(md, "##### "+a+"\n") {
+			t.Errorf("markdown lacks the subtitle of %s", a)
+		}
+	}
+}
+
+// v3 §14.3 and §14.6: the export for your AI of a key in git records it in
+// allow_list.rotated_credentials (html.agent.prompt.rotated); by hand, the
+// pre is valid JSON which, merged into a minimal valid config.json,
+// validates against config.v1.
+func TestNoise_RotationRecord(t *testing.T) {
+	v := noiseReport(t)
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		ai := report.RenderAIExport(v, cat, "/h")
+		if !strings.Contains(ai, "allow_list.rotated_credentials") {
+			t.Errorf("%s: the export lacks allow_list.rotated_credentials", lang)
+		}
+		page := renderHTML(t, lang, v)
+		_, manual, ok := strings.Cut(page, htmlEscape(cat.Text("html.fix.manual.rotated", nil))+`<pre>`)
+		if !ok {
+			t.Fatalf("%s: no html.fix.manual.rotated", lang)
+		}
+		manual, _, _ = strings.Cut(manual, `</pre>`)
+		var nested map[string]any
+		if err := json.Unmarshal([]byte(html.UnescapeString(manual)), &nested); err != nil {
+			t.Fatalf("%s: the pre is not JSON: %v\n%s", lang, err, manual)
+		}
+		raw, _ := json.Marshal(config.DefaultConfig())
+		var cfg map[string]any
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		al, _ := cfg["allow_list"].(map[string]any)
+		if al == nil {
+			al = map[string]any{}
+			cfg["allow_list"] = al
+		}
+		for k, val := range nested["allow_list"].(map[string]any) {
+			al[k] = val
+		}
+		out, _ := json.MarshalIndent(cfg, "", "  ")
+		p := filepath.Join(t.TempDir(), "config.json")
+		if err := os.WriteFile(p, out, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := config.LoadConfig(p); err != nil {
+			t.Errorf("%s: merged config does not validate: %v\n%s", lang, err, out)
+		}
+	}
+}
+
+// v3 §14.5: a finding with no action has no «What to do» heading.
+func TestNoise_NoEmptyWhatToDo(t *testing.T) {
+	v := cloneV2(noiseReport(t))
+	for i := range v.Findings {
+		v.Findings[i].Actions = nil
+	}
+	cat, _ := catalog.Load("en")
+	md := report.RenderV2Markdown(v, cat, time.UTC)
+	if strings.Contains(md, "#### "+cat.Text("finding.part.todo", nil)) {
+		t.Error("markdown has a «What to do» with no action")
 	}
 }

@@ -62,6 +62,9 @@ func CatalogKeys() []string {
 			keys = append(keys, "finding."+r+".why")
 		}
 	}
+	// The merged rows' texts (v3 §14.2).
+	keys = append(keys, "finding.cred_read_and_send.title.multi", "finding.cred_read_and_send.what.multi",
+		"finding.cred_read_and_send.why.multi", "finding.cred_readable.title.multi", "finding.cred_readable.what.multi")
 	for _, a := range rules.AllActions {
 		keys = append(keys, "action."+a+".label", "action."+a+".how")
 	}
@@ -167,25 +170,68 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		}
 		done[r], f = true, r.rep
 		p := findingParams(f)
+		members := []rules.Finding{f}
+		// A merged row (v3 §14.2): the .multi texts where they exist, and
+		// each agent's actions and assumptions under its name.
+		multi := func(key string) string { return key }
 		if len(r.agents) > 1 {
 			p["agent"] = listNames(cat, r.agents)
+			members = members[:0]
+			for _, id := range r.ids {
+				members = append(members, byID[id])
+			}
+			multi = func(key string) string {
+				if cat.Has(key + ".multi") {
+					return key + ".multi"
+				}
+				return key
+			}
 		}
-		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t("finding."+f.Rule+".title", p))
+		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi("finding."+f.Rule+".title"), p))
 		meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
 		if f.Radius != "" {
 			meta = append(meta, t("radius."+f.Radius, p))
 		}
 		w("%s\n\n", strings.Join(meta, " · "))
-		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t("finding."+f.Rule+".what", p))
-		w("#### %s\n\n%s\n\n", t("finding.part.why", p), t(whyKey(f), p))
-		w("#### %s\n\n", t("finding.part.todo", p))
-		for _, a := range f.Actions {
-			writeAction(&sb, cat, f, a, true)
+		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(multi("finding."+f.Rule+".what"), p))
+		w("#### %s\n\n%s\n\n", t("finding.part.why", p), t(multi(whyKey(f)), p))
+		head := func(m rules.Finding) { // the agent's name, in a merged row
+			if len(members) > 1 {
+				w("##### %s\n\n", m.Params.Agent)
+			}
+		}
+		acts := 0
+		for _, m := range members {
+			acts += len(m.Actions)
+		}
+		if acts > 0 { // no empty «What to do» (v3 §14.5)
+			w("#### %s\n\n", t("finding.part.todo", p))
+			for _, m := range members {
+				if len(m.Actions) > 0 {
+					head(m)
+				}
+				for _, a := range m.Actions {
+					writeAction(&sb, cat, m, a, true)
+				}
+			}
 		}
 		w("#### %s\n\n", t("finding.part.unknown", p))
-		for _, a := range f.Evidence.Assumptions {
-			if !sharedAssumption[a] {
-				w("- %s\n", t("unknown."+a, p))
+		for _, m := range members {
+			mp := findingParams(m)
+			var own []string
+			for _, a := range m.Evidence.Assumptions {
+				if !sharedAssumption[a] {
+					own = append(own, t("unknown."+a, mp))
+				}
+			}
+			if len(own) > 0 {
+				head(m)
+				for _, l := range own {
+					w("- %s\n", l)
+				}
+				if len(members) > 1 {
+					w("\n")
+				}
 			}
 		}
 		w("\n#### %s\n\n", t("finding.part.evidence", p))
@@ -200,7 +246,11 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			}
 		}
 		w("\n<details><summary>%s</summary>\n\n", t("evidence.edges", p))
-		for _, e := range f.Evidence.Edges {
+		var edges []string
+		for _, m := range members {
+			edges = append(edges, m.Evidence.Edges...)
+		}
+		for _, e := range uniqueSorted(edges) {
 			w("- `%s`\n", e)
 		}
 		w("\n</details>\n\n")

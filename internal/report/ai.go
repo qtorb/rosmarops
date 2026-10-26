@@ -57,8 +57,21 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	}
 
 	var tail strings.Builder
-	if len(v.Index.Scope.Evaluated) > 0 {
-		fmt.Fprintf(&tail, "%s\n\n", cat.Text("html.unknown.body", map[string]string{"agent": listNames(cat, v.Index.Scope.Evaluated)}))
+	// What we don't know: a paragraph per evaluated agent, in the score's
+	// order, with the HTML's key for it (v3 §14.4).
+	// An evaluated agent with no score (coverage) goes after, by name.
+	var order []string
+	seen := map[string]bool{}
+	for _, a := range c.scoredAgents() {
+		order, seen[a.Agent] = append(order, a.Agent), true
+	}
+	for _, a := range v.Index.Scope.Evaluated {
+		if !seen[a] {
+			order = append(order, a)
+		}
+	}
+	for _, a := range order {
+		fmt.Fprintf(&tail, "%s\n\n", cat.Text(unknownBody(a), map[string]string{"agent": a}))
 	}
 	tail.WriteString(cat.Text("ai.limits", nil) + "\n")
 
@@ -132,6 +145,9 @@ func (c htmlCtx) aiAction(f rules.Finding, a rules.Action) string {
 		prompt := "html.agent.prompt.merge"
 		if !a.FileExists {
 			prompt = "html.agent.prompt.create"
+		}
+		if a.Code == rules.ActionRotateCredential {
+			prompt = "html.agent.prompt.rotated" // as the HTML's button (v3 §14.3)
 		}
 		pp := copyParams(p)
 		pp["file"] = userPath(a.File, c.home, "~")
