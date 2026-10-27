@@ -367,7 +367,7 @@
   "html.today.reach": "Ahora mismo {agent} puede leerla desde cualquiera de tus {repos} proyectos, y tiene una forma de enviarla fuera sin que nadie lo apruebe.",
   "html.today.tag": "Si solo haces una cosa hoy",
   "html.today.time": "Cómo arreglarlo (2 minutos)",
-  "html.unattended.pending": "Esta revisión programada no se ha hecho: RosmarOps necesita que confirmes un cambio. Ejecútalo a mano con el lanzador.",
+  "html.unattended.pending": "Esta revisión programada no se ha hecho: RosmarOps necesita que confirmes un cambio. Abre tú rosmarops.exe para confirmarlo.",
   "html.unknown.body": "Suponemos que {agent} funciona como dice su documentación, con tus permisos de usuario, y que nada lo bloquea. Lo que depende del modo «auto» lo decide otro modelo de IA, no una persona, y no podemos saber de antemano qué decidirá.",
   "html.unknown.body.cursor": "Suponemos que {agent} funciona como dice su documentación, con tus permisos de usuario, en modo Auto-review, y que nada lo bloquea. Lo que depende de Auto-review lo decide otro modelo de IA, no una persona, y no podemos saber de antemano qué decidirá.",
   "html.unknown.title": "Lo que no sabemos",

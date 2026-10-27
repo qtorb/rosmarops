@@ -324,7 +324,7 @@
   "html.today.reach": "Right now {agent} can read it from any of your {repos} projects, and it has a way to send it out without anyone approving.",
   "html.today.tag": "If you do only one thing today",
   "html.today.time": "How to fix it (2 minutes)",
-  "html.unattended.pending": "This scheduled review did not run: RosmarOps needs you to confirm a change. Run it by hand with the launcher.",
+  "html.unattended.pending": "This scheduled review did not run: RosmarOps needs you to confirm a change. Open rosmarops.exe yourself to confirm it.",
   "html.unknown.body": "We assume {agent} works as its documentation says, with your user's permissions, and that nothing blocks it. What depends on auto mode is decided by another AI model, not a person, and we cannot know in advance what it will decide.",
   "html.unknown.body.cursor": "We assume {agent} works as its documentation says, with your user's permissions, in Auto-review mode, and that nothing blocks it. What depends on Auto-review is decided by another AI model, not a person, and we cannot know in advance what it will decide.",
   "html.unknown.title": "What we don't know",
