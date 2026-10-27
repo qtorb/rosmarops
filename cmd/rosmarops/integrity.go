@@ -176,15 +176,19 @@ const (
 // deferredLog keeps a run's log in memory until the reports directory is
 // known, then writes it, and what follows, to its file name there.
 type deferredLog struct {
-	name string
-	mu   sync.Mutex
-	buf  []byte
-	file *os.File
+	name   string
+	mu     sync.Mutex
+	buf    []byte
+	file   *os.File
+	closed bool
 }
 
 func (d *deferredLog) Write(p []byte) (int, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.closed {
+		return len(p), nil
+	}
 	if d.file != nil {
 		return d.file.Write(p)
 	}
@@ -197,7 +201,7 @@ func (d *deferredLog) Write(p []byte) (int, error) {
 func (d *deferredLog) attach(dir string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.file != nil {
+	if d.file != nil || d.closed {
 		return nil
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -211,5 +215,25 @@ func (d *deferredLog) attach(dir string) error {
 		return fmt.Errorf("write run log: %w", err)
 	}
 	d.file, d.buf = f, nil
+	return nil
+}
+
+// Close closes the log's file, once; later writes and attaches are dropped.
+// A file left open cannot be removed on Windows.
+func (d *deferredLog) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		return nil
+	}
+	d.closed, d.buf = true, nil
+	if d.file == nil {
+		return nil
+	}
+	err := d.file.Close()
+	d.file = nil
+	if err != nil {
+		return fmt.Errorf("close run log: %w", err)
+	}
 	return nil
 }

@@ -96,6 +96,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		freeConsole()
 		runLog = &deferredLog{name: ScheduledLogName}
+		defer runLog.Close() // after the deferred attach below
 		slog.SetDefault(slog.New(slog.NewTextHandler(runLog, nil)))
 	}
 	if runLog != nil {

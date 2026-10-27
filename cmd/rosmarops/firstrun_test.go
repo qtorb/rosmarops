@@ -56,9 +56,20 @@ func TestDoubleClickSpanishOpensReport(t *testing.T) {
 	if len(run) == 0 || string(run) != string(es) || !strings.Contains(string(run), `<html lang="es">`) {
 		t.Error("report.html is not the Spanish page")
 	}
+	var cfg struct {
+		RepoRoots []string `json:"repo_roots"`
+	}
 	raw, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "config.json"))
-	if !strings.Contains(string(raw), proj) {
+	if err := json.Unmarshal(raw, &cfg); err != nil { // a Windows path is escaped in the JSON
+		t.Fatal(err)
+	}
+	if len(cfg.RepoRoots) != 1 || cfg.RepoRoots[0] != proj {
 		t.Errorf("config: %s", raw)
+	}
+	// The run's log is closed when runNoArgs returns: on Windows an open
+	// file cannot be removed.
+	if err := os.Remove(filepath.Join(reports, RunLogName)); err != nil {
+		t.Errorf("run log still open: %v", err)
 	}
 }
 

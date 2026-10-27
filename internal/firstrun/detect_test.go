@@ -107,10 +107,25 @@ func TestPicked(t *testing.T) {
 		rules[filepath.Base(d.Path)] = d.Rule
 		t.Logf("%-18s %s", d.Rule, strings.TrimPrefix(d.Path, dir))
 	}
+	// "App" and "app" are two folders only where the file system tells
+	// case apart; elsewhere they are one and there is no duplicate to drop
+	// (the rule is covered everywhere by TestDetectDuplicateIgnoresCase).
+	probe := t.TempDir()
+	if err := os.Mkdir(filepath.Join(probe, "App"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := os.Stat(filepath.Join(probe, "app"))
+	caseSensitive := os.IsNotExist(err)
+	if !caseSensitive {
+		t.Log("the file system does not tell case apart: App and app are one folder, no duplicate to check")
+	}
 	for name, want := range map[string]string{
 		filepath.Base(dir): RuleHomeOrRoot, "App": RuleAccepted, "app": RuleDuplicate, "node_modules": RuleExcluded,
 		"roaming": RuleSystemFolder, "r000": RuleAccepted, "r098": RuleAccepted, "r099": RuleOverLimit, "r104": RuleOverLimit,
 	} {
+		if name == "app" && !caseSensitive {
+			continue
+		}
 		if rules[name] != want {
 			t.Errorf("%s: %q, want %q", name, rules[name], want)
 		}

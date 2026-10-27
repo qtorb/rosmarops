@@ -40,6 +40,7 @@ func runNoArgs() int {
 		cat, _ = catalog.Load(catalog.DefaultLang)
 	}
 	log := &deferredLog{name: RunLogName}
+	defer log.Close()
 	slog.SetDefault(slog.New(slog.NewTextHandler(log, nil)))
 	fail := func(err error) int {
 		slog.Error("run failed", "err", err)

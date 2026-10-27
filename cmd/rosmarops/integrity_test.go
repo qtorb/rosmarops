@@ -301,3 +301,41 @@ func TestIntegrityUnchanged(t *testing.T) {
 		t.Fatalf("notChecked %v, err %v, aborts %d, out %q", notChecked, err, ab.n, out.String())
 	}
 }
+
+// BV-87: Close closes the run's log once; the file can then be removed (on
+// Windows an open file cannot), and later writes and attaches are dropped.
+func TestDeferredLogClose(t *testing.T) {
+	dir := t.TempDir()
+	d := &deferredLog{name: RunLogName}
+	if _, err := d.Write([]byte("before\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.attach(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Write([]byte("after\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
+	path := filepath.Join(dir, RunLogName)
+	if raw, _ := os.ReadFile(path); string(raw) != "before\nafter\n" {
+		t.Errorf("log %q", raw)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("log still open: %v", err)
+	}
+	if n, err := d.Write([]byte("late\n")); err != nil || n != 5 {
+		t.Errorf("write after Close: %d, %v", n, err)
+	}
+	if err := d.attach(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("attach after Close reopened the log: %v", err)
+	}
+}
