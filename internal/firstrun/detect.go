@@ -97,7 +97,14 @@ func Detect(env Env) Result {
 // keep sorts one source's candidates alphabetically and applies U3's
 // filters, duplicates and limit to each, recording every decision.
 func (env Env) keep(res *Result, seen map[string]bool, source string, paths []string) {
-	sort.Slice(paths, func(i, j int) bool { return strings.ToLower(paths[i]) < strings.ToLower(paths[j]) })
+	// Alphabetical without regard to case; paths equal but for case in
+	// byte order, so that the order never depends on a map's (BV-79).
+	sort.Slice(paths, func(i, j int) bool {
+		if a, b := strings.ToLower(paths[i]), strings.ToLower(paths[j]); a != b {
+			return a < b
+		}
+		return paths[i] < paths[j]
+	})
 	for _, p := range paths {
 		rule, clean := env.check(p)
 		key := strings.ToLower(clean)

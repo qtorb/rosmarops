@@ -130,7 +130,10 @@ func (s *sandbox) initRepo(t *testing.T) {
 	for _, args := range [][]string{
 		{"init", "-q"},
 		{"add", "README.md", "deploy.sh"},
-		{"-c", "user.name=trust", "-c", "user.email=trust@example.invalid", "commit", "-q", "-m", "init"},
+		// No automatic maintenance: a newer git detaches `git maintenance
+		// run --auto` after a commit, and its maintenance.lock would vanish
+		// while the run is photographed (BV-79).
+		{"-c", "user.name=trust", "-c", "user.email=trust@example.invalid", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "commit", "-q", "-m", "init"},
 	} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = s.repo

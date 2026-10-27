@@ -149,12 +149,18 @@ const gitNoHooksPath = "/dev/null/rosmarops-no-hooks"
 //     (a repository's color.ui=always would put color codes before the "+"
 //     of diff lines; the diff commands also pass --no-color, which overrides
 //     color.diff)
+//   - maintenance.auto, gc.auto: https://git-scm.com/docs/git-config#Documentation/git-config.txt-maintenanceauto
+//     and https://git-scm.com/docs/git-config#Documentation/git-config.txt-gcauto
+//     (no automatic maintenance, which would write to the repository; none
+//     of the commands run here starts it today, this keeps it that way)
 var gitHardening = []string{
 	"-c", "core.fsmonitor=false",
 	"-c", "core.hooksPath=" + gitNoHooksPath,
 	"-c", "diff.external=",
 	"-c", "protocol.allow=never",
 	"-c", "color.ui=false",
+	"-c", "maintenance.auto=false",
+	"-c", "gc.auto=0",
 }
 
 // gitEnv is added to the inherited environment of every git process:
