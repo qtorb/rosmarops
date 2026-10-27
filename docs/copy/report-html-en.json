@@ -330,6 +330,7 @@
   "html.verdict.not_checked": "not checked this time",
   "html.verdict.still": "open since {date}",
   "html.weekly.agent_note": "The button is for a coding agent with a terminal on this computer, such as Claude Code or Cursor. Otherwise, use «I'd rather do it by hand».",
+  "html.weekly.copy_command": "Copy the command",
   "html.weekly.manual.step": "Open PowerShell (not as administrator), paste this command and press Enter:",
   "html.weekly.on": "Scheduled: every {day} at {time}.",
   "html.weekly.other_exe": "A weekly review is scheduled with another copy of RosmarOps ({path}). Update it to use this one:",

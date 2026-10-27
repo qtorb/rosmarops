@@ -44,7 +44,7 @@ Every release on GitHub includes:
 
 - the Windows program in a zip, with a `SHA256SUMS.txt` file;
 - a **GitHub artifact attestation** that ties the zip to the exact commit and the GitHub workflow that built it. Check it with `gh attestation verify rosmarops-windows-amd64.zip --repo qtorb/rosmarops`;
-- a **reproducible build**: building the tagged commit from a clean clone with Go 1.24.7 and the documented command (`CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath`) produces a `rosmarops.exe` with the same SHA-256 as the one in the release. (The zip itself is not byte-for-byte reproducible because of file dates; the attestation covers both the zip and the program.)
+- a **reproducible build**: building the tagged commit from a clean git clone with Go 1.24.7 and the documented command (`GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=<tag without v>"`) produces a `rosmarops.exe` with the same SHA-256 as the one in the release. (The zip itself is not byte-for-byte reproducible because of file dates; the attestation covers both the zip and the program.)
 
 ---
 

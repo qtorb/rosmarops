@@ -82,7 +82,8 @@ func fakeTasks(state string) []platform.ScheduledTask {
 var v17Self = scheduledtasks.Self{Exe: v17Exe, Domain: "PC", User: "ana", Langs: []string{"en", "es"}}
 
 // §17.3: the three states of column 2 from a fake adapter; the command,
-// literal, in the hidden pre and in «by hand»; the agent note under the
+// literal, in the hidden pre and in «by hand», where §18's button copies
+// the element right before it: the command alone; the agent note under the
 // button with no task or another exe's, not with its own (J11); the
 // notification line only when the notification did not show.
 func TestRenderHTML_WeeklyStates(t *testing.T) {
@@ -100,7 +101,8 @@ func TestRenderHTML_WeeklyStates(t *testing.T) {
 				cmd := html.EscapeString(report.WeeklyCommand(v17Exe, lang))
 				copyBlock := strings.Contains(col, `<pre hidden>`+esc("html.weekly.prompt", nil)+"\n\n"+cmd+`</pre><button type="button" class="wide"`) &&
 					strings.Contains(col, esc("html.fix.copy.generic", nil)+`</button><span class="live" aria-live="polite"></span><p class="note">`+esc("html.weekly.agent_note", nil)+`</p><details class="manual">`) &&
-					strings.Contains(col, `<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>`+esc("html.fix.manual", nil)+`</summary><p>`+esc("html.weekly.manual.step", nil)+`</p><pre>`+cmd+`</pre></details>`)
+					strings.Contains(col, `<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>`+esc("html.fix.manual", nil)+`</summary><p>`+esc("html.weekly.manual.step", nil)+`</p><pre>`+cmd+`</pre>`+
+						`<button type="button" class="b2" data-copied="`+esc("html.fix.copied", nil)+`">`+esc("html.weekly.copy_command", nil)+`</button><span class="live" aria-live="polite"></span></details>`)
 				if !strings.HasPrefix(col, `<h3>`+esc("html.weekly.title", nil)+`</h3>`) {
 					t.Errorf("%s %s: column 2 is not «%s»", state, lang, cat.Text("html.weekly.title", nil))
 				}
@@ -294,6 +296,29 @@ func TestRenderHTML_StripAndAssumptions(t *testing.T) {
 		step1, _, _ = strings.Cut(step1, `</section>`)
 		if !strings.Contains(step1, `<p class="meta warn">`+htmlEscape(cat.Text("html.integrity.not_checked", nil))+`</p>`) {
 			t.Errorf("%s: no integrity line in step 1", lang)
+		}
+	}
+}
+
+// §18: «Copy the command» copies the element right before it (the page's
+// copy script copies a button's previous sibling): the command, exactly,
+// without the agent's instruction.
+func TestRenderHTML_CopyCommandButton(t *testing.T) {
+	for _, state := range []string{"none", "other"} {
+		weekly := scheduledtasks.WeeklyOf(fakeTasks(state), v17Self)
+		v := v17Report(t, func(in *report.V2Input) { in.Weekly = weekly })
+		for _, lang := range []string{"en", "es"} {
+			cat, _ := catalog.Load(lang)
+			col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
+			label := htmlEscape(cat.Text("html.weekly.copy_command", nil))
+			m := regexp.MustCompile(`<pre>([^<]*)</pre><button type="button" class="b2" data-copied="[^"]*">` + regexp.QuoteMeta(label) + `</button>`).FindStringSubmatch(col)
+			if m == nil || strings.Count(col, label) != 1 {
+				t.Fatalf("%s %s: no single «%s» button after a pre:\n%s", state, lang, cat.Text("html.weekly.copy_command", nil), col)
+			}
+			copied := html.UnescapeString(m[1])
+			if copied != report.WeeklyCommand(v17Exe, lang) || strings.Contains(copied, cat.Text("html.weekly.prompt", nil)) {
+				t.Errorf("%s %s: copies %q", state, lang, copied)
+			}
 		}
 	}
 }

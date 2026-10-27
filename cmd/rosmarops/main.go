@@ -17,7 +17,10 @@ import (
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
-const version = "0.1.0-dev"
+// version is the release tag without the «v», set when building a release
+// with -ldflags="-X main.version=<version>"; a development build says
+// 0.1.0-dev.
+var version = "0.1.0-dev"
 
 // zeroHash is the placeholder written by DefaultState before rosmarops baseline runs.
 // Integrity fields equal to zeroHash mean "baseline pending" — NOT a mismatch.

@@ -69,7 +69,7 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p dist/pkg
-          go build -trimpath -o dist/pkg/rosmarops.exe ./cmd/rosmarops
+          go build -trimpath -ldflags="-X main.version=${TAG#v}" -o dist/pkg/rosmarops.exe ./cmd/rosmarops
       - name: No network in the binary
         run: |
           if GOOS=windows GOARCH=amd64 go list -deps ./cmd/rosmarops | grep -E '^(net|crypto/tls)(/|$)'; then exit 1; fi

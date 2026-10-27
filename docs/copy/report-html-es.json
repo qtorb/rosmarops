@@ -364,6 +364,7 @@
   "html.verdict.not_checked": "sin comprobar esta vez",
   "html.verdict.still": "abierto desde {date}",
   "html.weekly.agent_note": "El botón es para un agente de código con terminal en este ordenador, como Claude Code o Cursor. Si no, usa «Prefiero hacerlo a mano».",
+  "html.weekly.copy_command": "Copiar el comando",
   "html.weekly.manual.step": "Abre PowerShell (no como administrador), pega este comando y pulsa Enter:",
   "html.weekly.on": "Programada: cada {day} a las {time}.",
   "html.weekly.other_exe": "Hay una revisión semanal programada con otra copia de RosmarOps ({path}). Actualízala para que use esta:",

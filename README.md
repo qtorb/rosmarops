@@ -22,6 +22,8 @@ You get a visual report with a score per agent, the first thing to do with the e
 
 Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, and which agents or MCP servers are new.
 
+To run it every week without thinking about it, the report gives you the exact command to schedule a review every Friday at 09:00 (or your agent can run it for you). RosmarOps does not create the task itself. When the scheduled review finishes, Windows shows a notification; if notifications are turned off, the report opens in your browser.
+
 ## Check the download
 
 Each release has a `SHA256SUMS.txt` file and a GitHub artifact attestation:
@@ -42,7 +44,7 @@ cd rosmarops
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o rosmarops.exe ./cmd/rosmarops
 ```
 
-To reproduce the released `rosmarops.exe` exactly, build the tagged commit from a clean clone with Go 1.24.7: its SHA-256 matches the one in `SHA256SUMS.txt`.
+To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and build it with Go 1.24.7, passing the version without the «v» (for v0.1.0: `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.1.0" -o rosmarops.exe ./cmd/rosmarops`). Its SHA-256 matches the one in `SHA256SUMS.txt`.
 
 ---
 
