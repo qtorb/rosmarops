@@ -15,10 +15,10 @@ You get a visual report with a score per agent, the first thing to do with the e
 
 ## Install and run (Windows)
 
-1. Download `rosmarops-windows-amd64.zip` from the [latest release](https://github.com/qtorb/rosmarops/releases/latest).
+1. Download `rosmarops.exe` from the [latest release](https://github.com/qtorb/rosmarops/releases/latest).
 2. Optional, recommended: check it (see [Check the download](#check-the-download)).
-3. Extract the whole zip, then double-click `rosmarops-run.bat` (or `rosmarops-ejecutar.bat` for the report in Spanish).
-4. The report opens in your browser when it finishes (up to 5 minutes).
+3. Double-click `rosmarops.exe`. It finds your projects on its own; if it finds none, it asks you to choose the folder where you keep them.
+4. The report opens in your browser when it finishes (up to 5 minutes), in your Windows language, with a link to the other language.
 
 Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, and which agents or MCP servers are new.
 
@@ -29,10 +29,10 @@ To run it every week without thinking about it, the report gives you the exact c
 Each release has a `SHA256SUMS.txt` file and a GitHub artifact attestation:
 
 ```
-gh attestation verify rosmarops-windows-amd64.zip --repo qtorb/rosmarops
+gh attestation verify rosmarops.exe --repo qtorb/rosmarops
 ```
 
-The program is not signed with a code-signing certificate yet, so Windows SmartScreen may warn you. The attestation and the checksum are how you check it is the build from this repository.
+The program is not signed with a code-signing certificate yet, so Windows SmartScreen may warn you the first time you open it. Check the attestation and the checksum first: they are how you know it is the build from this repository. Then choose «More info» and «Run anyway».
 
 ## Build it yourself
 
