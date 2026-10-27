@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -52,6 +53,11 @@ type mcpServerEntry struct {
 
 	// EnvFile is Cursor's envFile (https://cursor.com/docs/context/mcp).
 	EnvFile string `json:"envFile"`
+
+	// ServerURL marks an Antigravity remote server, whose headers are read
+	// like a Claude Code remote server's (https://antigravity.google/docs/settings).
+	// The URL itself is not kept: no server node carries one.
+	ServerURL string `json:"serverUrl"`
 }
 
 // fileFormat selects how ReadMCPFile parses a config file.
@@ -78,6 +84,13 @@ var remoteTypes = map[string]bool{"http": true, "streamable-http": true, "sse": 
 //  2. Claude Code project scope: <repo>\.mcp.json (per repo in repoRoots)
 //  3. Cline:  %APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json
 //  4. Cursor: %USERPROFILE%\.cursor\mcp.json
+//  5. Claude Desktop: %APPDATA%\Claude\claude_desktop_config.json
+//  6. Antigravity: %USERPROFILE%\.gemini\config\mcp_config.json and
+//     <repo>\.agents\mcp_config.json (https://antigravity.google/docs/settings)
+//
+// It also lists the agents detected by the existence of their configuration
+// (agentdirs.Detect: Codex, Antigravity, Hermes Agent, Claude Desktop), in
+// MCPScan.Present; none of their TOML or YAML files is opened.
 //
 // Claude Code loads MCP servers only from ~/.claude.json and <repo>/.mcp.json
 // (https://code.claude.com/docs/en/mcp, https://code.claude.com/docs/en/settings).
@@ -169,6 +182,38 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		})
 	}
 
+	// Agents detected by the existence of their configuration (decision
+	// 2026-10-27, agentes nuevos, N1): their MCP sources are read only when
+	// the agent is present.
+	present := agentdirs.Detect(home, nil)
+	for _, p := range present {
+		scan.Present = append(scan.Present, platform.AgentPresence{Platform: p.Product, ConfigDir: p.ConfigDir, Marker: p.Marker})
+	}
+	has := agentdirs.Products(present)
+
+	// 5. Claude Desktop, installer path (the MSIX path is not covered).
+	if has[agentdirs.ClaudeDesktop] {
+		desktopDir := agentdirs.ClaudeDesktopDir(home, nil)
+		add(sourceSpec{
+			path: filepath.Join(desktopDir, "claude_desktop_config.json"), client: agentdirs.ClaudeDesktop,
+			format: formatMCPServers, loadsMCP: true, configDir: desktopDir, scope: platform.MCPScopeUser,
+		})
+	}
+
+	// 6. Antigravity: global and per project.
+	if has[agentdirs.Antigravity] {
+		geminiDir := agentdirs.AntigravityDir(home)
+		add(sourceSpec{
+			path: filepath.Join(geminiDir, "config", "mcp_config.json"), client: agentdirs.Antigravity,
+			format: formatMCPServers, loadsMCP: true, configDir: geminiDir, scope: platform.MCPScopeUser,
+		})
+		for _, root := range repoRoots {
+			add(sourceSpec{
+				path: filepath.Join(root, ".agents", "mcp_config.json"), client: agentdirs.Antigravity,
+				format: formatMCPServers, loadsMCP: true, configDir: geminiDir, scope: platform.MCPScopeProject, scopePath: root,
+			})
+		}
+	}
 	return scan, nil
 }
 
@@ -321,7 +366,7 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		env := secretVars(entry.Env, envKeys)
 
 		var headers []platform.EnvVar
-		if classify && remoteTypes[entry.Type] {
+		if classify && remoteTypes[entry.Type] || client == agentdirs.Antigravity && strings.TrimSpace(entry.ServerURL) != "" {
 			headers = secretVars(entry.Headers, sortedKeys(entry.Headers))
 		}
 

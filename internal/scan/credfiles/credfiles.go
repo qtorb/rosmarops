@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/jsonc"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -45,6 +46,7 @@ const (
 	formatRailway                      // Railway CLI config JSON: user.token, user.accessToken, user.refreshToken
 	formatLines                        // any other file: each line, key=value or key: value when it looks so
 	formatVSCodeSettings               // VS Code user settings.json (JSONC): terminal.integrated.env.* only
+	formatCodexAuth                    // Codex auth.json: OPENAI_API_KEY, tokens.*_token, personal_access_token
 )
 
 // userFile is one of the user's credential files.
@@ -131,6 +133,35 @@ func userFiles(home string, env Env) []userFile {
 		vscodeDir = filepath.Join(v, "Code", "User")
 	}
 	out = append(out, userFile{filepath.Join(vscodeDir, "settings.json"), formatVSCodeSettings})
+
+	// Agents detected and not evaluated (decision 2026-10-27, agentes
+	// nuevos, N1): Codex's auth.json (keys on parseCodexAuth), and Hermes
+	// Agent's .env and every profile's (Hermes docs, user-guide/configuration
+	// and user-guide/profiles: <H>\.env, <H>\profiles\<name>\.env).
+	adEnv := agentdirs.Env(env)
+	out = append(out, userFile{filepath.Join(agentdirs.CodexHome(home, adEnv), "auth.json"), formatCodexAuth})
+	hermes := agentdirs.HermesHome(home, adEnv)
+	out = append(out, userFile{filepath.Join(hermes, ".env"), formatEnv})
+	for _, profile := range profileDirs(filepath.Join(hermes, "profiles")) {
+		out = append(out, userFile{filepath.Join(profile, ".env"), formatEnv})
+	}
+	return out
+}
+
+// profileDirs lists the folders directly under dir, sorted; links are not
+// followed.
+func profileDirs(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() && e.Type()&os.ModeSymlink == 0 && !repos.IsForcedExclusion(e.Name()) {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 
@@ -239,10 +270,13 @@ func readFile(scan *platform.CredentialFileScan, path string, f format) bool {
 		scan.Failed = append(scan.Failed, platform.CredentialFailure{Path: path, Reason: graph.Reason(graph.ReasonReadError, err.Error())})
 		return true
 	}
-	if f == formatRailway || f == formatVSCodeSettings {
+	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth {
 		parse := parseRailway
-		if f == formatVSCodeSettings {
+		switch f {
+		case formatVSCodeSettings:
 			parse = parseVSCodeSettings
+		case formatCodexAuth:
+			parse = parseCodexAuth
 		}
 		entries, err := parse(path, raw)
 		if err != nil {
@@ -326,6 +360,67 @@ func parseRailway(path string, raw []byte) ([]platform.CredentialEntry, error) {
 		}
 		out = append(out, platform.CredentialEntry{
 			Path: path, Key: k.key, Pointer: "/user/" + k.key, Kind: k.kind,
+			Value: secrets.NewSecretValue(*s),
+		})
+	}
+	return out, nil
+}
+
+// codexAuthKeys are the secrets read from Codex's auth.json, by JSON
+// Pointer, with the credential kind of each. Source:
+// https://github.com/openai/codex, commit
+// b89952d582beaae3af3ddd7b679286cbb094f8b9,
+// codex-rs/login/src/auth/storage.rs (AuthDotJson: #[serde(rename =
+// "OPENAI_API_KEY")] openai_api_key, tokens: Option<TokenData>,
+// personal_access_token) and codex-rs/login/src/token_data.rs (TokenData:
+// id_token, serialized as the raw JWT, access_token, refresh_token).
+var codexAuthKeys = []struct{ pointer, kind string }{
+	{"/OPENAI_API_KEY", "codex_openai_api_key"},
+	{"/tokens/access_token", "codex_access_token"},
+	{"/tokens/refresh_token", "codex_refresh_token"},
+	{"/tokens/id_token", "codex_id_token"},
+	{"/personal_access_token", "codex_personal_access_token"},
+}
+
+// parseCodexAuth returns the non-empty string values of codexAuthKeys in a
+// Codex auth.json, located by JSON Pointer. Keys match exactly, as serde
+// does; nothing else of the file is kept (account ids, Bedrock keys, the
+// agent identity). The error text never holds file content.
+func parseCodexAuth(path string, raw []byte) ([]platform.CredentialEntry, error) {
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &root); err != nil || root == nil {
+		return nil, errors.New("not a JSON object")
+	}
+	var out []platform.CredentialEntry
+	for _, k := range codexAuthKeys {
+		parts := strings.Split(strings.TrimPrefix(k.pointer, "/"), "/")
+		obj, v, ok := root, json.RawMessage(nil), true
+		for i, part := range parts {
+			v, ok = obj[part]
+			if !ok || i == len(parts)-1 {
+				break
+			}
+			obj = nil
+			if err := json.Unmarshal(v, &obj); err != nil {
+				return nil, fmt.Errorf("%s is not a JSON object", strings.Join(parts[:i+1], "."))
+			}
+			if obj == nil {
+				ok = false
+				break
+			}
+		}
+		if !ok {
+			continue
+		}
+		var s *string
+		if err := json.Unmarshal(v, &s); err != nil {
+			return nil, fmt.Errorf("%s is not a string", strings.Join(parts, "."))
+		}
+		if s == nil || strings.TrimSpace(*s) == "" {
+			continue
+		}
+		out = append(out, platform.CredentialEntry{
+			Path: path, Key: parts[len(parts)-1], Pointer: k.pointer, Kind: k.kind,
 			Value: secrets.NewSecretValue(*s),
 		})
 	}

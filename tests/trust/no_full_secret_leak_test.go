@@ -259,6 +259,11 @@ func TestNoFullSecretInCredentialCollectorLog(t *testing.T) {
 		filepath.Join(home, ".npmrc"):                     "//registry.npmjs.org/:_authToken=" + fakeNpmToken + "\n",
 		filepath.Join(home, ".config", "gh", "hosts.yml"): "github.com:\n    oauth_token: " + fakeGitHubOAuth + "\nx.example.com:\n    oauth_token: " + fakeGitHubU2S + "\n",
 		filepath.Join(home, ".railway", "config.json"):    `{"user": {"token": "` + fakeRailwayTokens["token"] + `", "accessToken": "` + fakeRailwayTokens["accessToken"] + `", "refreshToken": "` + fakeRailwayTokens["refreshToken"] + `"}}`,
+		// Codex's auth.json and Hermes Agent's .env and a profile's (BV-88).
+		filepath.Join(home, ".codex", "auth.json"): `{"OPENAI_API_KEY": "` + fakeCodexTokens["OPENAI_API_KEY"] + `", "tokens": {"id_token": "` + fakeCodexTokens["id_token"] +
+			`", "access_token": "` + fakeCodexTokens["access_token"] + `", "refresh_token": "` + fakeCodexTokens["refresh_token"] + `"}, "personal_access_token": "` + fakeCodexTokens["personal_access_token"] + `"}`,
+		filepath.Join(home, "AppData", "Local", "hermes", ".env"):                     "LEAKCHECK_HERMES=" + fakeCodexTokens["hermes_env"] + "\n",
+		filepath.Join(home, "AppData", "Local", "hermes", "profiles", "work", ".env"): "LEAKCHECK_HERMES=" + fakeCodexTokens["hermes_profile"] + "\n",
 	}
 	for p, c := range files {
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
@@ -276,7 +281,7 @@ func TestNoFullSecretInCredentialCollectorLog(t *testing.T) {
 	defer slog.SetDefault(prev)
 
 	scan := credfiles.Collect(home, []string{repo}, func(string) (string, bool) { return "", false })
-	if len(scan.Entries) < 7 {
+	if len(scan.Entries) < 14 {
 		t.Fatalf("entries: %d — test would be vacuous", len(scan.Entries))
 	}
 	log := buf.String()
@@ -293,6 +298,26 @@ func TestNoFullSecretInCredentialCollectorLog(t *testing.T) {
 			t.Errorf("[railway %s] collector log contains the secret", key)
 		}
 	}
+	for key, v := range fakeCodexTokens {
+		if strings.Contains(log, v) || strings.Contains(log, v[4:len(v)-4]) {
+			t.Errorf("[%s] collector log contains the secret", key)
+		}
+	}
+	if strings.Contains(log, "LEAKCHECK_HERMES") {
+		t.Error("collector log contains a variable name")
+	}
+}
+
+// fakeCodexTokens are Codex's auth.json values and Hermes Agent's .env
+// values (BV-88).
+var fakeCodexTokens = map[string]string{
+	"OPENAI_API_KEY":        "sk-proj-LEAK" + strings.Repeat("K", 40) + "LEAK",
+	"id_token":              "eyJhbGciOiJSUzI1NiJ9.LEAKIDTOKN" + strings.Repeat("i", 30) + ".sigLEAK",
+	"access_token":          "eyJhbGciOiJSUzI1NiJ9.LEAKACCESS" + strings.Repeat("a", 30) + ".sigLEAK",
+	"refresh_token":         "rt_LEAK" + strings.Repeat("r", 40) + "LEAK",
+	"personal_access_token": "pat_LEAK" + strings.Repeat("p", 40) + "LEAK",
+	"hermes_env":            "sk-ant-api03-" + strings.Repeat("L", 93) + "-" + strings.Repeat("E", 10) + "AA",
+	"hermes_profile":        "sk-ant-api03-" + strings.Repeat("M", 93) + "-" + strings.Repeat("F", 10) + "AA",
 }
 
 // TestNoFullSecretInReportV2 runs the v2 report (BV-37) over the fake
@@ -315,6 +340,21 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 	railway := `{"user": {"token": "` + fakeRailwayTokens["token"] + `", "accessToken": "` + fakeRailwayTokens["accessToken"] + `", "refreshToken": "` + fakeRailwayTokens["refreshToken"] + `"}}`
 	if err := os.WriteFile(filepath.Join(home, ".railway", "config.json"), []byte(railway), 0o600); err != nil {
 		t.Fatal(err)
+	}
+	// Codex's auth.json and Hermes Agent's .env (BV-88).
+	codexAuth := `{"OPENAI_API_KEY": "` + fakeCodexTokens["OPENAI_API_KEY"] + `", "tokens": {"id_token": "` + fakeCodexTokens["id_token"] +
+		`", "access_token": "` + fakeCodexTokens["access_token"] + `", "refresh_token": "` + fakeCodexTokens["refresh_token"] + `"}, "personal_access_token": "` + fakeCodexTokens["personal_access_token"] + `"}`
+	hermesEnv := filepath.Join(home, "AppData", "Local", "hermes", ".env")
+	for p, c := range map[string]string{
+		filepath.Join(home, ".codex", "auth.json"): codexAuth,
+		hermesEnv: "LEAKCHECK_HERMES=" + fakeCodexTokens["hermes_env"] + "\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(c), 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Setenv("npm_config_userconfig", "")
 	t.Setenv("NPM_CONFIG_USERCONFIG", "")
@@ -367,6 +407,10 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 	for k := range fakeRailwayTokens {
 		want = append(want, filepath.Join(home, ".railway", "config.json")+"#/user/"+k)
 	}
+	for _, p := range []string{"/OPENAI_API_KEY", "/tokens/id_token", "/tokens/access_token", "/tokens/refresh_token", "/personal_access_token"} {
+		want = append(want, filepath.Join(home, ".codex", "auth.json")+"#"+p)
+	}
+	want = append(want, hermesEnv+":1")
 	for _, l := range want {
 		if !located[l] {
 			t.Fatalf("no finding at %s — test would be vacuous; located %v", l, located)
@@ -387,6 +431,9 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 	}
 	for k, val := range fakeRailwayTokens {
 		values["railway "+k] = val
+	}
+	for k, val := range fakeCodexTokens {
+		values[k] = val
 	}
 	outputs := map[string]string{"report.v2.json": string(js), "markdown": md}
 	// BV-40: the HTML in en and es, the card in it, and index-history.json.

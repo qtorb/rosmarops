@@ -93,6 +93,21 @@ func newSandbox(t *testing.T) *sandbox {
 	mustWrite(t, filepath.Join(s.home, ".cursor", "permissions.json"), "// jsonc\n{\"terminalAllowlist\": [\"cat\"]}")
 	mustWrite(t, filepath.Join(s.home, ".cursor", "sandbox.json"), `{"readBoundary": "system"}`)
 	mustWrite(t, filepath.Join(s.home, ".cursor", "hooks.json"), `{"version": 1, "hooks": {}}`)
+	// The agents detected and not evaluated (BV-88): Codex, Antigravity,
+	// Hermes Agent and Claude Desktop, so the run detects them and reads
+	// their files, and the write test covers them.
+	mustMkdir(t, filepath.Join(s.home, ".codex"))
+	mustWrite(t, filepath.Join(s.home, ".codex", "config.toml"), "model = \"x\"\n")
+	mustWrite(t, filepath.Join(s.home, ".codex", "auth.json"), `{"OPENAI_API_KEY": null}`)
+	mustWrite(t, filepath.Join(s.home, ".codex", "AGENTS.md"), "# codex\n")
+	mustMkdir(t, filepath.Join(s.home, ".gemini", "config"))
+	mustWrite(t, filepath.Join(s.home, ".gemini", "config", "mcp_config.json"), `{"mcpServers": {"demo": {"command": "node", "args": ["server.js"]}}}`)
+	mustWrite(t, filepath.Join(s.home, ".gemini", "GEMINI.md"), "# antigravity\n")
+	mustMkdir(t, filepath.Join(root, "localappdata", "hermes"))
+	mustWrite(t, filepath.Join(root, "localappdata", "hermes", "config.yaml"), "model: x\n")
+	mustWrite(t, filepath.Join(root, "localappdata", "hermes", ".env"), "LOG_LEVEL=debug\n")
+	mustMkdir(t, filepath.Join(root, "appdata", "Claude"))
+	mustWrite(t, filepath.Join(root, "appdata", "Claude", "claude_desktop_config.json"), `{"mcpServers": {}}`)
 	s.initRepo(t)
 	return s
 }

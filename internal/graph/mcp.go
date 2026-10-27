@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
@@ -24,6 +25,12 @@ var clientDisplayNames = map[string]string{
 	"claude-code": "Claude Code",
 	"cline":       "Cline",
 	"cursor":      "Cursor",
+
+	// Detected and not evaluated (decision 2026-10-27, agentes nuevos, N1).
+	agentdirs.Codex:         "Codex",
+	agentdirs.Antigravity:   "Antigravity",
+	agentdirs.Hermes:        "Hermes Agent",
+	agentdirs.ClaudeDesktop: "Claude Desktop",
 }
 
 // clientDisplayName returns the display name for a client product, never
@@ -274,6 +281,7 @@ func fromMCPScan(scan platform.MCPScan, salt []byte, discoveredAt time.Time, ext
 
 	clients, failed := ClientsFromSources(scan.Sources)
 	f := FromMCP(clients, scan.Servers, discoveredAt)
+	f.Nodes = append(f.Nodes, presentClients(f.Nodes, scan.Present, discoveredAt)...)
 	f.Coverage.SourcesFailed = append(failed, f.Coverage.SourcesFailed...)
 	sort.SliceStable(f.Coverage.SourcesFailed, func(i, j int) bool {
 		return f.Coverage.SourcesFailed[i].Path < f.Coverage.SourcesFailed[j].Path
@@ -284,6 +292,30 @@ func fromMCPScan(scan platform.MCPScan, salt []byte, discoveredAt time.Time, ext
 	sort.Slice(f.Nodes, func(i, j int) bool { return f.Nodes[i].ID < f.Nodes[j].ID })
 	sort.Slice(f.Edges, func(i, j int) bool { return f.Edges[i].ID < f.Edges[j].ID })
 	return f, nil
+}
+
+// presentClients are the ai_client nodes of the agents detected by the
+// existence of their configuration (platform.AgentPresence) that nodes does
+// not hold yet: no agent_config resource, since no file of theirs was read.
+func presentClients(nodes []Node, present []platform.AgentPresence, discoveredAt time.Time) []Node {
+	seen := discoveredAt.UTC().Format(time.RFC3339)
+	have := map[string]bool{}
+	for _, n := range nodes {
+		have[n.ID] = true
+	}
+	var out []Node
+	for _, p := range present {
+		id := clientID(p.Platform, p.ConfigDir)
+		if have[id] || p.ConfigDir == "" {
+			continue
+		}
+		have[id] = true
+		out = append(out, Node{
+			ID: id, Kind: KindAgent, Type: AgentAIClient, Name: clientDisplayName(p.Platform),
+			Platform: p.Platform, ConfigPath: p.ConfigDir, DiscoveredAt: seen,
+		})
+	}
+	return out
 }
 
 // canonicalPath normalises a config path so that it always produces the same
@@ -358,7 +390,7 @@ func keyHash(parts ...string) string {
 // loadedOnly keeps only the sources, and the servers, that the client really
 // loads MCP servers from (LoadsMCP, set by the adapter per source).
 func loadedOnly(scan platform.MCPScan) platform.MCPScan {
-	var out platform.MCPScan
+	out := platform.MCPScan{Present: scan.Present}
 	for _, s := range scan.Sources {
 		if s.LoadsMCP {
 			out.Sources = append(out.Sources, s)

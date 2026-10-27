@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -52,6 +53,18 @@ const cursorProduct = "cursor"
 //     folders above the root and the "Project instructions" setting are not
 //     read.
 //
+// Agents detected and not evaluated (decision 2026-10-27, agentes nuevos,
+// N1), each under the configuration folder of its ai_client (agentdirs):
+//   - Codex: CODEX_HOME\AGENTS.override.md when it exists, otherwise
+//     CODEX_HOME\AGENTS.md (openai/codex, codex-rs/codex-home/src/instructions);
+//     and <repo>\AGENTS.md, Shared;
+//   - Antigravity: %USERPROFILE%\.gemini\GEMINI.md; per repo root GEMINI.md,
+//     AGENTS.md (Shared) and every file under .agents\rules\;
+//   - Hermes Agent: per repo root, the first that exists of .hermes.md,
+//     HERMES.md, AGENTS.md, CLAUDE.md and .cursorrules (Hermes docs,
+//     user-guide/which-file-does-what); the last three are other agents'
+//     files, so Shared.
+//
 // Folders in the forced exclusion list (invariant 5) are not entered, and
 // symbolic links to folders are not followed.
 func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []string) (platform.InstructionScan, error) {
@@ -65,6 +78,20 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 	var scan platform.InstructionScan
 	claude := instructionLister{scan: &scan, product: knowledge.ClaudeCodeProduct, configDir: claudeDir}
 	cursor := instructionLister{scan: &scan, product: cursorProduct, configDir: cursorDir}
+	// The agents detected and not evaluated: only when present.
+	has := agentdirs.Products(agentdirs.Detect(home, nil))
+	codexDir := agentdirs.CodexHome(home, nil)
+	codex := instructionLister{scan: &scan, product: agentdirs.Codex, configDir: codexDir, off: !has[agentdirs.Codex]}
+	geminiDir := agentdirs.AntigravityDir(home)
+	antigravity := instructionLister{scan: &scan, product: agentdirs.Antigravity, configDir: geminiDir, off: !has[agentdirs.Antigravity]}
+	hermes := instructionLister{scan: &scan, product: agentdirs.Hermes, configDir: agentdirs.HermesHome(home, nil), off: !has[agentdirs.Hermes]}
+
+	if override := filepath.Join(codexDir, "AGENTS.override.md"); anyExists(override) {
+		codex.file(override)
+	} else {
+		codex.file(filepath.Join(codexDir, "AGENTS.md"))
+	}
+	antigravity.file(filepath.Join(geminiDir, "GEMINI.md"))
 
 	claude.file(filepath.Join(claudeDir, "CLAUDE.md"))
 	claude.tree(filepath.Join(claudeDir, "rules"), isMarkdown)
@@ -90,6 +117,24 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 		sub.tree(root, func(name string) bool { return name == "AGENTS.md" }, agents)
 		if !anyExists(filepath.Join(root, "CLAUDE.md"), filepath.Join(root, ".claude", "CLAUDE.md"), filepath.Join(root, "CLAUDE.local.md")) {
 			claude.shared(agents)
+		}
+
+		codex.shared(agents)
+
+		antigravity.file(filepath.Join(root, "GEMINI.md"))
+		antigravity.shared(agents)
+		antigravity.tree(filepath.Join(root, ".agents", "rules"), anyFile)
+
+		for _, c := range []struct {
+			name   string
+			shared bool
+		}{{".hermes.md", false}, {"HERMES.md", false}, {"AGENTS.md", true}, {"CLAUDE.md", true}, {".cursorrules", true}} {
+			if p := filepath.Join(root, c.name); !hermes.off && anyExists(p) {
+				h := hermes
+				h.sharedFile = c.shared
+				h.file(p)
+				break
+			}
 		}
 	}
 	sort.SliceStable(scan.Files, func(i, j int) bool {
@@ -125,6 +170,9 @@ type instructionLister struct {
 
 	// sharedFile marks the files listed as Shared.
 	sharedFile bool
+
+	// off lists nothing: the agent is not present.
+	off bool
 }
 
 func (l instructionLister) fail(path, code, detail string) {
@@ -142,6 +190,9 @@ func (l instructionLister) shared(path string) {
 
 // file lists path if it exists as a file (or a symbolic link, not followed).
 func (l instructionLister) file(path string) {
+	if l.off {
+		return
+	}
 	info, err := os.Lstat(path)
 	switch {
 	case os.IsNotExist(err):
@@ -170,6 +221,9 @@ func (l instructionLister) add(path string, info fs.FileInfo) {
 // tree lists every file under dir whose name matches, recursively, but the
 // paths in skip.
 func (l instructionLister) tree(dir string, match func(string) bool, skip ...string) {
+	if l.off {
+		return
+	}
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			if path == dir && os.IsNotExist(err) {

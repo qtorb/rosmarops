@@ -40,6 +40,25 @@ type MCPScan struct {
 	// Sources lists every client config file considered, in discovery order,
 	// including missing ones.
 	Sources []MCPSource
+
+	// Present lists the agents detected by the existence of their
+	// configuration, without reading it (decision 2026-10-27, agentes
+	// nuevos, N1): each one is an ai_client, detected and not evaluated.
+	Present []AgentPresence
+}
+
+// AgentPresence is an agent found on disk by the existence of an entry of
+// its configuration; nothing of it is read.
+type AgentPresence struct {
+	// Platform is the product code ("codex", "antigravity", "hermes",
+	// "claude-desktop").
+	Platform string
+
+	// ConfigDir is the agent's configuration folder: its ai_client identity.
+	ConfigDir string
+
+	// Marker is the file or folder that showed it.
+	Marker string
 }
 
 // MCPSourceStatus is the outcome of reading one MCP client config file.
@@ -92,7 +111,8 @@ type MCPSource struct {
 // This is the live view; the persisted baseline is state.MCPServerBaseline.
 type MCPServer struct {
 	// Client identifies which agent config file this server was read from.
-	// One of: "claude-code", "claude-code-project", "cline", "cursor".
+	// One of: "claude-code", "claude-code-project", "cline", "cursor",
+	// "claude-desktop", "antigravity".
 	Client string
 
 	// Name is the key under "mcpServers" in the config JSON.
@@ -280,7 +300,7 @@ type InstructionScan struct {
 // InstructionFile is one existing instruction file and the agent that loads
 // it, identified as its ai_client is: product and configuration folder.
 type InstructionFile struct {
-	Product   string // "claude-code" or "cursor"
+	Product   string // "claude-code", "cursor", "codex", "antigravity" or "hermes"
 	ConfigDir string
 	Path      string
 

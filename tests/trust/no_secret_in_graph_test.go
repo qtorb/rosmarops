@@ -78,6 +78,25 @@ const (
 	fakeCursorEnvFileToken = "ghp_CENV" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
 )
 
+// The agents detected and not evaluated (BV-88): Codex's auth.json, Hermes
+// Agent's .env and a profile's, Antigravity's MCP env and headers (global
+// and project), and Claude Desktop's MCP env.
+var (
+	fakeCodexSecrets = map[string]string{
+		"/OPENAI_API_KEY":        "sk-proj-CODX" + strings.Repeat("K", 40) + "CODX",
+		"/tokens/access_token":   "eyJhbGciOiJSUzI1NiJ9.CODXACCESS" + strings.Repeat("a", 30) + ".sigCODX",
+		"/tokens/refresh_token":  "rt_CODX" + strings.Repeat("r", 40) + "CODX",
+		"/tokens/id_token":       "eyJhbGciOiJSUzI1NiJ9.CODXIDTOKN" + strings.Repeat("i", 30) + ".sigCODX",
+		"/personal_access_token": "pat_CODX" + strings.Repeat("p", 40) + "CODX",
+	}
+	fakeHermesKey        = "sk-ant-api03-" + strings.Repeat("H", 93) + "-" + strings.Repeat("E", 10) + "AA"
+	fakeHermesProfileKey = "sk-ant-api03-" + strings.Repeat("P", 93) + "-" + strings.Repeat("F", 10) + "AA"
+	fakeAgyEnvToken      = "ghp_AGEN" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+	fakeAgyHeaderToken   = "ghp_AGHD" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+	fakeAgyProjectToken  = "ghp_AGPR" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+	fakeDesktopToken     = "ghp_CDSK" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+)
+
 // fakeInstructionToken is written in a repository's CLAUDE.md. The file
 // becomes an agent_instructions resource; its content is never read.
 const fakeInstructionToken = "ghp_INST" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
@@ -265,6 +284,41 @@ func TestNoSecretInGraph(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, ".cursor", "mcp.env"), []byte("GITHUB_TOKEN="+fakeCursorEnvFileToken+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// The agents detected and not evaluated (BV-88).
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("HERMES_HOME", "")
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	codexAuth, err := json.Marshal(map[string]any{
+		"OPENAI_API_KEY": fakeCodexSecrets["/OPENAI_API_KEY"],
+		"tokens": map[string]any{
+			"id_token": fakeCodexSecrets["/tokens/id_token"], "access_token": fakeCodexSecrets["/tokens/access_token"],
+			"refresh_token": fakeCodexSecrets["/tokens/refresh_token"], "account_id": "acct",
+		},
+		"personal_access_token": fakeCodexSecrets["/personal_access_token"],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hermesDir := filepath.Join(home, "AppData", "Local", "hermes")
+	geminiDir := filepath.Join(home, ".gemini")
+	desktopConfig := filepath.Join(home, "AppData", "Roaming", "Claude", "claude_desktop_config.json")
+	for p, c := range map[string]string{
+		filepath.Join(home, ".codex", "auth.json"):            string(codexAuth),
+		filepath.Join(hermesDir, "config.yaml"):               "model: x\n",
+		filepath.Join(hermesDir, ".env"):                      "ANTHROPIC_API_KEY=" + fakeHermesKey + "\n",
+		filepath.Join(hermesDir, "profiles", "work", ".env"):  "ANTHROPIC_API_KEY=" + fakeHermesProfileKey + "\n",
+		filepath.Join(geminiDir, "config", "mcp_config.json"): `{"mcpServers": {"gh": {"command": "npx", "env": {"GITHUB_TOKEN": "` + fakeAgyEnvToken + `"}}, "remote": {"serverUrl": "https://mcp.example.com/mcp", "headers": {"Authorization": "Bearer ` + fakeAgyHeaderToken + `"}}}}`,
+		filepath.Join(repo, ".agents", "mcp_config.json"):     `{"mcpServers": {"gh": {"command": "npx", "env": {"GITHUB_TOKEN": "` + fakeAgyProjectToken + `"}}}}`,
+		desktopConfig: `{"mcpServers": {"gh": {"command": "npx", "env": {"GITHUB_TOKEN": "` + fakeDesktopToken + `"}}}}`,
+	} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(c), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	t.Setenv("npm_config_userconfig", "")
 	t.Setenv("NPM_CONFIG_USERCONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -445,6 +499,49 @@ func TestNoSecretInGraph(t *testing.T) {
 			t.Errorf("graph.v2.json contains the %s", name)
 		}
 	}
+	// The agents detected and not evaluated (BV-88): each is an ai_client,
+	// each secret a credential at its location, and no value in the graph.
+	clients := map[string]bool{}
+	for _, n := range g.Nodes {
+		if n.Type == graph.AgentAIClient {
+			clients[n.Platform] = true
+		}
+	}
+	for _, p := range []string{"codex", "hermes", "antigravity", "claude-desktop"} {
+		if !clients[p] {
+			t.Fatalf("no %s ai_client — agent not detected", p)
+		}
+	}
+	newLocs := []string{
+		filepath.Join(hermesDir, ".env") + ":1",
+		filepath.Join(hermesDir, "profiles", "work", ".env") + ":1",
+		filepath.Join(geminiDir, "config", "mcp_config.json") + "#/mcpServers/gh/env/GITHUB_TOKEN",
+		filepath.Join(geminiDir, "config", "mcp_config.json") + "#/mcpServers/remote/headers/Authorization",
+		filepath.Join(repo, ".agents", "mcp_config.json") + "#/mcpServers/gh/env/GITHUB_TOKEN",
+		desktopConfig + "#/mcpServers/gh/env/GITHUB_TOKEN",
+	}
+	for pointer := range fakeCodexSecrets {
+		newLocs = append(newLocs, filepath.Join(home, ".codex", "auth.json")+"#"+pointer)
+	}
+	for _, loc := range newLocs {
+		if !credFileLocs[loc] {
+			t.Fatalf("no credential at %s — file not read", loc)
+		}
+	}
+	newSecrets := map[string]string{
+		"Hermes .env key": fakeHermesKey, "Hermes profile key": fakeHermesProfileKey,
+		"Antigravity env token": fakeAgyEnvToken, "Antigravity header token": fakeAgyHeaderToken,
+		"Antigravity project token": fakeAgyProjectToken, "Claude Desktop token": fakeDesktopToken,
+	}
+	for pointer, v := range fakeCodexSecrets {
+		newSecrets["Codex "+pointer] = v
+	}
+	for name, v := range newSecrets {
+		if strings.Contains(string(out), v) || strings.Contains(string(out), v[4:len(v)-4]) {
+			t.Errorf("graph.v2.json contains the %s", name)
+		}
+	}
+
 	var instructionRes bool
 	for _, n := range g.Nodes {
 		instructionRes = instructionRes || (n.Type == graph.ResourceAgentInstructions && strings.HasSuffix(n.Path, "CLAUDE.md"))

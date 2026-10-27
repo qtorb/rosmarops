@@ -68,6 +68,13 @@ var credentialKinds = map[string]credentialKind{
 	"railway_cli_token":         {CredentialAPIKey, "railway"},
 	"railway_cli_access_token":  {CredentialAPIKey, "railway"},
 	"railway_cli_refresh_token": {CredentialOAuthToken, "railway"},
+
+	// Codex's auth.json (decision 2026-10-27, agentes nuevos, N1).
+	"codex_openai_api_key":        {CredentialAPIKey, "openai"},
+	"codex_access_token":          {CredentialOAuthToken, "openai"},
+	"codex_refresh_token":         {CredentialOAuthToken, "openai"},
+	"codex_id_token":              {CredentialOAuthToken, "openai"},
+	"codex_personal_access_token": {CredentialAPIKey, "openai"},
 }
 
 // supabaseKeyScopes is the observed_scope read from the prefix of Supabase
