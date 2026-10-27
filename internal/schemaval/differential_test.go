@@ -98,6 +98,24 @@ func fixtures(t testing.TB) map[string][][]byte {
 // verdicts validates doc with both; oracleTypes are gojsonschema's error
 // types. An oracle panic (a number beyond float64 under enum, const or
 // uniqueItems) counts as invalid: the own validator fails secure there.
+//
+// The oracle (gojsonschema) is the weak party here, not our validator. On the
+// Windows runner of run 40588092908 (attempt 1) this test's oracle reported a
+// spurious "own true, oracle false" at graph.v2 [coverage agents_unsupported]
+// whose error types were about *nodes* (number_one_of / const / condition_then)
+// — impossible for a correct verdict on a mutation of a coverage array — and
+// moments later tried to allocate ~768 GiB and the process died with
+// "out of memory". The same commit's attempt 2 passed, and Linux always
+// passes. Both are the oracle's own behaviour under memory pressure, not a
+// permissiveness bug in schemaval: our validator gives the JSON Schema-correct
+// verdict on every single mutation of that path (checked exhaustively) and
+// validates a 1001-node grown doc in milliseconds with linear memory, where
+// gojsonschema's exhaustive error collection over the node oneOf blows up.
+// gojsonschema is a dev/test-only dependency (decision 2026-10-25, G2-G3); it
+// is never linked into the shipped binary. If verify-windows dies here again,
+// it is this allocation, reproducible on a given host with the logged seed —
+// not something to fix by weakening schemaval or the mutation set.
+// https://github.com/xeipuuv/gojsonschema/issues (unbounded error aggregation).
 func verdicts(t testing.TB, p pair, doc []byte) (own, oracle bool, oracleTypes []string) {
 	t.Helper()
 	r, err := p.own.Validate(doc)
@@ -381,10 +399,34 @@ func TestDifferential_BrokenFixtures(t *testing.T) {
 	t.Logf("%d mutated documents, %d invalid", total, invalid)
 }
 
-// Seeded random chains of mutations, so changes combine.
+// mutationSeed is the seed of the random-chain test. It is 49 by default and
+// overridable with ROSMAROPS_SCHEMAVAL_SEED, so a failure seen on one host
+// (e.g. a CI runner) can be replayed on another:
+//
+//	ROSMAROPS_SCHEMAVAL_SEED=49 go test -run TestDifferential_RandomMutations ./internal/schemaval/
+//
+// (TestDifferential_BrokenFixtures takes no seed: it is fully deterministic,
+// so re-running the same binary reproduces any failure it reports.)
+func mutationSeed(t testing.TB) int64 {
+	t.Helper()
+	if s := os.Getenv("ROSMAROPS_SCHEMAVAL_SEED"); s != "" {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			t.Fatalf("ROSMAROPS_SCHEMAVAL_SEED=%q: %v", s, err)
+		}
+		return n
+	}
+	return 49
+}
+
+// Seeded random chains of mutations, so changes combine. The seed is always
+// logged, and repeated in a failure, so the failing run can be replayed with
+// ROSMAROPS_SCHEMAVAL_SEED.
 func TestDifferential_RandomMutations(t *testing.T) {
 	pairs := compileAll(t)
-	rng := rand.New(rand.NewSource(49))
+	seed := mutationSeed(t)
+	t.Logf("seed=%d (override with ROSMAROPS_SCHEMAVAL_SEED)", seed)
+	rng := rand.New(rand.NewSource(seed))
 	rounds := 150
 	if testing.Short() {
 		rounds = 40
@@ -400,7 +442,7 @@ func TestDifferential_RandomMutations(t *testing.T) {
 					doc = ms[rng.Intn(len(ms))]
 				}
 				if own, oracle, types := verdicts(t, pairs[name], doc); own != oracle {
-					t.Fatalf("%s round %d: own %v, oracle %v %v\n%.2000s", name, i, own, oracle, types, doc)
+					t.Fatalf("%s round %d (seed=%d): own %v, oracle %v %v\n%.2000s", name, i, seed, own, oracle, types, doc)
 				}
 			}
 		}
