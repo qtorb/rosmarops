@@ -2,13 +2,16 @@
 # every pull request to master, the same verify job as release.yml, copied
 # literally (same runner, actions pinned by commit SHA, Go 1.24.7,
 # staticcheck 2025.1.1, gofumpt v0.7.0, strace, vet, staticcheck, gofumpt
-# and go test in linux and windows).
+# and go test in linux and windows). BV-85: pushes to bv-* branches too, and
+# a verify-windows job that runs vet and the tests natively on windows-latest
+# (no strace there; the runtime network trace is Linux-only).
 name: ci
 
 on:
   push:
     branches:
       - master
+      - 'bv-*'
   pull_request:
     branches:
       - master
@@ -40,5 +43,26 @@ jobs:
         run: staticcheck ./... && GOOS=windows staticcheck ./...
       - name: gofumpt
         run: test -z "$(gofumpt -l .)"
+      - name: go test (trust tests included)
+        run: go test -count=1 ./...
+
+  verify-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Tools (pinned versions)
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install mvdan.cc/gofumpt@v0.7.0
+      - name: go vet
+        run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
