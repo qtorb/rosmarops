@@ -34,9 +34,11 @@ func (s *slowAnswer) Read(p []byte) (int, error) {
 // J13 (decision 2026-10-26, integridad y revisión semanal, §7): the
 // integrity question comes before the scan's context, so an answer slower
 // than the global cap does not consume it: the scan finishes and there is a
-// graph. The cap is shrunk to budget and the answer takes longer.
+// graph. The cap is shrunk to budget and the answer takes longer. The
+// budget leaves room for the scan itself, which on Windows calls PowerShell
+// and takes more than 2 seconds.
 func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
-	const budget = 2 * time.Second
+	const budget = 15 * time.Second
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	for _, name := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"} {

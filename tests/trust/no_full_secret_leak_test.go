@@ -518,7 +518,7 @@ func TestNoFullSecretInAIExport(t *testing.T) {
 		if tmpl == nil || html.UnescapeString(tmpl[1]) != out {
 			t.Fatalf("%s: the HTML's template is not the export", lang)
 		}
-		if !strings.Contains(out, "~/src/app/.env") {
+		if !strings.Contains(out, "~"+filepath.FromSlash("/src/app/.env")) { // the path keeps its own separators
 			t.Fatalf("%s: no location in the export — test would be vacuous", lang)
 		}
 		for _, tc := range fakeSecrets {

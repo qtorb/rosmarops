@@ -22,7 +22,7 @@ import (
 // gitT runs git in dir with a fixed identity and fails the test on error.
 func gitT(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=master"}, args...)...)
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=master", "-c", "core.autocrlf=false"}, args...)...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE=2026-09-01T10:00:00Z", "GIT_COMMITTER_DATE=2026-09-01T10:00:00Z")
 	out, err := cmd.CombinedOutput()
@@ -74,7 +74,7 @@ func trickyRepo(t *testing.T) string {
 	gitT(t, r, "checkout", "-q", "master")
 	writeT(t, filepath.Join(r, "b.txt"), "main "+token(8)+"\n")
 	gitT(t, r, "commit", "-qam", "main")
-	cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "merge", "-q", "side")
+	cmd := exec.Command("git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.autocrlf=false", "merge", "-q", "side")
 	cmd.Dir = r
 	_ = cmd.Run() // conflict expected
 	writeT(t, filepath.Join(r, "b.txt"), "resolved "+token(9)+"\n")
@@ -82,10 +82,10 @@ func trickyRepo(t *testing.T) string {
 	gitT(t, r, "commit", "-qm", "merge")
 	gitT(t, r, "rm", "-q", "nonl.txt")
 	gitT(t, r, "commit", "-qm", "delete")
-	if err := os.Chmod(filepath.Join(r, "plus.txt"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	gitT(t, r, "commit", "-qam", "mode")
+	// The mode is set in the index: a file system without an executable bit
+	// (Windows) cannot carry it.
+	gitT(t, r, "update-index", "--chmod=+x", "plus.txt")
+	gitT(t, r, "commit", "-qm", "mode")
 	return r
 }
 

@@ -1,0 +1,3 @@
+# Golden pages are compared byte for byte: no end-of-line conversion on
+# checkout (Windows).
+internal/report/testdata/** -text

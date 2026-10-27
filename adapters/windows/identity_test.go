@@ -76,7 +76,9 @@ func buildIdentityGraph(t *testing.T, e identityEnv) graph.Graph {
 
 // canon is the graph's canonical form of a path built by the test (Unix test
 // host: slashes only, case kept).
-func canon(p string) string { return filepath.ToSlash(p) }
+// canon is the graph's canonical form of a path (forward slashes, lower case
+// for a Windows path), the one appliesIn writes into the scope.
+func canon(p string) string { return graph.CanonicalPath(p) }
 
 func TestIdentity_OneClientPerProductWithConfigsAndScopes(t *testing.T) {
 	e := newIdentityEnv(t)

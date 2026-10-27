@@ -2,6 +2,7 @@ package firstrun
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,7 +43,9 @@ func TestDetectDuplicateIgnoresCase(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	raw := `{"projects": {"` + a + `": {}, "` + b + `": {}}}`
+	ka, _ := json.Marshal(a) // a Windows path has backslashes to escape
+	kb, _ := json.Marshal(b)
+	raw := `{"projects": {` + string(ka) + `: {}, ` + string(kb) + `: {}}}`
 	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}
