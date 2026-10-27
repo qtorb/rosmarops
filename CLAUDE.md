@@ -122,7 +122,7 @@ tests/
 
 - Every check has at least one unit test using a fake filesystem (`testing/fstest` or similar).
 - Trust tests in `tests/trust/` are mandatory. They mechanically prove the invariants:
-  - `no_network_test.go`: builds the binary and runs it under a network namespace / mock that fails any socket; expects clean run.
+  - `no_network_test.go`: checks that the build has no networking packages, symbols or socket calls, then runs the binary on Linux under strace and fails on any internet connect, sendto or sendmsg; expects a clean run.
   - `no_writes_out_of_scope_test.go`: runs in a sandbox, asserts only the allowed paths receive writes.
   - `no_full_secret_leak_test.go`: feeds known fake secrets, asserts the full value never appears in any output (report, logs, state).
 - `go vet ./...` clean.
