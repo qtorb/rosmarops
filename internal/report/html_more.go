@@ -127,7 +127,7 @@ func (c htmlCtx) renderWeekly() {
 }
 
 // renderWeeklyCopy is the block that copies the command, as in step 2: the
-// hidden pre with the instruction and the command, the main button, the
+// hidden pre with the instruction (a PowerShell comment) and the command, the main button, the
 // live notice, the note on the agent the button is for (J11), and «I'd
 // rather do it by hand» with the visible command and a button that copies
 // only the command (§18).
@@ -136,7 +136,9 @@ func (c htmlCtx) renderWeeklyCopy() {
 		return // the executable's path is not known: no command to give
 	}
 	cmd := html.EscapeString(WeeklyCommand(c.v.exePath, c.cat.Lang()))
-	c.w(`<pre hidden>%s
+	// The instruction as a PowerShell comment («# »), so that the text
+	// pasted into PowerShell runs without error (BV-82).
+	c.w(`<pre hidden># %s
 
 %s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span><p class="note">%s</p>`,
 		c.t("html.weekly.prompt", nil), cmd, c.t("html.fix.copied", nil), c.t("html.fix.copy.generic", nil), c.t("html.weekly.agent_note", nil))

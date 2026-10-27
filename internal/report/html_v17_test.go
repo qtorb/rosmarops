@@ -99,7 +99,7 @@ func TestRenderHTML_WeeklyStates(t *testing.T) {
 				col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
 				esc := func(k string, p map[string]string) string { return htmlEscape(cat.Text(k, p)) }
 				cmd := html.EscapeString(report.WeeklyCommand(v17Exe, lang))
-				copyBlock := strings.Contains(col, `<pre hidden>`+esc("html.weekly.prompt", nil)+"\n\n"+cmd+`</pre><button type="button" class="wide"`) &&
+				copyBlock := strings.Contains(col, `<pre hidden># `+esc("html.weekly.prompt", nil)+"\n\n"+cmd+`</pre><button type="button" class="wide"`) &&
 					strings.Contains(col, esc("html.fix.copy.generic", nil)+`</button><span class="live" aria-live="polite"></span><p class="note">`+esc("html.weekly.agent_note", nil)+`</p><details class="manual">`) &&
 					strings.Contains(col, `<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>`+esc("html.fix.manual", nil)+`</summary><p>`+esc("html.weekly.manual.step", nil)+`</p><pre>`+cmd+`</pre>`+
 						`<button type="button" class="b2" data-copied="`+esc("html.fix.copied", nil)+`">`+esc("html.weekly.copy_command", nil)+`</button><span class="live" aria-live="polite"></span></details>`)
@@ -319,6 +319,35 @@ func TestRenderHTML_CopyCommandButton(t *testing.T) {
 			if copied != report.WeeklyCommand(v17Exe, lang) || strings.Contains(copied, cat.Text("html.weekly.prompt", nil)) {
 				t.Errorf("%s %s: copies %q", state, lang, copied)
 			}
+		}
+	}
+}
+
+// BV-82: the agent button copies the hidden pre (the element right before
+// it): «# » and the instruction, a PowerShell comment, a blank line and
+// exactly the command, so that pasting it into PowerShell gives no error.
+// «Copy the command» still copies the command alone.
+func TestRenderHTML_WeeklyCopyIsPowerShell(t *testing.T) {
+	weekly := scheduledtasks.WeeklyOf(fakeTasks("none"), v17Self)
+	v := v17Report(t, func(in *report.V2Input) { in.Weekly = weekly })
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
+		m := regexp.MustCompile(`(?s)<pre hidden>(.*?)</pre><button type="button" class="wide"`).FindStringSubmatch(col)
+		if m == nil {
+			t.Fatalf("%s: no agent copy block", lang)
+		}
+		copied := html.UnescapeString(m[1])
+		want := "# " + cat.Text("html.weekly.prompt", nil) + "\n\n" + report.WeeklyCommand(v17Exe, lang)
+		if copied != want {
+			t.Errorf("%s: copies\n%s\nwant\n%s", lang, copied, want)
+		}
+		if strings.Contains(cat.Text("html.weekly.prompt", nil), "\n") {
+			t.Errorf("%s: the instruction has more than one line: only the first is a comment", lang)
+		}
+		manual := regexp.MustCompile(`<pre>([^<]*)</pre><button type="button" class="b2"`).FindStringSubmatch(col)
+		if manual == nil || html.UnescapeString(manual[1]) != report.WeeklyCommand(v17Exe, lang) {
+			t.Errorf("%s: «%s» does not copy the command alone", lang, cat.Text("html.weekly.copy_command", nil))
 		}
 	}
 }
