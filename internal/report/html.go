@@ -446,12 +446,16 @@ func (c htmlCtx) renderStep1() {
 			html.EscapeString(strconv.Itoa(*a.Value)+of), bandVar[a.Band], *a.Value, html.EscapeString(of))
 	default:
 		// No graph: nothing was read, never «no AI agent found» (J14).
+		// Agents detected and none evaluated: not «no AI agent found»
+		// either (U12); that is only when there is no agent at all.
 		reason := index.ReasonNotApplicable
 		switch {
 		case !v.Coverage.GraphBuilt:
 			reason = index.ReasonCoverage
 		case len(v.Index.Agents) > 0:
 			reason = v.Index.Agents[0].Unavailable
+		case len(v.Index.Scope.NotEvaluated) > 0:
+			reason = index.ReasonAgentsNotEvaluated
 		}
 		c.w(`<div class="unavail">%s</div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
 	}
@@ -506,6 +510,8 @@ func (c htmlCtx) renderStep1() {
 		} else {
 			c.w(`<br>%s`, c.t("html.step.1.coverage.all", map[string]string{"evaluated": listNames(c.cat, ev)}))
 		}
+	} else if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 { // U12: detected, none evaluated
+		c.w(`<br>%s`, c.t("html.step.1.coverage.none", map[string]string{"pending": listNames(c.cat, ne)}))
 	}
 	if scored {
 		switch cmp := a.Comparison; cmp.Status {
@@ -1181,7 +1187,7 @@ func HTMLKeys() []string {
 		"html.doc_title", "html.header", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.delta", "html.index.not_comparable.rules",
 		"html.index.not_comparable.scope", "html.index.unavailable",
-		"html.index.reason.coverage", "html.index.reason.not_applicable",
+		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
 		"html.card.button", "html.card.counts", "html.card.method",
 		"html.count.repos", "html.none",
 		"html.today.reach",
@@ -1219,7 +1225,7 @@ func HTMLKeys() []string {
 	// BV-55: the memory fold's label (v3 §6.2)
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	// v3 §13 (BV-56)
-	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.after.rotate", "html.memory.new_mcp")
+	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.step.1.coverage.none", "html.after.rotate", "html.memory.new_mcp")
 	// v3 §14 (BV-57)
 	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
 	// v3 §17 (BV-68)

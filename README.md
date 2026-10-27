@@ -58,6 +58,7 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | VS Code extensions | Which AI agent extensions are installed (Cline, GitHub Copilot, Continue), to list them as detected; any other new extension is listed in the technical report |
 | Credentials | `.env` files in your repositories, MCP `env` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
+| Windows | The list of scheduled tasks and Windows Defender's exclusions, to tell you when a new one appears, and whether Windows allows notifications |
 
 ## What it does not see
 

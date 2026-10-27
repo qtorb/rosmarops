@@ -28,6 +28,7 @@ const (
 	SourceClaude    = "claude_projects"  // a) the keys of projects in ~/.claude.json
 	SourceWorkspace = "editor_workspace" // b) Cursor's and VS Code's workspace.json
 	SourceFolder    = "usual_folder"     // c) one level under the usual folders
+	SourcePicked    = "picked_folder"    // U4: the folder chosen in the picker
 )
 
 // Rules: why a candidate entered or not.
@@ -88,26 +89,31 @@ func Detect(env Env) Result {
 		name  string
 		paths func(Env, *Result) []string
 	}{{SourceClaude, claudeProjects}, {SourceWorkspace, workspaceFolders}, {SourceFolder, usualFolderRepos}} {
-		paths := src.paths(env, &res)
-		sort.Slice(paths, func(i, j int) bool { return strings.ToLower(paths[i]) < strings.ToLower(paths[j]) })
-		for _, p := range paths {
-			rule, clean := env.check(p)
-			key := strings.ToLower(clean)
-			switch {
-			case rule != RuleAccepted:
-			case seen[key]:
-				rule = RuleDuplicate
-			case len(res.Repos) >= MaxRepos:
-				rule = RuleOverLimit
-				res.Over++
-			default:
-				seen[key] = true
-				res.Repos = append(res.Repos, clean)
-			}
-			res.Decisions = append(res.Decisions, Decision{Source: src.name, Path: clean, Rule: rule})
-		}
+		env.keep(&res, seen, src.name, src.paths(env, &res))
 	}
 	return res
+}
+
+// keep sorts one source's candidates alphabetically and applies U3's
+// filters, duplicates and limit to each, recording every decision.
+func (env Env) keep(res *Result, seen map[string]bool, source string, paths []string) {
+	sort.Slice(paths, func(i, j int) bool { return strings.ToLower(paths[i]) < strings.ToLower(paths[j]) })
+	for _, p := range paths {
+		rule, clean := env.check(p)
+		key := strings.ToLower(clean)
+		switch {
+		case rule != RuleAccepted:
+		case seen[key]:
+			rule = RuleDuplicate
+		case len(res.Repos) >= MaxRepos:
+			rule = RuleOverLimit
+			res.Over++
+		default:
+			seen[key] = true
+			res.Repos = append(res.Repos, clean)
+		}
+		res.Decisions = append(res.Decisions, Decision{Source: source, Path: clean, Rule: rule})
+	}
 }
 
 // check normalizes p and applies U3's filters, in order.
@@ -297,17 +303,18 @@ func unhex(c byte) (byte, bool) {
 	return 0, false
 }
 
-// Picked is U4's repositories for the folder chosen in the picker: the
-// folder itself when it has a .git entry, then the repositories one level
-// under it, as ReposUnder finds them.
-func Picked(dir string) []string {
-	var out []string
-	if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
-		out = append(out, filepath.Clean(dir))
+// Picked is U4's repositories for the folder chosen in the picker (U11):
+// the folder itself when it has a .git entry, then the repositories one
+// level under it, as ReposUnder finds them, through U3's filters,
+// duplicates and limit. The user's-folder-or-drive-root filter applies to
+// each repository, not to the folder chosen: the user's folder is a valid
+// container.
+func Picked(env Env, dir string) Result {
+	paths := []string{dir}
+	if found, err := config.ReposUnder(dir); err == nil {
+		paths = append(paths, found...)
 	}
-	found, err := config.ReposUnder(dir)
-	if err == nil {
-		out = append(out, found...)
-	}
-	return out
+	var res Result
+	env.keep(&res, map[string]bool{}, SourcePicked, paths)
+	return res
 }

@@ -2,6 +2,7 @@ package firstrun
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,20 +75,57 @@ func TestDetectUnreadableSource(t *testing.T) {
 	}
 }
 
-// U4: the chosen folder itself when it has .git, then one level under it.
+// U11: the folder chosen in the picker goes through U3's filters,
+// duplicates and limit; the user's-folder filter applies to each
+// repository, not to the folder chosen.
 func TestPicked(t *testing.T) {
 	dir := t.TempDir()
-	for _, p := range []string{dir, filepath.Join(dir, "a"), filepath.Join(dir, "b")} {
-		if err := os.MkdirAll(filepath.Join(p, ".git"), 0o700); err != nil {
+	mk := func(p string) {
+		if err := os.MkdirAll(filepath.Join(dir, p, ".git"), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "c"), 0o700); err != nil {
+	mk(".") // the user's folder itself is a repository
+	for _, p := range []string{"App", "app", "node_modules", "roaming"} {
+		mk(p)
+	}
+	for i := 0; i < 105; i++ {
+		mk(fmt.Sprintf("r%03d", i))
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "notes"), 0o700); err != nil { // no .git: ReposUnder skips it
 		t.Fatal(err)
 	}
-	got := Picked(dir)
-	if want := []string{dir, filepath.Join(dir, "a"), filepath.Join(dir, "b")}; strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Errorf("%q, want %q", got, want)
+	res := Picked(Env{Home: dir, AppData: filepath.Join(dir, "roaming")}, dir)
+	rules := map[string]string{}
+	for _, d := range res.Decisions {
+		if d.Source != SourcePicked {
+			t.Errorf("source %q", d.Source)
+		}
+		rules[filepath.Base(d.Path)] = d.Rule
+		t.Logf("%-18s %s", d.Rule, strings.TrimPrefix(d.Path, dir))
+	}
+	for name, want := range map[string]string{
+		filepath.Base(dir): RuleHomeOrRoot, "App": RuleAccepted, "app": RuleDuplicate, "node_modules": RuleExcluded,
+		"roaming": RuleSystemFolder, "r000": RuleAccepted, "r098": RuleAccepted, "r099": RuleOverLimit, "r104": RuleOverLimit,
+	} {
+		if rules[name] != want {
+			t.Errorf("%s: %q, want %q", name, rules[name], want)
+		}
+	}
+	if len(res.Repos) != MaxRepos || res.Over != 6 || filepath.Base(res.Repos[0]) != "App" {
+		t.Errorf("%d repos, %d over, first %q", len(res.Repos), res.Over, res.Repos[0])
+	}
+	if _, ok := rules["notes"]; ok {
+		t.Error("a folder without .git was a candidate")
+	}
+	// A chosen folder that is not itself a repository: no_git for it, and
+	// its repositories in.
+	plain := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(plain, "one", ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if res := Picked(Env{}, plain); len(res.Repos) != 1 || res.Decisions[0].Rule != RuleNoGit {
+		t.Errorf("%+v", res)
 	}
 }
 

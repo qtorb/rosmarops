@@ -26,6 +26,7 @@ import (
 // The double click's seams; tests replace them.
 var (
 	detectProjects = func() firstrun.Result { return firstrun.Detect(firstrun.EnvFromOS()) }
+	pickedProjects = func(dir string) firstrun.Result { return firstrun.Picked(firstrun.EnvFromOS(), dir) }
 	pickFolder     = firstrun.Pick
 	openReportFile = notify.OpenReport
 	closeDelay     = 3 * time.Second // the window closes by itself after a run that opened the report
@@ -92,12 +93,7 @@ func runNoArgs() int {
 func firstRunRepos(cat catalog.Catalog) []string {
 	fmt.Println(cat.Text("console.first_run.detecting", nil))
 	res := detectProjects()
-	for _, d := range res.Decisions {
-		slog.Info("first run: candidate", "source", d.Source, "rule", d.Rule, "path", d.Path)
-	}
-	if res.Over > 0 {
-		slog.Warn("first run: repositories over the limit left out", "count", res.Over, "limit", firstrun.MaxRepos)
-	}
+	logDecisions(res)
 	if len(res.Repos) > 0 {
 		fmt.Println(cat.Text("console.first_run.found", map[string]string{"count": strconv.Itoa(len(res.Repos))}))
 		return res.Repos
@@ -112,10 +108,26 @@ func firstRunRepos(cat catalog.Catalog) []string {
 		fmt.Println(cat.Text("console.first_run.agents_only", nil))
 		return []string{}
 	}
-	repos := firstrun.Picked(dir)
-	slog.Info("first run: folder chosen", "path", dir, "repositories", len(repos))
-	fmt.Println(cat.Text("console.first_run.found", map[string]string{"count": strconv.Itoa(len(repos))}))
-	return repos
+	// U11: the chosen folder's repositories through U3's filters and limit.
+	slog.Info("first run: folder chosen", "path", dir)
+	picked := pickedProjects(dir)
+	logDecisions(picked)
+	fmt.Println(cat.Text("console.first_run.found", map[string]string{"count": strconv.Itoa(len(picked.Repos))}))
+	if picked.Repos == nil {
+		return []string{}
+	}
+	return picked.Repos
+}
+
+// logDecisions writes each first-run decision, and the repositories left
+// out by the limit, to the log.
+func logDecisions(res firstrun.Result) {
+	for _, d := range res.Decisions {
+		slog.Info("first run: candidate", "source", d.Source, "rule", d.Rule, "path", d.Path)
+	}
+	if res.Over > 0 {
+		slog.Warn("first run: repositories over the limit left out", "count", res.Over, "limit", firstrun.MaxRepos)
+	}
 }
 
 // openReport opens the report in the default browser (U5, as J9's plan
