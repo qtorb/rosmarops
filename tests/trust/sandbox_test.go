@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -82,7 +83,9 @@ func newSandbox(t *testing.T) *sandbox {
 		}
 	}
 
-	claudeJSON := `{"mcpServers":{"demo":{"command":"node","args":["server.js"]}}}`
+	// The repository is also a Claude Code project: a double click's first
+	// use finds it (decision 2026-10-27, primer uso con un solo .exe, U3).
+	claudeJSON := `{"mcpServers":{"demo":{"command":"node","args":["server.js"]}},"projects":{` + strconv.Quote(s.repo) + `:{}}}`
 	mustWrite(t, filepath.Join(s.home, ".claude.json"), claudeJSON)
 	// Cursor (BV-48): its folder and the files its collector reads, so the
 	// run reads them and the write test covers them.
@@ -138,6 +141,27 @@ func (s *sandbox) initRepo(t *testing.T) {
 	}
 }
 
+// setFirstUseAside checks that the first use found the sandbox repository,
+// then moves its configuration and state to ~/.rosmarops/firstuse/, so
+// that init starts afresh; the files stay inside ~/.rosmarops.
+func (s *sandbox) setFirstUseAside(t *testing.T) {
+	t.Helper()
+	raw, err := os.ReadFile(s.configPath())
+	if err != nil {
+		t.Fatalf("first use wrote no config: %v", err)
+	}
+	if _, err := exec.LookPath("git"); err == nil && !strings.Contains(string(raw), s.repo) {
+		t.Fatalf("first use did not find the repository:\n%s", raw)
+	}
+	aside := filepath.Join(s.home, ".rosmarops", "firstuse")
+	mustMkdir(t, aside)
+	for _, name := range []string{"config.json", "state.json"} {
+		if err := os.Rename(filepath.Join(s.home, ".rosmarops", name), filepath.Join(aside, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // configPath is where `rosmarops init` writes the config inside the sandbox.
 func (s *sandbox) configPath() string {
 	return filepath.Join(s.home, ".rosmarops", "config.json")
@@ -162,14 +186,17 @@ func (s *sandbox) setRepoRoots(t *testing.T) {
 	mustWrite(t, s.configPath(), string(out))
 }
 
-// runAll runs init, baseline, run and a scheduled review (run --unattended,
-// decision 2026-10-26, J3) in order. wrap, when non-nil, turns the
-// rosmarops argv into the argv actually executed (e.g. under strace) for the
-// given step.
+// runAll runs, in order: a double click on first use (no arguments,
+// decision 2026-10-27, primer uso con un solo .exe: it detects the projects,
+// initializes and runs), whose configuration and state are then set aside
+// under ~/.rosmarops/firstuse/; init, baseline, run, a scheduled review (run
+// --unattended, decision 2026-10-26, J3) and a second double click. wrap,
+// when non-nil, turns the rosmarops argv into the argv actually executed
+// (e.g. under strace) for the given step.
 func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []string) {
 	t.Helper()
 	steps := []struct{ step, args string }{
-		{"init", "init"}, {"baseline", "baseline"}, {"run", "run"}, {"unattended", "run --unattended"},
+		{"firstuse", ""}, {"init", "init"}, {"baseline", "baseline"}, {"run", "run"}, {"unattended", "run --unattended"}, {"doubleclick", ""},
 	}
 	for _, st := range steps {
 		step := st.step
@@ -184,7 +211,7 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 		var exitErr *exec.ExitError
 		switch {
 		case err == nil:
-		case errors.As(err, &exitErr) && (step == "run" || step == "unattended"):
+		case errors.As(err, &exitErr) && step != "init" && step != "baseline":
 			// A yellow or red run exits non-zero; the run still completed.
 			t.Logf("rosmarops run exit code %d", exitErr.ExitCode())
 		default:
@@ -193,11 +220,17 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 		if step == "init" {
 			s.setRepoRoots(t)
 		}
+		if step == "firstuse" {
+			s.setFirstUseAside(t)
+		}
 	}
 	reports := filepath.Join(s.home, ".rosmarops", "reports")
 	// Every file of the run, the BV-40 ones included, lands in the reports
 	// directory: the write test covers them.
-	for _, f := range []string{"graph.v2.json", "report.v2.json", "report.html", "index-history.json", "findings-memory.json", "last-scheduled-run-log.txt"} {
+	for _, f := range []string{
+		"graph.v2.json", "report.v2.json", "report.html", "report.en.html", "report.es.html", "index-history.json", "findings-memory.json",
+		"last-scheduled-run-log.txt", "last-run-log.txt", filepath.Join("..", "firstuse", "config.json"),
+	} {
 		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
 			t.Fatalf("run did not complete: no %s in %s: %v", f, reports, err)
 		}

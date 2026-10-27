@@ -62,7 +62,9 @@ func TestCLISurface(t *testing.T) {
 		out  string // in standard output, when set
 		err  string // in standard error, when set
 	}{
-		{args: nil, code: 0},
+		// No arguments is a double click, the whole flow (decision
+		// 2026-10-27, primer uso con un solo .exe, U1): firstrun_test.go;
+		// the help is --help, -h and help.
 		{args: []string{"-h"}, code: 0},
 		{args: []string{"--help"}, code: 0},
 		{args: []string{"help"}, code: 0},
@@ -93,7 +95,7 @@ func TestCLISurface(t *testing.T) {
 		if c.err != "" && !strings.Contains(errOut, c.err) {
 			t.Errorf("%v: stderr %q lacks %q", c.args, errOut, c.err)
 		}
-		if len(c.args) == 0 || c.args[0] == "-h" || c.args[0] == "--help" || c.args[0] == "help" {
+		if c.args[0] == "-h" || c.args[0] == "--help" || c.args[0] == "help" {
 			for _, cmd := range commands {
 				if !strings.Contains(out, cmd) {
 					t.Errorf("%v: help lacks the command %s", c.args, cmd)

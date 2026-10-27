@@ -171,6 +171,7 @@
   "html.index.unchanged": "The score has not changed since last time.",
   "html.integrity.not_checked": "RosmarOps could not read its state: integrity was not checked in this run.",
   "html.integrity.state_lost": "RosmarOps did not find its integrity reference (its state was lost or reset), and nobody confirmed the change.",
+  "html.lang_switch": "Ver en español",
   "html.legacy.body": "{count} warnings from the previous version, grouped in {groups} rows. Open a row to see the detail.",
   "html.legacy.none": "No warnings from the older checks.",
   "html.legacy.pointer": "The older checks are in the technical report: {file}",

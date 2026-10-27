@@ -56,6 +56,7 @@ type integrityRun struct {
 	cfgPath    string
 	reportDir  string
 	unattended bool
+	window     bool // the double-click window (U5)
 	lang       string
 	selfHash   func() (string, error)
 	// abort is abortWithIntegrityFailure, which never returns; tests
@@ -98,7 +99,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		if do == nil {
 			do = abortWithIntegrityFailure
 		}
-		o.lang, o.unattended = r.lang, r.unattended
+		o.lang, o.unattended, o.window = r.lang, r.unattended, r.window
 		do(category, why, action, o)
 	}
 	self, err := r.selfHash()
@@ -166,12 +167,16 @@ func (r integrityRun) check() (notChecked bool, err error) {
 }
 
 // ScheduledLogName is the log of a scheduled review, in the reports
-// directory (J3).
-const ScheduledLogName = "last-scheduled-run-log.txt"
+// directory (J3); RunLogName, the log of a double click (U5).
+const (
+	ScheduledLogName = "last-scheduled-run-log.txt"
+	RunLogName       = "last-run-log.txt"
+)
 
-// deferredLog keeps a scheduled review's log in memory until the reports
-// directory is known, then writes it, and what follows, to its file.
+// deferredLog keeps a run's log in memory until the reports directory is
+// known, then writes it, and what follows, to its file name there.
 type deferredLog struct {
+	name string
 	mu   sync.Mutex
 	buf  []byte
 	file *os.File
@@ -187,8 +192,8 @@ func (d *deferredLog) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// attach opens dir/ScheduledLogName (replacing the last one) and writes what
-// was kept. Only the first call opens a file.
+// attach opens dir/name (replacing the last one) and writes what was kept.
+// Only the first call opens a file.
 func (d *deferredLog) attach(dir string) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -198,12 +203,12 @@ func (d *deferredLog) attach(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create report dir %s: %w", dir, err)
 	}
-	f, err := os.OpenFile(filepath.Join(dir, ScheduledLogName), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	f, err := os.OpenFile(filepath.Join(dir, d.name), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return fmt.Errorf("open scheduled run log: %w", err)
+		return fmt.Errorf("open run log: %w", err)
 	}
 	if _, err := f.Write(d.buf); err != nil {
-		return fmt.Errorf("write scheduled run log: %w", err)
+		return fmt.Errorf("write run log: %w", err)
 	}
 	d.file, d.buf = f, nil
 	return nil

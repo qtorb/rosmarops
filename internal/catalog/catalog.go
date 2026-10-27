@@ -61,6 +61,21 @@ func Load(lang string) (Catalog, error) {
 	return Catalog{lang: lang, msgs: msgs, en: en}, nil
 }
 
+// Langs returns the languages with a catalog file, sorted: the report is
+// written in each of them (decision 2026-10-27, primer uso con un solo
+// .exe, U7).
+func Langs() []string {
+	entries, _ := files.ReadDir("messages")
+	langs := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if name := e.Name(); strings.HasSuffix(name, ".json") {
+			langs = append(langs, strings.TrimSuffix(name, ".json"))
+		}
+	}
+	sort.Strings(langs)
+	return langs
+}
+
 // Keys returns the codes of the English catalog, sorted.
 func Keys() ([]string, error) {
 	en, err := load(DefaultLang)

@@ -38,15 +38,16 @@ import (
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
-// runLangs are the languages of --lang (decision 2026-10-23, idioma): the
-// user chooses; the system's language is never detected.
+// runLangs are the languages of --lang. Without it, the Windows display
+// language when it has a translation, else English (decision 2026-10-27,
+// primer uso con un solo .exe, U7).
 var runLangs = map[string]bool{"en": true, "es": true}
 
 func newRunCmd() *cli.Command {
 	return &cli.Command{
 		Name: "run", Short: "cli.cmd.run.short", Long: "cli.cmd.run.long", Args: cli.AnyArgs,
 		Flags: []cli.Flag{
-			{Name: "lang", Default: catalog.DefaultLang, Usage: "cli.flag.lang"},
+			{Name: "lang", Default: systemLang(), Usage: "cli.flag.lang"},
 			// A scheduled review (decision 2026-10-26, integridad y revisión
 			// semanal, J3): left out of the help, which has no text for it.
 			{Name: "unattended", Bool: true, Hidden: true},
@@ -67,55 +68,72 @@ var (
 	}
 )
 
-func runRun(inv cli.Invocation) (err error) {
+func runRun(inv cli.Invocation) error {
+	_, err := runWith(inv.Flags["lang"], runMode{unattended: inv.Flags["unattended"] == "true"})
+	return err
+}
+
+// runMode is how a run was started: by hand (zero value), as a scheduled
+// review (unattended, J3), or by a double click (window, decision
+// 2026-10-27, primer uso con un solo .exe, U1–U5), whose log the caller
+// already sends to log.
+type runMode struct {
+	unattended bool
+	window     bool
+	log        *deferredLog
+}
+
+// runWith is a run; it returns report.html's path.
+func runWith(lang string, m runMode) (htmlPath string, err error) {
 	start := time.Now()
-	lang := inv.Flags["lang"]
 	if !runLangs[lang] {
-		return fmt.Errorf("lang_unsupported: %q (en, es)", lang)
+		return "", fmt.Errorf("lang_unsupported: %q (en, es)", lang)
 	}
+	unattended := m.unattended
+	runLog := m.log
 	// A scheduled review (J3): no window, never reads input, its log in
 	// the reports directory.
-	unattended := inv.Flags["unattended"] == "true"
-	var runLog *deferredLog
 	if unattended {
 		freeConsole()
-		runLog = &deferredLog{}
+		runLog = &deferredLog{name: ScheduledLogName}
 		slog.SetDefault(slog.New(slog.NewTextHandler(runLog, nil)))
+	}
+	if runLog != nil {
 		defer func() {
 			if err != nil {
-				slog.Error("scheduled run failed", "err", err)
+				slog.Error("run failed", "err", err)
 				if dir, dirErr := report.DefaultReportDir(); dirErr == nil {
 					_ = runLog.attach(dir) // a failure before the reports directory was known
 				}
 			}
 		}()
 	}
-	// Load config: a scheduled review reads only ~/.rosmarops/config.json,
-	// never one in its working directory (J3).
+	// Load config: a scheduled review and a double click read only
+	// ~/.rosmarops/config.json, never one in the working directory (J3, U2).
 	resolve := config.ResolveConfigPath
-	if unattended {
+	if unattended || m.window {
 		resolve = config.HomeConfigPath
 	}
 	cfgPath, err := resolve()
 	if err != nil {
-		return fmt.Errorf("resolve config path: %w", err)
+		return "", fmt.Errorf("resolve config path: %w", err)
 	}
 	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return "", fmt.Errorf("load config: %w", err)
 	}
 
 	// Load state (may not exist on first run after init but before baseline).
 	stPath, err := state.StatePath()
 	if err != nil {
-		return fmt.Errorf("resolve state path: %w", err)
+		return "", fmt.Errorf("resolve state path: %w", err)
 	}
 	st, stErr := state.LoadState(stPath)
 	if stErr != nil {
 		slog.Warn("could not load state; treating as first run", "err", stErr)
 		st, err = state.DefaultState(version)
 		if err != nil {
-			return fmt.Errorf("create fallback state: %w", err)
+			return "", fmt.Errorf("create fallback state: %w", err)
 		}
 	}
 
@@ -124,19 +142,19 @@ func runRun(inv cli.Invocation) (err error) {
 	if reportDir == "" {
 		reportDir, err = report.DefaultReportDir()
 		if err != nil {
-			return fmt.Errorf("resolve report dir: %w", err)
+			return "", fmt.Errorf("resolve report dir: %w", err)
 		}
 	}
 
-	if unattended {
+	if runLog != nil {
 		if err := runLog.attach(reportDir); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	cat, err := catalog.Load(lang)
 	if err != nil {
-		return fmt.Errorf("message catalog: %w", err)
+		return "", fmt.Errorf("message catalog: %w", err)
 	}
 	// Integrity (J1–J3): the state, the binary and the configuration
 	// against the references init recorded; a change is confirmed in the
@@ -148,10 +166,10 @@ func runRun(inv cli.Invocation) (err error) {
 	}
 	integrityNotChecked, err := integrityRun{
 		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: reportDir,
-		unattended: unattended, lang: lang, selfHash: hash.Self,
+		unattended: unattended, window: m.window, lang: lang, selfHash: hash.Self,
 	}.check()
 	if err != nil {
-		return err
+		return "", err
 	}
 	// Invariant §6: every scanner and subprocess runs under the global cap,
 	// which counts from after the integrity questions: the time a person
@@ -449,14 +467,14 @@ func runRun(inv cli.Invocation) (err error) {
 	// in its legacy section. The run's status is the highest of both.
 	bases, err := knowledge.All()
 	if err != nil {
-		return fmt.Errorf("knowledge base: %w", err)
+		return "", fmt.Errorf("knowledge base: %w", err)
 	}
 	base := bases[knowledge.ClaudeCodeProduct]
 	// The score history (I9): the last entry is the comparison's base; an
 	// invalid file is set aside, never deleted.
 	history, historyReset, err := index.ReadHistory(reportDir)
 	if err != nil {
-		return fmt.Errorf("index history: %w", err)
+		return "", fmt.Errorf("index history: %w", err)
 	}
 	if historyReset {
 		slog.Warn("index history did not validate: set aside as .invalid, a new one starts", "dir", reportDir)
@@ -465,13 +483,13 @@ func runRun(inv cli.Invocation) (err error) {
 	// deleted.
 	mem, memReset, err := memory.Read(reportDir)
 	if err != nil {
-		return fmt.Errorf("findings memory: %w", err)
+		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	if memReset {
 		slog.Warn("findings memory did not validate: set aside as .invalid, a new one starts", "dir", reportDir)
 	}
 	if saltErr != nil {
-		return fmt.Errorf("findings memory: %w", saltErr)
+		return "", fmt.Errorf("findings memory: %w", saltErr)
 	}
 	// A scheduled review's notification (J7): whether Windows will show it,
 	// read before the report so that this report says so.
@@ -500,23 +518,23 @@ func runRun(inv cli.Invocation) (err error) {
 	progress.line("console.progress.report", nil)
 	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, reportDir)
 	if err != nil {
-		return fmt.Errorf("write report: %w", err)
+		return "", fmt.Errorf("write report: %w", err)
 	}
-	htmlPath, err := report.WriteHTML(v2, cat, homeDir, time.Local, reportDir, report.FilenameV2(r, v2))
+	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir, report.FilenameV2(r, v2))
 	if err != nil {
-		return fmt.Errorf("write report: %w", err)
+		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("html report written", "html", htmlPath)
 	aiPath, err := report.WriteAIExport(v2, cat, homeDir, reportDir, report.FilenameV2(r, v2))
 	if err != nil {
-		return fmt.Errorf("write report: %w", err)
+		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("ai export written", "ai", aiPath)
 	if err := index.WriteHistory(reportDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
-		return fmt.Errorf("index history: %w", err)
+		return "", fmt.Errorf("index history: %w", err)
 	}
 	if err := memory.Write(reportDir, v2.NextMemory()); err != nil {
-		return fmt.Errorf("findings memory: %w", err)
+		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
 
@@ -529,7 +547,7 @@ func runRun(inv cli.Invocation) (err error) {
 		st.ConsecutiveGreen = 0
 	}
 	if err := state.SaveState(stPath, st); err != nil {
-		return fmt.Errorf("save state: %w", err)
+		return "", fmt.Errorf("save state: %w", err)
 	}
 
 	// Print summary.
@@ -539,11 +557,11 @@ func runRun(inv cli.Invocation) (err error) {
 		text, ok := report.NotificationText(v2, cat)
 		defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName)))
 		slog.Info("scheduled run finished", "status", v2.Status)
-		return nil
+		return htmlPath, nil
 	}
 	fmt.Print("\n" + report.ConsoleSummary(v2, cat, mdPath))
 
-	return nil
+	return htmlPath, nil
 }
 
 // compileExtraPattern compiles a single user-defined secret pattern from config.

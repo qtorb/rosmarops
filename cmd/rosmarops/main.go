@@ -27,7 +27,10 @@ var version = "0.1.0-dev"
 const zeroHash = "0000000000000000000000000000000000000000000000000000000000000000"
 
 func main() {
-	p := cli.Program{Name: "rosmarops", Version: version, Root: newRootCmd(), Stdout: os.Stdout, Stderr: os.Stderr}
+	if len(os.Args) == 1 {
+		os.Exit(runNoArgs()) // a double click (U1); help, --help and -h still show the help
+	}
+	p := cli.Program{Name: "rosmarops", Version: version, Lang: systemLang(), Root: newRootCmd(), Stdout: os.Stdout, Stderr: os.Stderr}
 	if err := p.Execute(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
@@ -152,6 +155,7 @@ type abortOptions struct {
 	configRejected bool
 	stateLost      bool
 	unattended     bool
+	window         bool // the double-click window (U5): open the red report and wait for Enter
 }
 
 // abortWithIntegrityFailure writes a minimal RED report (Markdown, JSON and
@@ -192,13 +196,27 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 			if catErr != nil {
 				cat, _ = catalog.Load(catalog.DefaultLang)
 			}
+			// The red page in every language and in report.html (U7).
 			base := strings.TrimSuffix(filepath.Base(mdPath), ".md")
-			page := report.RenderAbortHTML(cat, time.Now(), time.Local, base, o.configRejected, o.stateLost, o.unattended)
-			htmlPath, err := report.WriteAbortHTML(reportDir, page)
-			if err != nil {
+			pages := map[string]string{}
+			for _, l := range catalog.Langs() {
+				if c, err := catalog.Load(l); err == nil {
+					pages[l] = report.RenderAbortHTML(c, time.Now(), time.Local, base, o.configRejected, o.stateLost, o.unattended)
+				}
+			}
+			htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+			switch {
+			case err != nil:
 				slog.Error("integrity abort: could not write report.html", "err", err)
-			} else if o.unattended {
+			case o.unattended:
 				defaultNotifier.announce(context.Background(), cat.Text("notify.aborted", nil), htmlPath)
+			case o.window:
+				openReport(htmlPath)
+			}
+			if o.window {
+				fmt.Fprintf(os.Stderr, "\n🔴 ABORT: %s\n%s\n", why, action)
+				pressEnter(cat)
+				os.Exit(2)
 			}
 		}
 	}

@@ -33,10 +33,43 @@ func runInit(inv cli.Invocation) error {
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
 	}
-
-	stPath, err := state.StatePath()
+	// repo_roots from --repos-under when given. A folder that cannot be read
+	// leaves repo_roots empty: init still succeeds.
+	var repoRoots []string
+	if reposUnder != "" {
+		repos, err := config.ReposUnder(reposUnder)
+		if err != nil {
+			slog.Warn("init: --repos-under folder not read; repo_roots left empty", "err", err)
+			fmt.Fprintf(os.Stderr, "warning: %v; repo_roots left empty\n", err)
+		} else {
+			repoRoots = repos
+			fmt.Printf("Repositories found under %s: %d\n", reposUnder, len(repos))
+		}
+	}
+	stPath, reportDir, err := initialize(cfgPath, repoRoots)
 	if err != nil {
-		return fmt.Errorf("resolve state path: %w", err)
+		return err
+	}
+
+	fmt.Printf("RosmarOps initialized.\n\n")
+	fmt.Printf("  Config: %s\n", cfgPath)
+	fmt.Printf("  State:  %s\n\n", stPath)
+	fmt.Printf("Next step:\n")
+	fmt.Printf("  Run 'rosmarops run' to scan this computer.\n")
+	fmt.Printf("  Results are written to %s.\n", reportDir)
+
+	return nil
+}
+
+// initialize writes the configuration at cfgPath, with repoRoots, and the
+// state with the integrity references of this binary and this
+// configuration, and the accepted copy (decision 2026-10-26, integridad y
+// revisión semanal, J1). It never overwrites: an existing configuration or
+// state is an error. It returns the state's path and the reports directory.
+func initialize(cfgPath string, repoRoots []string) (stPath, reportDir string, err error) {
+	stPath, err = state.StatePath()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve state path: %w", err)
 	}
 
 	// Fail early if either file already exists — no silent overwrite.
@@ -53,74 +86,54 @@ func runInit(inv cli.Invocation) error {
 			fmt.Fprintf(os.Stderr, "error: state already exists at %s\n", stPath)
 		}
 		fmt.Fprintln(os.Stderr, "hint: use 'rosmarops baseline' to rehash after intentional changes")
-		return errors.New("init aborted: files already exist")
+		return "", "", errors.New("init aborted: files already exist")
 	}
 
 	// Ensure ~/.rosmarops/ directory exists.
 	// This is the only MkdirAll call permitted by the write-scope invariant.
 	stDir := filepath.Dir(stPath)
 	if err := os.MkdirAll(stDir, 0o700); err != nil {
-		return fmt.Errorf("create state directory %s: %w", stDir, err)
+		return "", "", fmt.Errorf("create state directory %s: %w", stDir, err)
 	}
 
-	// Write default config, with repo_roots from --repos-under when given. A
-	// folder that cannot be read leaves repo_roots empty: init still succeeds.
 	cfg := config.DefaultConfig()
-	if reposUnder != "" {
-		repos, err := config.ReposUnder(reposUnder)
-		if err != nil {
-			slog.Warn("init: --repos-under folder not read; repo_roots left empty", "err", err)
-			fmt.Fprintf(os.Stderr, "warning: %v; repo_roots left empty\n", err)
-		} else {
-			cfg.RepoRoots = repos
-			fmt.Printf("Repositories found under %s: %d\n", reposUnder, len(repos))
-		}
+	if repoRoots != nil {
+		cfg.RepoRoots = repoRoots
 	}
 	if err := config.WriteConfig(cfgPath, cfg); err != nil {
-		return fmt.Errorf("write config: %w", err)
+		return "", "", fmt.Errorf("write config: %w", err)
 	}
 	slog.Info("config created", "path", cfgPath)
 
-	reportDir := cfg.ReportDirectory
+	reportDir = cfg.ReportDirectory
 	if reportDir == "" {
 		reportDir, err = report.DefaultReportDir()
 		if err != nil {
-			return fmt.Errorf("resolve report dir: %w", err)
+			return "", "", fmt.Errorf("resolve report dir: %w", err)
 		}
 	}
 
-	// Write default state, with the integrity references of this binary and
-	// this configuration, and the accepted copy (decision 2026-10-26,
-	// integridad y revisión semanal, J1).
 	st, err := state.DefaultState(version)
 	if err != nil {
-		return fmt.Errorf("create state: %w", err)
+		return "", "", fmt.Errorf("create state: %w", err)
 	}
 	self, err := hash.Self()
 	if err != nil {
-		return fmt.Errorf("hash binary: %w", err)
+		return "", "", fmt.Errorf("hash binary: %w", err)
 	}
 	cfgRaw, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return fmt.Errorf("read config: %w", err)
+		return "", "", fmt.Errorf("read config: %w", err)
 	}
 	st.Integrity.VigilBinarySHA256, st.Integrity.ConfigSHA256 = self, hash.Bytes(cfgRaw)
 	if err := writeAcceptedCopy(reportDir, cfgRaw); err != nil {
-		return err
+		return "", "", err
 	}
 	if err := state.SaveState(stPath, st); err != nil {
-		return fmt.Errorf("write state: %w", err)
+		return "", "", fmt.Errorf("write state: %w", err)
 	}
 	slog.Info("state created", "path", stPath)
-
-	fmt.Printf("RosmarOps initialized.\n\n")
-	fmt.Printf("  Config: %s\n", cfgPath)
-	fmt.Printf("  State:  %s\n\n", stPath)
-	fmt.Printf("Next step:\n")
-	fmt.Printf("  Run 'rosmarops run' to scan this computer.\n")
-	fmt.Printf("  Results are written to %s.\n", reportDir)
-
-	return nil
+	return stPath, reportDir, nil
 }
 
 func fileExists(path string) bool {

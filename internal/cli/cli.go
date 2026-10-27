@@ -71,6 +71,7 @@ type Invocation struct {
 type Program struct {
 	Name    string
 	Version string
+	Lang    string // the help's language without --lang; en when empty
 	Root    *Command
 	Stdout  io.Writer
 	Stderr  io.Writer
@@ -150,10 +151,13 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
-// helpLang is the --lang of args, for the help: en when absent; a language
-// without a catalog is an error, as for run.
-func helpLang(args []string) (catalog.Catalog, error) {
-	lang := catalog.DefaultLang
+// helpLang is the --lang of args, for the help: def when absent (en when
+// def is empty); a language without a catalog is an error, as for run.
+func helpLang(args []string, def string) (catalog.Catalog, error) {
+	lang := def
+	if lang == "" {
+		lang = catalog.DefaultLang
+	}
 	for i, a := range args {
 		if a == "--" {
 			break
@@ -232,7 +236,7 @@ func parse(cmd *Command, path, args []string) (Invocation, error) {
 // list, or a command's text, flags and subcommands. Only the texts come from
 // the catalog; names, flags and the usage line are data.
 func (p Program) help(cmd *Command, path, args []string) error {
-	cat, err := helpLang(args)
+	cat, err := helpLang(args, p.Lang)
 	if err != nil {
 		return err
 	}

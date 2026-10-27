@@ -40,13 +40,25 @@ func RenderAbortHTML(cat catalog.Catalog, at time.Time, loc *time.Location, mdBa
 	return page
 }
 
-// WriteAbortHTML writes page as report.html in dir and returns its path.
-func WriteAbortHTML(dir, page string) (string, error) {
+// WriteAbortHTML writes the abort's pages (decision 2026-10-27, primer uso
+// con un solo .exe, U7): report.<lang>.html in each language of pages, and
+// report.html in runLang, so that no page is left showing an earlier
+// report. It returns report.html's path.
+func WriteAbortHTML(dir string, pages map[string]string, runLang string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create report dir %s: %w", dir, err)
 	}
+	run, ok := pages[runLang]
+	if !ok {
+		return "", fmt.Errorf("abort html: no page in %q", runLang)
+	}
+	for lang, page := range pages {
+		if err := os.WriteFile(filepath.Join(dir, LangFileName(lang)), []byte(page), 0o600); err != nil {
+			return "", fmt.Errorf("write html report: %w", err)
+		}
+	}
 	path := filepath.Join(dir, HTMLFileName)
-	if err := os.WriteFile(path, []byte(page), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(run), 0o600); err != nil {
 		return "", fmt.Errorf("write html report: %w", err)
 	}
 	return path, nil

@@ -86,8 +86,12 @@ func (c htmlCtx) renderSince() {
 	}
 	for _, g := range m.NoLongerObserved {
 		report := html.EscapeString(g.LastReport)
-		if name := g.LastReport + ".html"; c.exists(name) {
-			report = `<a href="` + html.EscapeString(name) + `">` + html.EscapeString(name) + `</a>`
+		// The earlier run's page in this language; before U7, its one page.
+		for _, name := range []string{PageName(g.LastReport, c.cat.Lang()), g.LastReport + ".html"} {
+			if c.exists(name) {
+				report = `<a href="` + html.EscapeString(name) + `">` + html.EscapeString(name) + `</a>`
+				break
+			}
 		}
 		lines = append(lines, c.withHTML("memory.no_longer_observed.line", map[string]string{
 			"severity": c.cat.Text("severity."+g.Severity, nil), "rule": g.Rule, "open_since": g.OpenSince,
@@ -193,7 +197,7 @@ dlg('ov-open','ov-dialog','ov-close');dlg('as-open','as-dialog','as-close');`
 func moreKeys() []string {
 	keys := []string{
 		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score",
-		"html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note", "html.weekly.copy_command",
+		"html.lang_switch", "html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note", "html.weekly.copy_command",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
 		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope",
 		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",

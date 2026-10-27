@@ -80,7 +80,9 @@ code,pre{font-family:ui-monospace,Consolas,monospace}
 code{font-size:.88em}
 a{color:var(--ink);text-decoration:underline}
 :focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
-.hdr{font-size:14px;font-weight:400;color:var(--mut);margin:0 0 16px}
+.hdr{font-size:14px;font-weight:400;color:var(--mut);margin:0 0 16px;display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+a.lang{font-size:14px;font-weight:400;color:var(--mut);text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+a.lang:hover,a.lang:focus-visible{color:var(--ink)}
 .flow{display:grid;grid-template-columns:minmax(0,.78fr) minmax(0,1.08fr) minmax(0,1.5fr);column-gap:36px;align-items:start}
 .head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
 .num{width:48px;height:48px;flex:none;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;box-shadow:0 0 0 8px var(--bg)}
@@ -256,6 +258,26 @@ func userPath(file, home, repl string) string {
 	return file
 }
 
+// langLinks is the link to the same page in each other language (informe
+// HTML v3 §19): the run's dated page, <base>.<lang>.html, which lives next to
+// every page written; the text is the page's own html.lang_switch, written
+// in the target language.
+func (c htmlCtx) langLinks() string {
+	var b strings.Builder
+	for _, l := range catalog.Langs() {
+		if l == c.cat.Lang() {
+			continue
+		}
+		fmt.Fprintf(&b, `<a class="lang" href="%s" hreflang="%s" lang="%s">%s</a>`,
+			html.EscapeString(PageName(c.v.base, l)), html.EscapeString(l), html.EscapeString(l), c.t("html.lang_switch", nil))
+	}
+	return b.String()
+}
+
+// PageName is the dated page of a run in lang: <base>.<lang>.html
+// (decision 2026-10-27, primer uso con un solo .exe, U7).
+func PageName(base, lang string) string { return base + "." + lang + ".html" }
+
 // RenderHTML renders the visual report (informe HTML v3 over v1 and v2):
 // the header, the three steps, what we could not read, the «More» strip
 // and the footer, from v and the catalog only. home is the user's folder,
@@ -284,7 +306,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS())
 
 	// §1.1 Header.
-	c.w(`<div class="hdr">%s</div>`, c.t("html.header", map[string]string{"date": cat.DayLabel(local)}))
+	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t("html.header", map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
 
 	// §2 The flow: 1 → 2 → 3.
 	today, hasToday := c.todayFinding()
@@ -1247,19 +1269,47 @@ var glossTerms = []string{"agent", "score", "master", "auto", "env", "config", "
 // none since the legacy section left the HTML (v2 §3, CTO-7 M5).
 var LegacyHTMLKeys = map[string]bool{}
 
-// WriteHTML writes the visual report to dir, as base.html and report.html
-// (§1). Both are in the reports directory.
-func WriteHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, dir, base string) (string, error) {
-	page := []byte(renderHTML(v, cat, home, loc, func(name string) bool {
+// WriteHTMLPages writes the visual report to dir in every catalog language
+// (decision 2026-10-27, primer uso con un solo .exe, U7): <base>.<lang>.html
+// and report.<lang>.html for each, and report.html in the run's language,
+// the page that opens. It returns report.html's path. All of them are in the
+// reports directory.
+func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir, base string) (string, error) {
+	exists := func(name string) bool {
 		_, err := os.Stat(filepath.Join(dir, filepath.Base(name)))
 		return err == nil
-	}))
-	path := filepath.Join(dir, base+".html")
-	if err := os.WriteFile(path, page, 0o600); err != nil {
-		return "", fmt.Errorf("write html report: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, HTMLFileName), page, 0o600); err != nil {
-		return "", fmt.Errorf("write html report: %w", err)
+	write := func(name string, page []byte) error {
+		if err := os.WriteFile(filepath.Join(dir, name), page, 0o600); err != nil {
+			return fmt.Errorf("write html report: %w", err)
+		}
+		return nil
 	}
-	return path, nil
+	var run []byte
+	for _, l := range catalog.Langs() {
+		cat, err := catalog.Load(l)
+		if err != nil {
+			return "", fmt.Errorf("html report: %w", err)
+		}
+		page := []byte(renderHTML(v, cat, home, loc, exists))
+		if err := write(PageName(base, l), page); err != nil {
+			return "", err
+		}
+		if err := write(LangFileName(l), page); err != nil {
+			return "", err
+		}
+		if l == runLang {
+			run = page
+		}
+	}
+	if run == nil {
+		return "", fmt.Errorf("html report: no catalog for %q", runLang)
+	}
+	if err := write(HTMLFileName, run); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, HTMLFileName), nil
 }
+
+// LangFileName is the fixed-name page of lang, report.<lang>.html.
+func LangFileName(lang string) string { return "report." + lang + ".html" }

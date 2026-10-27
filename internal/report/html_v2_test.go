@@ -121,11 +121,22 @@ func TestRenderHTML_Memory(t *testing.T) {
 			t.Errorf("%s: verdict on the first run, or no row", lang)
 		}
 
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, gone+".html"), nil, 0o600); err != nil {
+		// The earlier run's page in this language (U7); before U7, its one
+		// page.
+		dir, old := t.TempDir(), t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, report.PageName(gone, lang)), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		path, err := report.WriteHTML(run2, cat, "/h", time.UTC, dir, "run2")
+		if err := os.WriteFile(filepath.Join(old, gone+".html"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, old, "run2"); err != nil {
+			t.Fatal(err)
+		}
+		if raw, _ := os.ReadFile(filepath.Join(old, report.HTMLFileName)); !strings.Contains(string(raw), `<a href="`+gone+`.html">`) {
+			t.Errorf("%s: no link to the earlier run's one page", lang)
+		}
+		path, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, dir, "run2")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -135,7 +146,7 @@ func TestRenderHTML_Memory(t *testing.T) {
 		// v3 §17.2: one line of counts (a finding gone), no series.
 		for _, want := range []string{
 			htmlEscape(strings.SplitN(cat.Text("html.since.counts", nil), "{", 2)[0]),
-			`<a href="` + gone + `.html">` + gone + `.html</a>`,
+			`<a href="` + report.PageName(gone, lang) + `">` + report.PageName(gone, lang) + `</a>`,
 		} {
 			if !strings.Contains(box, want) {
 				t.Errorf("%s: memory box lacks %q: %s", lang, want, box)
