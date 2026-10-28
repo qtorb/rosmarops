@@ -137,9 +137,9 @@ jobs:
               $o = @(Receive-Job $job)
               $o | Select-Object -First 120 | Out-String
               $n = if ($a -eq 'doctor') { 80 } elseif ($a -eq '--version') { 6 } else { 0 }
-              "--- hermes $a: completed, $($o.Count) lines ---" | Add-Content $sum
+              "--- hermes ${a}: completed, $($o.Count) lines ---" | Add-Content $sum
               $o | Select-Object -First $n | ForEach-Object { "  $_" } | Add-Content $sum
-            } else { "TIMEOUT (stopped)"; "--- hermes $a: TIMEOUT 180s ---" | Add-Content $sum; Stop-Job $job }
+            } else { "TIMEOUT (stopped)"; "--- hermes ${a}: TIMEOUT 180s ---" | Add-Content $sum; Stop-Job $job }
             Remove-Job $job -Force -ErrorAction SilentlyContinue
           }
           & "$env:RUNNER_TEMP\snap.ps1" -Label 3-after-hermes-first-start
@@ -205,6 +205,15 @@ jobs:
           $v2 = Get-Content -Raw "$r\report.v2.json" -ErrorAction SilentlyContinue | ConvertFrom-Json
           if ($v2) {
             "status: $($v2.status)"
+            "legacy (v1 technical) status: $($v2.legacy.status); counts: $($v2.legacy.counts | ConvertTo-Json -Compress)"
+            "scan errors: $(@($v2.coverage.scan_errors) -join ', ')"
+            $v1 = Get-ChildItem $r -Filter "report-*.json" -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '\.v2\.' } | Select-Object -First 1
+            if ($v1) {
+              $j = Get-Content -Raw $v1.FullName | ConvertFrom-Json
+              "v1 header status: $($j.header.status)"
+              "v1 findings (id and severity only):"; @($j.findings) | ForEach-Object { "  $($_.id) $($_.category) $($_.severity)" }
+              "v1 errors:"; @($j.errors) | ForEach-Object { "  $($_.scope): $($_.message)" }
+            }
             "findings: $(@($v2.findings).Count)"
             @($v2.findings) | ForEach-Object { "  $($_.rule) $($_.severity)" }
           } else { "no report.v2.json" }
@@ -250,11 +259,12 @@ jobs:
             "-- $($labels[$i - 1]) -> $($labels[$i])" | Add-Content $chg
             $ka = @{}; foreach ($x in $a) { $ka["$($x.root)|$($x.rel)"] = $x }
             $kb = @{}; foreach ($x in $b) { $kb["$($x.root)|$($x.rel)"] = $x }
-            $lines = @(); $skills = @{ added = 0; changed = 0; removed = 0 }
+            $lines = @(); $skills = @{ added = 0; changed = 0; removed = 0 }; $cache = @{ added = 0; changed = 0; removed = 0 }
             $note = {
               param($kind, $k, $text)
               if ($k -match '__pycache__|\\hermes-agent\\') { return }
               if ($k -match '^hermes\|\\skills\\') { $skills[$kind]++; return }
+              if ($k -match '^hermes\|\\cache\\') { $cache[$kind]++; return }
               $script:lines += $text
             }
             foreach ($k in ($kb.Keys | Sort-Object)) {
@@ -265,6 +275,7 @@ jobs:
             $lines | Select-Object -First 60 | Add-Content $chg
             if ($lines.Count -gt 60) { "  ... $($lines.Count - 60) more" | Add-Content $chg }
             "  hermes\skills: $($skills.added) added, $($skills.changed) changed, $($skills.removed) removed" | Add-Content $chg
+            "  hermes\cache: $($cache.added) added, $($cache.changed) changed, $($cache.removed) removed" | Add-Content $chg
           }
 
       - name: Collect
