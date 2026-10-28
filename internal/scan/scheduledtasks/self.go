@@ -42,6 +42,19 @@ func (s Self) Owns(t platform.ScheduledTask) bool {
 	return args && s.User != "" && user && r.LogonType == "Interactive" && r.RunLevel == "Limited"
 }
 
+// ownButChanged reports a task that runs this same rosmarops.exe but no
+// longer meets J6 (BV-93, B2): its own weekly task was altered (arguments,
+// working directory, user, level or trigger). A task of another rosmarops.exe
+// is WeeklyOther, not this; a task that still meets J6 is Owns.
+func (s Self) ownButChanged(t platform.ScheduledTask) bool {
+	r := t.RosmarOps
+	if s.Exe == "" || r == nil {
+		return false
+	}
+	thisExe := r.Execute == s.Exe || strings.EqualFold(r.ExecuteExpanded, s.Exe)
+	return thisExe && !s.Owns(t)
+}
+
 // Weekly states (informe HTML v3 §17.3).
 const (
 	WeeklyNone  = "none"  // no own task and none of another exe

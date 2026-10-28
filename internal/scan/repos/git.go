@@ -3,6 +3,9 @@ package repos
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -63,6 +66,7 @@ func gitLogHashes(ctx context.Context, repoRoot string, maxCount int, since time
 		ctx,
 		repoRoot,
 		"log",
+		"--no-show-signature", // never verify signatures (BV-93, B1/P2)
 		"--format=%H",
 		fmt.Sprintf("--max-count=%d", maxCount),
 		fmt.Sprintf("--since=%s", sinceStr),
@@ -85,15 +89,21 @@ func gitConfigGet(ctx context.Context, repoRoot, key string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// gitHooksDir returns the effective hooks directory for the repository.
-// If core.hooksPath is set in repo-local config, that value is returned.
-// Otherwise ".git/hooks" relative to repoRoot is used.
+// gitHooksDir returns the effective hooks directory for the repository, as
+// git resolves it: `git rev-parse --git-path hooks` honours core.hooksPath
+// and any include.path that sets it, so a repository cannot hide its real
+// hooks folder behind an include (BV-93, B1/P6). The path may be relative to
+// repoRoot or absolute; the caller handles both.
 func gitHooksDir(ctx context.Context, repoRoot string) (string, error) {
-	val, err := gitConfigGet(ctx, repoRoot, "core.hooksPath")
-	if err != nil || val == "" {
-		return ".git/hooks", nil
+	out, err := runGitBytesHardened(ctx, repoRoot, gitHardeningBase, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse --git-path hooks: %w", err)
 	}
-	return val, nil
+	dir := strings.TrimSpace(string(out))
+	if dir == "" {
+		return "", fmt.Errorf("git rev-parse --git-path hooks: empty")
+	}
+	return dir, nil
 }
 
 // extractAddedLines returns a byte slice containing only the content from
@@ -153,22 +163,67 @@ const gitNoHooksPath = "/dev/null/rosmarops-no-hooks"
 //     and https://git-scm.com/docs/git-config#Documentation/git-config.txt-gcauto
 //     (no automatic maintenance, which would write to the repository; none
 //     of the commands run here starts it today, this keeps it that way)
-var gitHardening = []string{
+//   - log.showSignature, gpg.program, gpg.ssh.program, gpg.x509.program
+//     (BV-93, B1/P2): a repository can name the GPG program git runs to
+//     verify a commit's signature. With showSignature off and the programs
+//     emptied, git never runs a signature verifier the repository chose.
+//     https://git-scm.com/docs/git-config#Documentation/git-config.txt-logshowSignature
+//     and #Documentation/git-config.txt-gpgprogram
+//
+// core.hooksPath is NOT in this base list: it is appended by gitHardening()
+// for every call except gitHooksDir, which must resolve the repository's
+// real hooks directory (honouring the repository's own core.hooksPath) and
+// would be defeated by our override (BV-93, B1/P6).
+var gitHardeningBase = []string{
 	"-c", "core.fsmonitor=false",
-	"-c", "core.hooksPath=" + gitNoHooksPath,
 	"-c", "diff.external=",
 	"-c", "protocol.allow=never",
 	"-c", "color.ui=false",
 	"-c", "maintenance.auto=false",
 	"-c", "gc.auto=0",
+	"-c", "log.showSignature=false",
+	"-c", "gpg.program=",
+	"-c", "gpg.ssh.program=",
+	"-c", "gpg.x509.program=",
 }
 
-// gitEnv is added to the inherited environment of every git process:
-// no optional index refresh or lock (GIT_OPTIONAL_LOCKS) and no terminal
-// prompt (GIT_TERMINAL_PROMPT). https://git-scm.com/docs/git#_environment_variables
+// gitHardening returns the -c overrides prepended to a git invocation: the
+// base set plus the core.hooksPath override that keeps git from executing a
+// hook the repository names. gitHooksDir is the one caller that omits the
+// hooksPath override (it needs the repository's real hooks path).
+func gitHardening() []string {
+	return append(append([]string{}, gitHardeningBase...), "-c", "core.hooksPath="+gitNoHooksPath)
+}
+
+// gitEnv is the controlled environment of every git process, replacing the
+// GIT_* variables of the inherited environment (gitChildEnv strips them):
+// no optional index refresh or lock (GIT_OPTIONAL_LOCKS), no terminal prompt
+// (GIT_TERMINAL_PROMPT), no system config (GIT_CONFIG_NOSYSTEM) and no global
+// config (GIT_CONFIG_GLOBAL empty), so a repository is read with only its own
+// -c overrides, never a GIT_DIR, GIT_CONFIG_PARAMETERS or GIT_EXEC_PATH
+// planted in the environment (BV-93, B1/P5).
+// https://git-scm.com/docs/git#_environment_variables
 var gitEnv = []string{
 	"GIT_OPTIONAL_LOCKS=0",
 	"GIT_TERMINAL_PROMPT=0",
+	"GIT_CONFIG_NOSYSTEM=1",
+	"GIT_CONFIG_GLOBAL=",
+}
+
+// gitChildEnv is the environment for a git child: the inherited environment
+// with every GIT_* variable removed, then gitEnv appended. Removing the
+// inherited GIT_* keeps a variable in RosmarOps' own environment from
+// changing what git reads (BV-93, B1/P5).
+func gitChildEnv() []string {
+	base := os.Environ()
+	out := make([]string, 0, len(base)+len(gitEnv))
+	for _, kv := range base {
+		if strings.HasPrefix(kv, "GIT_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, gitEnv...)
 }
 
 // gitWaitDelay bounds how long a git process killed by its context may keep
@@ -181,10 +236,18 @@ const gitWaitDelay = 2 * time.Second
 // The process is killed when ctx is done (the per-repo deadline, which
 // inherits the global one).
 func runGitBytes(ctx context.Context, repoRoot string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, gitHardening...), args...)...)
+	return runGitBytesHardened(ctx, repoRoot, gitHardening(), args...)
+}
+
+// runGitBytesHardened is runGitBytes with the -c overrides given explicitly.
+// Every caller but gitHooksDir uses gitHardening() (with the core.hooksPath
+// override); gitHooksDir passes gitHardeningBase so git resolves the
+// repository's real hooks path.
+func runGitBytesHardened(ctx context.Context, repoRoot string, hardening []string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, hardening...), args...)...)
 	proc.Hide(cmd) // no window of its own (J3)
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), gitEnv...)
+	cmd.Env = gitChildEnv()
 	cmd.WaitDelay = gitWaitDelay
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -251,25 +314,93 @@ func gitLsFilesStaged(ctx context.Context, repoRoot string) ([]indexEntry, error
 	return entries, nil
 }
 
-// statHardening keeps a repository's configuration from hiding working-tree
-// changes from `git ls-files -m`: every file is stat-checked in full.
-// https://git-scm.com/docs/git-config#Documentation/git-config.txt-coreignoreStat
-// and #Documentation/git-config.txt-corecheckStat.
-var statHardening = []string{"-c", "core.ignoreStat=false", "-c", "core.checkStat=default", "-c", "core.trustctime=true"}
-
-// gitLsFilesModified returns the paths, spelled as gitLsFiles spells them,
-// whose working-tree file differs from the index (`git ls-files -m`:
-// modified, deleted, or unmerged).
+// gitLsFilesModified returns the tracked paths, spelled as gitLsFiles spells
+// them, whose working-tree file differs from the index. It is computed in Go,
+// never with `git ls-files -m`, because that command applies the repository's
+// clean filters, which run a program the repository names — code chosen by a
+// repository RosmarOps only reads (BV-93, B1/P1). Instead, for each index
+// entry the working-tree file's git blob id is computed from its raw bytes and
+// compared with the index blob id; no filter, no eol conversion, no git
+// subprocess touches the working tree.
+//
+// This matches `git ls-files -m` on a repository with no clean/eol filters:
+// a file is modified when its content differs, and a deleted file is modified.
+// A repository that does declare a filter may show more files as modified than
+// `git ls-files -m` would (the unfiltered bytes differ from the filtered
+// blob); that only makes the content cache skip those files, never unsafe.
+// assume-unchanged and skip-worktree entries (tag not "H") are excluded, as
+// `git ls-files -m` excludes them. Files over the content-scan limit are
+// reported modified without hashing: they are skipped for secrets anyway, so
+// only the cache gate matters, and reading a huge file just to hash it is not
+// worth it.
 func gitLsFilesModified(ctx context.Context, repoRoot string) (map[string]bool, error) {
-	out, err := runGitBytes(ctx, repoRoot, append(append([]string{}, statHardening...), "ls-files", "-m", "--full-name")...)
+	entries, err := gitLsFilesStaged(ctx, repoRoot)
 	if err != nil {
-		return nil, fmt.Errorf("git ls-files -m: %w", err)
+		return nil, err
 	}
 	set := map[string]bool{}
-	for _, p := range splitLines(string(out)) {
-		set[p] = true
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if e.tag != "H" || e.stage != "0" {
+			continue // assume-unchanged, skip-worktree or unmerged: as ls-files -m
+		}
+		if modified := worktreeDiffersFromIndex(repoRelPath(repoRoot, e.path), e); modified {
+			set[e.path] = true
+		}
 	}
 	return set, nil
+}
+
+// worktreeDiffersFromIndex reports whether the working-tree file at absPath
+// differs from its index entry e, by comparing git blob ids computed from the
+// raw bytes (no filter). A missing file or a type that cannot be hashed
+// (a directory where a file is expected) counts as modified, as does an
+// unreadable or oversized file (conservatively: the cache is then not used).
+func worktreeDiffersFromIndex(absPath string, e indexEntry) bool {
+	info, err := os.Lstat(absPath)
+	if err != nil {
+		return true // deleted or unreadable
+	}
+	var content []byte
+	switch {
+	case info.Mode()&os.ModeSymlink != 0:
+		// git stores a symlink as a blob of its target path (mode 120000).
+		target, err := os.Readlink(absPath)
+		if err != nil {
+			return true
+		}
+		content = []byte(filepath.ToSlash(target))
+	case info.Mode().IsRegular():
+		if info.Size() > MaxFileBytes {
+			return true // not hashed; skipped for secrets anyway
+		}
+		content, err = os.ReadFile(absPath)
+		if err != nil {
+			return true
+		}
+	default:
+		return true // not a regular file where the index has one
+	}
+	return gitBlobHash(len(e.blob), content) != e.blob
+}
+
+// gitBlobHash is git's object id of a blob with the given content: the hash of
+// "blob <len>\x00" followed by the content. The object format follows the
+// index blob id's length: 64 hex is SHA-256, otherwise SHA-1 (git's default).
+func gitBlobHash(blobHexLen int, content []byte) string {
+	header := fmt.Sprintf("blob %d\x00", len(content))
+	if blobHexLen == 64 {
+		h := sha256.New()
+		h.Write([]byte(header))
+		h.Write(content)
+		return hex.EncodeToString(h.Sum(nil))
+	}
+	h := sha1.New()
+	h.Write([]byte(header))
+	h.Write(content)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // gitStreamDiffs writes hashes to `git log --no-walk=unsorted --stdin --cc`
@@ -283,6 +414,7 @@ func gitLsFilesModified(ctx context.Context, repoRoot string) (map[string]bool, 
 func gitStreamDiffs(ctx context.Context, repoRoot string, hashes []string, read func(io.Reader) error) error {
 	args := []string{
 		"log", "--no-walk=unsorted", "--stdin",
+		"--no-show-signature",                // never verify signatures (BV-93, B1/P2)
 		"--cc",                               // merges as git show shows them
 		"--format=%x00%H",                    // marker line: NUL + commit hash
 		"--diff-filter=AM",                   // added + modified files only
@@ -291,10 +423,10 @@ func gitStreamDiffs(ctx context.Context, repoRoot string, hashes []string, read 
 		"--no-color",                         // color.diff=always would hide the "+" lines
 		"--src-prefix=a/", "--dst-prefix=b/", // whatever diff.noprefix says: "+++ b/<file>"
 	}
-	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, gitHardening...), args...)...)
+	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, gitHardening()...), args...)...)
 	proc.Hide(cmd) // no window of its own (J3)
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), gitEnv...)
+	cmd.Env = gitChildEnv()
 	cmd.WaitDelay = gitWaitDelay
 	cmd.Stdin = strings.NewReader(strings.Join(hashes, "\n") + "\n")
 	var stderr bytes.Buffer

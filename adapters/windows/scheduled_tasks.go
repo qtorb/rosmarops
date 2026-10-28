@@ -15,11 +15,21 @@ import (
 // psTaskRecord mirrors one element of the JSON array emitted by the PowerShell
 // scheduled-task enumeration command.
 type psTaskRecord struct {
-	Name      string       `json:"Name"`
-	Path      string       `json:"Path"`
-	Triggers  string       `json:"Triggers"` // comma-separated CIM class names
-	Actions   string       `json:"Actions"`  // pipe-separated executable paths
-	Date      string       `json:"Date"`     // ISO-8601 registration date, may be empty
+	Name     string `json:"Name"`
+	Path     string `json:"Path"`
+	Triggers string `json:"Triggers"` // comma-separated CIM class names (logon-trigger detection)
+	Actions  string `json:"Actions"`  // pipe-separated executable paths
+
+	// Fields for the canonical hash (BV-93, B2): every action's executable,
+	// arguments and working directory; the principal and run level; and each
+	// trigger's class, start and days. US (0x1f) separates fields, RS (0x1e)
+	// separates list items.
+	ActionsDetail  string `json:"ActionsDetail"`
+	TriggersDetail string `json:"TriggersDetail"`
+	UserID         string `json:"UserId"`
+	RunLevel       string `json:"RunLevel"`
+
+	Date      string       `json:"Date"` // ISO-8601 registration date, may be empty
 	RosmarOps *psRosmarOps `json:"RosmarOps"`
 }
 
@@ -58,15 +68,25 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 	//   - Collects trigger class names (to detect logon triggers) and action
 	//     executables (for the canonical hash).
 	//   - Outputs a JSON array; @() ensures an array even for a single task.
-	const psCmd = `$t = @(Get-ScheduledTask | ForEach-Object {` +
+	// BV-93, B4: load ScheduledTasks from its absolute system path, so
+	// Get-ScheduledTask is not resolved through a redirectable module path.
+	psCmd := importModule("ScheduledTasks") +
+		`$us=[char]0x1f; $rs=[char]0x1e;` +
+		`$t = @(Get-ScheduledTask | ForEach-Object {` +
 		`$task=$_;` +
 		`$triggers=(($task.Triggers | ForEach-Object {$_.CimClass.CimClassName}) -join ',');` +
 		`$actions=(($task.Actions | ForEach-Object {if($_.Execute){"$($_.Execute)"}else{''}}) -join '|');` +
+		`$adetail=(($task.Actions | ForEach-Object {"$($_.Execute)$us$($_.Arguments)$us$($_.WorkingDirectory)"}) -join $rs);` +
+		`$tdetail=(($task.Triggers | ForEach-Object {"$($_.CimClass.CimClassName)$us$($_.StartBoundary)$us$($_.DaysOfWeek)"}) -join $rs);` +
 		`[PSCustomObject]@{` +
 		`Name=$task.TaskName;` +
 		`Path=$task.TaskPath;` +
 		`Triggers=$triggers;` +
 		`Actions=$actions;` +
+		`ActionsDetail=$adetail;` +
+		`TriggersDetail=$tdetail;` +
+		`UserId="$($task.Principal.UserId)";` +
+		`RunLevel="$($task.Principal.RunLevel)";` +
 		`Date=if($task.Date){"$($task.Date)"}else{''};` +
 		// J5: for a task with a rosmarops.exe action only, its detail.
 		`RosmarOps=$(` +
@@ -111,7 +131,7 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 		tasks = append(tasks, platform.ScheduledTask{
 			Name:            r.Name,
 			Path:            r.Path,
-			SHA256:          taskSHA256(r.Name, r.Path, r.Triggers, r.Actions),
+			SHA256:          taskSHA256(r.Name, r.Path, r.ActionsDetail, r.TriggersDetail, r.UserID, r.RunLevel),
 			HasLogonTrigger: hasLogonTrigger(r.Triggers),
 			Date:            parseTaskDate(r.Date),
 			RosmarOps:       r.RosmarOps.task(),
@@ -136,10 +156,15 @@ func (r *psRosmarOps) task() *platform.RosmarOpsTask {
 	return t
 }
 
-// taskSHA256 computes the canonical SHA-256 for a scheduled task.
-// The canonical form is: name + NUL + path + NUL + triggerTypes + NUL + actions.
-func taskSHA256(name, path, triggers, actions string) string {
-	canonical := name + "\x00" + path + "\x00" + triggers + "\x00" + actions
+// taskSHA256 computes the canonical SHA-256 for a scheduled task (BV-93, B2).
+// The canonical form is name, path, every action's executable + arguments +
+// working directory, every trigger's class + start + days, the principal and
+// the run level, each joined with NUL. Covering arguments, working directory,
+// principal, level and trigger detail — not only the executable and the
+// trigger class — means that changing a known task's command, where it runs,
+// who it runs as or when it fires is seen as a change.
+func taskSHA256(name, path, actionsDetail, triggersDetail, userID, runLevel string) string {
+	canonical := strings.Join([]string{name, path, actionsDetail, triggersDetail, userID, runLevel}, "\x00")
 	return hash.Bytes([]byte(canonical))
 }
 

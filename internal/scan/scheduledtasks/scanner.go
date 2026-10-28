@@ -4,8 +4,6 @@
 package scheduledtasks
 
 import (
-	"time"
-
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
@@ -43,11 +41,15 @@ const (
 		"full Defender scan, and audit recent software installs."
 )
 
-// SeenWithinDays is the window for "recent" tasks. Tasks registered more than
-// this many days ago are ignored — they were presumably reviewed when they first
-// appeared or are beyond the drift detection window.
-// Hardcoded per CLAUDE.md invariant §5 (resource limits, not configurable).
-const SeenWithinDays = 7
+const (
+	// whyOwnTaskChanged / actionOwnTaskChanged: the own weekly task no longer
+	// meets J6. Texts from docs/copy/bv93-2026-10-27.json (BV-93, B2), kept
+	// here in English like the other scheduled-task findings; the catalog
+	// carries the localized copies.
+	titleOwnTaskChanged  = "Your RosmarOps weekly review task was changed"
+	whyOwnTaskChanged    = "The task no longer matches the command the report gave you: its program, arguments, folder, user or trigger changed. If you didn't change it, someone else can run code every time it starts."
+	actionOwnTaskChanged = "Delete the task and create it again with the command in the report."
+)
 
 // ScanResult holds the output of ScanScheduledTasks.
 type ScanResult struct {
@@ -67,26 +69,33 @@ type ScanResult struct {
 //   - new (not in baseline by name) OR modified (sha256 changed), AND
 //   - not allow-listed.
 //
-// Severity is RED for tasks with a logon trigger, YELLOW otherwise.
-// Tasks older than SeenWithinDays are excluded from consideration.
+// Severity is RED for tasks with a logon trigger, YELLOW otherwise. Every
+// task is considered: there is no date window (BV-93, B2/B8), because the
+// registration date is chosen by whoever creates the task, so an old date
+// must not hide a task.
 //
-// The returned NewBaseline contains all tasks within the recency window
-// (replacing the old baseline entirely — old tasks age out naturally).
+// fresh marks a run with no comparable baseline: the first run ever (empty
+// baseline), or the first run after the binary changed, when the task hash
+// covers new fields and would otherwise flag every task (BV-93, B2). A fresh
+// run records the baseline and emits no findings, exactly like the first time.
 //
-// RosmarOps's own weekly review (self.Owns, J6) is no finding.
+// The returned NewBaseline contains every task (replacing the old baseline).
+//
+// RosmarOps's own weekly review that still meets J6 (self.Owns) is no finding;
+// one that runs this same exe but no longer meets J6 is own_task_changed.
 func ScanScheduledTasks(
 	tasks []platform.ScheduledTask,
 	baseline []state.ScheduledTaskBase,
 	allowList []config.AllowEntryID,
 	self Self,
+	fresh bool,
 ) ScanResult {
-	cutoff := time.Now().UTC().Add(-SeenWithinDays * 24 * time.Hour)
-
 	// Build baseline lookup: lowercase name → sha256.
 	blByName := make(map[string]string, len(baseline))
 	for _, b := range baseline {
 		blByName[normName(b.Name)] = b.SHA256
 	}
+	fresh = fresh || len(baseline) == 0
 
 	// Build allow-list lookup: lowercase id → true.
 	allowed := make(map[string]bool, len(allowList))
@@ -99,28 +108,36 @@ func ScanScheduledTasks(
 	allowListedCount := 0
 
 	for _, t := range tasks {
-		// Date filter: skip tasks older than SeenWithinDays.
-		// Tasks with an unknown date (zero) are included conservatively.
-		if !t.Date.IsZero() && t.Date.Before(cutoff) {
-			continue
-		}
-
-		// Update new baseline regardless of allow-list status.
+		// Update new baseline regardless of allow-list or fresh status.
 		newBL = append(newBL, state.ScheduledTaskBase{
 			Name:   t.Name,
 			SHA256: t.SHA256,
 		})
 
+		// Its own weekly review that still meets J6 (decision 2026-10-26,
+		// integridad y revisión semanal, J6): no finding.
+		if self.Owns(t) {
+			continue
+		}
+
+		// A fresh run has no comparable baseline: record it, warn about
+		// nothing (BV-93, B2).
+		if fresh {
+			continue
+		}
+
+		// A task that runs this same rosmarops.exe but no longer meets J6:
+		// its own weekly task was altered (BV-93, B2). Allow-list by name is
+		// not honoured here: a tampered own task stays visible.
+		if self.ownButChanged(t) {
+			findings = append(findings, ownTaskChangedFinding(t))
+			continue
+		}
+
 		// Check if the task is new or modified.
 		baselinedSHA, inBaseline := blByName[normName(t.Name)]
 		if inBaseline && baselinedSHA == t.SHA256 {
 			continue // known, unchanged — no finding
-		}
-
-		// Its own weekly review (decision 2026-10-26, integridad y revisión
-		// semanal, J6).
-		if self.Owns(t) {
-			continue
 		}
 
 		// New or modified task — check allow-list.
@@ -167,6 +184,19 @@ func ScanScheduledTasks(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func ownTaskChangedFinding(t platform.ScheduledTask) finding.Finding {
+	f := finding.NewFinding(taskFindingID("own_task_changed", t.Name), finding.SeverityYellow, "own_task_changed", titleOwnTaskChanged)
+	f.WhyItMatters = whyOwnTaskChanged
+	f.SuggestedAction = actionOwnTaskChanged
+	f.Confidence = "high"
+	f.Evidence = finding.Evidence{Extra: map[string]string{
+		"task_name":      t.Name,
+		"task_path":      t.Path,
+		"current_sha256": t.SHA256[:16] + "\u2026",
+	}}
+	return f
+}
 
 func taskFindingID(category, name string) string {
 	h := hash.Bytes([]byte(name))

@@ -34,7 +34,8 @@ func TestScheduledTaskRosmarOpsDetail(t *testing.T) {
 		t.Error("a task without rosmarops.exe has a detail")
 	}
 	r := records[0]
-	if taskSHA256(r.Name, r.Path, r.Triggers, r.Actions) != hash.Bytes([]byte(r.Name+"\x00"+r.Path+"\x00"+r.Triggers+"\x00"+r.Actions)) {
+	wantHash := hash.Bytes([]byte(r.Name + "\x00" + r.Path + "\x00" + r.ActionsDetail + "\x00" + r.TriggersDetail + "\x00" + r.UserID + "\x00" + r.RunLevel))
+	if taskSHA256(r.Name, r.Path, r.ActionsDetail, r.TriggersDetail, r.UserID, r.RunLevel) != wantHash {
 		t.Error("the canonical hash changed")
 	}
 }

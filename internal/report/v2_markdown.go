@@ -55,6 +55,8 @@ var staticKeys = []string{
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",
+	// BV-93, B3: a scheduled review that could not finish
+	"notify.run_failed",
 }
 
 // CatalogKeys returns every code the v2 Markdown and the run's console

@@ -67,6 +67,19 @@ func runNoArgs() int {
 		return fail(fmt.Errorf("resolve state path: %w", err))
 	}
 	if !fileExists(cfgPath) && !fileExists(stPath) {
+		// B3 (BV-93): reports already in the folder mean this is not a first
+		// use — the configuration and the state were lost or removed. Never
+		// reinitialize in silence: treat it as J1, state lost, with the red
+		// page (it never returns). Only a truly empty reports folder is a
+		// first use.
+		if reportDir, dirErr := report.DefaultReportDir(); dirErr == nil && priorReportsExist(reportDir) {
+			slog.Warn("double click: reports present but no config or state — treating as state lost (J1)")
+			abortIntegrity("binary_hash_changed",
+				"RosmarOps lost its integrity reference: the state was lost or reset.",
+				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.",
+				abortOptions{lang: lang, stateLost: true, window: true})
+			return exitIntegrity
+		}
 		if _, _, err := initialize(cfgPath, firstRunRepos(cat)); err != nil {
 			return fail(err)
 		}
@@ -75,7 +88,11 @@ func runNoArgs() int {
 	fmt.Println(cat.Text("console.checking", nil))
 	htmlPath, err := runWith(lang, runMode{window: true, log: log})
 	if err != nil {
-		return fail(err)
+		// B3 (BV-93): a double click never fails in silence — the red
+		// "could not finish" page, opened. The run's log was already flushed
+		// by runWith's failure path. Never returns.
+		abortRun(abortOptions{lang: lang, window: true}, err)
+		return exitRunFailed
 	}
 	if openReport(htmlPath) {
 		fmt.Println(cat.Text("console.report_opened", nil))
@@ -140,6 +157,17 @@ func openReport(path string) bool {
 	}
 	slog.Info("report opened", "path", path)
 	return true
+}
+
+// priorReportsExist reports whether the reports directory already holds a
+// report from an earlier run: report.html or any dated report-*.md. Used to
+// tell a true first use (an empty folder) from a lost state (BV-93, B3).
+func priorReportsExist(dir string) bool {
+	if fileExists(filepath.Join(dir, report.HTMLFileName)) {
+		return true
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "report-*.md"))
+	return len(matches) > 0
 }
 
 // pressEnter asks to press Enter and waits for it on a console (U5).

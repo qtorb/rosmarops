@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/proc"
+	"github.com/qtorb/rosmarops/internal/winpath"
 )
 
 // psTimeout is the default wall-clock limit for any single PowerShell call.
@@ -34,18 +36,26 @@ const subprocessWaitDelay = 2 * time.Second
 // The call ends at psTimeout or at ctx's deadline (the global one),
 // whichever comes first; callers may wrap with a tighter deadline if needed.
 func runPS(ctx context.Context, command string) ([]byte, error) {
-	if _, err := exec.LookPath("powershell.exe"); err != nil {
-		// PowerShell not available (non-Windows CI, WSL without interop, etc.)
-		return nil, nil
+	// BV-93, B4: powershell.exe by the absolute path the Windows API gives,
+	// never one found on %PATH%. Off Windows the API gives nothing and we fall
+	// back to PATH; when PowerShell is not there the feature is unavailable.
+	exe := winpath.PowerShellExe()
+	if exe == "" {
+		p, err := exec.LookPath("powershell.exe")
+		if err != nil {
+			return nil, nil
+		}
+		exe = p
 	}
 
 	callCtx, cancel := context.WithTimeout(ctx, psTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(callCtx, "powershell.exe",
+	cmd := exec.CommandContext(callCtx, exe,
 		"-NonInteractive", "-NoProfile",
 		"-Command", command)
-	proc.Hide(cmd) // no window of its own (J3)
+	proc.Hide(cmd)         // no window of its own (J3)
+	cmd.Env = psChildEnv() // BV-93, B4: PSModulePath = system modules only
 	cmd.WaitDelay = subprocessWaitDelay
 
 	var stdout, stderr bytes.Buffer
@@ -60,4 +70,28 @@ func runPS(ctx context.Context, command string) ([]byte, error) {
 		return nil, err
 	}
 	return stdout.Bytes(), nil
+}
+
+// importModule is a PowerShell prefix that loads the named system module by
+// its absolute path (BV-93, B4), so the exact system module loads and not one
+// reached through PSModulePath. Off Windows it is empty: there runPS returns
+// nil before running anything. A system module path never contains a single
+// quote, so single-quoting it is safe.
+func importModule(name string) string {
+	dir := winpath.Module(name)
+	if dir == "" {
+		return ""
+	}
+	return "Import-Module '" + dir + "';"
+}
+
+// psChildEnv is the environment of every PowerShell child: the inherited one
+// with PSModulePath narrowed to the single system module directory (BV-93,
+// B4). Off Windows it is the inherited environment unchanged; PowerShell is
+// unavailable there anyway.
+func psChildEnv() []string {
+	if mods := winpath.SystemModules(); mods == "" {
+		return nil // inherit unchanged off Windows
+	}
+	return winpath.ChildEnv(os.Environ())
 }

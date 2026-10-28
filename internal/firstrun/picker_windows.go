@@ -5,8 +5,11 @@ package firstrun
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/qtorb/rosmarops/internal/winpath"
 )
 
 // Pick opens the folder picker with title and returns the folder chosen, ""
@@ -14,11 +17,18 @@ import (
 // window, so that the dialog shows), with no time limit: the person takes
 // the time they need (U4).
 func Pick(title string) (string, error) {
-	ps, err := exec.LookPath("powershell.exe")
-	if err != nil {
-		return "", fmt.Errorf("folder picker: powershell.exe not found: %w", err)
+	// BV-93, B4: powershell.exe by the absolute system path, with PSModulePath
+	// narrowed to the system module directory.
+	ps := winpath.PowerShellExe()
+	if ps == "" {
+		p, err := exec.LookPath("powershell.exe")
+		if err != nil {
+			return "", fmt.Errorf("folder picker: powershell.exe not found: %w", err)
+		}
+		ps = p
 	}
 	cmd := exec.Command(ps, PickerArgs()...)
+	cmd.Env = winpath.ChildEnv(os.Environ())
 	cmd.Stdin = strings.NewReader(pickerInput(title))
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb

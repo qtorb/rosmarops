@@ -69,7 +69,13 @@ var (
 )
 
 func runRun(inv cli.Invocation) error {
-	_, err := runWith(inv.Flags["lang"], runMode{unattended: inv.Flags["unattended"] == "true"})
+	unattended := inv.Flags["unattended"] == "true"
+	_, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
+	if err != nil && unattended {
+		// B3 (BV-93): a scheduled review never fails in silence — a red page,
+		// a notification and the run_failed exit code. Never returns.
+		abortRun(abortOptions{lang: inv.Flags["lang"], unattended: true}, err)
+	}
 	return err
 }
 
@@ -137,18 +143,25 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return "", fmt.Errorf("create fallback state: %w", err)
 		}
 	}
+	// The engine version the loaded state was written with, read before the
+	// integrity check bumps it: a different version means the binary changed,
+	// so the scheduled-task hash (BV-93, B2) may now cover new fields and must
+	// not flag every task. The scheduled-task scan treats this run as fresh.
+	freshTaskHash := st.EngineVersion != version
 
-	// Determine report directory.
-	reportDir := cfg.ReportDirectory
-	if reportDir == "" {
-		reportDir, err = report.DefaultReportDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve report dir: %w", err)
-		}
+	// B3 (BV-93): integrity is verified before any configuration value is
+	// used, the report (log) directory included — a tampered config must not
+	// redirect a single write before it is caught. Until the check passes,
+	// only the fixed default report directory is written to (the abort report,
+	// the accepted copy and the log); the configured report directory is used
+	// only afterwards.
+	defaultDir, err := report.DefaultReportDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve report dir: %w", err)
 	}
 
 	if runLog != nil {
-		if err := runLog.attach(reportDir); err != nil {
+		if err := runLog.attach(defaultDir); err != nil {
 			return "", err
 		}
 	}
@@ -166,11 +179,18 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		ask.in, ask.out, ask.terminal = strings.NewReader(""), io.Discard, false
 	}
 	integrityNotChecked, err := integrityRun{
-		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: reportDir,
+		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: defaultDir,
 		unattended: unattended, window: m.window, lang: lang, selfHash: hash.Self,
 	}.check()
 	if err != nil {
 		return "", err
+	}
+
+	// The configuration is verified now: its report directory can be used for
+	// the report files that follow.
+	reportDir := cfg.ReportDirectory
+	if reportDir == "" {
+		reportDir = defaultDir
 	}
 	// Invariant §6: every scanner and subprocess runs under the global cap,
 	// which counts from after the integrity questions: the time a person
@@ -397,7 +417,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// --- Scheduled tasks scanner (M7) ---
 		{Name: "scheduledtasks", Run: func(ctx context.Context) func() {
 			currentTasks, tasksErr := plat.ListScheduledTasks(ctx)
-			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks, self)
+			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks, self, freshTaskHash)
 			return func() {
 				weekly = scheduledtasks.WeeklyOf(currentTasks, self)
 				if tasksErr != nil {

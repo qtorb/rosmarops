@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/proc"
+	"github.com/qtorb/rosmarops/internal/winpath"
 )
 
 // timeout bounds the PowerShell call.
@@ -21,13 +21,21 @@ const timeout = 30 * time.Second
 // Run runs the script with toastXML on its standard input (empty: only
 // read the setting) and returns ToastNotifier.Setting.
 func Run(ctx context.Context, toastXML string) (string, error) {
-	if _, err := exec.LookPath("powershell.exe"); err != nil {
-		return "", fmt.Errorf("notify: powershell.exe not found: %w", err)
+	// BV-93, B4: powershell.exe by the absolute system path, with PSModulePath
+	// narrowed to the system module directory.
+	exe := winpath.PowerShellExe()
+	if exe == "" {
+		p, err := exec.LookPath("powershell.exe")
+		if err != nil {
+			return "", fmt.Errorf("notify: powershell.exe not found: %w", err)
+		}
+		exe = p
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "powershell.exe", Args()...)
+	cmd := exec.CommandContext(ctx, exe, Args()...)
 	proc.Hide(cmd)
+	cmd.Env = winpath.ChildEnv(os.Environ())
 	cmd.Stdin = strings.NewReader(toastXML)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -43,9 +51,11 @@ func Run(ctx context.Context, toastXML string) (string, error) {
 // exit code says nothing about the outcome, so only a failure to start it
 // is an error. It gets no hidden window: the browser must show.
 func OpenReport(path string) error {
-	exe := "explorer.exe"
-	if root := os.Getenv("SystemRoot"); root != "" {
-		exe = filepath.Join(root, "explorer.exe")
+	// BV-93, B4: explorer.exe by the absolute path the Windows API gives, not
+	// %SystemRoot% from the environment.
+	exe := winpath.ExplorerExe()
+	if exe == "" {
+		exe = "explorer.exe"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

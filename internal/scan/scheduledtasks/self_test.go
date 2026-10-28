@@ -3,6 +3,7 @@ package scheduledtasks_test
 import (
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
 )
@@ -100,16 +101,23 @@ func TestWeeklyOf(t *testing.T) {
 	}
 }
 
-// J6: the own task gives no scheduled_task_new; the same task with any
-// difference still does.
+// J6: the own task gives no finding; the same exe's task altered so it no
+// longer meets J6 gives own_task_changed (BV-93, B2). A non-fresh baseline is
+// used so the run exercises the comparison, not the first-run path.
 func TestScanScheduledTasks_OwnTaskSilent(t *testing.T) {
-	if got := scheduledtasks.ScanScheduledTasks([]platform.ScheduledTask{ownTask()}, nil, nil, self).Findings; len(got) != 0 {
+	if got := scheduledtasks.ScanScheduledTasks([]platform.ScheduledTask{ownTask()}, sentinel, nil, self, false).Findings; len(got) != 0 {
 		t.Errorf("own task: %d findings", len(got))
 	}
 	elevated := ownTask()
 	elevated.RosmarOps.RunLevel = "Highest"
-	got := scheduledtasks.ScanScheduledTasks([]platform.ScheduledTask{elevated}, nil, nil, self).Findings
-	if len(got) != 1 || got[0].Category != "scheduled_task_new" {
-		t.Errorf("not own: %+v", got)
+	got := scheduledtasks.ScanScheduledTasks([]platform.ScheduledTask{elevated}, sentinel, nil, self, false).Findings
+	if len(got) != 1 || got[0].Category != "own_task_changed" {
+		t.Errorf("tampered own task: %+v", got)
+	}
+	// Even allow-listed by name, a tampered own task stays visible.
+	allow := []config.AllowEntryID{{ID: "RosmarOps weekly review", Note: "mine"}}
+	got = scheduledtasks.ScanScheduledTasks([]platform.ScheduledTask{elevated}, sentinel, allow, self, false).Findings
+	if len(got) != 1 || got[0].Category != "own_task_changed" {
+		t.Errorf("tampered own task (allow-listed): %+v", got)
 	}
 }

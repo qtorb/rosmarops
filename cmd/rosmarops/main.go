@@ -26,6 +26,23 @@ var version = "0.1.0-dev"
 // Integrity fields equal to zeroHash mean "baseline pending" — NOT a mismatch.
 const zeroHash = "0000000000000000000000000000000000000000000000000000000000000000"
 
+// Process exit codes. A plain error exits 1; an integrity abort, 2; a
+// scheduled review or double click that could not finish, 3 (BV-93, B3) — a
+// distinct code so a run that never produced a report is told apart from a
+// clean red result and from an integrity abort.
+const (
+	exitIntegrity = 2
+	exitRunFailed = 3
+)
+
+// The aborts, as package vars so tests can intercept them. In production both
+// write their red report and call os.Exit, so they never return; the explicit
+// returns after the call sites are reached only when a test replaces them.
+var (
+	abortRun       = abortRunFailed
+	abortIntegrity = abortWithIntegrityFailure
+)
+
 func main() {
 	if len(os.Args) == 1 {
 		os.Exit(runNoArgs()) // a double click (U1); help, --help and -h still show the help
@@ -216,13 +233,57 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 			if o.window {
 				fmt.Fprintf(os.Stderr, "\n🔴 ABORT: %s\n%s\n", why, action)
 				pressEnter(cat)
-				os.Exit(2)
+				os.Exit(exitIntegrity)
 			}
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\n🔴 ABORT: %s\n%s\n", why, action)
-	os.Exit(2)
+	os.Exit(exitIntegrity)
+}
+
+// abortRunFailed is B3 (BV-93): a scheduled review and a double click never
+// fail in silence. On any error from the run, it overwrites report.html in
+// every language with a red "the review could not finish" page — there is no
+// new report, so an earlier green one must not keep showing as today's — then
+// shows the scheduled review's notification (unattended) or opens the page
+// (window), and exits with the run_failed code. This function never returns.
+func abortRunFailed(o abortOptions, cause error) {
+	slog.Error("run failed", "err", cause)
+	reportDir, err := report.DefaultReportDir()
+	if err != nil {
+		slog.Error("run_failed abort: could not resolve report dir", "err", err)
+		fmt.Fprintln(os.Stderr, "error:", cause)
+		os.Exit(exitRunFailed)
+	}
+	cat, catErr := catalog.Load(o.lang)
+	if catErr != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	// The red page in every language and in report.html (U7).
+	pages := map[string]string{}
+	for _, l := range catalog.Langs() {
+		if c, err := catalog.Load(l); err == nil {
+			pages[l] = report.RenderRunFailedHTML(c, time.Now(), time.Local)
+		}
+	}
+	htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+	if err != nil {
+		slog.Error("run_failed abort: could not write report.html", "err", err)
+		fmt.Fprintln(os.Stderr, "error:", cause)
+		os.Exit(exitRunFailed)
+	}
+	switch {
+	case o.unattended:
+		defaultNotifier.announce(context.Background(), cat.Text("notify.run_failed", nil), htmlPath)
+	case o.window:
+		openReport(htmlPath)
+		fmt.Fprintln(os.Stdout, "error:", cause)
+		fmt.Fprintln(os.Stdout, filepath.Join(reportDir, RunLogName))
+		pressEnter(cat)
+	}
+	fmt.Fprintf(os.Stderr, "\n🔴 %s\n", cause)
+	os.Exit(exitRunFailed)
 }
 
 // resolveCfgPath mirrors config.ResolveConfigPath without importing that package.

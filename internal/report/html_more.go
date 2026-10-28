@@ -203,6 +203,7 @@ func moreKeys() []string {
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
 		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope",
 		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",
+		"html.abort.run_failed", // BV-93, B3: the run-could-not-finish page
 	}
 	for _, d := range []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"} {
 		keys = append(keys, "html.day."+d)

@@ -27,7 +27,11 @@ type psMpPreferenceResponse struct {
 // Returns nil, nil if PowerShell is unavailable or Get-MpPreference fails
 // (e.g., Defender not installed, insufficient privileges).
 func (w *WindowsPlatform) ListDefenderExclusions(ctx context.Context) ([]platform.DefenderExclusion, error) {
-	const psCmd = `try {` +
+	// BV-93, B4: load Defender from its absolute system path, so Get-MpPreference
+	// is not resolved through a redirectable module path. A load failure is
+	// caught below and reported as no exclusions, as any other failure is.
+	psCmd := `try {` +
+		importModule("Defender") +
 		`$p=Get-MpPreference;` +
 		`@{` +
 		`ExclusionPath=@($p.ExclusionPath);` +

@@ -40,6 +40,26 @@ func RenderAbortHTML(cat catalog.Catalog, at time.Time, loc *time.Location, mdBa
 	return page
 }
 
+// RenderRunFailedHTML is the red report.html written when a scheduled review
+// or a double click could not finish (BV-93, B3): the run produced no new
+// report, so the page says the previous one is not up to date and the person
+// must open rosmarops.exe to see the error. A run that cannot finish must not
+// leave an earlier green report showing as if it were today's. Only catalog
+// texts; no script.
+func RenderRunFailedHTML(cat catalog.Catalog, at time.Time, loc *time.Location) string {
+	if loc == nil {
+		loc = time.Local
+	}
+	t := func(key string, p map[string]string) string { return html.EscapeString(cat.Text(key, p)) }
+	page := fmt.Sprintf(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><style>%s</style></head><body><main>`,
+		html.EscapeString(cat.Lang()), t("html.doc_title", nil), htmlCSS())
+	page += `<div class="hdr">` + t("html.header", map[string]string{"date": cat.DayLabel(at.In(loc))}) + `</div>`
+	page += `<h1 class="hl">` + t("html.status.red", nil) + `</h1>`
+	page += `<p class="meta">` + t("html.abort.run_failed", nil) + `</p>`
+	page += `</main></body></html>` + "\n"
+	return page
+}
+
 // WriteAbortHTML writes the abort's pages (decision 2026-10-27, primer uso
 // con un solo .exe, U7): report.<lang>.html in each language of pages, and
 // report.html in runLang, so that no page is left showing an earlier
