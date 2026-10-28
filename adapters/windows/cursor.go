@@ -72,19 +72,33 @@ func ReadCursor(home, enterpriseHooks string, repoRoots []string) platform.Curso
 	return scan
 }
 
-// cursorDoc is the subset of Cursor's files RosmarOps keeps. Unknown keys
-// are ignored: each file has more keys than RosmarOps reads.
-type cursorDoc struct {
-	TerminalAllowlist        *[]string `json:"terminalAllowlist"`
-	MCPAllowlist             *[]string `json:"mcpAllowlist"`
-	Type                     string    `json:"type"`
-	ReadBoundary             string    `json:"readBoundary"`
-	AdditionalReadwritePaths []string  `json:"additionalReadwritePaths"`
-	Permissions              struct {
-		Allow []string `json:"allow"`
-		Deny  []string `json:"deny"`
-	} `json:"permissions"`
-}
+// The subset of each Cursor file RosmarOps keeps, one struct per file type
+// (BV-94b): the strict reading of keys (jsonkeys, B5) compares a file's keys
+// only with the keys RosmarOps reads from that file. Unknown keys are
+// ignored: each file has more keys than RosmarOps reads.
+type (
+	// cursorPermissionsDoc is permissions.json.
+	cursorPermissionsDoc struct {
+		TerminalAllowlist *[]string `json:"terminalAllowlist"`
+		MCPAllowlist      *[]string `json:"mcpAllowlist"`
+	}
+	// cursorSandboxDoc is sandbox.json.
+	cursorSandboxDoc struct {
+		Type                     string   `json:"type"`
+		ReadBoundary             string   `json:"readBoundary"`
+		AdditionalReadwritePaths []string `json:"additionalReadwritePaths"`
+	}
+	// cursorCLIDoc is cli-config.json and cli.json.
+	cursorCLIDoc struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+			Deny  []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	// cursorHooksDoc is hooks.json: RosmarOps reads none of its keys (the
+	// file itself is an executable resource of Cursor).
+	cursorHooksDoc struct{}
+)
 
 // readCursorFile reads one Cursor file. permissions.json is JSONC
 // (https://cursor.com/docs/reference/permissions.md): its comments are
@@ -99,8 +113,22 @@ func readCursorFile(path, kind, scope, root string) platform.CursorFile {
 	if kind == platform.CursorPermissions {
 		raw = jsonc.Strip(raw)
 	}
-	var doc cursorDoc
-	conflicts, err := jsonkeys.Decode(raw, &doc)
+	var (
+		perm    cursorPermissionsDoc
+		sandbox cursorSandboxDoc
+		cli     cursorCLIDoc
+		hooks   cursorHooksDoc
+		doc     any = &hooks
+	)
+	switch kind {
+	case platform.CursorPermissions:
+		doc = &perm
+	case platform.CursorSandbox:
+		doc = &sandbox
+	case platform.CursorCLI:
+		doc = &cli
+	}
+	conflicts, err := jsonkeys.Decode(raw, doc)
 	if err != nil {
 		slog.Warn("cursor: could not parse", "path", path, "err", err)
 		f.Status, f.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
@@ -109,16 +137,16 @@ func readCursorFile(path, kind, scope, root string) platform.CursorFile {
 	f.KeyConflicts = conflicts
 	switch kind {
 	case platform.CursorPermissions:
-		if doc.TerminalAllowlist != nil {
-			f.TerminalAllowlist, f.HasTerminalAllowlist = append([]string{}, *doc.TerminalAllowlist...), true
+		if perm.TerminalAllowlist != nil {
+			f.TerminalAllowlist, f.HasTerminalAllowlist = append([]string{}, *perm.TerminalAllowlist...), true
 		}
-		if doc.MCPAllowlist != nil {
-			f.MCPAllowlist, f.HasMCPAllowlist = append([]string{}, *doc.MCPAllowlist...), true
+		if perm.MCPAllowlist != nil {
+			f.MCPAllowlist, f.HasMCPAllowlist = append([]string{}, *perm.MCPAllowlist...), true
 		}
 	case platform.CursorSandbox:
-		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = doc.Type, doc.ReadBoundary, doc.AdditionalReadwritePaths
+		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = sandbox.Type, sandbox.ReadBoundary, sandbox.AdditionalReadwritePaths
 	case platform.CursorCLI:
-		f.CLIAllow, f.CLIDeny = doc.Permissions.Allow, doc.Permissions.Deny
+		f.CLIAllow, f.CLIDeny = cli.Permissions.Allow, cli.Permissions.Deny
 	}
 	return f
 }

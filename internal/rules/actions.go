@@ -107,8 +107,8 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 				if !ok {
 					continue
 				}
-				if p, ok := rulePath(file); ok {
-					act.Rules = append(act.Rules, m.RuleTool+"("+untrusted.PlainText(p)+")") // B7: a path read from disk
+				if p, ok := rulePath(file); ok && proposable(p) {
+					act.Rules = append(act.Rules, m.RuleTool+"("+p+")")
 				} else {
 					uncovered[id] = true
 				}
@@ -122,8 +122,8 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 			}
 			act.Key = m.Setting
 			for _, file := range credFilesOf(f) {
-				if p, ok := rulePath(file); ok {
-					act.Rules = append(act.Rules, m.RuleTool+"("+untrusted.PlainText(p)+")") // B7: a path read from disk
+				if p, ok := rulePath(file); ok && proposable(p) {
+					act.Rules = append(act.Rules, m.RuleTool+"("+p+")")
 				} else {
 					uncoveredFile = true
 				}
@@ -283,6 +283,14 @@ func configExists(g graph.Graph, file string) bool {
 	}
 	return false
 }
+
+// proposable reports whether a path can go in a proposed Read or Edit rule
+// as it is (decision 2026-10-27, blindaje, B7, as corrected by BV-94b): a
+// path that untrusted.PlainText would change (a control, bidi or backtick
+// character, or more than its 200 characters) gets no rule, never a cut or
+// altered one. Its finding and its sanitised location still show; the
+// action covers the rest, or is not proposed.
+func proposable(p string) bool { return untrusted.PlainText(p) == p }
 
 // rulePath is the absolute pattern of a file in a Read or Edit rule: "//"
 // and the path in POSIX form, as Claude Code matches it on Windows

@@ -233,3 +233,38 @@ func htmlText(cat catalog.Catalog, key string) string {
 func escapeHTML(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;").Replace(s)
 }
+
+// BV-94b, 1: own_task_changed (yellow) and config_key_case_conflict (red)
+// are lines of «Other signals on this computer», with their own texts, in
+// en and es; the JSON with them validates.
+func TestBV94b_SignalsInHTML(t *testing.T) {
+	g := v2Graph(t)
+	own := finding.NewFinding("own_task_changed:0123456789abcdef", finding.SeverityYellow, "own_task_changed", "t")
+	conflict := configkeys.Findings(platform.MCPScan{Sources: []platform.MCPSource{{ConfigPath: "/src/a/.mcp.json", KeyConflicts: []string{"/mcpServers/db/Command"}}}},
+		platform.ClaudeSettingsScan{}, platform.CursorScan{})
+	v := bv94Build(t, &g, func(in *report.V2Input) {
+		in.V1 = report.Build("t", append([]finding.Finding{own}, conflict...), nil, 0, 0, 0, 0, nil)
+	})
+	got := map[string]int{}
+	for _, s := range v.Signals {
+		got[s.Category] = s.Count
+	}
+	if got["own_task_changed"] != 1 || got["config_key_case_conflict"] != 1 {
+		t.Fatalf("signals %+v", v.Signals)
+	}
+	if _, err := report.RenderV2JSON(v); err != nil {
+		t.Fatal(err)
+	}
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		for _, c := range []string{"own_task_changed", "config_key_case_conflict"} {
+			if !cat.HasOwn("html.signal."+c) || !strings.Contains(page, htmlText(cat, "html.signal."+c)+"</li>") {
+				t.Errorf("%s: no signal line for %s", lang, c)
+			}
+		}
+		if !strings.Contains(page, `background:var(--ambfill)"></span>`+htmlText(cat, "html.signal.own_task_changed")) {
+			t.Errorf("%s: own_task_changed is yellow, its dot must be too", lang)
+		}
+	}
+}

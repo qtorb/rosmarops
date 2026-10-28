@@ -76,7 +76,7 @@
               "command_sha256": {
                 "type": "string",
                 "pattern": "^[a-f0-9]{64}$",
-                "description": "SHA-256 of the concatenated (command + args + env keys)."
+                "description": "HMAC-SHA256, keyed with the local salt, of the concatenated (command + args + env keys): never a bare SHA-256, since the arguments may hold a secret."
               },
               "first_seen":     { "type": "string", "format": "date-time" },
               "destination_ref": {

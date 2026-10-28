@@ -79,3 +79,31 @@ func TestAllowListWithoutSalt(t *testing.T) {
 		t.Errorf("no salt: findings %d, hits %d, baseline %d", len(r.Findings), len(r.Hits), len(r.NewBaseline))
 	}
 }
+
+// BV-94b, 2: a server absent from a run keeps its accepted destination while
+// its entry stays; when it comes back pointing elsewhere, the warning
+// returns. Removing the entry removes the record.
+func TestAllowListRecordSurvivesAbsence(t *testing.T) {
+	s := srv("claude-code", "dev-tool", `C:\Users\testuser\Documents\dev\mcp-server.exe`, []string{"--port", "1"})
+	allow := []config.AllowEntryID{{ID: "claude-code:dev-tool", Note: "intentional dev setup"}}
+	r1 := mcp.ScanMCPServers([]platform.MCPServer{s}, allow, testHomeDir, bind)
+
+	gone := bind
+	gone.Baseline, gone.Now = r1.NewBaseline, bind.Now.Add(time.Hour)
+	r2 := mcp.ScanMCPServers(nil, allow, testHomeDir, gone)
+	if len(r2.NewBaseline) != 1 || r2.NewBaseline[0] != r1.NewBaseline[0] {
+		t.Fatalf("absent: record %+v, want the accepted one kept", r2.NewBaseline)
+	}
+
+	back := gone
+	back.Baseline, back.Now = r2.NewBaseline, gone.Now.Add(time.Hour)
+	moved := s
+	moved.Args = []string{"--port", "2"}
+	if r3 := mcp.ScanMCPServers([]platform.MCPServer{moved}, allow, testHomeDir, back); len(r3.Findings) != 1 || len(r3.Hits) != 0 {
+		t.Errorf("back elsewhere: findings %d, hits %d; the warning must return", len(r3.Findings), len(r3.Hits))
+	}
+
+	if r := mcp.ScanMCPServers(nil, nil, testHomeDir, gone); len(r.NewBaseline) != 0 {
+		t.Errorf("entry removed: record %+v kept", r.NewBaseline)
+	}
+}

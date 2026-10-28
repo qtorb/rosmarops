@@ -42,7 +42,12 @@ var (
 		"global_package_new": "global_package_new", "npm_registry_non_standard": "npm_registry_non_standard",
 		"suspicious_script_unexpected_location": "suspicious_script_unexpected_location",
 		"vscode_workspace_trust_disabled":       "vscode_workspace_trust_disabled",
+		// BV-94b: the tampering signals of the hardening cuts.
+		"own_task_changed": "own_task_changed", "config_key_case_conflict": "config_key_case_conflict",
 	}
+	// anySeverity are the signals shown whatever their severity: the own
+	// weekly task changed is yellow, and still a sign of tampering (BV-94b).
+	anySeverity = map[string]bool{"own_task_changed": true}
 )
 
 // Signal is one line of «Other signals on this computer»: a technical-report
@@ -50,6 +55,8 @@ var (
 type Signal struct {
 	Category string `json:"category"`
 	Count    int    `json:"count"`
+
+	red bool // a red finding is among them: the dot's colour
 }
 
 // agentExtension is the product name of a new VS Code extension the
@@ -81,19 +88,20 @@ func technicalFindings(fs []finding.Finding) []finding.Finding {
 	return out
 }
 
-// signals are the technical-report categories with a red finding, in the
-// order of §2.1's list, with their count.
+// signals are the technical-report categories with a red finding (or any
+// finding, for anySeverity), in the order of §2.1's list, with their count.
 func signals(fs []finding.Finding) []Signal {
-	counts := map[string]int{}
+	counts, red := map[string]int{}, map[string]bool{}
 	for _, f := range fs {
-		if c, ok := signalCategory[f.Category]; ok && f.Severity == finding.SeverityRed && technical(f) {
+		if c, ok := signalCategory[f.Category]; ok && (f.Severity == finding.SeverityRed || anySeverity[c]) && technical(f) {
 			counts[c]++
+			red[c] = red[c] || f.Severity == finding.SeverityRed
 		}
 	}
 	out := []Signal{}
 	for _, c := range SignalOrder {
 		if counts[c] > 0 {
-			out = append(out, Signal{Category: c, Count: counts[c]})
+			out = append(out, Signal{Category: c, Count: counts[c], red: red[c]})
 		}
 	}
 	return out
@@ -104,7 +112,7 @@ var SignalOrder = []string{
 	"workflow_dangerous_pattern", "git_hook_with_network", "core_hooks_path_redirected", "git_alias_with_shell",
 	"dependency_lifecycle_script_network", "shell_profile_modified", "av_exclusion_new", "scheduled_task_new",
 	"global_package_new", "npm_registry_non_standard", "suspicious_script_unexpected_location",
-	"vscode_workspace_trust_disabled",
+	"vscode_workspace_trust_disabled", "own_task_changed", "config_key_case_conflict",
 }
 
 // envFilesTracked counts the .env files tracked by git that hold no

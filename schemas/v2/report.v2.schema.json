@@ -1224,7 +1224,9 @@
             "global_package_new",
             "npm_registry_non_standard",
             "suspicious_script_unexpected_location",
-            "vscode_workspace_trust_disabled"
+            "vscode_workspace_trust_disabled",
+            "own_task_changed",
+            "config_key_case_conflict"
           ]
         },
         "count": {

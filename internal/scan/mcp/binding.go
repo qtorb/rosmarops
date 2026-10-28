@@ -18,7 +18,9 @@ import (
 // destination_ref (the v2 graph's, BV-91) in state.baselines.mcp_servers.
 // If the server then points somewhere else, the entry stops applying and the
 // warning returns, until the entry is accepted again: a new accepted_at,
-// later than the recorded first_seen, records the new destination.
+// later than the recorded first_seen, records the new destination. The
+// records of a server stay while its entry is in allow_list, even in a run
+// that does not see the server; removing the entry removes them.
 //
 // Without the salt no destination can be checked: no entry applies
 // (fail-secure).
@@ -58,6 +60,7 @@ func (b Binding) bind(current []platform.MCPServer, allow map[string]config.Allo
 			out = append(out, e)
 		}
 	}
+	present := map[key]bool{}
 	for i, srv := range current {
 		if !srv.LoadsMCP {
 			continue
@@ -67,6 +70,7 @@ func (b Binding) bind(current []platform.MCPServer, allow map[string]config.Allo
 		if !ok {
 			continue
 		}
+		present[k] = true
 		ref := graph.DestinationRef(b.Salt, srv)
 		if ref == "" {
 			continue // nothing to bind to: the entry does not apply
@@ -90,6 +94,16 @@ func (b Binding) bind(current []platform.MCPServer, allow map[string]config.Allo
 		default:
 			// It points somewhere else since the entry was accepted: the
 			// entry does not apply, and the accepted destination stays.
+			for _, e := range prev {
+				keep(e)
+			}
+		}
+	}
+	// A server absent from this run keeps its accepted destinations while
+	// its entry stays in allow_list (BV-94b): coming back pointing
+	// elsewhere, it is warned about again.
+	for k, prev := range recorded {
+		if _, ok := allow[k.client+":"+k.name]; ok && !present[k] {
 			for _, e := range prev {
 				keep(e)
 			}

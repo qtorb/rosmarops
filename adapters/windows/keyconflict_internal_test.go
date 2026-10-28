@@ -81,14 +81,52 @@ func TestKeyConflictVSCodeVars(t *testing.T) {
 	}
 }
 
-// cursorDoc: Cursor's permissions, sandbox and cli files.
-func TestKeyConflictCursorDoc(t *testing.T) {
-	p := writeTemp(t, "sandbox.json", `{"type": "workspace_readwrite", "ReadBoundary": "none", "readBoundary": "workspace"}`)
-	f := readCursorFile(p, platform.CursorSandbox, platform.CursorScopeUser, "")
-	if want := []string{"/ReadBoundary"}; !reflect.DeepEqual(f.KeyConflicts, want) {
-		t.Errorf("conflicts %q, want %q", f.KeyConflicts, want)
+// Cursor, one test per file (BV-94b): a file's keys are compared only with
+// the keys RosmarOps reads from that file; a known key of another Cursor
+// file gives nothing.
+func TestKeyConflictCursorByFile(t *testing.T) {
+	for _, c := range []struct {
+		name, kind, content string
+		want                []string
+		check               func(platform.CursorFile) bool
+	}{
+		{
+			"permissions.json", platform.CursorPermissions,
+			`{"TerminalAllowlist": ["rm"], "terminalAllowlist": ["ls"], "Type": "x", "ReadBoundary": "none", "Permissions": {}}`,
+			[]string{"/TerminalAllowlist"},
+			func(f platform.CursorFile) bool {
+				return len(f.TerminalAllowlist) == 1 && f.TerminalAllowlist[0] == "ls"
+			},
+		},
+		{
+			"sandbox.json", platform.CursorSandbox,
+			`{"type": "workspace_readwrite", "ReadBoundary": "none", "readBoundary": "workspace", "MCPAllowlist": [], "Permissions": {}}`,
+			[]string{"/ReadBoundary"},
+			func(f platform.CursorFile) bool { return f.ReadBoundary == "workspace" },
+		},
+		{
+			"cli-config.json", platform.CursorCLI,
+			`{"permissions": {"Allow": ["Shell(*)"], "deny": []}, "Type": "x", "terminalAllowlist": []}`,
+			[]string{"/permissions/Allow"},
+			func(f platform.CursorFile) bool { return len(f.CLIAllow) == 0 },
+		},
+		{
+			"hooks.json", platform.CursorHooks,
+			`{"version": 1, "Type": "x", "Permissions": {}, "ReadBoundary": "none", "hooks": {}}`,
+			nil,
+			func(platform.CursorFile) bool { return true },
+		},
+	} {
+		p := writeTemp(t, c.name, c.content)
+		f := readCursorFile(p, c.kind, platform.CursorScopeUser, "")
+		if f.Status != platform.MCPSourceRead || !reflect.DeepEqual(f.KeyConflicts, c.want) || !c.check(f) {
+			t.Errorf("%s: status %s, conflicts %q (want %q), read %+v", c.name, f.Status, f.KeyConflicts, c.want, f)
+		}
 	}
-	if f.ReadBoundary != "workspace" {
-		t.Errorf("readBoundary %q", f.ReadBoundary)
+
+	// Cursor's mcp.json is read as an MCP source: its own keys only.
+	p := writeTemp(t, "mcp.json", `{"mcpServers": {"s": {"command": "node", "Command": "evil", "url": "https://x.example"}}, "ReadBoundary": "none", "TerminalAllowlist": []}`)
+	if _, src := ReadMCPFile(p, "cursor", true); !reflect.DeepEqual(src.KeyConflicts, []string{"/mcpServers/s/Command"}) {
+		t.Errorf("mcp.json: conflicts %q", src.KeyConflicts)
 	}
 }

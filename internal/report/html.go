@@ -349,7 +349,11 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 			if sg.Count > 1 {
 				n = ` <span class="n">· ` + strconv.Itoa(sg.Count) + `</span>`
 			}
-			c.w(`<li><span class="dot" style="background:var(--redfill)"></span>%s%s</li>`, c.t("html.signal."+sg.Category, nil), n)
+			fill := "var(--redfill)"
+			if !sg.red {
+				fill = "var(--ambfill)" // a yellow signal (own_task_changed)
+			}
+			c.w(`<li><span class="dot" style="background:%s"></span>%s%s</li>`, fill, c.t("html.signal."+sg.Category, nil), n)
 		}
 		c.w(`</ul></div>`)
 	}

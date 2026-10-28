@@ -593,3 +593,44 @@ func TestEvaluate_TitleOrder(t *testing.T) {
 		t.Errorf("title %s/%s, others %d, locations %v", f.Params.Service, f.Params.Scope, f.OthersCount(), f.Evidence.Locations)
 	}
 }
+
+// BV-94b, 4 (blindaje B7): a Read(//…) value is never cut or altered. A
+// file whose path untrusted.PlainText would change (a backtick, a control
+// character, more than 200 characters) gets no rule; the finding keeps
+// every location and the rule of the clean file is still proposed.
+func TestAskReadRule_PathNotPlainNotProposed(t *testing.T) {
+	tick := repoWeb + "/a`b/.env.local"
+	long := repoWeb + "/" + strings.Repeat("d", 210) + "/.env.local"
+	g := scenario(t, platform.ClaudePermissions{}, []entry{
+		{dashEnv, 4, "SUPABASE_SERVICE_ROLE_KEY", serviceRole},
+		{tick, 1, "SUPABASE_SERVICE_ROLE_KEY", serviceRole},
+		{long, 1, "SUPABASE_SERVICE_ROLE_KEY", serviceRole},
+	})
+	res := evaluate(t, g)
+	var found bool
+	for _, f := range res.Findings {
+		if !contains(f.Evidence.Locations, tick+":1") {
+			continue
+		}
+		found = true
+		if !contains(f.Evidence.Locations, long+":1") || !contains(f.Evidence.Locations, dashEnv+":4") {
+			t.Errorf("locations %v", f.Evidence.Locations)
+		}
+		asked := false
+		for _, a := range f.Actions {
+			if a.Code != rules.ActionAskReadRule {
+				continue
+			}
+			asked = true
+			if !reflect.DeepEqual(a.Rules, []string{"Read(/" + dashEnv + ")"}) || a.Completeness != rules.CompletenessPartial {
+				t.Errorf("ask rule %v (%s): only the clean file's", a.Rules, a.Completeness)
+			}
+		}
+		if !asked {
+			t.Error("no ask_read_rule action: the clean file's rule must still be proposed")
+		}
+	}
+	if !found {
+		t.Fatal("no finding with the backtick path — test would be vacuous")
+	}
+}
