@@ -363,6 +363,18 @@ type CredentialFileScan struct {
 	// Failed are files that exist but were not read, and repositories over
 	// the file-count limit. Reason is "<code>: <detail>".
 	Failed []CredentialFailure
+
+	// KeyConflicts are the keys of the JSON credential files read with
+	// exact keys (Codex's .credentials.json, Hermes Agent's auth.json) that
+	// match a key RosmarOps reads only without regard to case (decision
+	// 2026-10-27, blindaje, B5): not read, and each one a
+	// config_key_case_conflict finding.
+	KeyConflicts []KeyConflict
+}
+
+// KeyConflict is one such key: its file and its JSON Pointer.
+type KeyConflict struct {
+	Path, Pointer string
 }
 
 // CredentialEntry is one key and value read from a credential file.

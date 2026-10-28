@@ -51,6 +51,22 @@ func Findings(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor
 		add(f.Path, f.KeyConflicts)
 	}
 
+	return build(all)
+}
+
+// FromCredentialFiles is one red finding per file and key of the JSON
+// credential files read with exact keys (BV-96: Codex's .credentials.json,
+// Hermes Agent's auth.json).
+func FromCredentialFiles(scan platform.CredentialFileScan) []finding.Finding {
+	all := make([]conflict, 0, len(scan.KeyConflicts))
+	for _, c := range scan.KeyConflicts {
+		all = append(all, conflict{c.Path, c.Pointer})
+	}
+	return build(all)
+}
+
+// build is one finding per file and key, sorted by id.
+func build(all []conflict) []finding.Finding {
 	cat := catalog.Source()
 	seen := map[string]bool{}
 	var out []finding.Finding

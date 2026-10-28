@@ -35,3 +35,15 @@ func TestFindings(t *testing.T) {
 		t.Error("findings with no conflict")
 	}
 }
+
+// BV-96: the key conflicts of the JSON credential files read with exact keys
+// are findings too.
+func TestFromCredentialFiles(t *testing.T) {
+	fs := FromCredentialFiles(platform.CredentialFileScan{KeyConflicts: []platform.KeyConflict{
+		{Path: "/h/hermes/auth.json", Pointer: "/credential_pool/p/0/Api_Key"},
+		{Path: "/h/hermes/auth.json", Pointer: "/credential_pool/p/0/Api_Key"},
+	}})
+	if len(fs) != 1 || fs[0].Severity != finding.SeverityRed || fs[0].Evidence.File != "/h/hermes/auth.json" {
+		t.Errorf("findings %+v", fs)
+	}
+}

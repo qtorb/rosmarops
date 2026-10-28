@@ -344,7 +344,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				}
 			}
 			scanned = credfiles.AddEnvFiles(scanned, envFiles)
-			return func() { credFiles = scanned }
+			return func() {
+				credFiles = scanned
+				// B5 for the key files read with exact keys (BV-96).
+				findings = append(findings, configkeys.FromCredentialFiles(scanned)...)
+			}
 		}},
 
 		// --- v2 graph: MCP agents and loads edges, Claude Code permissions,

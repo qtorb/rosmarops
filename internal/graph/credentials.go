@@ -75,6 +75,17 @@ var credentialKinds = map[string]credentialKind{
 	"codex_refresh_token":         {CredentialOAuthToken, "openai"},
 	"codex_id_token":              {CredentialOAuthToken, "openai"},
 	"codex_personal_access_token": {CredentialAPIKey, "openai"},
+
+	// N1b (BV-96): Codex's MCP OAuth fallback file and Hermes Agent's
+	// auth.json. The service behind them is not stated in the file (an MCP
+	// server; a Hermes provider), so it is unknown; a value a built-in
+	// pattern recognises takes that pattern's kind instead.
+	"codex_mcp_access_token":  {CredentialOAuthToken, ServiceUnknown},
+	"codex_mcp_refresh_token": {CredentialOAuthToken, ServiceUnknown},
+	"hermes_access_token":     {CredentialOAuthToken, ServiceUnknown},
+	"hermes_refresh_token":    {CredentialOAuthToken, ServiceUnknown},
+	"hermes_agent_key":        {CredentialAPIKey, ServiceUnknown},
+	"hermes_api_key":          {CredentialAPIKey, ServiceUnknown},
 }
 
 // supabaseKeyScopes is the observed_scope read from the prefix of Supabase

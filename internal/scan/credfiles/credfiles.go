@@ -38,15 +38,17 @@ const MaxFileBytes = 2 * 1024 * 1024
 type format int
 
 const (
-	formatEnv            format = iota // KEY=VALUE lines (.env)
-	formatNpmrc                        // npmrc: the _authToken keys only
-	formatINI                          // ini key = value lines (~/.aws/credentials)
-	formatGitCredentials               // one URL per line, scheme://user:secret@host
-	formatGhHosts                      // GitHub CLI hosts.yml: oauth_token keys
-	formatRailway                      // Railway CLI config JSON: user.token, user.accessToken, user.refreshToken
-	formatLines                        // any other file: each line, key=value or key: value when it looks so
-	formatVSCodeSettings               // VS Code user settings.json (JSONC): terminal.integrated.env.* only
-	formatCodexAuth                    // Codex auth.json: OPENAI_API_KEY, tokens.*_token, personal_access_token
+	formatEnv              format = iota // KEY=VALUE lines (.env)
+	formatNpmrc                          // npmrc: the _authToken keys only
+	formatINI                            // ini key = value lines (~/.aws/credentials)
+	formatGitCredentials                 // one URL per line, scheme://user:secret@host
+	formatGhHosts                        // GitHub CLI hosts.yml: oauth_token keys
+	formatRailway                        // Railway CLI config JSON: user.token, user.accessToken, user.refreshToken
+	formatLines                          // any other file: each line, key=value or key: value when it looks so
+	formatVSCodeSettings                 // VS Code user settings.json (JSONC): terminal.integrated.env.* only
+	formatCodexAuth                      // Codex auth.json: OPENAI_API_KEY, tokens.*_token, personal_access_token
+	formatCodexCredentials               // Codex .credentials.json: <key>.access_token, <key>.refresh_token (BV-96)
+	formatHermesAuth                     // Hermes Agent auth.json: providers.* and credential_pool.* tokens and keys (BV-96)
 )
 
 // userFile is one of the user's credential files.
@@ -145,6 +147,11 @@ func userFiles(home string, env Env) []userFile {
 	for _, profile := range profileDirs(filepath.Join(hermes, "profiles")) {
 		out = append(out, userFile{filepath.Join(profile, ".env"), formatEnv})
 	}
+	// N1b (decision 2026-10-27, agentes nuevos, signed 2026-10-28; BV-92
+	// §4): Codex's MCP OAuth fallback file, absent when the OS keyring
+	// works (its absence is normal), and Hermes Agent's auth.json.
+	out = append(out, userFile{filepath.Join(agentdirs.CodexHome(home, adEnv), ".credentials.json"), formatCodexCredentials})
+	out = append(out, userFile{filepath.Join(hermes, "auth.json"), formatHermesAuth})
 	return out
 }
 
@@ -268,6 +275,23 @@ func readFile(scan *platform.CredentialFileScan, path string, f format) bool {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		scan.Failed = append(scan.Failed, platform.CredentialFailure{Path: path, Reason: graph.Reason(graph.ReasonReadError, err.Error())})
+		return true
+	}
+	if f == formatCodexCredentials || f == formatHermesAuth {
+		parse := parseCodexCredentials
+		if f == formatHermesAuth {
+			parse = parseHermesAuth
+		}
+		entries, conflicts, err := parse(path, raw)
+		if err != nil {
+			scan.Failed = append(scan.Failed, platform.CredentialFailure{Path: path, Reason: graph.Reason(graph.ReasonParseError, err.Error())})
+			return true
+		}
+		scan.Read = append(scan.Read, path)
+		scan.Entries = append(scan.Entries, entries...)
+		for _, c := range conflicts {
+			scan.KeyConflicts = append(scan.KeyConflicts, platform.KeyConflict{Path: path, Pointer: c})
+		}
 		return true
 	}
 	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth {
