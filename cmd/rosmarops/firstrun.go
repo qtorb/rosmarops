@@ -156,7 +156,11 @@ func logDecisions(res firstrun.Result) {
 // openReport opens the report in the default browser (U5, as J9's plan
 // B); false when it could not.
 func openReport(path string) bool {
-	if err := openReportFile(absPath(path)); err != nil {
+	switch err := openReportFile(absPath(path)); {
+	case errors.Is(err, platform.ErrNotApplicable):
+		slog.Info("report not opened", "err", err)
+		return false
+	case err != nil:
 		slog.Warn("report not opened", "err", err)
 		return false
 	}

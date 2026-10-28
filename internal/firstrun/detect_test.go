@@ -58,6 +58,39 @@ func TestDetectDuplicateIgnoresCase(t *testing.T) {
 	}
 }
 
+// U3 on a case-insensitive file system (macOS, BV-98): a repository over the
+// limit that comes twice, equal but for case, is left out once.
+func TestDetectOverLimitDuplicateIgnoresCase(t *testing.T) {
+	home := t.TempDir()
+	var paths []string
+	for i := 0; i < MaxRepos; i++ {
+		paths = append(paths, filepath.Join(home, "work", fmt.Sprintf("r%03d", i)))
+	}
+	paths = append(paths, filepath.Join(home, "work", "X100"), filepath.Join(home, "work", "x100"))
+	projects := map[string]any{}
+	for _, p := range paths {
+		if err := os.MkdirAll(filepath.Join(p, ".git"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		projects[p] = map[string]any{}
+	}
+	raw, err := json.Marshal(map[string]any{"projects": projects})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	res := Detect(Env{Home: home})
+	if len(res.Repos) != MaxRepos || res.Over != 1 {
+		t.Fatalf("%d repos, %d over the limit; want %d and 1", len(res.Repos), res.Over, MaxRepos)
+	}
+	last := res.Decisions[len(res.Decisions)-1]
+	if last.Rule != RuleDuplicate {
+		t.Errorf("last decision %+v, want a duplicate", last)
+	}
+}
+
 // A ~/.claude.json that cannot be parsed, or one over the size limit, is
 // a source not read, never a crash.
 func TestDetectUnreadableSource(t *testing.T) {
