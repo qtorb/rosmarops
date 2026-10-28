@@ -42,9 +42,10 @@ jobs:
             claudejson = "$env:USERPROFILE\.claude.json"
             codex      = "$env:USERPROFILE\.codex"
           }
-          # The Hermes code checkout and tool stores are not configuration: listed
+          # The Hermes code checkout and its tool store (Python, ripgrep, uv) are not
+          # configuration: listed
           # by size only, not walked.
-          $skip = @('hermes-agent', 'node_modules', '.venv', 'venv', '__pycache__')
+          $skip = @('hermes-agent', 'tools', 'node_modules', '.venv', 'venv', '__pycache__')
           $out = @()
           "===== SNAPSHOT: $Label ====="
           foreach ($name in $roots.Keys) {
@@ -110,6 +111,10 @@ jobs:
           $head = git -C $tree rev-parse HEAD 2>$null
           "installed commit: $head (release $env:HERMES_TAG = $env:HERMES_COMMIT) -> $(if ($head -eq $env:HERMES_COMMIT) { 'MATCH' } else { 'DIFFERENT' })"
           "installed describe: $(git -C $tree describe --tags 2>$null)"
+          $sum = "$env:RUNNER_TEMP\lab\summary.txt"
+          "== install ==" | Add-Content $sum
+          "installer: scripts/install.ps1 @ $env:HERMES_TAG, -Channel stable -NonInteractive -SkipBrowser -SkipComputerUse" | Add-Content $sum
+          "installed commit: $head (release $env:HERMES_COMMIT) -> $(if ($head -eq $env:HERMES_COMMIT) { 'MATCH' } else { 'DIFFERENT' }); describe: $(git -C $tree describe --tags 2>$null)" | Add-Content $sum
           & "$env:RUNNER_TEMP\snap.ps1" -Label 2-after-hermes-install
 
       - name: First start of Hermes without a key (version, help, doctor)
@@ -122,10 +127,19 @@ jobs:
           if (-not $cmd) { $cmd = $cands | Select-Object -First 1 }
           "hermes: $cmd"
           if (-not $cmd) { "hermes command not found"; exit 0 }
+          $sum = "$env:RUNNER_TEMP\lab\summary.txt"
+          "== first start ==" | Add-Content $sum
+          "hermes: $cmd" | Add-Content $sum
           foreach ($a in @('--version', '--help', 'doctor')) {
             "----- hermes $a (cap 180s, stdin closed) -----"
             $job = Start-Job -ArgumentList $cmd, $a { param($c, $a) cmd /c "`"$c`" $a < NUL 2>&1" }
-            if (Wait-Job $job -Timeout 180) { Receive-Job $job | Select-Object -First 120 | Out-String } else { "TIMEOUT (stopped)"; Stop-Job $job }
+            if (Wait-Job $job -Timeout 180) {
+              $o = @(Receive-Job $job)
+              $o | Select-Object -First 120 | Out-String
+              $n = if ($a -eq 'doctor') { 80 } elseif ($a -eq '--version') { 6 } else { 0 }
+              "--- hermes $a: completed, $($o.Count) lines ---" | Add-Content $sum
+              $o | Select-Object -First $n | ForEach-Object { "  $_" } | Add-Content $sum
+            } else { "TIMEOUT (stopped)"; "--- hermes $a: TIMEOUT 180s ---" | Add-Content $sum; Stop-Job $job }
             Remove-Job $job -Force -ErrorAction SilentlyContinue
           }
           & "$env:RUNNER_TEMP\snap.ps1" -Label 3-after-hermes-first-start
@@ -140,7 +154,16 @@ jobs:
           $text = Get-Content -Raw $cfg
           $keyish = '(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|xox[abp]-|AKIA[0-9A-Z]{16}|(api_key|token|secret|password)\s*:\s*["'']?[A-Za-z0-9_\-\.]{12,})'
           $hits = [regex]::Matches($text, $keyish, 'IgnoreCase')
-          "config.yaml: $((Get-Item $cfg).Length) bytes, sha256 $((Get-FileHash $cfg -Algorithm SHA256).Hash.ToLower()), key-like matches: $($hits.Count)"
+          $sum = "$env:RUNNER_TEMP\lab\summary.txt"
+          "== config.yaml ==" | Add-Content $sum
+          "config.yaml: $((Get-Item $cfg).Length) bytes, $((Get-Content $cfg).Count) lines, sha256 $((Get-FileHash $cfg -Algorithm SHA256).Hash.ToLower()), key-like matches: $($hits.Count)" | Tee-Object -FilePath $sum -Append
+          # Where each match is and the key name before the colon; never the value.
+          foreach ($m in $hits) {
+            $line = ($text.Substring(0, $m.Index) -split "`n").Count
+            $name = ($m.Value -split ':')[0].Trim()
+            if ($name.Length -gt 24 -or $name -eq $m.Value) { $name = '(a key-shaped token, no key name)' }
+            "  match at line ${line}: key name '$name' (value not shown)" | Tee-Object -FilePath $sum -Append
+          }
           if ($hits.Count -gt 0) { "NOT uploaded: something looks like a key" | Tee-Object out\CONFIG_NOT_UPLOADED.txt }
           else { Copy-Item $cfg out\hermes-config.yaml }
 
@@ -177,6 +200,7 @@ jobs:
         shell: pwsh
         continue-on-error: true
         run: |
+          Start-Transcript -Path "$env:RUNNER_TEMP\lab\rosmarops-saw.txt" | Out-Null
           $r = "$env:USERPROFILE\.rosmarops\reports"
           $v2 = Get-Content -Raw "$r\report.v2.json" -ErrorAction SilentlyContinue | ConvertFrom-Json
           if ($v2) {
@@ -194,6 +218,9 @@ jobs:
           Get-ChildItem $r -Filter "last-run-log*.txt" -ErrorAction SilentlyContinue | ForEach-Object {
             Select-String -Path $_.FullName -Pattern 'hermes|parse_error|yaml' | ForEach-Object { "  $($_.Line)" }
           }
+          Stop-Transcript | Out-Null
+          "== what RosmarOps saw ==" | Add-Content "$env:RUNNER_TEMP\lab\summary.txt"
+          Get-Content "$env:RUNNER_TEMP\lab\rosmarops-saw.txt" | Where-Object { $_ -notmatch '^\*{5,}|^(Start|End) time|^Username|^RunAs|^Configuration|^Machine|^Host Application|^Process ID|^PSVersion|^PSEdition|^GitCommitId|^OS:|^Platform|^PSCompatible|^PSRemoting|^Serialization|^WSManStack|^Windows PowerShell transcript|^Transcript started|^PowerShell transcript' } | Add-Content "$env:RUNNER_TEMP\lab\summary.txt"
 
       - name: Changes between snapshots (Claude Code, Codex, Hermes)
         if: always()
@@ -213,16 +240,39 @@ jobs:
             }
             foreach ($k in ($ka.Keys | Sort-Object)) { if (-not $kb.ContainsKey($k)) { "  removed: $k" } }
           }
+          # For the summary: every change outside %LOCALAPPDATA%\hermes, and Hermes' own
+          # files outside the code checkout and caches.
+          $sum = "$env:RUNNER_TEMP\lab\summary.txt"
+          "== changes between snapshots (no __pycache__, no hermes-agent checkout) ==" | Add-Content $sum
+          for ($i = 1; $i -lt $labels.Count; $i++) {
+            $a = Load $labels[$i - 1]; $b = Load $labels[$i]
+            "-- $($labels[$i - 1]) -> $($labels[$i])" | Add-Content $sum
+            $ka = @{}; foreach ($x in $a) { $ka["$($x.root)|$($x.rel)"] = $x }
+            $kb = @{}; foreach ($x in $b) { $kb["$($x.root)|$($x.rel)"] = $x }
+            $keep = { param($k) $k -notmatch '__pycache__|\\hermes-agent\\' }
+            foreach ($k in ($kb.Keys | Sort-Object)) {
+              if (-not (& $keep $k)) { continue }
+              if (-not $ka.ContainsKey($k)) { "  added:   $k ($($kb[$k].size) bytes)" | Add-Content $sum }
+              elseif ($ka[$k].sha256 -ne $kb[$k].sha256 -or $ka[$k].size -ne $kb[$k].size) { "  changed: $k ($($ka[$k].size) -> $($kb[$k].size) bytes)" | Add-Content $sum }
+            }
+            foreach ($k in ($ka.Keys | Sort-Object)) { if ((& $keep $k) -and -not $kb.ContainsKey($k)) { "  removed: $k" | Add-Content $sum } }
+          }
 
       - name: Collect
         if: always()
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\lab\summary.txt" out -ErrorAction SilentlyContinue
           Copy-Item "$env:RUNNER_TEMP\lab\snap-*.json" out -ErrorAction SilentlyContinue
           $r = "$env:USERPROFILE\.rosmarops\reports"
           if (Test-Path $r) { New-Item -ItemType Directory -Force -Path out\reports | Out-Null; Copy-Item "$r\*" out\reports -Recurse -Force }
           Get-ChildItem out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300
+
+      - name: SUMMARY (last, so the end of the log has it)
+        if: always()
+        shell: pwsh
+        run: Get-Content "$env:RUNNER_TEMP\lab\summary.txt" -ErrorAction SilentlyContinue
 
       - name: Upload artifacts
         if: always()
