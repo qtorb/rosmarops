@@ -115,17 +115,15 @@ func canonicalOrigin(u parsedURL) (string, bool) {
 }
 
 // normalizedFullURL is the whole URL normalized (scheme and host lowercased,
-// default port dropped), with userinfo, path, query and fragment kept, so that
-// any change of destination is seen. It never leaves the device in clear: it is
-// only HMAC'd into destination_ref.
+// default port dropped), with path, query and fragment kept, so that any change
+// of destination is seen. The userinfo (user:password@) is dropped: rotating a
+// credential embedded in the URL is not a change of destination, the same as
+// E2 for env and headers. It never leaves the device in clear: it is only
+// HMAC'd into destination_ref.
 func normalizedFullURL(u parsedURL) string {
 	var b strings.Builder
 	b.WriteString(u.scheme)
 	b.WriteString("://")
-	if u.userinfo != "" {
-		b.WriteString(u.userinfo)
-		b.WriteByte('@')
-	}
 	b.WriteString(u.host)
 	if u.port != "" && u.port != defaultPorts[u.scheme] {
 		b.WriteByte(':')
