@@ -167,7 +167,7 @@ func FromMCP(clients []ClientSource, servers []platform.MCPServer, discoveredAt 
 		// mcp_server_user_writable_command): writes_config_of covers
 		// another agent replacing it.
 		if p, ok := commandPath(srv); ok {
-			rid := "res_agent_executable_" + keyHash(ResourceAgentExecutable, canonicalPath(p), from)
+			rid := sharedExecutableResourceID(p, from)
 			nodes[rid] = Node{ID: rid, Kind: KindResource, Type: ResourceAgentExecutable, Path: p, Configures: from, DiscoveredAt: seen}
 		}
 	}

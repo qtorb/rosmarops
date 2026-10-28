@@ -367,7 +367,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, cfg.RepoRoots)
 			instructions, instructionsErr := plat.ListAgentInstructions(ctx, cfg.RepoRoots)
 			cursorScan, cursorErr := plat.ListCursor(ctx, cfg.RepoRoots)
-			instructionsErr = errors.Join(instructionsErr, cursorErr)
+			skillScan, skillsErr := plat.ListSkills(ctx, cfg.RepoRoots)
+			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
 			if ctx.Err() != nil {
 				settingsErr = errors.Join(settingsErr, fmt.Errorf("claude settings: %w", ctx.Err()))
 			}
@@ -379,7 +380,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				// The graph is built once the repositories are scanned: the
 				// secrets committed in them are part of it (CTO-7 §2.2).
 				buildGraph = func(repoGraph graph.Repos) {
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -640,10 +641,10 @@ func compileExtraPattern(spec config.SecretPattern) (secrets.Pattern, error) {
 }
 
 // writeGraph builds the v2 graph from the MCP scan, the Claude Code settings
-// scan, the agent instruction files and the credential files, infers Claude Code's reaches and
-// writes_config_of edges (repoRoots and home anchor its permission rules),
-// and writes it to dir. Credential fingerprints and host_id are
-// keyed with the state's local salt. If the sources could not be listed, or
+// scan, the agent instruction files, the skills and the credential files,
+// infers Claude Code's reaches and writes_config_of edges (repoRoots and
+// home anchor its permission rules), and writes it to dir. Credential
+// fingerprints and host_id are keyed with the state's local salt. If the sources could not be listed, or
 // the salt is unusable, there is nothing trustworthy to build, so no graph is
 // written and any previous one is removed.
 func writeGraph(
@@ -652,6 +653,7 @@ func writeGraph(
 	settings platform.ClaudeSettingsScan,
 	cursor platform.CursorScan,
 	instructions platform.InstructionScan,
+	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
 	exts []platform.VSCodeExtension,
 	repoGraph graph.Repos,
@@ -679,6 +681,7 @@ func writeGraph(
 		return fail(err)
 	}
 	frag = graph.AddInstructions(frag, instructions, now)
+	frag = graph.AddSkills(frag, skillScan, now)
 	frag = graph.AddExtensions(frag, exts, filepath.Join(home, ".vscode", "extensions"), now)
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
