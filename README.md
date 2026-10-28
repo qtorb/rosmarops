@@ -11,6 +11,8 @@ RosmarOps reads the configuration of the AI agents on your Windows computer (tod
 
 You get a visual report with a score per agent, the first thing to do with the exact setting to change, and a table of how each agent works: who decides what it does (nobody, another AI model, or you) and how far it reaches. It reads only. It never changes anything and never connects to the network.
 
+How each agent behaves out of the box, version by version, is tracked in the [RosmarOps Observatory](https://rosmarops.com/observatory/). How findings and scores are worked out: [Methodology](https://rosmarops.com/methodology/).
+
 ---
 
 ## Install and run (Windows)
