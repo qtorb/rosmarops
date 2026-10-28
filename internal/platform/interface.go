@@ -344,7 +344,8 @@ type InstructionFile struct {
 // 2026-10-28, skills y herramientas de agentes, K1): every <skill>/SKILL.md
 // as an instruction file and every file under <skill>/scripts/ as an
 // executable, one entry per agent that loads the folder, all Shared. Only
-// their existence is checked: no file is opened.
+// their existence is checked: no skill file is opened (Hermes Agent's
+// config.yaml is read for its trusted project roots, BV-99b).
 type SkillScan struct {
 	Instructions []InstructionFile
 	Executables  []InstructionFile

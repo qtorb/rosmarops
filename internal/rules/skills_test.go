@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -23,52 +24,113 @@ import (
 // writing Cursor's skill (instructions, executable) and Cursor writing its
 // own.
 func TestSkillInAgentsFolder_ClaudeCodeAndCursor(t *testing.T) {
-	before, after := skillScenario(t, false), skillScenario(t, true)
-	was := map[string]bool{}
-	for _, f := range before {
-		was[f] = true
-	}
-	var added []string
-	for _, f := range after {
-		if !was[f] {
-			added = append(added, f)
-		}
-	}
-	want := []string{
+	before := skillScenario(t, nil)
+	after := skillScenario(t, func(t *testing.T, repo string) {
+		skill := filepath.Join(repo, ".agents", "skills", "deploy")
+		touchFile(t, filepath.Join(skill, "SKILL.md"))
+		touchFile(t, filepath.Join(skill, "scripts", "deploy.sh"))
+	})
+	equalLists(t, "resources", after.resources, []string{
+		"agent_executable .agents/skills/deploy/scripts/deploy.sh cursor",
+		"agent_instructions .agents/skills/deploy/SKILL.md cursor",
+	})
+	equalLists(t, "new findings", added(before.findings, after.findings), []string{
 		"foreign_agent_config_writable red Claude Code -> Cursor agent_executable",
 		"foreign_agent_instructions_writable yellow Claude Code -> Cursor agent_instructions",
 		"own_config_writable red Cursor -> Cursor agent_executable",
 		"own_instructions_writable yellow Cursor -> Cursor agent_instructions",
-	}
-	if len(added) != len(want) || len(after) != len(before)+len(want) {
-		t.Fatalf("new findings = %q, want %q (before %q)", added, want, before)
-	}
-	for i := range want {
-		if added[i] != want[i] {
-			t.Errorf("new finding %d = %q, want %q", i, added[i], want[i])
+	})
+}
+
+// BV-99b, item 3: the typical `npx skills add` — the canonical copy in
+// <repo>\.agents\skills\demo with scripts\run.ps1, linked from
+// <repo>\.claude\skills\demo. Claude Code and Cursor both get the skill,
+// one shared node per agent and canonical path, and nothing goes to
+// coverage. Claude Code now loads its own copy too: on top of the four
+// findings of a skill only Cursor loads, Claude Code can write its own
+// skill (own_*) and Cursor can write Claude Code's (foreign_*).
+func TestNpxSkillsAdd_ClaudeCodeAndCursor(t *testing.T) {
+	before := skillScenario(t, nil)
+	after := skillScenario(t, func(t *testing.T, repo string) {
+		canon := filepath.Join(repo, ".agents", "skills", "demo")
+		touchFile(t, filepath.Join(canon, "SKILL.md"))
+		touchFile(t, filepath.Join(canon, "scripts", "run.ps1"))
+		link := filepath.Join(repo, ".claude", "skills", "demo")
+		if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
+			t.Fatal(err)
 		}
+		if err := os.Symlink(canon, link); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+	})
+	equalLists(t, "resources", after.resources, []string{
+		"agent_executable .agents/skills/demo/scripts/run.ps1 claude-code",
+		"agent_executable .agents/skills/demo/scripts/run.ps1 cursor",
+		"agent_instructions .agents/skills/demo/SKILL.md claude-code",
+		"agent_instructions .agents/skills/demo/SKILL.md cursor",
+	})
+	if after.failed != 0 {
+		t.Errorf("sources_failed = %d, want 0", after.failed)
+	}
+	equalLists(t, "new findings", added(before.findings, after.findings), []string{
+		"foreign_agent_config_writable red Claude Code -> Cursor agent_executable",
+		"foreign_agent_config_writable red Cursor -> Claude Code agent_executable",
+		"foreign_agent_instructions_writable yellow Claude Code -> Cursor agent_instructions",
+		"foreign_agent_instructions_writable yellow Cursor -> Claude Code agent_instructions",
+		"own_config_writable red Claude Code -> Claude Code agent_executable",
+		"own_config_writable red Cursor -> Cursor agent_executable",
+		"own_instructions_writable yellow Claude Code -> Claude Code agent_instructions",
+		"own_instructions_writable yellow Cursor -> Cursor agent_instructions",
+	})
+}
+
+func touchFile(t *testing.T, p string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// skillScenario evaluates the machine, with or without the skill, and
-// returns its findings as "rule severity agent -> target resource_type".
-func skillScenario(t *testing.T, withSkill bool) []string {
+func added(before, after []string) []string {
+	was := map[string]bool{}
+	for _, f := range before {
+		was[f] = true
+	}
+	var out []string
+	for _, f := range after {
+		if !was[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func equalLists(t *testing.T, what string, got, want []string) {
+	t.Helper()
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("%s:\n got  %q\n want %q", what, got, want)
+	}
+}
+
+// skillOutcome is a scenario's skill resources ("type path platform", path
+// relative to the repository), its count of sources_failed and its findings
+// ("rule severity agent -> target resource_type").
+type skillOutcome struct {
+	resources, findings []string
+	failed              int
+}
+
+// skillScenario evaluates the machine after setup (nil: no skill).
+func skillScenario(t *testing.T, setup func(t *testing.T, repo string)) skillOutcome {
 	t.Helper()
 	tmp := t.TempDir()
 	h, repo := filepath.Join(tmp, "home"), filepath.Join(tmp, "repo")
 	cDir, cuDir := filepath.Join(h, ".claude"), filepath.Join(h, ".cursor")
-	skill := filepath.Join(repo, ".agents", "skills", "deploy")
-	var files []string
-	if withSkill {
-		files = []string{filepath.Join(skill, "SKILL.md"), filepath.Join(skill, "scripts", "deploy.sh")}
-	}
-	for _, p := range files {
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if setup != nil {
+		setup(t, repo)
 	}
 	env := func(string) (string, bool) { return "", false }
 	scan := skills.Discover(context.Background(), h, env, []string{repo})
@@ -98,24 +160,15 @@ func skillScenario(t *testing.T, withSkill bool) []string {
 	for _, n := range g.Nodes {
 		nodes[n.ID] = n
 	}
-	var res []string
+	var out skillOutcome
 	for _, n := range g.Nodes {
 		if n.Kind == graph.KindResource && (n.Type == graph.ResourceAgentInstructions || n.Type == graph.ResourceAgentExecutable) {
 			rel, _ := filepath.Rel(repo, n.Path)
-			res = append(res, n.Type+" "+filepath.ToSlash(rel)+" "+nodes[n.Configures].Platform)
+			out.resources = append(out.resources, n.Type+" "+filepath.ToSlash(rel)+" "+nodes[n.Configures].Platform)
 		}
 	}
-	sort.Strings(res)
-	wantRes := []string{
-		"agent_executable .agents/skills/deploy/scripts/deploy.sh cursor",
-		"agent_instructions .agents/skills/deploy/SKILL.md cursor",
-	}
-	if !withSkill {
-		wantRes = nil
-	}
-	if len(res) != len(wantRes) || (withSkill && (res[0] != wantRes[0] || res[1] != wantRes[1])) {
-		t.Fatalf("resources = %q, want %q", res, wantRes)
-	}
+	sort.Strings(out.resources)
+	out.failed = len(g.Coverage.SourcesFailed)
 
 	bases, err := knowledge.All()
 	if err != nil {
@@ -125,14 +178,13 @@ func skillScenario(t *testing.T, withSkill bool) []string {
 		Graph: g, Base: bases[knowledge.ClaudeCodeProduct], Bases: bases, RepoRoots: []string{repo},
 		Home: h, Now: now, ClaudeSettings: &settings,
 	})
-	var got []string
 	for _, fd := range result.Findings {
 		target := fd.Params.TargetAgent
 		if target == "" {
 			target = fd.Params.Agent
 		}
-		got = append(got, fd.Rule+" "+fd.Severity+" "+fd.Params.Agent+" -> "+target+" "+fd.Params.ResourceType)
+		out.findings = append(out.findings, fd.Rule+" "+fd.Severity+" "+fd.Params.Agent+" -> "+target+" "+fd.Params.ResourceType)
 	}
-	sort.Strings(got)
-	return got
+	sort.Strings(out.findings)
+	return out
 }

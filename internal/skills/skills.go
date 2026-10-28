@@ -4,8 +4,11 @@
 // under <skill>/scripts/, which the agent can run. It is portable: it
 // receives the user's folder, the environment and the repository roots, and
 // the platform adapter calls it. Existence only: every entry is checked with
-// os.Lstat or listed from its folder, symbolic links are never followed and
-// no file is opened.
+// os.Lstat or listed from its folder and no skill file is opened. A link
+// (symbolic link or junction) to a skill is read once, never walked: it
+// counts only when it names a skill this pass already listed (BV-99b, item
+// 1). The one file read is Hermes Agent's config.yaml, for its trusted
+// project roots (BV-99b, item 2).
 package skills
 
 import (
@@ -48,6 +51,16 @@ type agent struct{ product, configDir string }
 type folder struct {
 	path   string
 	agents []agent
+
+	// targets are the folders a link to a skill in this one may point into
+	// and count (BV-99b, item 1), by pathKey.
+	targets map[string]bool
+
+	// hermesUnknown, when set, is the coverage reason of a project folder
+	// Hermes Agent may load and that is not attributed to it: its trusted
+	// roots could not be established.
+	hermesUnknown string
+	hermes        agent
 }
 
 // agents are the configuration folders of every agent that loads skills,
@@ -91,32 +104,43 @@ func resolve(home string, env agentdirs.Env) agents {
 // Continue and Claude Desktop load no skills.
 func userFolders(home string, a agents) []folder {
 	return []folder{
-		{filepath.Join(a.claude.configDir, "skills"), []agent{a.claude}},
-		{filepath.Join(home, ".cursor", "skills"), []agent{a.cursor}},
-		{filepath.Join(home, ".agents", "skills"), []agent{a.cursor, a.codex, a.copilot}},
-		{filepath.Join(home, ".gemini", "antigravity", "skills"), []agent{a.antigravity}},
-		{filepath.Join(home, ".gemini", "antigravity-cli", "skills"), []agent{a.antigravity}},
-		{filepath.Join(a.hermes.configDir, "skills"), []agent{a.hermes}},
-		{filepath.Join(home, ".cline", "skills"), []agent{a.cline}},
-		{filepath.Join(home, ".copilot", "skills"), []agent{a.copilot}},
+		{path: filepath.Join(a.claude.configDir, "skills"), agents: []agent{a.claude}},
+		{path: filepath.Join(home, ".cursor", "skills"), agents: []agent{a.cursor}},
+		{path: filepath.Join(home, ".agents", "skills"), agents: []agent{a.cursor, a.codex, a.copilot}},
+		{path: filepath.Join(home, ".gemini", "antigravity", "skills"), agents: []agent{a.antigravity}},
+		{path: filepath.Join(home, ".gemini", "antigravity-cli", "skills"), agents: []agent{a.antigravity}},
+		{path: filepath.Join(a.hermes.configDir, "skills"), agents: []agent{a.hermes}},
+		{path: filepath.Join(home, ".cline", "skills"), agents: []agent{a.cline}},
+		{path: filepath.Join(home, ".copilot", "skills"), agents: []agent{a.copilot}},
 	}
 }
 
 // repoFolders are the skills folders of a repository root (lectura 98, §1).
-// Hermes Agent loads .hermes\skills and .agents\skills only from the roots
-// in skills.trusted_project_dirs (agent/skill_utils.py), which is not read:
-// they are listed for it as for the others.
-func repoFolders(root string, a agents) []folder {
-	return []folder{
-		{filepath.Join(root, ".claude", "skills"), []agent{a.claude, a.cursor, a.copilot, a.cline}},
-		{filepath.Join(root, ".cursor", "skills"), []agent{a.cursor}},
-		{filepath.Join(root, ".agents", "skills"), []agent{a.cursor, a.codex, a.antigravity, a.hermes, a.copilot, a.cline}},
-		{filepath.Join(root, ".agent", "skills"), []agent{a.antigravity}},
-		{filepath.Join(root, ".hermes", "skills"), []agent{a.hermes}},
-		{filepath.Join(root, ".cline", "skills"), []agent{a.cline}},
-		{filepath.Join(root, ".clinerules", "skills"), []agent{a.cline}},
-		{filepath.Join(root, ".github", "skills"), []agent{a.copilot}},
+// Hermes Agent loads .hermes\skills and .agents\skills only when the root is
+// trusted (hermesTrust); otherwise they are not attributed to it, and when
+// its trust is unknown the folders go to its coverage.
+func repoFolders(root string, a agents, trust hermesTrust) []folder {
+	agentsFolder := []agent{a.cursor, a.codex, a.antigravity, a.copilot, a.cline}
+	var hermesFolder []agent
+	if trust.trusts(root) {
+		agentsFolder = append(agentsFolder, a.hermes)
+		hermesFolder = []agent{a.hermes}
 	}
+	fs := []folder{
+		{path: filepath.Join(root, ".claude", "skills"), agents: []agent{a.claude, a.cursor, a.copilot, a.cline}},
+		{path: filepath.Join(root, ".cursor", "skills"), agents: []agent{a.cursor}},
+		{path: filepath.Join(root, ".agents", "skills"), agents: agentsFolder},
+		{path: filepath.Join(root, ".agent", "skills"), agents: []agent{a.antigravity}},
+		{path: filepath.Join(root, ".hermes", "skills"), agents: hermesFolder},
+		{path: filepath.Join(root, ".cline", "skills"), agents: []agent{a.cline}},
+		{path: filepath.Join(root, ".clinerules", "skills"), agents: []agent{a.cline}},
+		{path: filepath.Join(root, ".github", "skills"), agents: []agent{a.copilot}},
+	}
+	if trust.unknown != "" {
+		fs[2].hermesUnknown, fs[2].hermes = trust.unknown, a.hermes
+		fs[4].hermesUnknown, fs[4].hermes = trust.unknown, a.hermes
+	}
+	return fs
 }
 
 // Discover lists the skills of home's folders and of each repository root,
@@ -125,17 +149,35 @@ func repoFolders(root string, a agents) []folder {
 // ctx ends, goes to coverage and the rest continues. An agent that is not
 // present still gets its entries: the graph keeps only those of the agents
 // it has.
+//
+// A skill that is a link counts when it points, in one step, to a skill
+// listed in a user skills folder or in the .agents\skills of its own
+// repository: the agents of the link's folder get the files of that skill,
+// by their canonical paths, so each agent has one resource per file. Any
+// other link goes to coverage.
 func Discover(ctx context.Context, home string, env agentdirs.Env, repoRoots []string) platform.SkillScan {
 	a := resolve(home, env)
-	d := &discovery{seen: map[string]bool{}}
+	d := &discovery{seen: map[string]bool{}, skills: map[string]*skillFiles{}}
+	users := map[string]bool{}
+	var user []folder
 	if home != "" {
-		for _, f := range userFolders(home, a) {
+		user = userFolders(home, a)
+		for _, f := range user {
+			users[pathKey(f.path)] = true
+		}
+		for _, f := range user {
+			f.targets = users
 			d.folder(ctx, f)
 		}
 	}
-	for _, root := range repoRoots {
-		d.repo(ctx, root, a)
+	var trust hermesTrust
+	if len(repoRoots) > 0 {
+		trust = readHermesTrust(home, env)
 	}
+	for _, root := range repoRoots {
+		d.repo(ctx, root, a, trust, users)
+	}
+	d.resolveLinks()
 	sortFiles(d.scan.Instructions)
 	sortFiles(d.scan.Executables)
 	sort.SliceStable(d.scan.Failed, func(i, j int) bool {
@@ -150,15 +192,20 @@ func Discover(ctx context.Context, home string, env agentdirs.Env, repoRoots []s
 
 // repo lists the skills folders of one root under its own deadline; a panic
 // sends the root to coverage and the next one continues (invariant 7).
-func (d *discovery) repo(ctx context.Context, root string, a agents) {
+func (d *discovery) repo(ctx context.Context, root string, a agents, trust hermesTrust, users map[string]bool) {
 	ctx, cancel := context.WithTimeout(ctx, repos.PerRepoTimeout)
 	defer cancel()
 	defer func() {
 		if r := recover(); r != nil {
-			d.fail(folder{root, []agent{a.claude, a.cursor, a.codex, a.antigravity, a.hermes, a.cline, a.copilot}}, root, graph.ReasonReadError, fmt.Sprintf("panic: %v", r))
+			d.fail(folder{path: root, agents: []agent{a.claude, a.cursor, a.codex, a.antigravity, a.hermes, a.cline, a.copilot}}, root, graph.ReasonReadError, fmt.Sprintf("panic: %v", r))
 		}
 	}()
-	for _, f := range repoFolders(root, a) {
+	targets := map[string]bool{pathKey(filepath.Join(root, ".agents", "skills")): true}
+	for k := range users {
+		targets[k] = true
+	}
+	for _, f := range repoFolders(root, a, trust) {
+		f.targets = targets
 		d.folder(ctx, f)
 	}
 }
@@ -176,22 +223,50 @@ func sortFiles(files []platform.InstructionFile) {
 type discovery struct {
 	scan platform.SkillScan
 	seen map[string]bool // product, configDir, kind and path already listed
+
+	// skills are the skill folders listed, by pathKey, with what was found
+	// in them; links, the links to skills, resolved once every folder is
+	// listed.
+	skills map[string]*skillFiles
+	links  []link
+}
+
+// skillFiles is what one skill folder holds: its SKILL.md, its scripts and
+// the entries that could not be listed.
+type skillFiles struct {
+	instructions, executables []string
+	failed                    []failure
+}
+
+type failure struct{ path, code, detail string }
+
+// link is a skill that is a link: the folder it sits in and its target, read
+// once (empty when it could not be read).
+type link struct {
+	f      folder
+	path   string
+	target string
+	err    error
 }
 
 func (d *discovery) fail(f folder, path, code, detail string) {
 	slog.Warn("skills: not listed", "path", path, "reason", code, "detail", detail)
-	for _, a := range f.agents {
+	d.failFor(f.agents, path, graph.Reason(code, detail))
+}
+
+func (d *discovery) failFor(agents []agent, path, reason string) {
+	for _, a := range agents {
 		if key := "fail\x00" + a.product + "\x00" + a.configDir + "\x00" + path; !d.seen[key] {
 			d.seen[key] = true
 			d.scan.Failed = append(d.scan.Failed, platform.InstructionFailure{
-				Product: a.product, ConfigDir: a.configDir, Path: path, Reason: graph.Reason(code, detail),
+				Product: a.product, ConfigDir: a.configDir, Path: path, Reason: reason,
 			})
 		}
 	}
 }
 
-func (d *discovery) add(list *[]platform.InstructionFile, kind string, f folder, path string) {
-	for _, a := range f.agents {
+func (d *discovery) add(list *[]platform.InstructionFile, kind string, agents []agent, path string) {
+	for _, a := range agents {
 		if key := kind + "\x00" + a.product + "\x00" + a.configDir + "\x00" + path; !d.seen[key] {
 			d.seen[key] = true
 			*list = append(*list, platform.InstructionFile{Product: a.product, ConfigDir: a.configDir, Path: path, Shared: true})
@@ -209,13 +284,19 @@ func (d *discovery) expired(ctx context.Context, f folder, path string) bool {
 	return false
 }
 
-// notFollowed sends a symbolic link to coverage: it is never followed.
+// notFollowed sends a link to coverage: it is not followed.
 func (d *discovery) notFollowed(f folder, path string) {
 	d.fail(f, path, graph.ReasonSourceUnsupported, "symbolic link not followed")
 }
 
+// isLink reports a symbolic link or another reparse point, such as a
+// junction (ModeIrregular since Go 1.23 with winsymlink=1): neither is
+// walked.
+func isLink(m fs.FileMode) bool { return m&(fs.ModeSymlink|fs.ModeIrregular) != 0 }
+
 // folder lists the skills of one skills folder: its subfolders, but those in
-// the forced exclusion list (invariant 5), up to MaxSkillsPerFolder.
+// the forced exclusion list (invariant 5), up to MaxSkillsPerFolder. A skill
+// that is a link is kept for resolveLinks.
 func (d *discovery) folder(ctx context.Context, f folder) {
 	info, err := os.Lstat(f.path)
 	switch {
@@ -226,10 +307,17 @@ func (d *discovery) folder(ctx context.Context, f folder) {
 	case err != nil:
 		d.fail(f, f.path, graph.ReasonReadError, err.Error())
 		return
-	case info.Mode()&fs.ModeSymlink != 0:
+	case isLink(info.Mode()):
 		d.notFollowed(f, f.path)
 		return
 	case !info.IsDir():
+		return
+	}
+	if f.hermesUnknown != "" {
+		slog.Warn("skills: project folder not attributed to Hermes", "path", f.path, "reason", f.hermesUnknown)
+		d.failFor([]agent{f.hermes}, f.path, f.hermesUnknown)
+	}
+	if len(f.agents) == 0 {
 		return
 	}
 	entries, err := os.ReadDir(f.path)
@@ -239,7 +327,7 @@ func (d *discovery) folder(ctx context.Context, f folder) {
 	}
 	n := 0
 	for _, e := range entries {
-		if repos.IsForcedExclusion(e.Name()) || (!e.IsDir() && e.Type()&fs.ModeSymlink == 0) {
+		if repos.IsForcedExclusion(e.Name()) || (!e.IsDir() && !isLink(e.Type())) {
 			continue
 		}
 		if n == MaxSkillsPerFolder {
@@ -251,34 +339,86 @@ func (d *discovery) folder(ctx context.Context, f folder) {
 			return
 		}
 		skill := filepath.Join(f.path, e.Name())
-		if e.Type()&fs.ModeSymlink != 0 {
-			d.notFollowed(f, skill)
+		if isLink(e.Type()) {
+			target, err := os.Readlink(skill)
+			d.links = append(d.links, link{f: f, path: skill, target: target, err: err})
 			continue
 		}
-		d.skill(ctx, f, skill)
+		sf := d.skill(ctx, f, skill)
+		d.skills[pathKey(skill)] = sf
+		d.emit(f.agents, sf)
+	}
+}
+
+// emit lists sf's files and failures for agents.
+func (d *discovery) emit(agents []agent, sf *skillFiles) {
+	for _, p := range sf.instructions {
+		d.add(&d.scan.Instructions, "instructions", agents, p)
+	}
+	for _, p := range sf.executables {
+		d.add(&d.scan.Executables, "executable", agents, p)
+	}
+	for _, x := range sf.failed {
+		d.failFor(agents, x.path, graph.Reason(x.code, x.detail))
+	}
+}
+
+// resolveLinks attributes each link to a skill to the agents of its folder
+// (BV-99b, item 1). The target, read once and relative to the link's
+// folder, must be a skill this pass listed (a link to a link was not) in a
+// folder the link's folder may point into; nothing is read again. Any
+// other link goes to coverage.
+func (d *discovery) resolveLinks() {
+	for _, l := range d.links {
+		if l.err != nil {
+			d.fail(l.f, l.path, graph.ReasonSourceUnsupported, "symbolic link not followed: "+l.err.Error())
+			continue
+		}
+		target := l.target
+		if !filepath.IsAbs(target) && !isWindowsAbs(target) {
+			target = filepath.Join(filepath.Dir(l.path), target)
+		}
+		sf, listed := d.skills[pathKey(target)]
+		if !listed || !l.f.targets[pathKey(filepath.Dir(target))] {
+			d.notFollowed(l.f, l.path)
+			continue
+		}
+		slog.Info("skills: link to a listed skill", "path", l.path, "target", target)
+		d.emit(l.f.agents, sf)
 	}
 }
 
 // skill lists one skill: its SKILL.md and the files under scripts/. A folder
 // with no SKILL.md is not a skill.
-func (d *discovery) skill(ctx context.Context, f folder, dir string) {
-	md := filepath.Join(dir, "SKILL.md")
-	if !d.entry(f, md, &d.scan.Instructions, "instructions") {
-		return
+func (d *discovery) skill(ctx context.Context, f folder, dir string) *skillFiles {
+	sf := &skillFiles{}
+	failed := func(path, code, detail string) {
+		slog.Warn("skills: not listed", "path", path, "reason", code, "detail", detail)
+		sf.failed = append(sf.failed, failure{path, code, detail})
 	}
-	scripts := filepath.Join(dir, "scripts")
-	info, err := os.Lstat(scripts)
+	md := filepath.Join(dir, "SKILL.md")
+	info, err := os.Lstat(md)
 	switch {
 	case os.IsNotExist(err):
-		return
+		return sf
 	case err != nil:
-		d.fail(f, scripts, graph.ReasonReadError, err.Error())
-		return
-	case info.Mode()&fs.ModeSymlink != 0:
-		d.notFollowed(f, scripts)
-		return
+		failed(md, graph.ReasonReadError, err.Error())
+	default:
+		sf.listed(md, info, &sf.instructions, failed)
+	}
+	scripts := filepath.Join(dir, "scripts")
+	info, err = os.Lstat(scripts)
+	switch {
+	case os.IsNotExist(err):
+		return sf
+	case err != nil:
+		failed(scripts, graph.ReasonReadError, err.Error())
+		return sf
+	case isLink(info.Mode()):
+		failed(scripts, graph.ReasonSourceUnsupported, "symbolic link not followed")
+		return sf
 	case !info.IsDir():
-		return
+		return sf
 	}
 	n := 0
 	err = filepath.WalkDir(scripts, func(path string, e fs.DirEntry, err error) error {
@@ -286,7 +426,7 @@ func (d *discovery) skill(ctx context.Context, f folder, dir string) {
 			return fs.SkipAll
 		}
 		if err != nil {
-			d.fail(f, path, graph.ReasonReadError, err.Error())
+			failed(path, graph.ReasonReadError, err.Error())
 			if e != nil && e.IsDir() {
 				return fs.SkipDir
 			}
@@ -299,48 +439,36 @@ func (d *discovery) skill(ctx context.Context, f folder, dir string) {
 			return nil
 		}
 		if n == MaxScriptFiles {
-			d.fail(f, scripts, graph.ReasonFileCountLimitExceeded, fmt.Sprintf("more than %d files", MaxScriptFiles))
+			failed(scripts, graph.ReasonFileCountLimitExceeded, fmt.Sprintf("more than %d files", MaxScriptFiles))
 			return fs.SkipAll
 		}
 		n++
 		info, err := e.Info()
 		if err != nil {
-			d.fail(f, path, graph.ReasonReadError, err.Error())
+			failed(path, graph.ReasonReadError, err.Error())
 			return nil
 		}
-		d.listed(f, path, info, &d.scan.Executables, "executable")
+		sf.listed(path, info, &sf.executables, failed)
 		return nil
 	})
 	if err != nil {
-		d.fail(f, scripts, graph.ReasonReadError, err.Error())
+		failed(scripts, graph.ReasonReadError, err.Error())
 	}
-}
-
-// entry lists path if it exists, and reports whether it does.
-func (d *discovery) entry(f folder, path string, list *[]platform.InstructionFile, kind string) bool {
-	info, err := os.Lstat(path)
-	switch {
-	case os.IsNotExist(err):
-		return false
-	case err != nil:
-		d.fail(f, path, graph.ReasonReadError, err.Error())
-		return true
-	}
-	d.listed(f, path, info, list, kind)
-	return true
+	return sf
 }
 
 // listed lists an existing entry: a regular file within the size limit
-// (invariant 6), or a symbolic link, listed by its own path and not
-// followed. Folders and other entries are not listed.
-func (d *discovery) listed(f folder, path string, info fs.FileInfo, list *[]platform.InstructionFile, kind string) {
+// (invariant 6), or a link, listed by its own path and not followed (a link
+// inside a skill is the agent's file at that path). Folders and other
+// entries are not listed.
+func (sf *skillFiles) listed(path string, info fs.FileInfo, list *[]string, failed func(path, code, detail string)) {
 	switch {
-	case info.Mode()&fs.ModeSymlink != 0:
+	case isLink(info.Mode()):
 	case !info.Mode().IsRegular():
 		return
 	case info.Size() > repos.MaxFileBytes:
-		d.fail(f, path, graph.ReasonSizeLimitExceeded, fmt.Sprintf("%d bytes > %d (invariant 6)", info.Size(), repos.MaxFileBytes))
+		failed(path, graph.ReasonSizeLimitExceeded, fmt.Sprintf("%d bytes > %d (invariant 6)", info.Size(), repos.MaxFileBytes))
 		return
 	}
-	d.add(list, kind, f, path)
+	*list = append(*list, path)
 }

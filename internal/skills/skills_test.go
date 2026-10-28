@@ -99,6 +99,9 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 	} {
 		write(t, filepath.Join(tmp, filepath.FromSlash(p)), 1)
 	}
+	if err := os.WriteFile(filepath.Join(hermes, "config.yaml"), []byte("skills:\n  trusted_project_dirs: ['"+repo+"']\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	env := envOf(map[string]string{"HERMES_HOME": hermes, "APPDATA": filepath.Join(home, "AppData", "Roaming")})
 	scan := skills.Discover(context.Background(), home, env, []string{repo})
 
@@ -183,29 +186,29 @@ func TestDiscover_CountLimits(t *testing.T) {
 	for i := 0; i <= skills.MaxSkillsPerFolder; i++ {
 		write(t, filepath.Join(dir, fmt.Sprintf("s%03d", i), "SKILL.md"), 1)
 	}
-	scripts := filepath.Join(repo, ".hermes", "skills", "big", "scripts")
-	write(t, filepath.Join(repo, ".hermes", "skills", "big", "SKILL.md"), 1)
+	scripts := filepath.Join(repo, ".clinerules", "skills", "big", "scripts")
+	write(t, filepath.Join(repo, ".clinerules", "skills", "big", "SKILL.md"), 1)
 	for i := 0; i <= skills.MaxScriptFiles; i++ {
 		write(t, filepath.Join(scripts, fmt.Sprintf("f%03d.sh", i)), 1)
 	}
 	scan := skills.Discover(context.Background(), "", envOf(nil), []string{repo})
-	var cursor, hermes int
+	var cursor, cline int
 	for _, f := range scan.Instructions {
 		if f.Product == "cursor" {
 			cursor++
 		}
 	}
 	for _, f := range scan.Executables {
-		if f.Product == "hermes" {
-			hermes++
+		if f.Product == "cline" {
+			cline++
 		}
 	}
-	if cursor != skills.MaxSkillsPerFolder || hermes != skills.MaxScriptFiles {
-		t.Errorf("listed %d skills and %d scripts, want %d and %d", cursor, hermes, skills.MaxSkillsPerFolder, skills.MaxScriptFiles)
+	if cursor != skills.MaxSkillsPerFolder || cline != skills.MaxScriptFiles {
+		t.Errorf("listed %d skills and %d scripts, want %d and %d", cursor, cline, skills.MaxSkillsPerFolder, skills.MaxScriptFiles)
 	}
 	equal(t, "failed", failures(tmp, scan.Failed), []string{
+		"cline repo/.clinerules/skills/big/scripts " + graph.ReasonFileCountLimitExceeded,
 		"cursor repo/.cursor/skills " + graph.ReasonFileCountLimitExceeded,
-		"hermes repo/.hermes/skills/big/scripts " + graph.ReasonFileCountLimitExceeded,
 	})
 }
 
@@ -235,12 +238,12 @@ func TestDiscover_LinksNotFollowed(t *testing.T) {
 	cursor := filepath.Join(repo, ".cursor", "skills")
 	write(t, filepath.Join(cursor, "own", "SKILL.md"), 1)
 	links := map[string]string{
-		filepath.Join(cursor, "linked"):                                  filepath.Join(outside, "skill"),
-		filepath.Join(cursor, "own", "scripts"):                          filepath.Join(outside, "skill", "scripts"),
-		filepath.Join(repo, ".github", "skills"):                         outside,
-		filepath.Join(repo, ".hermes", "skills", "h", "scripts", "t.sh"): filepath.Join(outside, "tool.sh"),
+		filepath.Join(cursor, "linked"):                                      filepath.Join(outside, "skill"),
+		filepath.Join(cursor, "own", "scripts"):                              filepath.Join(outside, "skill", "scripts"),
+		filepath.Join(repo, ".github", "skills"):                             outside,
+		filepath.Join(repo, ".clinerules", "skills", "h", "scripts", "t.sh"): filepath.Join(outside, "tool.sh"),
 	}
-	write(t, filepath.Join(repo, ".hermes", "skills", "h", "SKILL.md"), 1)
+	write(t, filepath.Join(repo, ".clinerules", "skills", "h", "SKILL.md"), 1)
 	for link, target := range links {
 		if err := os.MkdirAll(filepath.Dir(link), 0o700); err != nil {
 			t.Fatal(err)
@@ -251,10 +254,10 @@ func TestDiscover_LinksNotFollowed(t *testing.T) {
 	}
 	scan := skills.Discover(context.Background(), "", envOf(nil), []string{repo})
 	equal(t, "instructions", listed(tmp, scan.Instructions), []string{
+		"cline repo/.clinerules/skills/h/SKILL.md",
 		"cursor repo/.cursor/skills/own/SKILL.md",
-		"hermes repo/.hermes/skills/h/SKILL.md",
 	})
-	equal(t, "executables", listed(tmp, scan.Executables), []string{"hermes repo/.hermes/skills/h/scripts/t.sh"})
+	equal(t, "executables", listed(tmp, scan.Executables), []string{"cline repo/.clinerules/skills/h/scripts/t.sh"})
 	equal(t, "failed", failures(tmp, scan.Failed), []string{
 		"copilot repo/.github/skills " + graph.ReasonSourceUnsupported,
 		"cursor repo/.cursor/skills/linked " + graph.ReasonSourceUnsupported,
