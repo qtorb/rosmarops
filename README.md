@@ -20,7 +20,7 @@ You get a visual report with a score per agent, the first thing to do with the e
 3. Double-click `rosmarops.exe`. It finds your projects on its own; if it finds none, it asks you to choose the folder where you keep them.
 4. The report opens in your browser when it finishes (up to 5 minutes), in your Windows language, with a link to the other language.
 
-Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, and which agents or MCP servers are new.
+Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, which agents or MCP servers are new, and which MCP servers now point somewhere else.
 
 To run it every week without thinking about it, the report gives you the exact command to schedule a review every Friday at 09:00 (or your agent can run it for you). RosmarOps does not create the task itself. When the scheduled review finishes, Windows shows a notification; if notifications are turned off, the report opens in your browser.
 
@@ -60,7 +60,7 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Antigravity | Detected, not scored yet: its MCP servers (`~/.gemini/config/mcp_config.json` and each project's `.agents/mcp_config.json`) and its instruction files (`GEMINI.md`, `AGENTS.md`, `.agents/rules`) |
 | Hermes Agent | Detected, not scored yet: the keys in its `.env` files, and its instruction files |
 | Claude Desktop | Detected, not scored yet: its MCP servers in `claude_desktop_config.json` |
-| Credentials | `.env` files in your repositories, MCP `env` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
+| Credentials | `.env` files in your repositories, MCP `env` and `headers` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
 | Windows | The list of scheduled tasks and Windows Defender's exclusions, to tell you when a new one appears, and whether Windows allows notifications |
 
