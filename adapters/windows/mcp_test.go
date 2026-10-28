@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -118,6 +119,20 @@ func TestListMCPServers_ReportsEverySource(t *testing.T) {
 		{"cline", "cline_mcp_settings.json", platform.MCPSourceMissing},
 		{"cursor", filepath.Join(".cursor", "mcp.json"), platform.MCPSourceRead},
 		{"cursor", filepath.Join(".cursor", "mcp.json"), platform.MCPSourceMissing}, // the repo's (K10)
+	}
+	if runtime.GOOS == "windows" {
+		// BV-91 (D2): managed-mcp.json, read only on Windows (New sets the
+		// managed dir there), right after the user ~/.claude.json source.
+		managed := struct {
+			platform string
+			suffix   string
+			status   platform.MCPSourceStatus
+		}{"claude-code", "managed-mcp.json", platform.MCPSourceMissing}
+		want = append(want[:2], append([]struct {
+			platform string
+			suffix   string
+			status   platform.MCPSourceStatus
+		}{managed}, want[2:]...)...)
 	}
 	if len(scan.Sources) != len(want) {
 		t.Fatalf("sources: got %d %+v, want %d", len(scan.Sources), scan.Sources, len(want))
