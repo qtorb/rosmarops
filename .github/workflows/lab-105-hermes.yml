@@ -1,0 +1,233 @@
+# Temporary laboratory, LECTURA-105: what does Hermes Agent v0.22.5 write on a
+# clean Windows runner, out of the box, with no keys and no sign-in, and what
+# does RosmarOps (built from master) see? Claude Code is installed too and only
+# `claude doctor` runs (no sign-in), so its folder exists. Five snapshots of
+# %LOCALAPPDATA%\hermes, %USERPROFILE%\.claude(.json) and %USERPROFILE%\.codex
+# list names, sizes and SHA-256 (never contents). The config.yaml Hermes
+# generates is uploaded only if nothing in it looks like a key. Two passes on
+# fresh runners. Temporary; lives only on lab-95.
+name: lab-105-hermes
+on:
+  push:
+    branches: [lab-95]
+    paths: ['.github/workflows/lab-105-hermes.yml']
+permissions:
+  contents: read
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      HERMES_TAG: v0.22.5
+      HERMES_COMMIT: bf0203a794a07aac3ff764972ab9087baa4e4f4e
+    steps:
+      - name: Windows version
+        shell: pwsh
+        run: |
+          (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber | Format-List | Out-String).Trim()
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\lab" | Out-Null
+
+      - name: Snapshot helper
+        shell: pwsh
+        run: |
+          @'
+          param([string]$Label)
+          $roots = [ordered]@{
+            hermes     = "$env:LOCALAPPDATA\hermes"
+            claude     = "$env:USERPROFILE\.claude"
+            claudejson = "$env:USERPROFILE\.claude.json"
+            codex      = "$env:USERPROFILE\.codex"
+          }
+          # The Hermes code checkout and tool stores are not configuration: listed
+          # by size only, not walked.
+          $skip = @('hermes-agent', 'node_modules', '.venv', 'venv', '__pycache__')
+          $out = @()
+          "===== SNAPSHOT: $Label ====="
+          foreach ($name in $roots.Keys) {
+            $p = $roots[$name]
+            if (-not (Test-Path -LiteralPath $p)) { "absent:  $p"; continue }
+            $item = Get-Item -LiteralPath $p -Force
+            if (-not $item.PSIsContainer) {
+              $h = (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLower()
+              $out += [pscustomobject]@{ root = $name; rel = ''; size = $item.Length; sha256 = $h; utc = $item.LastWriteTimeUtc.ToString('o') }
+              continue
+            }
+            $stack = New-Object System.Collections.Stack
+            $stack.Push($p)
+            while ($stack.Count -gt 0) {
+              $d = $stack.Pop()
+              foreach ($e in (Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue)) {
+                $rel = $e.FullName.Substring($p.Length)
+                if ($e.PSIsContainer) {
+                  if ($skip -contains $e.Name) {
+                    $files = Get-ChildItem -LiteralPath $e.FullName -Recurse -File -Force -ErrorAction SilentlyContinue
+                    $size = ($files | Measure-Object Length -Sum).Sum
+                    $out += [pscustomobject]@{ root = $name; rel = "$rel\ (not walked: $($files.Count) files)"; size = $size; sha256 = ''; utc = '' }
+                  } else { $stack.Push($e.FullName) }
+                  continue
+                }
+                $h = if ($e.Length -le 5MB) { (Get-FileHash -LiteralPath $e.FullName -Algorithm SHA256).Hash.ToLower() } else { 'over-5MB' }
+                $out += [pscustomobject]@{ root = $name; rel = $rel; size = $e.Length; sha256 = $h; utc = $e.LastWriteTimeUtc.ToString('o') }
+              }
+            }
+          }
+          $out | Sort-Object root, rel | Format-Table root, rel, size, sha256 -AutoSize | Out-String -Width 400
+          $out | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\lab\snap-$Label.json"
+          '@ | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\snap.ps1"
+          & "$env:RUNNER_TEMP\snap.ps1" -Label 0-initial
+
+      - name: Install Claude Code (npm, as LECTURA-97) and run claude doctor without sign-in
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          npm install -g "@anthropic-ai/claude-code"
+          "claude: $(claude --version)"
+          $job = Start-Job { claude doctor 2>&1 }
+          if (Wait-Job $job -Timeout 120) { "claude doctor: completed"; Receive-Job $job | Out-String } else { "claude doctor: TIMEOUT 120s (stopped)"; Stop-Job $job }
+          Remove-Job $job -Force -ErrorAction SilentlyContinue
+          & "$env:RUNNER_TEMP\snap.ps1" -Label 1-after-claude-doctor
+
+      - name: Install Hermes v0.22.5 (official Windows installer, pinned, non-interactive)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          # README.md:43-56 @ v0.22.5: `iex (irm https://hermes-agent.nousresearch.com/install.ps1)`.
+          # The same script, from the repository at the tag, on its stable channel (the
+          # latest published release; the release commit is not on main, so -Commit cannot
+          # pin it); the installed commit is checked against the release's below.
+          # -NonInteractive skips `hermes setup` (API keys).
+          $url = "https://raw.githubusercontent.com/NousResearch/hermes-agent/$env:HERMES_TAG/scripts/install.ps1"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\install.ps1" -UseBasicParsing
+          "install.ps1 sha256: $((Get-FileHash "$env:RUNNER_TEMP\install.ps1" -Algorithm SHA256).Hash.ToLower())"
+          $start = Get-Date
+          & "$env:RUNNER_TEMP\install.ps1" -Channel stable -NonInteractive -SkipBrowser -SkipComputerUse
+          "installer exit: $LASTEXITCODE; $([int]((Get-Date) - $start).TotalSeconds)s"
+          $tree = "$env:LOCALAPPDATA\hermes\hermes-agent"
+          $head = git -C $tree rev-parse HEAD 2>$null
+          "installed commit: $head (release $env:HERMES_TAG = $env:HERMES_COMMIT) -> $(if ($head -eq $env:HERMES_COMMIT) { 'MATCH' } else { 'DIFFERENT' })"
+          "installed describe: $(git -C $tree describe --tags 2>$null)"
+          & "$env:RUNNER_TEMP\snap.ps1" -Label 2-after-hermes-install
+
+      - name: First start of Hermes without a key (version, help, doctor)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $cands = @(Get-ChildItem "$env:LOCALAPPDATA\hermes" -Recurse -Depth 6 -Include hermes.exe, hermes.cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+          "hermes candidates:"; $cands
+          $cmd = Get-Command hermes -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if (-not $cmd) { $cmd = $cands | Select-Object -First 1 }
+          "hermes: $cmd"
+          if (-not $cmd) { "hermes command not found"; exit 0 }
+          foreach ($a in @('--version', '--help', 'doctor')) {
+            "----- hermes $a (cap 180s, stdin closed) -----"
+            $job = Start-Job -ArgumentList $cmd, $a { param($c, $a) cmd /c "`"$c`" $a < NUL 2>&1" }
+            if (Wait-Job $job -Timeout 180) { Receive-Job $job | Select-Object -First 120 | Out-String } else { "TIMEOUT (stopped)"; Stop-Job $job }
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+          }
+          & "$env:RUNNER_TEMP\snap.ps1" -Label 3-after-hermes-first-start
+
+      - name: config.yaml (uploaded only if nothing looks like a key)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $cfg = "$env:LOCALAPPDATA\hermes\config.yaml"
+          if (-not (Test-Path $cfg)) { "no config.yaml at $cfg" | Tee-Object out\NO_CONFIG_YAML.txt; exit 0 }
+          $text = Get-Content -Raw $cfg
+          $keyish = '(sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|xox[abp]-|AKIA[0-9A-Z]{16}|(api_key|token|secret|password)\s*:\s*["'']?[A-Za-z0-9_\-\.]{12,})'
+          $hits = [regex]::Matches($text, $keyish, 'IgnoreCase')
+          "config.yaml: $((Get-Item $cfg).Length) bytes, sha256 $((Get-FileHash $cfg -Algorithm SHA256).Hash.ToLower()), key-like matches: $($hits.Count)"
+          if ($hits.Count -gt 0) { "NOT uploaded: something looks like a key" | Tee-Object out\CONFIG_NOT_UPLOADED.txt }
+          else { Copy-Item $cfg out\hermes-config.yaml }
+
+      - name: Build rosmarops.exe from master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: master
+          path: rosmarops-src
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: go build
+        shell: pwsh
+        run: |
+          Push-Location rosmarops-src
+          "master: $(git rev-parse HEAD)"
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -o "$env:GITHUB_WORKSPACE\rosmarops.exe" ./cmd/rosmarops
+          Pop-Location
+
+      - name: Run RosmarOps (init + run)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          .\rosmarops.exe init
+          .\rosmarops.exe run --lang en
+          "exit: $LASTEXITCODE"
+          & "$env:RUNNER_TEMP\snap.ps1" -Label 4-final
+
+      - name: What RosmarOps saw (band, findings, coverage, Hermes)
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $r = "$env:USERPROFILE\.rosmarops\reports"
+          $v2 = Get-Content -Raw "$r\report.v2.json" -ErrorAction SilentlyContinue | ConvertFrom-Json
+          if ($v2) {
+            "status: $($v2.status)"
+            "findings: $(@($v2.findings).Count)"
+            @($v2.findings) | ForEach-Object { "  $($_.rule) $($_.severity)" }
+          } else { "no report.v2.json" }
+          $g = Get-Content -Raw "$r\graph.v2.json" -ErrorAction SilentlyContinue | ConvertFrom-Json
+          if ($g) {
+            "ai_clients:"; @($g.nodes) | Where-Object { $_.type -eq 'ai_client' } | ForEach-Object { "  $($_.platform) $($_.name)" }
+            "sources_failed:"; @($g.coverage.sources_failed) | ForEach-Object { "  $($_.path) :: $($_.reason)" }
+            "agents_unsupported:"; @($g.coverage.agents_unsupported) | ForEach-Object { "  $($_ | ConvertTo-Json -Compress)" }
+          } else { "no graph.v2.json" }
+          "log lines about hermes / parse_error:"
+          Get-ChildItem $r -Filter "last-run-log*.txt" -ErrorAction SilentlyContinue | ForEach-Object {
+            Select-String -Path $_.FullName -Pattern 'hermes|parse_error|yaml' | ForEach-Object { "  $($_.Line)" }
+          }
+
+      - name: Changes between snapshots (Claude Code, Codex, Hermes)
+        if: always()
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $labels = @('0-initial', '1-after-claude-doctor', '2-after-hermes-install', '3-after-hermes-first-start', '4-final')
+          function Load($l) { $f = "$env:RUNNER_TEMP\lab\snap-$l.json"; if (Test-Path $f) { @(Get-Content -Raw $f | ConvertFrom-Json) } else { @() } }
+          for ($i = 1; $i -lt $labels.Count; $i++) {
+            $a = Load $labels[$i - 1]; $b = Load $labels[$i]
+            "===== $($labels[$i - 1]) -> $($labels[$i]) ====="
+            $ka = @{}; foreach ($x in $a) { $ka["$($x.root)|$($x.rel)"] = $x }
+            $kb = @{}; foreach ($x in $b) { $kb["$($x.root)|$($x.rel)"] = $x }
+            foreach ($k in ($kb.Keys | Sort-Object)) {
+              if (-not $ka.ContainsKey($k)) { "  added:   $k ($($kb[$k].size) bytes)" }
+              elseif ($ka[$k].sha256 -ne $kb[$k].sha256 -or $ka[$k].size -ne $kb[$k].size) { "  changed: $k ($($ka[$k].size) -> $($kb[$k].size) bytes)" }
+            }
+            foreach ($k in ($ka.Keys | Sort-Object)) { if (-not $kb.ContainsKey($k)) { "  removed: $k" } }
+          }
+
+      - name: Collect
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\lab\snap-*.json" out -ErrorAction SilentlyContinue
+          $r = "$env:USERPROFILE\.rosmarops\reports"
+          if (Test-Path $r) { New-Item -ItemType Directory -Force -Path out\reports | Out-Null; Copy-Item "$r\*" out\reports -Recurse -Force }
+          Get-ChildItem out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String -Width 300
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lab-105-run-${{ matrix.run }}
+          path: out
+          if-no-files-found: warn
