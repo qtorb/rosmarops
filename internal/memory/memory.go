@@ -61,9 +61,9 @@ const saltRefLabel = "rosmarops/findings-memory/salt-ref/v1"
 // with the salt, 16 hex.
 func SaltRef(salt []byte) string { return hash.Keyed(salt, []byte(saltRefLabel))[:16] }
 
-// SchemaVersion is the version written (decision 2026-10-26, agentes y MCP
-// nuevos, A2); version 1 is still read.
-const SchemaVersion = 2
+// SchemaVersion is the version written: v3 adds last_checked.mcp_dest_refs
+// (BV-91, D3); versions 1 and 2 are still read.
+const SchemaVersion = 3
 
 // File mirrors schemas/v2/findings-memory.v2.schema.json (and v1, read
 // without SaltRef and AgentRefs).
@@ -87,6 +87,10 @@ type Checked struct {
 	// AgentRefs are the salted references of the agents seen in that run,
 	// by comparison key (A1). nil: no base (a v1 memory).
 	AgentRefs *[]string `json:"agent_refs,omitempty"`
+	// MCPDestRefs are the salted references of each MCP server's destination
+	// (BV-91, D3): HMAC(salt, comparison key ‖ destination_ref)[:16]. nil: no
+	// base (a v1 or v2 memory), so the first v3 run reports no change.
+	MCPDestRefs *[]string `json:"mcp_dest_refs,omitempty"`
 }
 
 // Entry is one finding's memory.
@@ -135,11 +139,21 @@ type Run struct {
 }
 
 // SeenAgent is one agent of the run: its comparison key (A1), whether it is
-// an MCP server, and its name for the report.
+// an MCP server, its name for the report and, for an MCP server, its
+// destination_ref (BV-91, D3), to tell a change of destination.
 type SeenAgent struct {
 	Key  string
 	MCP  bool
 	Name string
+	Dest string // mcp_server only: the graph node's destination_ref
+}
+
+// MCPRef is an MCP server the report may name: its display name and its
+// comparison key, so the report can look up its agent and destination in the
+// graph (BV-91, D3/D4).
+type MCPRef struct {
+	Name string
+	Key  string
 }
 
 // Root is the run's memory in report.v2.json.
@@ -150,11 +164,14 @@ type Root struct {
 	Reason           string         `json:"reason,omitempty"`
 	Reset            bool           `json:"reset"`
 
-	// NewAgents and NewMCP are the agents and MCP servers new since the
-	// last checked run, by name, sorted (A1); none without a base.
-	// SaltChanged: the local salt is not the memory's (A2).
+	// NewAgents are the non-MCP agents new since the last checked run, by name,
+	// sorted (A1). NewMCP are the new MCP servers and MCPChanged the servers
+	// that were there last time but now point somewhere else (BV-91, D3), each
+	// by name and comparison key, sorted; none without a base. SaltChanged: the
+	// local salt is not the memory's (A2).
 	NewAgents   []string `json:"-"`
-	NewMCP      []string `json:"-"`
+	NewMCP      []MCPRef `json:"-"`
+	MCPChanged  []MCPRef `json:"-"`
 	SaltChanged bool     `json:"-"`
 }
 
@@ -179,6 +196,28 @@ type Moved struct {
 // ref is the salted reference of an id: HMAC-SHA256 with the local salt,
 // 16 hex.
 func ref(salt []byte, id string) string { return hash.Keyed(salt, []byte(id))[:16] }
+
+// mcpDestRef is a server's salted destination reference (BV-91, D3):
+// HMAC(salt, comparison key ‖ destination_ref)[:16]. A server with no
+// destination_ref still gets a stable ref, so losing a destination is a change.
+func mcpDestRef(salt []byte, a SeenAgent) string {
+	return ref(salt, a.Key+"\x00"+a.Dest)
+}
+
+// uniqueSortedMCP is uniqueSorted for MCPRef, keyed by the comparison key.
+func uniqueSortedMCP(refs []MCPRef) []MCPRef {
+	seen := map[string]bool{}
+	out := refs[:0]
+	for _, r := range refs {
+		if seen[r.Key] {
+			continue
+		}
+		seen[r.Key] = true
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
+}
 
 // Update computes this run's verdicts against prev and returns the new
 // memory, the verdict of each current finding (by finding id) and the run's
@@ -209,23 +248,39 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 	}
 	notComparable := root.Reason != ""
 
-	// A1: the agents and MCP servers not in the last checked run's.
+	// A1: the agents and MCP servers not in the last checked run's. BV-91 (D3):
+	// an MCP server that was there but whose destination_ref is not is a change
+	// of destination.
 	if b := prev.LastChecked; b != nil && b.AgentRefs != nil && !root.SaltChanged {
 		base := map[string]bool{}
 		for _, r := range *b.AgentRefs {
 			base[r] = true
 		}
-		for _, a := range run.Seen {
-			if base[ref(salt, a.Key)] {
-				continue
-			}
-			if a.MCP {
-				root.NewMCP = append(root.NewMCP, a.Name)
-			} else {
-				root.NewAgents = append(root.NewAgents, a.Name)
+		destBase := map[string]bool{}
+		if b.MCPDestRefs != nil {
+			for _, r := range *b.MCPDestRefs {
+				destBase[r] = true
 			}
 		}
-		root.NewAgents, root.NewMCP = uniqueSorted(root.NewAgents), uniqueSorted(root.NewMCP)
+		for _, a := range run.Seen {
+			if !base[ref(salt, a.Key)] {
+				if a.MCP {
+					root.NewMCP = append(root.NewMCP, MCPRef{Name: a.Name, Key: a.Key})
+				} else {
+					root.NewAgents = append(root.NewAgents, a.Name)
+				}
+				continue
+			}
+			// Present last time: a known MCP server whose destination_ref is not
+			// in the base points somewhere else now. Only when the base has
+			// destinations (a v3 base), so the first v3 run reports no change.
+			if a.MCP && b.MCPDestRefs != nil && !destBase[mcpDestRef(salt, a)] {
+				root.MCPChanged = append(root.MCPChanged, MCPRef{Name: a.Name, Key: a.Key})
+			}
+		}
+		root.NewAgents = uniqueSorted(root.NewAgents)
+		root.NewMCP = uniqueSortedMCP(root.NewMCP)
+		root.MCPChanged = uniqueSortedMCP(root.MCPChanged)
 	}
 
 	verdicts := map[string]rules.FindingMemory{}
@@ -308,15 +363,22 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 
 	if run.Complete {
 		agentRefs := make([]string, 0, len(run.Seen))
+		destRefs := make([]string, 0, len(run.Seen))
 		for _, a := range run.Seen {
 			agentRefs = append(agentRefs, ref(salt, a.Key))
+			if a.MCP {
+				destRefs = append(destRefs, mcpDestRef(salt, a))
+			}
 		}
 		if agentRefs = uniqueSorted(agentRefs); agentRefs == nil {
 			agentRefs = []string{} // a base with no agent
 		}
+		if destRefs = uniqueSorted(destRefs); destRefs == nil {
+			destRefs = []string{} // a base with no MCP server
+		}
 		next.LastChecked = &Checked{
 			Run: next.Runs, Date: run.Date, RulesVersion: run.RulesVersion, KnowledgeVersion: run.KnowledgeVersion,
-			Agents: sortedCopy(run.Agents), Repos: run.Repos, AgentRefs: &agentRefs,
+			Agents: sortedCopy(run.Agents), Repos: run.Repos, AgentRefs: &agentRefs, MCPDestRefs: &destRefs,
 		}
 	}
 	for _, e := range byMid {
@@ -426,9 +488,12 @@ func validate(raw []byte) error {
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return fmt.Errorf("parse findings memory: %w", err)
 	}
-	schema := schemas.FindingsMemoryV2Schema
-	if head.SchemaVersion == 1 {
+	schema := schemas.FindingsMemoryV3Schema
+	switch head.SchemaVersion {
+	case 1:
 		schema = schemas.FindingsMemorySchema
+	case 2:
+		schema = schemas.FindingsMemoryV2Schema
 	}
 	s, err := schemaval.Compile(schema)
 	if err != nil {

@@ -596,3 +596,124 @@ func TestNoSecretInGraph(t *testing.T) {
 	}
 	assertNoSecret(t, "state.json", stRaw, nil)
 }
+
+// TestNoSecretInGraph_MCPDestinations is BV-91 (D6): a secret in a remote
+// server's URL (userinfo, query, fragment or a path token), in a stdio
+// server's arguments, or in the headers of a Cursor, Cline or Claude Desktop
+// server never reaches the graph; the remote origin is recorded as exactly
+// scheme://host, and the header secrets become credentials without their value.
+func TestNoSecretInGraph_MCPDestinations(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	appData := filepath.Join(home, "AppData", "Roaming")
+	t.Setenv("APPDATA", appData)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	t.Setenv("CODEX_HOME", "")
+	t.Setenv("HERMES_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("AppData", "")
+	t.Setenv("GH_CONFIG_DIR", "")
+
+	const (
+		urlUser  = "urluserSECRET"
+		urlPass  = "urlpassSECRET1234"
+		urlQuery = "qapikeySECRET1234"
+		urlFrag  = "fragtokenSECRET1234"
+		urlPath  = "pathtokenSECRET1234"
+		argKey   = "argapikeySECRET1234"
+		argTok   = "argtokenSECRET1234"
+		argDBPw  = "argdbpassSECRET1234"
+		hdrCur   = "ghp_CURH" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+		hdrCli   = "ghp_CLIH" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+		hdrDesk  = "ghp_DSKH" + "ZYXWVUTSRQPONMLKJIHGFEDCBA987654"
+	)
+	// All the forbidden substrings, plus the middle of each (defence against
+	// partial redaction).
+	secretsList := []string{urlUser, urlPass, urlQuery, urlFrag, urlPath, argKey, argTok, argDBPw, hdrCur, hdrCli, hdrDesk}
+
+	remoteURL := "https://" + urlUser + ":" + urlPass + "@api.internal.example.com/mcp/" + urlPath + "?api_key=" + urlQuery + "#" + urlFrag
+	claudeJSON := `{"mcpServers": {
+	  "remote": {"type": "http", "url": "` + remoteURL + `"},
+	  "local": {"command": "node", "args": ["server.js", "--api-key=` + argKey + `", "TOKEN=` + argTok + `", "postgres://dbu:` + argDBPw + `@db.example.com:5432/app"]}
+	}}`
+	if err := os.WriteFile(filepath.Join(home, ".claude.json"), []byte(claudeJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Cursor, Cline and Claude Desktop servers, each with a secret header.
+	writeJSON := func(p, content string) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeJSON(filepath.Join(home, ".cursor", "mcp.json"),
+		`{"mcpServers": {"cur": {"type": "http", "url": "https://cursor.example.com/mcp", "headers": {"Authorization": "Bearer `+hdrCur+`"}}}}`)
+	writeJSON(filepath.Join(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"),
+		`{"mcpServers": {"cli": {"type": "sse", "url": "https://cline.example.com/mcp", "headers": {"Authorization": "Bearer `+hdrCli+`"}}}}`)
+	writeJSON(filepath.Join(appData, "Claude", "claude_desktop_config.json"),
+		`{"mcpServers": {"desk": {"type": "http", "url": "https://desktop.example.com/mcp", "headers": {"Authorization": "Bearer `+hdrDesk+`"}}}}`)
+
+	scan, err := windows.New().ListMCPServers(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListMCPServers: %v", err)
+	}
+	st, err := state.DefaultState("0.1.0-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt, err := st.Salt()
+	if err != nil {
+		t.Fatal(err)
+	}
+	frag, err := graph.FromMCPScan(scan, salt, time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("FromMCPScan: %v", err)
+	}
+	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, time.Now())
+	out, err := graph.Encode(g)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	s := string(out)
+	for _, v := range secretsList {
+		if strings.Contains(s, v) {
+			t.Errorf("graph contains the secret %q", v)
+		}
+		if mid := v[4 : len(v)-4]; len(mid) > 0 && strings.Contains(s, mid) {
+			t.Errorf("graph contains the middle of %q", v)
+		}
+	}
+	if strings.Contains(s, hex.EncodeToString(salt)) {
+		t.Error("graph contains the local salt")
+	}
+	// Positive: the remote origin is exactly scheme://host, with no path, and
+	// three secret headers became credentials.
+	if !strings.Contains(s, `"https://api.internal.example.com"`) {
+		t.Error("the remote origin external_service is missing or not exactly scheme://host")
+	}
+	for _, p := range []string{"/mcp/", "api_key=", "@api.internal"} {
+		if strings.Contains(s, p) {
+			t.Errorf("graph contains the URL part %q", p)
+		}
+	}
+	var sendsTo, creds int
+	for _, e := range g.Edges {
+		if e.Type == graph.EdgeSendsTo {
+			sendsTo++
+		}
+	}
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindCredential {
+			creds++
+		}
+	}
+	if sendsTo < 1 {
+		t.Error("no sends_to edge to the remote origin")
+	}
+	if creds < 3 {
+		t.Errorf("header secrets as credentials: got %d, want at least 3 (Cursor, Cline, Claude Desktop)", creds)
+	}
+}

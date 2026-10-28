@@ -58,10 +58,13 @@ type V2 struct {
 	// TestData are the keys treated as test data by default (decision
 	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
 	TestData rules.TestData `json:"-"`
-	// NewAgents are the agents new since the last checked run, NewMCP the
-	// MCP servers (v3 §13.3; decision 2026-10-26, agentes y MCP nuevos, A1).
+	// NewAgents are the non-MCP agents new since the last checked run, by name
+	// (v3 §13.3; A1). NewMCP are the new MCP servers and MCPChanged the servers
+	// that now point somewhere else (BV-91, D3/D4), each with its agent and
+	// destination.
 	NewAgents  []string         `json:"-"`
-	NewMCP     []string         `json:"-"`
+	NewMCP     []MCPServerLine  `json:"-"`
+	MCPChanged []MCPServerLine  `json:"-"`
 	repos      int              // configured repositories
 	nextMemory memory.File      // findings-memory.json after this run
 	memoryPrev bool             // an earlier findings-memory.json was read
@@ -401,7 +404,13 @@ func applyMemory(v *V2, in V2Input) {
 		v.Findings[i].Memory = &m
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
-	v.NewAgents, v.NewMCP = root.NewAgents, root.NewMCP // A1: from the memory, not from v1
+	v.NewAgents = root.NewAgents // A1: from the memory, not from v1
+	if in.Graph != nil {
+		// BV-91 (D4): the new and changed MCP lines pair the memory's refs with
+		// each server's agent and destination from the graph.
+		v.NewMCP = mcpServerLines(*in.Graph, root.NewMCP, in.Home)
+		v.MCPChanged = mcpServerLines(*in.Graph, root.MCPChanged, in.Home)
+	}
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

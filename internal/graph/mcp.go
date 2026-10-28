@@ -281,6 +281,10 @@ func fromMCPScan(scan platform.MCPScan, salt []byte, discoveredAt time.Time, ext
 
 	clients, failed := ClientsFromSources(scan.Sources)
 	f := FromMCP(clients, scan.Servers, discoveredAt)
+	// BV-91: each server's transport, command and destination_ref, and an
+	// external_service origin with a sends_to edge for every parseable remote
+	// URL (salt keys the destination_ref).
+	f = addMCPDestinations(f, scan.Servers, salt, discoveredAt)
 	f.Nodes = append(f.Nodes, presentClients(f.Nodes, scan.Present, discoveredAt)...)
 	f.Coverage.SourcesFailed = append(failed, f.Coverage.SourcesFailed...)
 	sort.SliceStable(f.Coverage.SourcesFailed, func(i, j int) bool {

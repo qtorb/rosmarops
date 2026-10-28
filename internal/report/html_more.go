@@ -52,6 +52,10 @@ func (c htmlCtx) renderMore(local time.Time) {
 // and MCP servers; the fold of moved and gone findings.
 func (c htmlCtx) renderSince() {
 	m := c.v.Memory
+	// BV-91 (D4): a server that points somewhere else now, before the rest.
+	for _, s := range c.v.MCPChanged {
+		c.w(`<p>%s</p>`, c.t("html.memory.mcp_changed", c.mcpParams(s)))
+	}
 	switch {
 	case !c.v.memoryPrev:
 		c.w(`<p>%s</p>`, c.t("html.memory.first", nil))
@@ -75,7 +79,7 @@ func (c htmlCtx) renderSince() {
 		c.w(`<p>%s</p>`, c.t("html.memory.new_agent", map[string]string{"agent": a}))
 	}
 	for _, s := range c.v.NewMCP {
-		c.w(`<p>%s</p>`, c.t("html.memory.new_mcp", map[string]string{"name": s}))
+		c.w(`<p>%s</p>`, c.t("html.memory.new_mcp", c.mcpParams(s)))
 	}
 	if !c.v.memoryPrev {
 		return
@@ -104,6 +108,13 @@ func (c htmlCtx) renderSince() {
 		}
 		c.w(`</details>`)
 	}
+}
+
+// mcpParams are the {name}, {agent} and {destination} of a new or changed MCP
+// server line (BV-91, D4). The outer c.t escapes the whole line, so the host is
+// escaped once and the HTML never carries a raw "https://".
+func (c htmlCtx) mcpParams(s MCPServerLine) map[string]string {
+	return mcpParams(c.cat, s)
 }
 
 // renderWeekly is column 2 (§17.3): scheduled, with its day and time; or

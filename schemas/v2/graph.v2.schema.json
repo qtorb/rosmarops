@@ -99,7 +99,7 @@
     },
 
     "agent": {
-      "$comment": "ai_client: type + product + canonical configuration folder; mcp_server: type + product + canonical config file + name [+ JSON Pointer when not /mcpServers/<name>]; extension: \"agent_ext_\" + sha256(\"extension\", editor, lowercase extension id)[:16], the version excluded; platform is the product code, config_path the extensions folder",
+      "$comment": "ai_client: type + product + canonical configuration folder; mcp_server: type + product + canonical config file + name [+ JSON Pointer when not /mcpServers/<name>]; extension: \"agent_ext_\" + sha256(\"extension\", editor, lowercase extension id)[:16], the version excluded; platform is the product code, config_path the extensions folder. transport, command and destination_ref are mcp_server only, all optional.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "type", "platform", "config_path", "discovered_at"],
@@ -116,7 +116,19 @@
           "type": "string",
           "description": "For ai_client: the agent's configuration folder (e.g. %USERPROFILE%\\.claude). For mcp_server: the config file that declares it."
         },
-        "discovered_at": { "$ref": "#/definitions/dateTime" }
+        "discovered_at": { "$ref": "#/definitions/dateTime" },
+        "transport": {
+          "enum": ["stdio", "http", "sse", "ws"],
+          "description": "mcp_server only: how the client reaches the server. Optional."
+        },
+        "command": {
+          "type": "string",
+          "description": "mcp_server only, stdio: the executable as written in the config (arguments are never stored). Optional."
+        },
+        "destination_ref": {
+          "type": "string",
+          "description": "mcp_server only: salted HMAC of the server's full canonical destination (remote URL with path/query/fragment, or command+arguments+env/header names and values and the local program's bytes), to detect a change of destination without storing the destination. Optional."
+        }
       },
       "if": {
         "properties": { "type": { "const": "mcp_server" } },
@@ -240,7 +252,8 @@
         { "$ref": "#/definitions/edgeReceives" },
         { "$ref": "#/definitions/edgeAuthenticatesTo" },
         { "$ref": "#/definitions/edgeReadsEnv" },
-        { "$ref": "#/definitions/edgeCommittedIn" }
+        { "$ref": "#/definitions/edgeCommittedIn" },
+        { "$ref": "#/definitions/edgeSendsTo" }
       ]
     },
 
@@ -387,6 +400,21 @@
         "certainty": { "$ref": "#/definitions/certainty" },
         "presence": { "enum": ["tracked", "history_only"] },
         "has_remote": { "type": "boolean", "description": "True when .git/config declares at least one remote." }
+      }
+    },
+
+    "edgeSendsTo": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "MCP server to external_service resource: the remote origin (scheme://host[:port]) the server sends data to, read from its URL at rest.",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "sends_to" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "observed" }
       }
     }
   }

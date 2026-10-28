@@ -79,6 +79,14 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	for _, a := range order {
 		fmt.Fprintf(&tail, "%s\n\n", cat.Text(unknownBody(a), map[string]string{"agent": a}))
 	}
+	// BV-91 (D5): the new and changed MCP servers, with the host for remote
+	// servers. Never the URL path, query, arguments or keys.
+	for _, s := range v.MCPChanged {
+		fmt.Fprintf(&tail, "%s\n\n", cat.Text("memory.mcp_changed", mcpParams(cat, s)))
+	}
+	for _, s := range v.NewMCP {
+		fmt.Fprintf(&tail, "%s\n\n", cat.Text("memory.new_mcp", mcpParams(cat, s)))
+	}
 	tail.WriteString(cat.Text("ai.limits", nil) + "\n")
 
 	full := make([]string, len(v.Findings))

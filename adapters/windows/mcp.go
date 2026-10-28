@@ -12,6 +12,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
@@ -54,9 +55,14 @@ type mcpServerEntry struct {
 	// EnvFile is Cursor's envFile (https://cursor.com/docs/context/mcp).
 	EnvFile string `json:"envFile"`
 
-	// ServerURL marks an Antigravity remote server, whose headers are read
-	// like a Claude Code remote server's (https://antigravity.google/docs/settings).
-	// The URL itself is not kept: no server node carries one.
+	// URL is a remote server's endpoint in Claude Code, Cursor and Claude
+	// Desktop (BV-91, D2). Its canonical origin (scheme, host, non-default
+	// port) reaches the graph as an external_service; the whole URL only feeds
+	// the salted destination_ref, never the graph in clear.
+	URL string `json:"url"`
+
+	// ServerURL is Antigravity's remote endpoint (serverUrl), read like URL
+	// (https://antigravity.google/docs/settings).
 	ServerURL string `json:"serverUrl"`
 }
 
@@ -142,6 +148,14 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		path: filepath.Join(home, ".claude.json"), client: "claude-code",
 		format: formatClaudeJSON, loadsMCP: true, configDir: claudeDir, scope: platform.MCPScopeUser,
 	})
+	// Managed MCP servers (BV-91, D2): the administrator's managed-mcp.json,
+	// loaded by Claude Code with managed scope.
+	if w.managed != nil && w.managed.dir != "" {
+		add(sourceSpec{
+			path: filepath.Join(w.managed.dir, "managed-mcp.json"), client: "claude-code",
+			format: formatMCPServers, loadsMCP: true, configDir: claudeDir, scope: platform.MCPScopeManaged,
+		})
+	}
 
 	// 2. Claude Code per project: settings.json and the gitignored
 	// settings.local.json (not MCP sources; v1 only), and the project-scope
@@ -365,8 +379,21 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		// (invariant §3).
 		env := secretVars(entry.Env, envKeys)
 
+		// Remote URL (BV-91, D2): "url" in Claude Code, Cursor and Claude
+		// Desktop; "serverUrl" in Antigravity.
+		url := strings.TrimSpace(entry.URL)
+		if url == "" {
+			url = strings.TrimSpace(entry.ServerURL)
+		}
+
+		// Headers are read as credentials for Claude Code remote servers
+		// (existing), Antigravity remote servers (existing) and, since BV-91
+		// (D2), every Cursor, Cline and Claude Desktop server.
 		var headers []platform.EnvVar
-		if classify && remoteTypes[entry.Type] || client == agentdirs.Antigravity && strings.TrimSpace(entry.ServerURL) != "" {
+		switch {
+		case classify && remoteTypes[entry.Type],
+			client == agentdirs.Antigravity && url != "",
+			client == "cursor", client == "cline", client == agentdirs.ClaudeDesktop:
 			headers = secretVars(entry.Headers, sortedKeys(entry.Headers))
 		}
 
@@ -381,25 +408,101 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		}
 
 		servers = append(servers, platform.MCPServer{
-			Client:     client,
-			Name:       ne.name,
-			Command:    entry.Command,
-			Args:       args,
-			EnvKeys:    envKeys,
-			Env:        env,
-			Headers:    headers,
-			ConfigPath: path,
-			Pointer:    pointer,
-			LoadsMCP:   loadsMCP,
-			ConfigDir:  spec.configDir,
-			Scope:      scope,
-			ScopePath:  scopePath,
-			EnvFile:    cursorEnvFile(client, entry.EnvFile, spec),
+			Client:            client,
+			Name:              ne.name,
+			Command:           entry.Command,
+			Args:              args,
+			EnvKeys:           envKeys,
+			Env:               env,
+			Headers:           headers,
+			ConfigPath:        path,
+			Pointer:           pointer,
+			LoadsMCP:          loadsMCP,
+			ConfigDir:         spec.configDir,
+			Scope:             scope,
+			ScopePath:         scopePath,
+			EnvFile:           cursorEnvFile(client, entry.EnvFile, spec),
+			Transport:         mcpTransport(entry, url),
+			URL:               url,
+			CommandFileDigest: programFileDigest(entry.Command, args, scopePath),
 		})
 	}
 	sort.Slice(servers, func(i, j int) bool { return servers[i].Pointer < servers[j].Pointer })
 
 	return servers, src
+}
+
+// mcpTransport is how the client reaches the server (BV-91, D1): the server's
+// declared type (streamable-http normalised to http) when it is a known remote
+// type; "stdio" when it runs a command; "http" for a URL with no explicit type;
+// "" when none of these is known.
+func mcpTransport(entry mcpServerEntry, url string) string {
+	switch {
+	case remoteTypes[entry.Type]:
+		if entry.Type == "streamable-http" {
+			return "http"
+		}
+		return entry.Type
+	case strings.TrimSpace(entry.Command) != "":
+		return "stdio"
+	case url != "":
+		return "http"
+	default:
+		return ""
+	}
+}
+
+// programFileDigest is the SHA-256 (lowercase hex) of the local program a stdio
+// server runs — its command when that is a file path, else the first argument
+// that is a file path (BV-91, E3) — when the file exists and is at most 2 MB.
+// "unreadable" when the file exists but could not be read or is too big; ""
+// when there is no such file. An edit to the program thus changes the server's
+// destination_ref. Only paths (absolute, or relative to a project root) are
+// considered; a bare "npx"/"node" is a PATH lookup, never a file at rest.
+func programFileDigest(command string, args []string, scopePath string) string {
+	if p, ok := existingProgramFile(command, scopePath); ok {
+		return digestOfFile(p)
+	}
+	for _, a := range args {
+		if p, ok := existingProgramFile(a, scopePath); ok {
+			return digestOfFile(p)
+		}
+	}
+	return ""
+}
+
+// existingProgramFile resolves s to an existing regular file, or reports false.
+func existingProgramFile(s, scopePath string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" || !(filepath.IsAbs(s) || strings.ContainsAny(s, `/\`)) {
+		return "", false
+	}
+	p := s
+	if !filepath.IsAbs(s) {
+		if scopePath == "" {
+			return "", false
+		}
+		p = filepath.Join(scopePath, filepath.FromSlash(s))
+	}
+	info, err := os.Lstat(p)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return p, true
+}
+
+// digestOfFile is hash.Bytes of the file's content, or "unreadable" when it is
+// over the size limit (invariant 6) or cannot be read.
+func digestOfFile(p string) string {
+	info, err := os.Stat(p)
+	if err != nil || info.Size() > MaxConfigBytes {
+		return "unreadable"
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return "unreadable"
+	}
+	return hash.Bytes(data)
 }
 
 // cursorEnvFile resolves a Cursor server's envFile: an absolute path, a

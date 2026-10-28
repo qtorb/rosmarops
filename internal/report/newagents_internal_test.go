@@ -36,7 +36,8 @@ func TestSeenAgents_MCPScope(t *testing.T) {
 		t.Errorf("moved within user scope: %v %v", root.NewMCP, root.NewAgents)
 	}
 	_, _, root = memory.Update(m, run("2026-10-03", g("agent_mcp_c", "project:/src/a")), nil, salt)
-	if !reflect.DeepEqual(root.NewMCP, []string{"browser"}) {
+	wantMoved := []memory.MCPRef{{Name: "browser", Key: "mcp\x00cursor\x00browser\x00project:/src/a"}}
+	if !reflect.DeepEqual(root.NewMCP, wantMoved) {
 		t.Errorf("user → project: %v", root.NewMCP)
 	}
 

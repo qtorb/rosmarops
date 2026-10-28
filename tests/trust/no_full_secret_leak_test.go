@@ -627,3 +627,79 @@ func TestNoCommittedSecretInRunOutputs(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestNoMCPDestinationSecretInReports is BV-91 (D6): a secret in a new MCP
+// server's remote URL never reaches the report, the Markdown or the export for
+// your AI. The «new MCP server» line shows only the host; the URL's userinfo,
+// path, query and fragment never appear. A prior run without the server makes
+// it «new», so the line is rendered.
+func TestNoMCPDestinationSecretInReports(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "Users", "mcpleakuser")
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	const (
+		pw    = "urlpwSECRET1234"
+		query = "qrySECRET1234"
+		frag  = "fragSECRET1234"
+		path  = "pathSECRET1234"
+	)
+	secretURL := "https://user:" + pw + "@api.secret.example.com/mcp/" + path + "?api_key=" + query + "#" + frag
+	salt := []byte("0123456789abcdef0123456789abcdef")
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	base, err := knowledge.ClaudeCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := platform.MCPSource{
+		Platform: "claude-code", ConfigPath: filepath.Join(home, ".claude.json"), ConfigDir: claudeDir,
+		Status: platform.MCPSourceRead, LoadsMCP: true,
+	}
+	server := platform.MCPServer{
+		Client: "claude-code", Name: "remote", ConfigPath: source.ConfigPath, ConfigDir: claudeDir,
+		LoadsMCP: true, Scope: platform.MCPScopeUser, Transport: "http", URL: secretURL,
+	}
+	buildV2 := func(scan platform.MCPScan, mem memory.File) report.V2 {
+		frag, err := graph.FromMCPScan(scan, salt, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now)
+		v, _ := report.BuildV2(report.V2Input{
+			Graph: &g, GraphSHA256: strings.Repeat("0", 64), Base: base, RepoRoots: nil,
+			V1: report.Build("0.1.0-dev", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: now, Memory: mem, Salt: salt, Home: home,
+		})
+		return v
+	}
+	// Run 1: the client, no server — the base for the comparison.
+	v1 := buildV2(platform.MCPScan{Sources: []platform.MCPSource{source}}, memory.File{})
+	// Run 2: the client plus the remote server — now «new».
+	v2 := buildV2(platform.MCPScan{Sources: []platform.MCPSource{source}, Servers: []platform.MCPServer{server}}, v1.NextMemory())
+	if len(v2.NewMCP) == 0 {
+		t.Fatal("the remote server is not reported as new — test would be vacuous")
+	}
+
+	forbidden := []string{pw, query, frag, path, "/mcp/", "api_key=", "user:" + pw}
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outputs := map[string]string{
+			"HTML":     report.RenderHTML(v2, cat, home, time.UTC),
+			"Markdown": report.RenderV2Markdown(v2, cat, time.UTC),
+			"AI":       report.RenderAIExport(v2, cat, home),
+		}
+		for which, out := range outputs {
+			for _, f := range forbidden {
+				if strings.Contains(out, f) {
+					t.Errorf("%s/%s carries the URL secret %q", lang, which, f)
+				}
+			}
+			if !strings.Contains(out, "api.secret.example.com") {
+				t.Errorf("%s/%s lacks the host — the new-MCP line was not rendered", lang, which)
+			}
+		}
+	}
+}

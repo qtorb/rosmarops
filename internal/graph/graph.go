@@ -32,6 +32,7 @@ const (
 	EdgeReadsEnv        = "reads_env"
 	EdgeWritesConfigOf  = "writes_config_of"
 	EdgeCommittedIn     = "committed_in"
+	EdgeSendsTo         = "sends_to" // mcp_server → external_service (BV-91, E1)
 )
 
 // Resource types referenced by the integrity rules.
@@ -96,6 +97,13 @@ type Node struct {
 	Name       string `json:"name"`
 	Platform   string `json:"platform"`
 	ConfigPath string `json:"config_path"`
+
+	// agent, mcp_server only (BV-91, D1/E1): transport, the local command
+	// (arguments excluded), and the salted HMAC of the full canonical
+	// destination. All optional.
+	Transport      string `json:"transport"`
+	Command        string `json:"command"`
+	DestinationRef string `json:"destination_ref"`
 
 	// capability
 	Basis            string `json:"basis"`
@@ -194,6 +202,10 @@ var edgeEndpoints = map[string]struct{ from, to []endpoint }{
 		to: []endpoint{{kind: KindResource, types: []string{
 			ResourceAgentConfig, ResourceAgentInstructions, ResourceAgentExecutable,
 		}}},
+	},
+	EdgeSendsTo: {
+		from: []endpoint{{kind: KindAgent, types: []string{AgentMCPServer}}},
+		to:   []endpoint{{kind: KindResource, types: []string{ResourceExternalService}}},
 	},
 }
 

@@ -1226,6 +1226,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	// v3 §13 (BV-56)
 	keys = append(keys, "html.index.scale", "html.step.1.coverage", "html.step.1.coverage.all", "html.step.1.coverage.none", "html.after.rotate", "html.memory.new_mcp")
+	// BV-91 (D4): the new/changed MCP lines and the destination fragment.
+	keys = append(keys, "html.memory.mcp_changed", "html.mcp.dest.remote", "html.mcp.dest.local")
 	// v3 §14 (BV-57)
 	keys = append(keys, "html.f.cred.title.multi", "html.f.cred_readable.extra.multi", "html.fix.title.agent", "html.gain.agent", "html.fix.manual.rotated")
 	// v3 §17 (BV-68)

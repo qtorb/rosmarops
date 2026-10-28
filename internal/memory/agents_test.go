@@ -39,7 +39,8 @@ func TestNewAgents_AgainstLastChecked(t *testing.T) {
 		}
 	}
 	m, _, root = Update(m, runSeen("2026-10-02", seen("fs", "browser")), nil, salt)
-	if root.NewAgents != nil || !reflect.DeepEqual(root.NewMCP, []string{"browser"}) {
+	wantNew := []MCPRef{{Name: "browser", Key: "mcp\x00claude-code\x00browser\x00user"}}
+	if root.NewAgents != nil || !reflect.DeepEqual(root.NewMCP, wantNew) {
 		t.Fatalf("run 2: %v %v", root.NewAgents, root.NewMCP)
 	}
 	_, _, root = Update(m, runSeen("2026-10-03", seen("fs", "browser")), nil, salt)
@@ -49,7 +50,7 @@ func TestNewAgents_AgainstLastChecked(t *testing.T) {
 }
 
 // A2: a v1 findings-memory.json reads without error and gives no «new»
-// (it has no agent_refs); it is written back as v2.
+// (it has no agent_refs); it is written back at the current version.
 func TestNewAgents_V1MemoryHasNoBase(t *testing.T) {
 	dir := t.TempDir()
 	v1 := `{"schema_version":1,"runs":2,"last_checked":{"run":2,"date":"2026-10-25","rules_version":"1","knowledge_version":"k","agents":["Claude Code"],"repos":10},"entries":[]}`
@@ -71,7 +72,7 @@ func TestNewAgents_V1MemoryHasNoBase(t *testing.T) {
 		t.Fatal(err)
 	}
 	back, _, err := Read(dir)
-	if err != nil || back.SchemaVersion != 2 || back.SaltRef != SaltRef(salt) || back.LastChecked.AgentRefs != nil {
+	if err != nil || back.SchemaVersion != SchemaVersion || back.SaltRef != SaltRef(salt) || back.LastChecked.AgentRefs != nil {
 		t.Fatalf("written: %+v %v", back, err)
 	}
 	if _, _, root = Update(back, runSeen("2026-10-27", seen("fs", "browser")), nil, salt); root.NewMCP != nil {

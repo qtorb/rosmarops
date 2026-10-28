@@ -57,3 +57,9 @@ var FindingsMemorySchema []byte
 //
 //go:embed v2/findings-memory.v2.schema.json
 var FindingsMemoryV2Schema []byte
+
+// FindingsMemoryV3Schema is the embedded v2/findings-memory.v3.schema.json
+// schema (BV-91, D3): adds last_checked.mcp_dest_refs.
+//
+//go:embed v2/findings-memory.v3.schema.json
+var FindingsMemoryV3Schema []byte

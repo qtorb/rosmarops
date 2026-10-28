@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/findings-memory.v2.schema.json",
+  "title": "RosmarOps — findings memory v2",
+  "description": "findings-memory.json in the reports directory (decision memoria, M2): each v2 finding's verdict history, by salted reference only. v2 (decision 2026-10-26, agentes y MCP nuevos, A2) adds salt_ref and last_checked.agent_refs. v3 (BV-91, D3) adds last_checked.mcp_dest_refs. Never paths, services, fingerprints, host_id, values or text.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "salt_ref",
+    "runs",
+    "last_checked",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 3
+    },
+    "salt_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "HMAC-SHA256 of the local salt with a fixed label (not host_id's), 16 hex: a different salt makes the run salt_changed."
+    },
+    "runs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "last_checked": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "date",
+            "rules_version",
+            "knowledge_version",
+            "agents",
+            "repos"
+          ],
+          "properties": {
+            "run": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "date": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            },
+            "rules_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "knowledge_version": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "repos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "agent_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              "description": "Salted references of the agents seen in this run, by their comparison key (A1): a client or an extension by its node id, an MCP server by client, name and scope. Never names or paths. Absent when the base was carried over from a v1 memory: no base for new agents."
+            },
+            "mcp_dest_refs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{16}$"
+              },
+              "description": "Salted references of each MCP server's destination (BV-91, D3): HMAC(salt, comparison key ‖ destination_ref)[:16]. Never a destination in clear. Absent when the base was carried over from a v1 or v2 memory: no base for a change of destination."
+            }
+          },
+          "description": "The last run with complete coverage: the base of the next comparison."
+        }
+      ]
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/entry"
+      },
+      "maxItems": 1000
+    }
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mid",
+        "rule",
+        "severity",
+        "first_seen",
+        "open_since",
+        "last_seen",
+        "last_verdict",
+        "reappeared",
+        "last_report",
+        "last_seen_run",
+        "open",
+        "agent",
+        "creds"
+      ],
+      "properties": {
+        "mid": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "HMAC-SHA256 of the finding id with the local salt, 16 hex."
+        },
+        "rule": {
+          "enum": [
+            "cred_read_and_send",
+            "cred_in_git",
+            "cred_readable",
+            "foreign_agent_config_writable",
+            "foreign_agent_instructions_writable",
+            "own_instructions_writable",
+            "own_config_writable"
+          ]
+        },
+        "severity": {
+          "enum": [
+            "red",
+            "yellow"
+          ]
+        },
+        "first_seen": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "open_since": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "last_seen": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "last_verdict": {
+          "enum": [
+            "new",
+            "still_observed",
+            "observed_again",
+            "no_longer_observed",
+            "not_comparable",
+            "not_checked"
+          ]
+        },
+        "reappeared": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_report": {
+          "type": "string",
+          "pattern": "^report-[0-9]{4}-[0-9]{2}-[0-9]{2}__[A-Z]+__[0-9]+R-[0-9]+Y$",
+          "description": "Base name of a report file: date, colour and counts only."
+        },
+        "last_seen_run": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "agent": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "Salted reference of the finding's agent."
+        },
+        "creds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "description": "Salted references of the finding's credentials, for moved or merged."
+        }
+      }
+    }
+  }
+}

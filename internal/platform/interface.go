@@ -168,6 +168,25 @@ type MCPServer struct {
 	// go to the credential files collector, received by the server
 	// (decision 2026-10-25, Cursor, K10). Empty otherwise.
 	EnvFile string
+
+	// Transport is how the client reaches the server: "stdio", "http", "sse"
+	// or "ws" (BV-91, D1). Empty when the adapter could not tell.
+	Transport string
+
+	// URL is the remote server's URL as read from the config ("url", or
+	// Antigravity's "serverUrl"), in clear, for the graph to parse into a
+	// canonical origin and a salted destination_ref (BV-91, D1/D2). Empty for a
+	// stdio server. Like Env, it is never persisted; only the origin (scheme,
+	// host and non-default port) and a salted hash reach the graph.
+	URL string
+
+	// CommandFileDigest is the SHA-256 (lowercase hex) of the local program a
+	// stdio server runs — its command when that is a file path, else the first
+	// argument that is a file path — when the file exists and is at most 2 MB
+	// (BV-91, E3). "unreadable" when the file exists but could not be read or is
+	// too big; empty when there is no such file. It feeds destination_ref so an
+	// edit to the program is seen as a change of destination.
+	CommandFileDigest string
 }
 
 // ClaudeSettingsScan is what ListClaudeSettings read: Claude Code's

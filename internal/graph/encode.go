@@ -30,14 +30,17 @@ func (n Node) MarshalJSON() ([]byte, error) {
 	switch n.Kind {
 	case KindAgent:
 		return json.Marshal(struct {
-			ID           string `json:"id"`
-			Kind         string `json:"kind"`
-			Type         string `json:"type"`
-			Name         string `json:"name,omitempty"`
-			Platform     string `json:"platform"`
-			ConfigPath   string `json:"config_path"`
-			DiscoveredAt string `json:"discovered_at"`
-		}{n.ID, n.Kind, n.Type, n.Name, n.Platform, n.ConfigPath, n.DiscoveredAt})
+			ID             string `json:"id"`
+			Kind           string `json:"kind"`
+			Type           string `json:"type"`
+			Name           string `json:"name,omitempty"`
+			Platform       string `json:"platform"`
+			ConfigPath     string `json:"config_path"`
+			DiscoveredAt   string `json:"discovered_at"`
+			Transport      string `json:"transport,omitempty"`
+			Command        string `json:"command,omitempty"`
+			DestinationRef string `json:"destination_ref,omitempty"`
+		}{n.ID, n.Kind, n.Type, n.Name, n.Platform, n.ConfigPath, n.DiscoveredAt, n.Transport, n.Command, n.DestinationRef})
 	case KindCapability:
 		return json.Marshal(struct {
 			ID               string `json:"id"`
@@ -125,7 +128,7 @@ func (e Edge) MarshalJSON() ([]byte, error) {
 			AppliesIn     string `json:"applies_in,omitempty"`
 			ApprovalState string `json:"approval_state,omitempty"`
 		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, e.AppliesIn, e.ApprovalState})
-	case EdgeReceives, EdgeReadsEnv:
+	case EdgeReceives, EdgeReadsEnv, EdgeSendsTo:
 		return json.Marshal(struct {
 			ID        string `json:"id"`
 			Type      string `json:"type"`

@@ -115,11 +115,26 @@ func TestReadClaudeJSON_ScopesRemoteAndForeignKeys(t *testing.T) {
 	}
 	for _, leaked := range []string{
 		fakeEmail, "Fake Org", "fix the login bug", "secret prompt", "fake-user-id-123",
-		"oauthAccount", "numStartups", "allowedTools", fakeHeaderToken, fakeUntypedToken, "githubcopilot",
+		"oauthAccount", "numStartups", "allowedTools", fakeHeaderToken, fakeUntypedToken,
+		"/mcp/", // BV-91: the URL path never reaches the graph
 	} {
 		if strings.Contains(string(out), leaked) {
 			t.Errorf("graph contains %q", leaked)
 		}
+	}
+	// BV-91: the remote origin (scheme://host, no path) is an external_service
+	// node, reached by a sends_to edge from the server.
+	if !strings.Contains(string(out), `"https://api.githubcopilot.com"`) {
+		t.Error("graph lacks the remote origin external_service")
+	}
+	var sendsTo int
+	for _, e := range f.Edges {
+		if e.Type == graph.EdgeSendsTo && e.From == remote {
+			sendsTo++
+		}
+	}
+	if sendsTo != 1 {
+		t.Errorf("sends_to edges from the remote server: got %d, want 1", sendsTo)
 	}
 }
 
@@ -163,11 +178,14 @@ func TestReadMCPFile_RemoteTypes(t *testing.T) {
 		}
 	}
 
-	// Cursor and Cline keep their v0.1 handling: headers are not read.
-	path := filepath.Join(dir, "cursor.json")
-	writeFile(t, path, `{"mcpServers": {"s": {"type": "http", "url": "https://x", "headers": {"X-Api-Key": "k"}}}}`)
-	if servers, _ := windows.ReadMCPFile(path, "cursor", true); servers[0].Headers != nil {
-		t.Error("Cursor remote headers read; Cursor is out of scope for remote classification")
+	// BV-91 (D2): Cursor and Cline headers are now read as credentials, like
+	// env, whatever the server's type.
+	for _, client := range []string{"cursor", "cline"} {
+		path := filepath.Join(dir, client+".json")
+		writeFile(t, path, `{"mcpServers": {"s": {"type": "http", "url": "https://x", "headers": {"X-Api-Key": "k"}}}}`)
+		if servers, _ := windows.ReadMCPFile(path, client, true); servers[0].Headers == nil {
+			t.Errorf("%s headers not read; BV-91 reads them as credentials", client)
+		}
 	}
 }
 
