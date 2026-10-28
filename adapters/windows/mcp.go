@@ -2,7 +2,6 @@ package windows
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
@@ -24,7 +24,8 @@ const MaxConfigBytes = 2 * 1024 * 1024
 // mcpSettingsFile is the minimal schema shared by all AI agent MCP config files.
 // Claude Code, Cline, and Cursor all use the same top-level "mcpServers" key.
 // Unknown fields (e.g., Claude Code's "autoUpdatesChannel", "theme") are ignored
-// by json.Unmarshal because the struct has no corresponding fields.
+// because the struct has no corresponding fields. Keys are matched exactly
+// (jsonkeys.Decode, decision 2026-10-27, blindaje, B5).
 type mcpSettingsFile struct {
 	MCPServers map[string]mcpServerEntry `json:"mcpServers"`
 }
@@ -35,7 +36,7 @@ type mcpSettingsFile struct {
 // (projects.<absolute path>.hasTrustDialogAccepted,
 // https://code.claude.com/docs/en/permissions#project-allow-rules-and-workspace-trust).
 // The file also holds account details and history; no struct declares those
-// fields, so json.Unmarshal discards them and none of it reaches the graph,
+// fields, so jsonkeys.Decode discards them and none of it reaches the graph,
 // the report or the log.
 type claudeJSONFile struct {
 	MCPServers map[string]mcpServerEntry `json:"mcpServers"`
@@ -341,9 +342,11 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 	switch format {
 	case formatClaudeJSON:
 		var cfg claudeJSONFile
-		if err := json.Unmarshal(raw, &cfg); err != nil {
+		conflicts, err := jsonkeys.Decode(raw, &cfg)
+		if err != nil {
 			return nil, parseFailed(src, path, err)
 		}
+		src.KeyConflicts = keyConflicts(loadsMCP, conflicts)
 		for name, e := range cfg.MCPServers {
 			entries["/mcpServers/"+pointerEscape(name)] = namedEntry{name: name, entry: e}
 		}
@@ -354,9 +357,11 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		}
 	default:
 		var cfg mcpSettingsFile
-		if err := json.Unmarshal(raw, &cfg); err != nil {
+		conflicts, err := jsonkeys.Decode(raw, &cfg)
+		if err != nil {
 			return nil, parseFailed(src, path, err)
 		}
+		src.KeyConflicts = keyConflicts(loadsMCP, conflicts)
 		for name, e := range cfg.MCPServers {
 			entries["/mcpServers/"+pointerEscape(name)] = namedEntry{name: name, entry: e}
 		}
@@ -531,6 +536,16 @@ type namedEntry struct {
 	name    string
 	entry   mcpServerEntry
 	project string
+}
+
+// keyConflicts are a source's key conflicts (B5) when the client loads MCP
+// servers from it; a file read only for the v1 scanner (LoadsMCP false)
+// reports its keys through the settings reader, if at all.
+func keyConflicts(loadsMCP bool, conflicts []string) []string {
+	if !loadsMCP {
+		return nil
+	}
+	return conflicts
 }
 
 func parseFailed(src platform.MCPSource, path string, err error) platform.MCPSource {

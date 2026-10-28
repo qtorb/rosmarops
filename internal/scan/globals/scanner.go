@@ -70,6 +70,10 @@ type ScanResult struct {
 
 	// AllowListedCount is the number of new packages suppressed by the allow-list.
 	AllowListedCount int
+
+	// Hits are the warnings the allow-list hid, one per warning, with the
+	// entry that hid it (decision 2026-10-27, blindaje, B9).
+	Hits []config.AllowHit
 }
 
 // ScanGlobals collects global npm and pnpm packages, checks ~/.npmrc for a
@@ -94,10 +98,11 @@ func ScanGlobals(
 	}
 
 	// Build allow-list lookup: norm(name) → true (name-only, version-agnostic).
-	allowed := make(map[string]bool, len(allowList))
+	allowed := make(map[string]config.AllowEntryID, len(allowList))
 	for _, a := range allowList {
-		allowed[strings.ToLower(strings.TrimSpace(a.ID))] = true
+		allowed[strings.ToLower(strings.TrimSpace(a.ID))] = a
 	}
+	var hits []config.AllowHit
 
 	var findings []finding.Finding
 	var newPkgBL []state.GlobalPackage
@@ -133,8 +138,9 @@ func ScanGlobals(
 			if baselined[normPkg(mgr.name, p.Name)] {
 				continue // known package — no finding
 			}
-			if allowed[strings.ToLower(p.Name)] {
+			if a, ok := allowed[strings.ToLower(p.Name)]; ok {
 				allowListedCount++
+				hits = append(hits, config.AllowHit{List: config.ListGlobalPackages, ID: a.ID, Note: a.Note})
 				continue
 			}
 			id := globalPkgFindingID(mgr.name, p.Name)
@@ -168,6 +174,7 @@ func ScanGlobals(
 		NewPackageBaseline: newPkgBL,
 		NewNpmrcSHA:        newNpmrcSHA,
 		AllowListedCount:   allowListedCount,
+		Hits:               hits,
 	}
 }
 

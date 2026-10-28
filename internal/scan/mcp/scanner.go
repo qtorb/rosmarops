@@ -11,6 +11,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/state"
 )
 
 // Finding text approved by human owner (2026-05-22).
@@ -58,6 +59,15 @@ var safeSubpaths = []string{
 type ScanResult struct {
 	Findings         []finding.Finding
 	AllowListedCount int // servers whose findings were all suppressed by the allow-list
+
+	// Hits are the warnings the allow-list hid, one per warning, with the
+	// entry that hid it (decision 2026-10-27, blindaje, B9).
+	Hits []config.AllowHit
+
+	// NewBaseline is the destination each allow-listed server had when its
+	// entry was accepted (B9): the caller persists it to
+	// state.Baselines.MCPServers.
+	NewBaseline []state.MCPServerBaseline
 }
 
 // ScanMCPServers returns the findings of the MCP servers a client loads
@@ -74,31 +84,44 @@ type ScanResult struct {
 //
 // homeDir is the resolved user home directory (os.UserHomeDir() result). Passing it as
 // a parameter keeps this function testable without OS calls.
+//
+// An allow_list entry ("client:name") applies only while the server points
+// where it pointed when the entry was accepted (decision 2026-10-27,
+// blindaje, B9): b holds the destination references recorded in the state
+// and computes the current ones (the v2 graph's destination_ref, BV-91).
+// See Binding.
 func ScanMCPServers(
 	current []platform.MCPServer,
 	allowList []config.AllowEntryID,
 	homeDir string,
+	b Binding,
 ) ScanResult {
-	// Build allow-list set: lowercase "client:name" → present.
-	allowSet := make(map[string]struct{}, len(allowList))
+	// Build allow-list set: lowercase "client:name" → entry.
+	allowSet := make(map[string]config.AllowEntryID, len(allowList))
 	for _, a := range allowList {
-		allowSet[strings.ToLower(a.ID)] = struct{}{}
+		allowSet[strings.ToLower(a.ID)] = a
 	}
+	applies, newBaseline := b.bind(current, allowSet)
 
 	var (
 		findings         []finding.Finding
 		allowListedCount int
+		hits             []config.AllowHit
 	)
 
-	for _, srv := range current {
+	for i, srv := range current {
 		if !srv.LoadsMCP {
 			continue // a file the client does not load MCP servers from (A4)
 		}
 		nameKey := strings.ToLower(srv.Client) + ":" + strings.ToLower(srv.Name)
 
-		// Allow-list check first — suppresses ALL findings for this server.
-		if _, allowed := allowSet[nameKey]; allowed {
+		// Allow-list check first — suppresses ALL findings for this server,
+		// while its destination is the accepted one (B9).
+		if a, allowed := allowSet[nameKey]; allowed && applies[i] {
 			allowListedCount++
+			if isUserWritableCommand(srv.Command, homeDir) {
+				hits = append(hits, config.AllowHit{List: config.ListMCPServers, ID: a.ID, Note: a.Note})
+			}
 			continue
 		}
 
@@ -127,6 +150,8 @@ func ScanMCPServers(
 	return ScanResult{
 		Findings:         findings,
 		AllowListedCount: allowListedCount,
+		Hits:             hits,
+		NewBaseline:      newBaseline,
 	}
 }
 

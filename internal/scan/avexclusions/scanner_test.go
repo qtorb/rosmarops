@@ -60,6 +60,9 @@ func TestScanAVExclusions_AllowListed_Suppressed(t *testing.T) {
 		{Path: ".ps1", Note: "PowerShell scripts, dev tooling"},
 	}
 	result := avexclusions.ScanAVExclusions(excls, nil, allow)
+	if len(result.Hits) != 1 || result.Hits[0].List != config.ListAVExclusions || result.Hits[0].Note != allow[0].Note { // B9
+		t.Errorf("hits %+v", result.Hits)
+	}
 	if len(result.Findings) != 0 {
 		t.Errorf("allow-listed exclusion: want 0 findings, got %d", len(result.Findings))
 	}

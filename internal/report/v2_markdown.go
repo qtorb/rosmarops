@@ -13,6 +13,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // Catalog codes of the v2 Markdown. §6 lists most; the ones marked "render"
@@ -41,6 +42,8 @@ var staticKeys = []string{
 	// BV-43
 	"section.memory", "memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
+	"memory.reason." + memory.ReasonMemoryLost,
+	"md.silenced.config", // B9
 	// BV-50
 	"report.silenced.one", "report.silenced.other", "report.silenced.entry",
 	"report.testdata.one", "report.testdata.other", "report.testdata.entry",
@@ -85,6 +88,9 @@ func CatalogKeys() []string {
 	}
 	for _, p := range rules.AllPostures {
 		keys = append(keys, p+".one", p+".other")
+	}
+	for c := range legacyTexts {
+		keys = append(keys, "finding."+c+".title", "finding."+c+".why", "finding."+c+".action")
 	}
 	keys = append(keys, overviewKeys()...) // v3 §11.8
 	sort.Strings(keys)
@@ -249,10 +255,10 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			if m.Family == "" {
 				w("- %s\n", t("group.outside_repos", map[string]string{"count": strconv.Itoa(m.Count)}))
 			} else {
-				w("- %s\n", cat.Plural("group.family", m.Count, map[string]string{"family": path.Base(strings.ReplaceAll(m.Family, `\`, "/")), "count": strconv.Itoa(m.Count)}))
+				w("- %s\n", cat.Plural("group.family", m.Count, map[string]string{"family": untrusted.PlainText(path.Base(strings.ReplaceAll(m.Family, `\`, "/"))), "count": strconv.Itoa(m.Count)}))
 			}
 			for _, item := range m.Items {
-				w("  - `%s`\n", item)
+				w("  - `%s`\n", untrusted.PlainText(item))
 			}
 		}
 		w("\n<details><summary>%s</summary>\n\n", t("evidence.edges", p))
@@ -292,7 +298,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	if td := v.TestData; td.Count > 0 {
 		w("%s\n\n", cat.Plural("report.testdata", td.Count, map[string]string{"count": strconv.Itoa(td.Count)}))
 		for _, f := range td.Files {
-			w("- %s\n", t("report.testdata.entry", map[string]string{"repo": f.Repo, "path": f.Path}))
+			w("- %s\n", t("report.testdata.entry", map[string]string{"repo": untrusted.PlainText(f.Repo), "path": untrusted.PlainText(f.Path)}))
 		}
 		w("\n")
 	}
@@ -301,18 +307,28 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	if sl := v.Silenced; len(sl.Entries) > 0 {
 		w("%s\n\n", cat.Plural("report.silenced", sl.Count, map[string]string{"count": strconv.Itoa(sl.Count)}))
 		for _, e := range sl.Entries {
-			w("- %s\n", t("report.silenced.entry", map[string]string{"repo": e.Repo, "path": e.Path, "note": e.Note, "expires_on": e.ExpiresOn}))
+			w("- %s\n", t("report.silenced.entry", map[string]string{"repo": untrusted.PlainText(e.Repo), "path": untrusted.PlainText(e.Path), "note": untrusted.PlainText(e.Note), "expires_on": e.ExpiresOn}))
 		}
 		w("\n")
 		if sl.Expired > 0 {
 			w("%s\n\n", cat.Plural("report.silenced.expired", sl.Expired, map[string]string{"count": strconv.Itoa(sl.Expired)}))
 		}
 		for _, g := range sl.Guards {
-			w("- %s\n", t("test_fixture."+g.Guard, map[string]string{"repo": g.Repo, "path": g.Path}))
+			w("- %s\n", t("test_fixture."+g.Guard, map[string]string{"repo": untrusted.PlainText(g.Repo), "path": untrusted.PlainText(g.Path)}))
 		}
 		if len(sl.Guards) > 0 {
 			w("\n")
 		}
+	}
+
+	// Hidden by the configuration (B9): each allow_list entry that hid a
+	// warning, with its list, identifier and note; never a secret's value.
+	if len(v.hidden) > 0 {
+		w("## %s\n\n", t("md.silenced.config", nil))
+		for _, e := range v.hidden {
+			w("- `allow_list.%s` · `%s` · %s\n", e.List, untrusted.PlainText(e.ID), untrusted.PlainText(e.Note))
+		}
+		w("\n")
 	}
 
 	// How your agents work (v3 §11.8): after the posture, before the memory.
@@ -320,7 +336,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 
 	// Memory (BV-43): only when there is an earlier memory to compare with,
 	// or a new agent (M5).
-	if !v.memoryPrev && len(v.NewAgents)+len(v.NewMCP) > 0 {
+	if !v.memoryPrev && !v.memoryLost && len(v.NewAgents)+len(v.NewMCP) > 0 {
 		w("## %s\n\n", t("section.memory", nil))
 		for _, a := range v.NewAgents {
 			w("%s\n\n", t("memory.new_agent", map[string]string{"agent": a}))
@@ -329,7 +345,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", t("memory.new_mcp", mcpParams(cat, s)))
 		}
 	}
-	if v.memoryPrev {
+	if v.memoryPrev || v.memoryLost { // B8: a lost memory says why nothing compares
 		m := v.Memory
 		w("## %s\n\n", t("section.memory", nil))
 		for _, s := range v.MCPChanged { // BV-91 (D4): changed destination first
@@ -365,13 +381,13 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("%s\n", t("coverage.none", nil))
 	}
 	for _, f := range v.Coverage.SourcesFailed {
-		w("- `%s` — `%s`\n", f.Path, f.Reason)
+		w("- `%s` — `%s`\n", untrusted.PlainText(f.Path), untrusted.PlainText(f.Reason))
 	}
 	for _, a := range v.Coverage.AgentsUnsupported {
-		w("- `%s` — `%s`\n", a.Platform, a.ConfigPath)
+		w("- `%s` — `%s`\n", untrusted.PlainText(a.Platform), untrusted.PlainText(a.ConfigPath))
 	}
 	for _, s := range v.Coverage.ScanErrors {
-		w("- `%s`\n", s)
+		w("- `%s`\n", untrusted.PlainText(s))
 	}
 	if !v.Coverage.GraphBuilt {
 		w("- `graph.v2.json`\n")
@@ -393,21 +409,29 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	for _, g := range v.Legacy.Groups {
 		params := map[string]string{
-			"category": g.Category, "detail": g.Detail, "count": strconv.Itoa(g.Count),
-			"family": path.Base(strings.ReplaceAll(g.Family, `\`, "/")), "repos": strconv.Itoa(len(g.Repos)),
+			"category": g.Category, "detail": untrusted.PlainText(g.Detail), "count": strconv.Itoa(g.Count),
+			"family": untrusted.PlainText(path.Base(strings.ReplaceAll(g.Family, `\`, "/"))), "repos": strconv.Itoa(len(g.Repos)),
 		}
 		w("<details><summary>%s %s · <code>%s</code> · <code>%s</code></summary>\n\n",
-			severityEmoji(finding.Severity(g.Severity)), cat.Plural("legacy.group", g.Count, params), g.Category, g.Detail)
+			severityEmoji(finding.Severity(g.Severity)), cat.Plural("legacy.group", g.Count, params), g.Category, params["detail"])
+		if legacyTexts[g.Category] { // its own texts, in this language (BV-94)
+			w("**%s**\n\n%s\n\n%s\n\n", t("finding."+g.Category+".title", nil), t("finding."+g.Category+".why", nil), t("finding."+g.Category+".action", nil))
+		}
 		if g.AlsoInV2 {
 			w("%s\n\n", t("legacy.also_in_v2", params))
 		}
 		for _, m := range g.members {
-			w("- `%s`\n", m)
+			w("- `%s`\n", untrusted.PlainText(m))
 		}
 		w("\n</details>\n\n")
 	}
 	return sb.String()
 }
+
+// legacyTexts are the technical-report categories with their own catalog
+// texts (finding.<category>.title, .why and .action), shown in their group:
+// own_task_changed (BV-93, B2) and config_key_case_conflict (BV-94, B5).
+var legacyTexts = map[string]bool{"own_task_changed": true, "config_key_case_conflict": true}
 
 // sharedAssumptions are in nearly every edge and change nothing (§1, base
 // group): shown once, before the findings, not in each one (BV-39).
@@ -469,7 +493,7 @@ func writeAction(sb *strings.Builder, cat catalog.Catalog, f rules.Finding, a ru
 	}
 	fmt.Fprintf(sb, "%s\n\n", cat.Text("action."+a.Code+".how", p))
 	if a.File != "" {
-		fmt.Fprintf(sb, "`%s`\n\n", a.File)
+		fmt.Fprintf(sb, "`%s`\n\n", untrusted.PlainText(a.File))
 		if !a.FileExists {
 			fmt.Fprintf(sb, "%s\n\n", cat.Text("action.file_missing", p))
 		}
@@ -478,7 +502,7 @@ func writeAction(sb *strings.Builder, cat catalog.Catalog, f rules.Finding, a ru
 		fmt.Fprintf(sb, "```json\n%s\n```\n\n", a.Value)
 	}
 	for _, l := range a.Locations {
-		fmt.Fprintf(sb, "- `%s`\n", l)
+		fmt.Fprintf(sb, "- `%s`\n", untrusted.PlainText(l))
 	}
 	if len(a.Locations) > 0 {
 		sb.WriteString("\n")
@@ -495,7 +519,7 @@ func findingParams(f rules.Finding) map[string]string {
 	p["service_name"], p["cred_label"] = serviceName(f.Params.Service), credLabel(f)
 	p["cred_id"] = f.Params.CredID
 	if len(f.Group.Members) > 0 && f.Group.Members[0].Family != "" {
-		p["family"] = path.Base(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/"))
+		p["family"] = untrusted.PlainText(path.Base(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/")))
 	}
 	return p
 }
@@ -533,7 +557,7 @@ func credLabel(f rules.Finding) string {
 // actionParams are the finding's params and the action's file and key.
 func actionParams(f rules.Finding, a rules.Action) map[string]string {
 	p := findingParams(f)
-	p["file"], p["key"], p["magnitude"] = a.File, a.Key, strconv.Itoa(a.Magnitude)
+	p["file"], p["key"], p["magnitude"] = untrusted.PlainText(a.File), a.Key, strconv.Itoa(a.Magnitude)
 	return p
 }
 

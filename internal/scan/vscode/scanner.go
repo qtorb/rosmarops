@@ -44,6 +44,9 @@ const (
 type ScanResult struct {
 	Findings         []finding.Finding
 	AllowListedCount int // extensions suppressed by the allow-list this run
+	// Hits are the warnings the allow-list hid, one per warning, with the
+	// entry that hid it (decision 2026-10-27, blindaje, B9).
+	Hits []config.AllowHit
 
 	// NewBaseline is every current extension, with the first_seen of the
 	// ones already in the reference. The caller persists it to
@@ -105,9 +108,9 @@ func ScanExtensions(
 		res.Recorded = len(current)
 	}
 
-	allowed := make(map[string]struct{}, len(allowList))
+	allowed := make(map[string]config.AllowEntryID, len(allowList))
 	for _, a := range allowList {
-		allowed[strings.ToLower(a.ID)] = struct{}{}
+		allowed[strings.ToLower(a.ID)] = a
 	}
 
 	var (
@@ -126,8 +129,9 @@ func ScanExtensions(
 		if firstRun && (ext.InstalledAt.IsZero() || now.Sub(ext.InstalledAt) > SeenWithinDays*24*time.Hour) {
 			continue // the starting point (A5)
 		}
-		if _, isAllowed := allowed[strings.ToLower(ext.ID)]; isAllowed {
+		if a, isAllowed := allowed[strings.ToLower(ext.ID)]; isAllowed {
 			allowListedCount++
+			res.Hits = append(res.Hits, config.AllowHit{List: config.ListExtensions, ID: a.ID, Note: a.Note})
 			continue
 		}
 		if firstRun {

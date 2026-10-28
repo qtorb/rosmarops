@@ -126,11 +126,6 @@ var reservedKeys = []string{
 	"html.today.tag", "html.today.time", "html.today.chip",
 	// gone from the footer: the agents not evaluated are in step 1 (v3 §13.1)
 	"html.index.not_evaluated",
-	// BV-93, B2: own_task_changed is a legacy scheduled-task finding whose text
-	// the scanner bakes in English; localizing it would need internal/report/
-	// changes, out of B2's scope, so its catalog texts are signed but not yet
-	// emitted through the catalog.
-	"finding.own_task_changed.title", "finding.own_task_changed.why", "finding.own_task_changed.action",
 }
 
 // allEmitted is every code the Markdown, the console and the HTML can emit,

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
@@ -20,7 +21,7 @@ import (
 // decodes (https://code.claude.com/docs/en/settings-reference): permission
 // keys, .mcp.json approvals, env, the commands Claude Code runs (hooks,
 // statusLine, apiKeyHelper) and two managed-only keys. Any other key is
-// discarded by json.Unmarshal. Command texts are read only to see that a
+// discarded; keys are matched exactly (jsonkeys.Decode, B5). Command texts are read only to see that a
 // command exists; they are never kept.
 type settingsFile struct {
 	Permissions struct {
@@ -202,12 +203,14 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 		return f
 	}
 	var s settingsFile
-	if err := json.Unmarshal(raw, &s); err != nil {
+	conflicts, err := jsonkeys.Decode(raw, &s)
+	if err != nil {
 		slog.Warn("claude settings: could not parse", "path", f.ConfigPath, "err", err)
 		f.Status = platform.MCPSourceFailed
 		f.Reason = graph.Reason(graph.ReasonParseError, err.Error())
 		return f
 	}
+	f.KeyConflicts = conflicts
 	f.HasPolicyKey = hasPolicyKey(raw)
 
 	p := s.Permissions
@@ -292,7 +295,9 @@ func readProjectTrust(path string) []platform.ProjectTrust {
 		return nil
 	}
 	var cfg claudeJSONFile
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	// The same file as the MCP source of ~/.claude.json, which reports its
+	// key conflicts (B5).
+	if _, err := jsonkeys.Decode(raw, &cfg); err != nil {
 		return nil
 	}
 	trust := make([]platform.ProjectTrust, 0, len(cfg.Projects))
@@ -370,7 +375,11 @@ func readVSCodeMode(path, configDir string) *platform.VSCodeModeSetting {
 			Name  string `json:"name"`
 			Value string `json:"value"`
 		}
-		if json.Unmarshal(e, &vars) == nil {
+		conflicts, err := jsonkeys.Decode(e, &vars)
+		for _, c := range conflicts {
+			v.KeyConflicts = append(v.KeyConflicts, "/"+pointerEscape(vscodeEnvKey)+c)
+		}
+		if err == nil {
 			for _, ev := range vars {
 				v.Env = append(v.Env, platform.EnvVar{Key: ev.Name, Value: secrets.NewSecretValue(ev.Value)})
 			}

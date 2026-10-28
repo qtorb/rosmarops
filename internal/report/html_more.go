@@ -57,6 +57,8 @@ func (c htmlCtx) renderSince() {
 		c.w(`<p>%s</p>`, c.t("html.memory.mcp_changed", c.mcpParams(s)))
 	}
 	switch {
+	case c.v.memoryLost: // B8: it ran before; never «first run»
+		c.w(`<p>%s</p>`, c.t("html.memory.lost", nil))
 	case !c.v.memoryPrev:
 		c.w(`<p>%s</p>`, c.t("html.memory.first", nil))
 	case m.Reason != "":
@@ -158,7 +160,16 @@ func (c htmlCtx) renderWeeklyCopy() {
 }
 
 // psQuote is s in PowerShell single quotes, the inner quote doubled.
-func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+func psQuote(s string) string { return "'" + psQuoteEscaper.Replace(s) + "'" }
+
+// psQuoteEscaper doubles every character PowerShell takes as a single quote:
+// the ASCII ' and the typographic U+2018–U+201B (decision 2026-10-27,
+// blindaje, B7).
+var psQuoteEscaper = strings.NewReplacer(
+	"'", "''",
+	"\u2018", "\u2018\u2018", "\u2019", "\u2019\u2019",
+	"\u201a", "\u201a\u201a", "\u201b", "\u201b\u201b",
+)
 
 // WeeklyCommand is the PowerShell command of J4 (v3 §17.3) for exe, in
 // language lang: a weekly task, Fridays at 09:00, as the current user,

@@ -427,11 +427,12 @@ func checkHistorySecrets(
 
 	// Build allow-set: lowercase(patternType+":"+commitSHA) → present.
 	// commitSHA in the allow-list may be abbreviated (7–40 chars).
-	allowSet := make(map[string]bool, len(allowHistory))
+	allowSet := make(map[string]config.AllowEntrySecretHistory, len(allowHistory))
 	for _, a := range allowHistory {
 		key := strings.ToLower(a.PatternType) + ":" + strings.ToLower(a.CommitSHA)
-		allowSet[key] = true
+		allowSet[key] = a
 	}
+	hidden := map[string]bool{} // pattern:commit already counted (B9)
 
 	type seenKey struct{ patternID, commitSHA string }
 	seen := make(map[seenKey]int) // index in findings + 1
@@ -446,9 +447,17 @@ func checkHistorySecrets(
 		}
 		trace.historyScanned++
 		for _, m := range matches[h] {
-			// Allow-list: check both full SHA and 7-char prefix.
-			if allowSet[strings.ToLower(m.PatternID)+":"+strings.ToLower(h)] ||
-				(len(h) >= 7 && allowSet[strings.ToLower(m.PatternID)+":"+strings.ToLower(h[:7])]) {
+			// Allow-list: check both full SHA and 7-char prefix. What it
+			// hides is counted, one warning per pattern and commit (B9).
+			a, allowed := allowSet[strings.ToLower(m.PatternID)+":"+strings.ToLower(h)]
+			if !allowed && len(h) >= 7 {
+				a, allowed = allowSet[strings.ToLower(m.PatternID)+":"+strings.ToLower(h[:7])]
+			}
+			if allowed {
+				if k := m.PatternID + ":" + h; !hidden[k] {
+					hidden[k] = true
+					allowHit(ctx, config.AllowHit{List: config.ListSecretsInHistory, ID: a.PatternType + ":" + a.CommitSHA, Note: a.Note})
+				}
 				continue
 			}
 			sk := seenKey{m.PatternID, h}
@@ -713,9 +722,9 @@ func checkHooks(
 	}
 
 	// Build allow-set: lowercase(path) → present.
-	allowSet := make(map[string]bool, len(allowHooks))
+	allowSet := make(map[string]config.AllowEntryPath, len(allowHooks))
 	for _, a := range allowHooks {
-		allowSet[strings.ToLower(a.Path)] = true
+		allowSet[strings.ToLower(a.Path)] = a
 	}
 
 	// Build baseline lookup: hook name → sha256.
@@ -758,10 +767,13 @@ func checkHooks(
 			SHA256: currentSHA,
 		})
 
-		// Allow-list check: skip all findings for this hook if path is allowed.
-		if allowSet[strings.ToLower(absPath)] || allowSet[strings.ToLower(name)] {
-			continue
+		// Allow-list: every finding of this hook is dropped if its path or
+		// name is allowed, and counted (B9).
+		entry, allowed := allowSet[strings.ToLower(absPath)]
+		if !allowed {
+			entry, allowed = allowSet[strings.ToLower(name)]
 		}
+		before := len(ffindings)
 
 		// Network call check (always, regardless of baseline).
 		if hookNetworkPattern.Match(content) {
@@ -780,11 +792,9 @@ func checkHooks(
 		}
 
 		// New/modified check (only if baseline exists for this repo).
-		if baseline == nil {
-			continue
-		}
 		prevSHA, inBaseline := blByName[name]
 		switch {
+		case baseline == nil:
 		case !inBaseline:
 			id := repoFindingID("git_hook_new_or_modified", repoRoot, name)
 			f := finding.NewFinding(id, finding.SeverityYellow, "git_hook_new_or_modified",
@@ -814,6 +824,12 @@ func checkHooks(
 				CurrentSHA256:  currentSHA[:16] + "…",
 			}
 			ffindings = append(ffindings, f)
+		}
+		if allowed {
+			for range ffindings[before:] {
+				allowHit(ctx, config.AllowHit{List: config.ListGitHooks, ID: entry.Path, Note: entry.Note})
+			}
+			ffindings = ffindings[:before]
 		}
 	}
 	return ffindings, hookBaselines
@@ -907,6 +923,16 @@ type identifyCtx struct {
 }
 
 type identifyKey struct{}
+
+type allowHitKey struct{}
+
+// allowHit reports one warning an allow-list entry hid (B9) to the scan's
+// OnAllowHit, if any.
+func allowHit(ctx context.Context, h config.AllowHit) {
+	if f, ok := ctx.Value(allowHitKey{}).(func(config.AllowHit)); ok {
+		f(h)
+	}
+}
 
 func withIdentify(ctx context.Context, ic identifyCtx) context.Context {
 	return context.WithValue(ctx, identifyKey{}, ic)

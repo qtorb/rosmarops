@@ -1130,7 +1130,8 @@
           "enum": [
             "rules_changed",
             "scope_changed",
-            "salt_changed"
+            "salt_changed",
+            "memory_lost"
           ]
         },
         "reset": {

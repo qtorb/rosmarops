@@ -166,6 +166,14 @@ func destinationRef(salt []byte, srv platform.MCPServer, patterns []secrets.Patt
 	return "hmac-sha256:" + hash.Keyed(salt, []byte(material))
 }
 
+// DestinationRef is the destination_ref of srv (see destinationRef), keyed
+// with salt, with the built-in secret patterns: the same value the server's
+// node carries. The v1 MCP scanner ties allow_list entries to it (decision
+// 2026-10-27, blindaje, B9).
+func DestinationRef(salt []byte, srv platform.MCPServer) string {
+	return destinationRef(salt, srv, secrets.BuiltinPatterns())
+}
+
 // destinationMaterial builds the canonical, deterministic byte string that
 // destinationRef hashes. Fields are tagged and NUL-separated so no two servers
 // collide.

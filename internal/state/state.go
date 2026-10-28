@@ -65,6 +65,11 @@ type MCPServerBaseline struct {
 	Name          string `json:"name"`
 	CommandSHA256 string `json:"command_sha256"`
 	FirstSeen     string `json:"first_seen,omitempty"`
+
+	// DestinationRef is the server's destination_ref (the v2 graph's,
+	// BV-91) when its allow_list entry was accepted (decision 2026-10-27,
+	// blindaje, B9): the entry applies only while the server points there.
+	DestinationRef string `json:"destination_ref,omitempty"`
 }
 
 // RepoBaseline holds per-repo baselined artifacts.

@@ -78,7 +78,12 @@
                 "pattern": "^[a-f0-9]{64}$",
                 "description": "SHA-256 of the concatenated (command + args + env keys)."
               },
-              "first_seen":     { "type": "string", "format": "date-time" }
+              "first_seen":     { "type": "string", "format": "date-time" },
+              "destination_ref": {
+                "type": "string",
+                "pattern": "^hmac-sha256:[a-f0-9]{64}$",
+                "description": "Optional. The server's destination_ref (graph v2) when its allow_list.mcp_servers entry was accepted: the entry applies only while the server still points there (decision 2026-10-27, blindaje, B9)."
+              }
             }
           }
         },

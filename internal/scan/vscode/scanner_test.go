@@ -96,6 +96,9 @@ func TestScanExtensions_AllowListed_Suppressed(t *testing.T) {
 	if len(r.Findings) != 0 {
 		t.Fatalf("expected 0 findings (allow-listed), got %d", len(r.Findings))
 	}
+	if len(r.Hits) != 1 || r.Hits[0].List != config.ListExtensions || r.Hits[0].ID != "ritwickdey.liveserver" { // B9
+		t.Errorf("hits %+v", r.Hits)
+	}
 	if r.AllowListedCount != 1 {
 		t.Errorf("expected allow-listed count 1, got %d", r.AllowListedCount)
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // HTMLFileName is the visual report with a fixed name, replaced on every
@@ -249,13 +250,13 @@ func listNames(cat catalog.Catalog, names []string) string {
 // ("%USERPROFILE%" for the agent prompt, "~" for the manual steps; §5).
 func userPath(file, home, repl string) string {
 	if home == "" {
-		return file
+		return untrusted.PlainText(file)
 	}
 	h := strings.TrimRight(graph.CanonicalPath(home), "/")
 	if strings.HasPrefix(graph.CanonicalPath(file), h+"/") {
-		return repl + file[len(h):]
+		return untrusted.PlainText(repl + file[len(h):])
 	}
-	return file
+	return untrusted.PlainText(file)
 }
 
 // langLinks is the link to the same page in each other language (informe
@@ -325,13 +326,13 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
 		for _, f := range cov.SourcesFailed {
 			code, _, _ := strings.Cut(f.Reason, ": ")
-			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(f.Path), html.EscapeString(code))
+			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))
 		}
 		for _, a := range cov.AgentsUnsupported {
-			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(a.ConfigPath), html.EscapeString(a.Platform))
+			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(a.ConfigPath)), html.EscapeString(untrusted.PlainText(a.Platform)))
 		}
 		for _, s := range cov.ScanErrors {
-			c.w(`<li><code>%s</code></li>`, html.EscapeString(s))
+			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(s)))
 		}
 		if !cov.GraphBuilt {
 			c.w(`<li><code>%s</code></li>`, graph.FileName)
@@ -502,6 +503,9 @@ func (c htmlCtx) renderStep1() {
 	if n := v.TestData.Count; n > 0 { // v3 §12.1
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.testdata", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
+	if n := v.HiddenCount(); n > 0 { // B9: what the configuration hides
+		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
 	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
 	// Which agents are evaluated, and which detected but not yet (v3 §13.1).
 	if ev := v.Index.Scope.Evaluated; len(ev) > 0 {
@@ -536,8 +540,11 @@ func (c htmlCtx) renderStep1() {
 			c.w(`<br>%s`, c.t("html.step.1.other", map[string]string{"agent": o.Agent, "score": strconv.Itoa(*o.Value), "band": c.cat.Text("band."+o.Band, nil)}))
 		}
 	}
-	if v.Index.HistoryReset {
+	switch {
+	case v.Index.HistoryReset:
 		c.w(`<br>%s`, c.t("html.history.reset", nil))
+	case v.historyMissing: // B8: RosmarOps ran before, the history is gone
+		c.w(`<br>%s`, c.t("html.history.missing", nil))
 	}
 	c.w(`</p>`)
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
@@ -659,7 +666,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	if a.Code == rules.ActionRemoveFromDisk {
 		c.w(`<p>%s</p><ul>`, c.t("html.fix.remove", p))
 		for _, l := range a.Locations {
-			c.w(`<li><code>%s</code></li>`, html.EscapeString(l))
+			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(l)))
 		}
 		c.w(`</ul>`)
 	} else {
@@ -859,7 +866,7 @@ func (c htmlCtx) where(locs []string) {
 			c.w(` %s`, c.t("html.tech.more", map[string]string{"count": strconv.Itoa(len(locs) - 5)}))
 			break
 		}
-		c.w(`<code>%s</code> `, html.EscapeString(l))
+		c.w(`<code>%s</code> `, html.EscapeString(untrusted.PlainText(l)))
 	}
 }
 
@@ -927,7 +934,7 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 	if a.Code == rules.ActionRemoveFromDisk {
 		c.w(`<p>%s</p><ul>`, c.t("html.fix.remove", p))
 		for _, l := range a.Locations {
-			c.w(`<li><code>%s</code></li>`, html.EscapeString(l))
+			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(l)))
 		}
 		c.w(`</ul>`)
 		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t("html.after.full", p))
@@ -1017,6 +1024,7 @@ func (c htmlCtx) projects(f rules.Finding) []string {
 			}
 		}
 		name := path.Base(strings.ReplaceAll(dir, `\`, "/"))
+		name = untrusted.PlainText(name) // B7: a folder name read from disk
 		if name != "" && name != "." && name != "/" && !seen[name] {
 			seen[name] = true
 			out = append(out, name)
@@ -1028,7 +1036,10 @@ func (c htmlCtx) projects(f rules.Finding) []string {
 
 // familyName is the name of the family of the finding's first member, or
 // the folder of its first location (§5, html.after.radius).
-func familyName(f rules.Finding) string {
+func familyName(f rules.Finding) string { return untrusted.PlainText(familyFolder(f)) }
+
+// familyFolder is familyName as read, before PlainText.
+func familyFolder(f rules.Finding) string {
 	if len(f.Group.Members) > 0 && f.Group.Members[0].Family != "" {
 		return filepath.Base(filepath.FromSlash(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/")))
 	}
@@ -1204,10 +1215,11 @@ func HTMLKeys() []string {
 		// v2
 		"html.index.unchanged", "html.legacy.pointer",
 		"html.ai.copy", "html.ai.download",
-		"ai.instruction", "ai.what", "ai.today", "ai.findings", "ai.limits", "ai.more",
-		"html.memory.first",
+		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.more",
+		"html.memory.first", "html.memory.lost", "html.history.missing", // B8
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
+		"memory.reason." + memory.ReasonMemoryLost,
 		"severity.red", "severity.yellow",
 		"html.verdict.new", "html.verdict.still", "html.verdict.again", "html.verdict.not_checked",
 	}
@@ -1222,6 +1234,8 @@ func HTMLKeys() []string {
 		"html.signals.title", "html.signals.note", "html.index.method_change")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
+	// BV-94, B9: what the configuration hides
+	keys = append(keys, "html.silenced.config.one", "html.silenced.config.other")
 	// BV-55: the memory fold's label (v3 §6.2)
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	// v3 §13 (BV-56)

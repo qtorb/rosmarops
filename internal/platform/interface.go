@@ -105,6 +105,12 @@ type MCPSource struct {
 	// https://code.claude.com/docs/en/settings). Such a file is still read
 	// for the v1 scanner, but the v2 graph ignores it.
 	LoadsMCP bool
+
+	// KeyConflicts are the JSON Pointers of the keys of this file that match
+	// a key RosmarOps reads only without regard to case (decision
+	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
+	// and each one is a config_key_case_conflict finding.
+	KeyConflicts []string
 }
 
 // MCPServer describes one entry under "mcpServers" in an AI agent's MCP config file.
@@ -286,6 +292,12 @@ type ClaudeSettingsFile struct {
 	// other than null (managed-settings, "When an admin document counts as
 	// present").
 	HasPolicyKey bool
+
+	// KeyConflicts are the JSON Pointers of the keys of this file that match
+	// a key RosmarOps reads only without regard to case (decision
+	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
+	// and each one is a config_key_case_conflict finding.
+	KeyConflicts []string
 }
 
 // ClaudePermissions is the subset of a Claude Code settings file that grants
@@ -389,6 +401,12 @@ type VSCodeModeSetting struct {
 	Env       []EnvVar
 	Status    MCPSourceStatus
 	Reason    string
+
+	// KeyConflicts are the JSON Pointers of the keys of this file that match
+	// a key RosmarOps reads only without regard to case (decision
+	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
+	// and each one is a config_key_case_conflict finding.
+	KeyConflicts []string
 }
 
 // ProjectTrust is the workspace trust Claude Code recorded for one project
@@ -608,4 +626,10 @@ type CursorFile struct {
 	// (https://cursor.com/docs/cli/reference/permissions.md).
 	CLIAllow []string
 	CLIDeny  []string
+
+	// KeyConflicts are the JSON Pointers of the keys of this file that match
+	// a key RosmarOps reads only without regard to case (decision
+	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
+	// and each one is a config_key_case_conflict finding.
+	KeyConflicts []string
 }

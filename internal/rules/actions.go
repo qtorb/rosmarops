@@ -7,6 +7,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // Action codes (§2, E5): the knowledge base's mitigations entry, in this
@@ -107,7 +108,7 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 					continue
 				}
 				if p, ok := rulePath(file); ok {
-					act.Rules = append(act.Rules, m.RuleTool+"("+p+")")
+					act.Rules = append(act.Rules, m.RuleTool+"("+untrusted.PlainText(p)+")") // B7: a path read from disk
 				} else {
 					uncovered[id] = true
 				}
@@ -122,7 +123,7 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 			act.Key = m.Setting
 			for _, file := range credFilesOf(f) {
 				if p, ok := rulePath(file); ok {
-					act.Rules = append(act.Rules, m.RuleTool+"("+p+")")
+					act.Rules = append(act.Rules, m.RuleTool+"("+untrusted.PlainText(p)+")") // B7: a path read from disk
 				} else {
 					uncoveredFile = true
 				}

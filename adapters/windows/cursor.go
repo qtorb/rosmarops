@@ -2,7 +2,6 @@ package windows
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/jsonc"
+	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
 
@@ -100,11 +100,13 @@ func readCursorFile(path, kind, scope, root string) platform.CursorFile {
 		raw = jsonc.Strip(raw)
 	}
 	var doc cursorDoc
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	conflicts, err := jsonkeys.Decode(raw, &doc)
+	if err != nil {
 		slog.Warn("cursor: could not parse", "path", path, "err", err)
 		f.Status, f.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
 		return f
 	}
+	f.KeyConflicts = conflicts
 	switch kind {
 	case platform.CursorPermissions:
 		if doc.TerminalAllowlist != nil {

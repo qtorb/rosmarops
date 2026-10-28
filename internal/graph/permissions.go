@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -599,8 +598,11 @@ func applyApprovals(f *Fragment, mcp platform.MCPScan, scan platform.ClaudeSetti
 		index[e.ID] = i
 	}
 	for _, srv := range mcp.Servers {
-		if !srv.LoadsMCP || srv.Scope != platform.MCPScopeProject || srv.Client == agentdirs.Antigravity {
-			continue // Claude Code's approvals of .mcp.json are not Antigravity's
+		if !srv.LoadsMCP || srv.Scope != platform.MCPScopeProject || productOf(srv.Client) != knowledge.ClaudeCodeProduct {
+			// Claude Code's approvals of .mcp.json are its own: not
+			// Antigravity's, nor Cursor's (decision 2026-10-27, blindaje,
+			// B10). Those servers keep approval_state unknown, inferred.
+			continue
 		}
 		id := edgeID(EdgeLoads, clientID(productOf(srv.Client), srv.ConfigDir), serverID(srv))
 		i, ok := index[id]

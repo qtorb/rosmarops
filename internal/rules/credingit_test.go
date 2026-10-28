@@ -1,6 +1,7 @@
 package rules_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -243,6 +244,10 @@ func TestCredInGit_Rotated(t *testing.T) {
 	})
 	if gf := gitFindings(res); len(gf) != 0 {
 		t.Errorf("rotated credential still reported: %+v", gf)
+	}
+	// B9: what it hid is counted with its entry; the unused entry is not.
+	if want := []config.AllowHit{{List: config.ListRotatedCredentials, ID: id}}; !reflect.DeepEqual(res.Silenced.Rotated, want) {
+		t.Errorf("rotated hits %+v, want %+v", res.Silenced.Rotated, want)
 	}
 }
 

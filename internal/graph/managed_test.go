@@ -433,3 +433,43 @@ func TestFromScan_ManagedEnvAcrossAdminSources(t *testing.T) {
 		t.Errorf("got %v, want %v", locs, want)
 	}
 }
+
+// B10 (decision 2026-10-27, blindaje): Claude Code's .mcp.json approvals are
+// not Cursor's. A project server of <repo>/.cursor/mcp.json with the same
+// name keeps approval_state unknown and certainty inferred; the Claude Code
+// server beside it is still approved.
+func TestFromScan_CursorProjectServerIgnoresClaudeApprovals(t *testing.T) {
+	cursorDir := "/home/me/.cursor"
+	cursorSrv := platform.MCPServer{
+		Client: "cursor", Name: "db", Command: "npx", Args: []string{},
+		ConfigPath: permRepo + "/.cursor/mcp.json", Pointer: "/mcpServers/db", LoadsMCP: true,
+		ConfigDir: cursorDir, Scope: platform.MCPScopeProject, ScopePath: permRepo,
+	}
+	scan := mcpScanOf(projectServer("db"), cursorSrv)
+	scan.Sources = append(scan.Sources, platform.MCPSource{Platform: "cursor", ConfigPath: cursorSrv.ConfigPath, ConfigDir: cursorDir, Status: platform.MCPSourceRead, LoadsMCP: true})
+	files := []platform.ClaudeSettingsFile{withApprovals(userFile(platform.ClaudePermissions{}), []string{"db"}, nil, ptrBool(true))}
+	f, _, err := graph.FromScan(scan, platform.ClaudeSettingsScan{Files: files}, testSalt, scanTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][2]string{}
+	for _, e := range f.Edges {
+		if e.Type != graph.EdgeLoads {
+			continue
+		}
+		for _, n := range f.Nodes {
+			if n.ID == e.From {
+				got[n.Platform] = [2]string{e.ApprovalState, e.Certainty}
+			}
+		}
+	}
+	if want := [2]string{graph.ApprovalUnknown, graph.CertaintyInferred}; got["cursor"] != want {
+		t.Errorf("cursor: %v, want %v", got["cursor"], want)
+	}
+	if want := [2]string{graph.ApprovalApproved, graph.CertaintyObserved}; got["claude-code"] != want {
+		t.Errorf("claude-code: %v, want %v", got["claude-code"], want)
+	}
+	if _, err := graph.Encode(graph.Build(f, testProvenance, scanTime)); err != nil {
+		t.Errorf("graph: %v", err)
+	}
+}

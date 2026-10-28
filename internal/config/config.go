@@ -57,6 +57,26 @@ type AllowList struct {
 	TestFixtures       []AllowEntryTestFixture `json:"test_fixtures,omitempty"`
 }
 
+// AllowHit is one warning an allow_list entry hid in this run (decision
+// 2026-10-27, blindaje, B9): the list, the entry's identifier as written
+// (id, path, or pattern_type:commit_sha) and its note. The report counts
+// them and lists each entry; it never holds a secret's value.
+type AllowHit struct {
+	List, ID, Note string
+}
+
+// The allow_list lists that hide warnings (B9), as the report names them.
+const (
+	ListExtensions         = "extensions"
+	ListMCPServers         = "mcp_servers"
+	ListScheduledTasks     = "scheduled_tasks"
+	ListGlobalPackages     = "global_packages"
+	ListAVExclusions       = "av_exclusions"
+	ListGitHooks           = "git_hooks"
+	ListSecretsInHistory   = "secrets_in_history"
+	ListRotatedCredentials = "rotated_credentials"
+)
+
 // AllowEntryRotated declares a credential rotated by its id: it stops
 // giving cred_in_git. RosmarOps cannot check it without network.
 type AllowEntryRotated struct {

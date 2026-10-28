@@ -46,3 +46,21 @@ func TestText(t *testing.T) {
 		t.Errorf("empty: %q", got)
 	}
 }
+
+// B7 (decision 2026-10-27, blindaje): placeholders are filled in one pass,
+// so a value read from disk that contains a placeholder is never expanded,
+// whatever the order of params; an unknown placeholder stays; a lone brace
+// stays.
+func TestTextNeverExpandsAValue(t *testing.T) {
+	c := Catalog{lang: "en", msgs: map[string]string{
+		"k": "{name} ({agent}) in {repos} {missing} {",
+	}}
+	c.en = c.msgs
+	p := map[string]string{"name": "evil{agent}{repos}", "agent": "Claude Code", "repos": "3"}
+	want := "evil{agent}{repos} (Claude Code) in 3 {missing} {"
+	for i := 0; i < 50; i++ { // map order varies between iterations
+		if got := c.Text("k", p); got != want {
+			t.Fatalf("got %q, want %q", got, want)
+		}
+	}
+}

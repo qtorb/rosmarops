@@ -46,6 +46,10 @@ type Silenced struct {
 	Entries []SilencedEntry   `json:"entries"`
 	Expired int               `json:"-"`
 	Guards  []FixtureGuardHit `json:"-"`
+
+	// Rotated are the credentials allow_list.rotated_credentials hid, one
+	// per credential, with its entry (decision 2026-10-27, blindaje, B9).
+	Rotated []config.AllowHit `json:"-"`
 }
 
 // SilencedEntry is one allow_list.test_fixtures entry and what it did.
@@ -196,9 +200,9 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 	silencedCreds := map[string]bool{}
 	g := in.Graph
 	occ := in.occurrences(g)
-	rotated := map[string]bool{}
+	rotated := map[string]config.AllowEntryRotated{}
 	for _, r := range in.Rotated {
-		rotated[r.ID] = true
+		rotated[r.ID] = r
 	}
 	edges := map[string][]graph.Edge{}
 	for _, e := range g.Edges {
@@ -280,7 +284,8 @@ func gitFindings(in Input, nodes map[string]graph.Node, scopes map[string]string
 	sort.Strings(ids)
 	for _, id := range ids {
 		cred := nodes[id]
-		if rotated[id] {
+		if r, ok := rotated[id]; ok {
+			sil.Rotated = append(sil.Rotated, config.AllowHit{List: config.ListRotatedCredentials, ID: r.ID, Note: r.Note})
 			continue
 		}
 		class := classOf(cred, scopes[id])

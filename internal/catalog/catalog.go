@@ -61,6 +61,18 @@ func Load(lang string) (Catalog, error) {
 	return Catalog{lang: lang, msgs: msgs, en: en}, nil
 }
 
+// Source is the English catalog, the source language: the texts the v1
+// findings carry in their JSON (decision 2026-10-27, blindaje, B5 and
+// own_task_changed). The catalog is embedded, so it cannot be missing; a
+// broken file fails the tests.
+func Source() Catalog {
+	c, err := Load(DefaultLang)
+	if err != nil {
+		panic(err)
+	}
+	return c
+}
+
 // Langs returns the languages with a catalog file, sorted: the report is
 // written in each of them (decision 2026-10-27, primer uso con un solo
 // .exe, U7).
@@ -93,6 +105,11 @@ func Keys() ([]string, error) {
 // Text returns the text of key in the catalog's language, falling back to
 // English, with {name} placeholders replaced from params. A key with no text
 // (empty, or missing everywhere) renders as "[key]".
+//
+// Placeholders are replaced in one pass, left to right (decision
+// 2026-10-27, blindaje, B7): a value is copied as it is, so a "{agent}"
+// inside a value read from disk is never expanded. A placeholder with no
+// param stays as written.
 func (c Catalog) Text(key string, params map[string]string) string {
 	t := c.msgs[key]
 	if t == "" {
@@ -101,10 +118,36 @@ func (c Catalog) Text(key string, params map[string]string) string {
 	if t == "" {
 		return "[" + key + "]"
 	}
-	for name, v := range params {
-		t = strings.ReplaceAll(t, "{"+name+"}", v)
+	return fill(t, params)
+}
+
+// fill replaces the {name} placeholders of t from params in one pass.
+func fill(t string, params map[string]string) string {
+	if len(params) == 0 {
+		return t
 	}
-	return t
+	var b strings.Builder
+	for {
+		open := strings.IndexByte(t, '{')
+		if open < 0 {
+			break
+		}
+		end := strings.IndexByte(t[open+1:], '}')
+		if end < 0 {
+			break
+		}
+		name := t[open+1 : open+1+end]
+		if v, ok := params[name]; ok {
+			b.WriteString(t[:open])
+			b.WriteString(v)
+			t = t[open+1+end+1:]
+			continue
+		}
+		b.WriteString(t[:open+1])
+		t = t[open+1:]
+	}
+	b.WriteString(t)
+	return b.String()
 }
 
 // Plural returns key.one for n == 1 and key.other otherwise.

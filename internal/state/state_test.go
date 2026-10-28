@@ -159,3 +159,26 @@ func TestSaveState_FileHasNewline(t *testing.T) {
 		t.Error("state file does not end with newline")
 	}
 }
+
+// B9 (decision 2026-10-27, blindaje): baselines.mcp_servers[].destination_ref
+// is optional; a valid one round-trips, a malformed one fails the schema.
+func TestSaveState_MCPDestinationRef(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	st := defaultState(t)
+	ref := "hmac-sha256:" + strings.Repeat("ab", 32)
+	st.Baselines.MCPServers = []state.MCPServerBaseline{
+		{Client: "cursor", Name: "a", CommandSHA256: zeroHash, DestinationRef: ref, FirstSeen: "2026-10-28T12:00:00Z"},
+		{Client: "cursor", Name: "b", CommandSHA256: zeroHash},
+	}
+	if err := state.SaveState(path, st); err != nil {
+		t.Fatal(err)
+	}
+	got, err := state.LoadState(path)
+	if err != nil || got.Baselines.MCPServers[0].DestinationRef != ref || got.Baselines.MCPServers[1].DestinationRef != "" {
+		t.Fatalf("round trip: %+v, %v", got.Baselines.MCPServers, err)
+	}
+	st.Baselines.MCPServers[0].DestinationRef = "https://example.com"
+	if err := state.SaveState(path, st); err == nil {
+		t.Error("a destination in clear must fail the schema")
+	}
+}

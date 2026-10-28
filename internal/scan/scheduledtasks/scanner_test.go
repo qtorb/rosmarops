@@ -82,6 +82,9 @@ func TestScanScheduledTasks_AllowListed_Suppressed(t *testing.T) {
 	if result.AllowListedCount != 1 {
 		t.Errorf("AllowListedCount = %d, want 1", result.AllowListedCount)
 	}
+	if want := (config.AllowHit{List: config.ListScheduledTasks, ID: "AllowedTask", Note: "known dev tool logon trigger"}); len(result.Hits) != 1 || result.Hits[0] != want { // B9
+		t.Errorf("hits %+v", result.Hits)
+	}
 }
 
 // B2/B8: an old registration date no longer hides a task.

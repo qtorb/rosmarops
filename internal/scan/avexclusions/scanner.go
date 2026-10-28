@@ -45,6 +45,10 @@ type ScanResult struct {
 
 	// AllowListedCount is the number of new exclusions suppressed by the allow-list.
 	AllowListedCount int
+
+	// Hits are the warnings the allow-list hid, one per warning, with the
+	// entry that hid it (decision 2026-10-27, blindaje, B9).
+	Hits []config.AllowHit
 }
 
 // ScanAVExclusions compares the current Defender exclusion set against the
@@ -67,10 +71,11 @@ func ScanAVExclusions(
 	}
 
 	// Build allow-list lookup: norm(path value) → true.
-	allowed := make(map[string]bool, len(allowList))
+	allowed := make(map[string]config.AllowEntryPath, len(allowList))
 	for _, a := range allowList {
-		allowed[normStr(a.Path)] = true
+		allowed[normStr(a.Path)] = a
 	}
+	var hits []config.AllowHit
 
 	// Build new baseline from full current exclusion set.
 	newBL := make([]state.AVExclusion, 0, len(exclusions))
@@ -93,8 +98,9 @@ func ScanAVExclusions(
 		}
 
 		// New exclusion: check allow-list.
-		if allowed[normStr(e.Value)] {
+		if a, ok := allowed[normStr(e.Value)]; ok {
 			allowListedCount++
+			hits = append(hits, config.AllowHit{List: config.ListAVExclusions, ID: a.Path, Note: a.Note})
 			continue
 		}
 
@@ -117,6 +123,7 @@ func ScanAVExclusions(
 		Findings:         findings,
 		NewBaseline:      newBL,
 		AllowListedCount: allowListedCount,
+		Hits:             hits,
 	}
 }
 

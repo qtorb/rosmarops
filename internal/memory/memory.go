@@ -52,6 +52,9 @@ const (
 	ReasonRulesChanged = "rules_changed"
 	ReasonScopeChanged = "scope_changed"
 	ReasonSaltChanged  = "salt_changed" // A2: the local salt is not the memory's
+	// ReasonMemoryLost: RosmarOps ran before, but the memory is missing or
+	// was set aside (decision 2026-10-27, blindaje, B8).
+	ReasonMemoryLost = "memory_lost"
 )
 
 // saltRefLabel is the fixed label of salt_ref (A2), not host_id's.
@@ -136,6 +139,9 @@ type Run struct {
 	Complete bool
 	// Seen are the agents of this run, by comparison key (A1).
 	Seen []SeenAgent
+	// MemoryLost: RosmarOps ran before on this computer, but the memory it
+	// compares with is missing or was set aside (B8). Nothing compares.
+	MemoryLost bool
 }
 
 // SeenAgent is one agent of the run: its comparison key (A1), whether it is
@@ -245,6 +251,9 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 	}
 	if root.SaltChanged {
 		root.Reason = ReasonSaltChanged // A8: shown as the other reasons
+	}
+	if run.MemoryLost && root.Reason == "" {
+		root.Reason = ReasonMemoryLost // B8: never «N new findings»
 	}
 	notComparable := root.Reason != ""
 

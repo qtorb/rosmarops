@@ -89,6 +89,11 @@ type ScanConfig struct {
 	// any goroutine, never at once (decision informe HTML v3 §9.6).
 	OnProgress func(done, total int)
 
+	// OnAllowHit, when set, is called with each warning allow_list.git_hooks
+	// or allow_list.secrets_in_history hid (decision 2026-10-27, blindaje,
+	// B9), from any goroutine, possibly at once: the caller synchronizes.
+	OnAllowHit func(config.AllowHit)
+
 	// OnFamilies, when set, receives the repository families (each a list of
 	// roots in repoRoots order) once they are known, on the calling
 	// goroutine. The v2 report groups its members by family.
@@ -429,6 +434,9 @@ func ScanRepo(
 
 	if _, ok := ctx.Value(traceKey{}).(*repoTrace); !ok {
 		ctx = withTrace(ctx, &repoTrace{})
+	}
+	if cfg.OnAllowHit != nil {
+		ctx = context.WithValue(ctx, allowHitKey{}, cfg.OnAllowHit)
 	}
 	// Every check logs its duration and outcome (timeCheck, BV-30).
 

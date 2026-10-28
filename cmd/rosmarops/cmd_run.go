@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	windowsadapter "github.com/qtorb/rosmarops/adapters/windows"
@@ -27,6 +28,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/scan/avexclusions"
+	"github.com/qtorb/rosmarops/internal/scan/configkeys"
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
 	"github.com/qtorb/rosmarops/internal/scan/mcp"
@@ -203,6 +205,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		findings         []finding.Finding
 		scanErrors       []finding.ScanError
 		allowListedTotal int
+		// allowHits are the warnings the configuration hid, for the
+		// report (decision 2026-10-27, blindaje, B9).
+		allowHits []config.AllowHit
 	)
 
 	// The fallback state carries a fresh local salt, so this run's credential
@@ -289,6 +294,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				vscodeExts = currentExts
 				findings = append(findings, extResult.Findings...)
 				allowListedTotal += extResult.AllowListedCount
+				allowHits = append(allowHits, extResult.Hits...)
 				st.Baselines.VSCodeExtensions = extResult.NewBaseline
 				if extResult.FirstRun && extResult.Recorded > 0 {
 					vscodeFirstRun = &report.VSCodeFirstRun{Recorded: extResult.Recorded, Recent: extResult.Recent}
@@ -301,7 +307,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			scanned, listErr := plat.ListMCPServers(ctx, cfg.RepoRoots)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
-			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir)
+			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
+				mcp.Binding{Salt: salt, Baseline: st.Baselines.MCPServers, Now: time.Now()})
 			return func() {
 				mcpScan, mcpErr = scanned, listErr
 				if mcpErr != nil {
@@ -313,6 +320,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				}
 				findings = append(findings, mcpResult.Findings...)
 				allowListedTotal += mcpResult.AllowListedCount
+				allowHits = append(allowHits, mcpResult.Hits...)
+				// B9: the destination each allow-listed server had when
+				// its entry was accepted. Not on a failed listing, which
+				// would forget them.
+				if listErr == nil {
+					st.Baselines.MCPServers = mcpResult.NewBaseline
+				}
 			}
 		}},
 
@@ -349,6 +363,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			listErr := errors.Join(mcpErr, settingsErr, instructionsErr)
 			return func() {
 				graphDone = true
+				// B5: a key the agent reads differently from RosmarOps.
+				findings = append(findings, configkeys.Findings(mcpScan, settingsScan, cursorScan)...)
 				// The graph is built once the repositories are scanned: the
 				// secrets committed in them are part of it (CTO-7 §2.2).
 				buildGraph = func(repoGraph graph.Repos) {
@@ -372,12 +388,23 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// --- Repository scanner (M6) ---
 		{Name: "repos", Run: func(ctx context.Context) func() {
 			var repoFamilies [][]string
+			// The repository scan's allow-list hits come from its
+			// goroutines (B9): gathered here, handed over in the record.
+			var (
+				hitsMu   sync.Mutex
+				repoHits []config.AllowHit
+			)
 			scanCfg := repos.ScanConfig{
 				Patterns:     repoPatterns,
 				AllowHooks:   cfg.AllowList.GitHooks,
 				AllowHistory: cfg.AllowList.SecretsInHistory,
 				OnFamilies:   func(f [][]string) { repoFamilies = f },
-				OnProgress:   progress.repos,
+				OnAllowHit: func(h config.AllowHit) {
+					hitsMu.Lock()
+					defer hitsMu.Unlock()
+					repoHits = append(repoHits, h)
+				},
+				OnProgress: progress.repos,
 			}
 			if saltErr == nil {
 				// Committed secrets become salted references in the scan;
@@ -389,6 +416,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			)
 			return func() {
 				families = repoFamilies
+				hitsMu.Lock()
+				allowHits = append(allowHits, repoHits...)
+				hitsMu.Unlock()
 				repoFindings = scanned
 				findings = append(findings, scanned...)
 				scanErrors = append(scanErrors, repoErrs...)
@@ -429,6 +459,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				}
 				findings = append(findings, tasksResult.Findings...)
 				allowListedTotal += tasksResult.AllowListedCount
+				allowHits = append(allowHits, tasksResult.Hits...)
 				st.Baselines.ScheduledTasks = tasksResult.NewBaseline
 			}
 		}},
@@ -447,6 +478,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				}
 				findings = append(findings, avResult.Findings...)
 				allowListedTotal += avResult.AllowListedCount
+				allowHits = append(allowHits, avResult.Hits...)
 				st.Baselines.AVExclusions = avResult.NewBaseline
 			}
 		}},
@@ -457,6 +489,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				findings = append(findings, globalsResult.Findings...)
 				allowListedTotal += globalsResult.AllowListedCount
+				allowHits = append(allowHits, globalsResult.Hits...)
 				st.Baselines.GlobalPackages = globalsResult.NewPackageBaseline
 				if globalsResult.NewNpmrcSHA != "" {
 					st.Baselines.NpmrcSHA256 = globalsResult.NewNpmrcSHA
@@ -522,8 +555,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: cfg.RepoRoots,
 		Families: families, V1: r, GeneratedAt: time.Now(),
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
-		Salt: salt, Memory: mem, MemoryReset: memReset,
-		Rotated: cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
+		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
+		AllowHits: allowHits,
+		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code,

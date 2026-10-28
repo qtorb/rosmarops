@@ -22,8 +22,14 @@ func AIFileName(base string) string { return base + ".ai.md" }
 
 // RenderAIExport renders the export for your AI (§6), in the catalog's
 // language, from the html.* texts the HTML shows for each finding. It
-// carries no value, preview, fingerprint, host id or credential id, and
-// every path in the user's folder starts with ~.
+// carries no value, preview, fingerprint or host id, and every path in the
+// user's folder starts with ~. It does carry a credential id
+// (cred_<16 hex>) in the rotate action's value: the user needs it to mark
+// the credential as rotated (decision 2026-10-27, blindaje, B7).
+//
+// Every value read from disk passes through untrusted.PlainText where it
+// enters the text; the locations of each finding go in a ```text block,
+// announced by ai.untrusted_data (B7).
 func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	c := htmlCtx{v: v, cat: cat, home: home, score: map[string]*index.AgentIndex{}}
 	for i := range v.Index.Agents {
@@ -31,7 +37,7 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	}
 
 	var head strings.Builder
-	fmt.Fprintf(&head, "%s\n\n%s\n\n%s\n\n", cat.Text("ai.instruction", nil), cat.Text("ai.no_secrets", nil), cat.Text("ai.what", nil))
+	fmt.Fprintf(&head, "%s\n\n%s\n\n%s\n\n%s\n\n", cat.Text("ai.instruction", nil), cat.Text("ai.no_secrets", nil), cat.Text("ai.what", nil), cat.Text("ai.untrusted_data", nil))
 	for _, a := range v.Index.Agents {
 		if a.Value == nil {
 			continue
@@ -103,12 +109,7 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 				b.WriteString(c.aiAction(f, a))
 			}
 		}
-		for _, l := range f.Evidence.Locations {
-			fmt.Fprintf(&b, "- `%s`\n", userPath(l, home, "~"))
-		}
-		if len(f.Evidence.Locations) > 0 {
-			b.WriteString("\n")
-		}
+		b.WriteString(textBlock(f.Evidence.Locations, home))
 		full[i] = b.String()
 		line[i] = "- " + c.titleText(f) + "\n"
 	}
@@ -157,10 +158,7 @@ func (c htmlCtx) aiAction(f rules.Finding, a rules.Action) string {
 	after := "html.after.full"
 	if a.Code == rules.ActionRemoveFromDisk {
 		fmt.Fprintf(&b, "%s\n\n", c.cat.Text("html.fix.remove", p))
-		for _, l := range a.Locations {
-			fmt.Fprintf(&b, "- `%s`\n", userPath(l, c.home, "~"))
-		}
-		b.WriteString("\n")
+		b.WriteString(textBlock(a.Locations, c.home))
 	} else {
 		prompt := "html.agent.prompt.merge"
 		if !a.FileExists {
@@ -205,4 +203,20 @@ func WriteAIExport(v V2, cat catalog.Catalog, home, dir, base string) (string, e
 		return "", fmt.Errorf("write ai export: %w", err)
 	}
 	return path, nil
+}
+
+// textBlock is locations as a ```text block, one per line, each as
+// userPath shows it (plain text, ~ for the user's folder); empty for none
+// (B7: paths read from disk are data, never instructions).
+func textBlock(locations []string, home string) string {
+	if len(locations) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("```text\n")
+	for _, l := range locations {
+		b.WriteString(userPath(l, home, "~") + "\n")
+	}
+	b.WriteString("```\n\n")
+	return b.String()
 }

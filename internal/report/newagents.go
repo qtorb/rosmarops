@@ -6,6 +6,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // mcpDestText is a server's destination for a report line (BV-91, D4): "sends
@@ -14,9 +15,9 @@ import (
 func mcpDestText(cat catalog.Catalog, s MCPServerLine) string {
 	switch {
 	case s.Remote != "":
-		return cat.Text("html.mcp.dest.remote", map[string]string{"host": s.Remote})
+		return cat.Text("html.mcp.dest.remote", map[string]string{"host": untrusted.PlainText(s.Remote)})
 	case s.Local != "":
-		return cat.Text("html.mcp.dest.local", map[string]string{"command": s.Local})
+		return cat.Text("html.mcp.dest.local", map[string]string{"command": untrusted.PlainText(s.Local)})
 	default:
 		return ""
 	}
@@ -25,7 +26,8 @@ func mcpDestText(cat catalog.Catalog, s MCPServerLine) string {
 // mcpParams are the {name}, {agent} and {destination} of a new or changed MCP
 // server line.
 func mcpParams(cat catalog.Catalog, s MCPServerLine) map[string]string {
-	return map[string]string{"name": s.Name, "agent": s.Agent, "destination": mcpDestText(cat, s)}
+	// B7: the name, the agent and the destination were read from disk.
+	return map[string]string{"name": untrusted.PlainText(s.Name), "agent": untrusted.PlainText(s.Agent), "destination": mcpDestText(cat, s)}
 }
 
 // MCPServerLine is a new or changed MCP server for the «since last time»

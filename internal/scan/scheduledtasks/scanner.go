@@ -4,6 +4,7 @@
 package scheduledtasks
 
 import (
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
@@ -41,16 +42,6 @@ const (
 		"full Defender scan, and audit recent software installs."
 )
 
-const (
-	// whyOwnTaskChanged / actionOwnTaskChanged: the own weekly task no longer
-	// meets J6. Texts from docs/copy/bv93-2026-10-27.json (BV-93, B2), kept
-	// here in English like the other scheduled-task findings; the catalog
-	// carries the localized copies.
-	titleOwnTaskChanged  = "Your RosmarOps weekly review task was changed"
-	whyOwnTaskChanged    = "The task no longer matches the command the report gave you: its program, arguments, folder, user or trigger changed. If you didn't change it, someone else can run code every time it starts."
-	actionOwnTaskChanged = "Delete the task and create it again with the command in the report."
-)
-
 // ScanResult holds the output of ScanScheduledTasks.
 type ScanResult struct {
 	// Findings contains one finding per new task: YELLOW or RED.
@@ -62,6 +53,10 @@ type ScanResult struct {
 
 	// AllowListedCount is the number of new tasks suppressed by the allow-list.
 	AllowListedCount int
+
+	// Hits are the warnings the allow-list hid, one per warning, with the
+	// entry that hid it (decision 2026-10-27, blindaje, B9).
+	Hits []config.AllowHit
 }
 
 // ScanScheduledTasks compares the list of recently registered tasks against
@@ -98,10 +93,11 @@ func ScanScheduledTasks(
 	fresh = fresh || len(baseline) == 0
 
 	// Build allow-list lookup: lowercase id → true.
-	allowed := make(map[string]bool, len(allowList))
+	allowed := make(map[string]config.AllowEntryID, len(allowList))
 	for _, a := range allowList {
-		allowed[normName(a.ID)] = true
+		allowed[normName(a.ID)] = a
 	}
+	var hits []config.AllowHit
 
 	var findings []finding.Finding
 	var newBL []state.ScheduledTaskBase
@@ -141,8 +137,9 @@ func ScanScheduledTasks(
 		}
 
 		// New or modified task — check allow-list.
-		if allowed[normName(t.Name)] {
+		if a, ok := allowed[normName(t.Name)]; ok {
 			allowListedCount++
+			hits = append(hits, config.AllowHit{List: config.ListScheduledTasks, ID: a.ID, Note: a.Note})
 			continue
 		}
 
@@ -178,6 +175,7 @@ func ScanScheduledTasks(
 		Findings:         findings,
 		NewBaseline:      newBL,
 		AllowListedCount: allowListedCount,
+		Hits:             hits,
 	}
 }
 
@@ -186,9 +184,13 @@ func ScanScheduledTasks(
 // ---------------------------------------------------------------------------
 
 func ownTaskChangedFinding(t platform.ScheduledTask) finding.Finding {
-	f := finding.NewFinding(taskFindingID("own_task_changed", t.Name), finding.SeverityYellow, "own_task_changed", titleOwnTaskChanged)
-	f.WhyItMatters = whyOwnTaskChanged
-	f.SuggestedAction = actionOwnTaskChanged
+	// The own weekly task no longer meets J6: texts from the catalog's
+	// finding.own_task_changed.* (BV-93, B2; BV-94), in English, the v1
+	// JSON's language.
+	cat := catalog.Source()
+	f := finding.NewFinding(taskFindingID("own_task_changed", t.Name), finding.SeverityYellow, "own_task_changed", cat.Text("finding.own_task_changed.title", nil))
+	f.WhyItMatters = cat.Text("finding.own_task_changed.why", nil)
+	f.SuggestedAction = cat.Text("finding.own_task_changed.action", nil)
 	f.Confidence = "high"
 	f.Evidence = finding.Evidence{Extra: map[string]string{
 		"task_name":      t.Name,

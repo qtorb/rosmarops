@@ -62,15 +62,18 @@ type V2 struct {
 	// (v3 §13.3; A1). NewMCP are the new MCP servers and MCPChanged the servers
 	// that now point somewhere else (BV-91, D3/D4), each with its agent and
 	// destination.
-	NewAgents  []string         `json:"-"`
-	NewMCP     []MCPServerLine  `json:"-"`
-	MCPChanged []MCPServerLine  `json:"-"`
-	repos      int              // configured repositories
-	nextMemory memory.File      // findings-memory.json after this run
-	memoryPrev bool             // an earlier findings-memory.json was read
-	base       string           // the run's report base name
-	series     []int            // the evaluated agent's comparable scores, oldest first
-	seriesBy   map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
+	NewAgents      []string         `json:"-"`
+	NewMCP         []MCPServerLine  `json:"-"`
+	MCPChanged     []MCPServerLine  `json:"-"`
+	repos          int              // configured repositories
+	nextMemory     memory.File      // findings-memory.json after this run
+	memoryPrev     bool             // an earlier findings-memory.json was read
+	memoryLost     bool             // B8: prior runs, but no memory to compare with
+	historyMissing bool             // B8: prior runs, but no index-history.json
+	hidden         []HiddenEntry    // B9: what the configuration hid, by entry
+	base           string           // the run's report base name
+	series         []int            // the evaluated agent's comparable scores, oldest first
+	seriesBy       map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
 	// vscodeFirstRun is the first run of the extensions collector (A5).
 	vscodeFirstRun *VSCodeFirstRun
 	// agentNames are the graph's agent names by node id, for the target
@@ -180,6 +183,18 @@ type V2Input struct {
 	Memory      memory.File
 	MemoryReset bool
 
+	// AllowHits are the warnings the configuration's allow_list hid in the
+	// v1 scanners (decision 2026-10-27, blindaje, B9); the rotated
+	// credentials' come from the rules layer.
+	AllowHits []config.AllowHit
+
+	// PriorRuns: RosmarOps ran before on this computer, by the state
+	// (last_run) or by a report in the reports directory (report.html or
+	// report-*.md). With no memory, or no history, to compare with, the
+	// report says they were lost, never «first run» (decision 2026-10-27,
+	// blindaje, B8).
+	PriorRuns bool
+
 	// Rotated and Fixtures are allow_list.rotated_credentials and
 	// test_fixtures; ConfigFile the configuration file as the report shows
 	// it (decision 2026-10-24, memoria, M9–M10).
@@ -282,10 +297,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 			SourcesFailed:     g.Coverage.SourcesFailed,
 			AgentsUnsupported: g.Coverage.AgentsUnsupported,
 		}
-		v2Status = finding.StatusGreen
-		for _, f := range v.Findings {
-			v2Status = maxStatus(v2Status, finding.Status(f.Severity))
-		}
+		v2Status = reduceV2(v.Findings, g.Coverage.SourcesFailed)
 	} else {
 		v.Today = rules.Today{Code: rules.TodayNothingUrgent}
 	}
@@ -296,7 +308,9 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.Coverage.AgentsUnsupported = []graph.AgentUnsupported{}
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
+	v.hidden = hiddenEntries(append(append([]config.AllowHit{}, in.AllowHits...), res.Silenced.Rotated...))
 	v.Index, v.radiusProj = buildIndex(in, res, v)
+	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8
 	v.AgentsOverview = agentsOverview(res.AgentsOverview, v.Index)
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.
@@ -380,6 +394,7 @@ func applyMemory(v *V2, in V2Input) {
 		Agents: v.Index.Scope.Evaluated, Repos: len(in.RepoRoots),
 		Complete: in.Graph != nil && len(v.Coverage.SourcesFailed) == 0,
 	}
+	run.MemoryLost = in.PriorRuns && in.Memory.Runs == 0
 	if in.Graph != nil {
 		run.Seen = seenAgents(*in.Graph)
 	}
@@ -404,6 +419,7 @@ func applyMemory(v *V2, in V2Input) {
 		v.Findings[i].Memory = &m
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
+	v.memoryLost = run.MemoryLost
 	v.NewAgents = root.NewAgents // A1: from the memory, not from v1
 	if in.Graph != nil {
 		// BV-91 (D4): the new and changed MCP lines pair the memory's refs with
@@ -454,6 +470,61 @@ func statusRank(s finding.Status) int {
 		return 0
 	}
 	return 1
+}
+
+// HiddenEntry is one allow_list entry that hid warnings in this run (B9):
+// its list, its identifier and note as written, and how many it hid.
+type HiddenEntry struct {
+	List, ID, Note string
+	Count          int
+}
+
+// hiddenEntries groups hits by entry, sorted by list, id and note.
+func hiddenEntries(hits []config.AllowHit) []HiddenEntry {
+	n := map[config.AllowHit]int{}
+	for _, h := range hits {
+		n[h]++
+	}
+	out := make([]HiddenEntry, 0, len(n))
+	for h, c := range n {
+		out = append(out, HiddenEntry{List: h.List, ID: h.ID, Note: h.Note, Count: c})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.List != b.List {
+			return a.List < b.List
+		}
+		if a.ID != b.ID {
+			return a.ID < b.ID
+		}
+		return a.Note < b.Note
+	})
+	return out
+}
+
+// HiddenCount is the number of warnings the configuration hid (B9).
+func (v V2) HiddenCount() int {
+	n := 0
+	for _, e := range v.hidden {
+		n += e.Count
+	}
+	return n
+}
+
+// reduceV2 is the v2 graph's status: the most severe finding's, and at
+// least yellow when any source of the graph could not be read (decision
+// 2026-10-27, blindaje, B6; invariant 4). Every source in sources_failed is
+// an agent's: a configuration or instructions file, or a credential file
+// an agent can reach; what was not read is never reported as clean.
+func reduceV2(fs []rules.Finding, failed []graph.SourceFailed) finding.Status {
+	s := finding.StatusGreen
+	if len(failed) > 0 {
+		s = finding.StatusYellow
+	}
+	for _, f := range fs {
+		s = maxStatus(s, finding.Status(f.Severity))
+	}
+	return s
 }
 
 func maxStatus(a, b finding.Status) finding.Status {
@@ -553,6 +624,8 @@ func legacyMember(f finding.Finding) string {
 		return strings.Join(paths, ", ")
 	case f.Category == "global_package_new":
 		return extra(e, "package_manager") + " " + extra(e, "package_name") + "@" + extra(e, "package_version")
+	case f.Category == "config_key_case_conflict": // B5: the file and the key
+		return in(e.File) + "#" + extra(e, "key")
 	case f.Category == "npm_registry_non_standard":
 		return extra(e, "npmrc_path")
 	}
