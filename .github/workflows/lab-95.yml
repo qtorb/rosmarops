@@ -1,0 +1,90 @@
+# Temporary laboratory for LECTURA-95: can a clean GitHub Actions Windows
+# runner measure, with RosmarOps v0.3.0, the out-of-the-box exposure of Claude
+# Code and Cursor? It installs the agents by their official route WITHOUT
+# signing in, downloads the signed v0.3.0 rosmarops.exe (SHA-256 checked),
+# runs it non-interactively, and uploads the report. The job runs twice, on two
+# fresh runners, to check the result is identical. This file is temporary and
+# lives only on the lab-95 branch.
+name: lab-95
+on:
+  push:
+    branches: [lab-95]
+permissions:
+  contents: read
+jobs:
+  lab:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [1, 2]
+    runs-on: windows-latest
+    steps:
+      - name: Windows version
+        shell: pwsh
+        run: |
+          cmd /c ver
+          (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List | Out-String).Trim()
+          "OSVersion: $([System.Environment]::OSVersion.VersionString)"
+
+      - name: Install Claude Code (npm, official)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          node --version
+          npm --version
+          npm install -g "@anthropic-ai/claude-code"
+          "claude on PATH: $(Get-Command claude -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+          claude --version
+
+      - name: Install Cursor (winget, official; may need interaction)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          winget --version
+          winget install --id Anysphere.Cursor -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          "cursor on PATH: $(Get-Command cursor -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+
+      - name: Config at rest before running RosmarOps (no sign-in, no changes)
+        shell: pwsh
+        run: |
+          foreach ($p in @("$env:USERPROFILE\.claude", "$env:USERPROFILE\.claude.json", "$env:USERPROFILE\.cursor", "$env:APPDATA\Cursor", "$env:APPDATA\Claude")) {
+            if (Test-Path $p) { "PRESENT: $p" } else { "absent:  $p" }
+          }
+
+      - name: Download rosmarops.exe v0.3.0 and verify SHA-256
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/qtorb/rosmarops/releases/download/v0.3.0/rosmarops.exe" -OutFile rosmarops.exe
+          $want = "69f2f13f401d403a2c4e8f05f321ac600502e0176e98bd0d3f1e4c5c8f155696"
+          $got = (Get-FileHash rosmarops.exe -Algorithm SHA256).Hash.ToLower()
+          "want: $want"
+          "got:  $got"
+          if ($got -ne $want) { throw "SHA-256 mismatch: refusing to run (LECTURA-95 stop condition)" }
+
+      - name: Run RosmarOps non-interactively (init + run)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          .\rosmarops.exe init
+          .\rosmarops.exe run --lang en
+
+      - name: Collect reports
+        if: always()
+        shell: pwsh
+        run: |
+          $reports = Join-Path $env:USERPROFILE ".rosmarops\reports"
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          if (Test-Path $reports) {
+            Copy-Item "$reports\*" out -Recurse -Force
+            Get-ChildItem out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String
+          } else {
+            "no reports directory at $reports" | Tee-Object -FilePath out\NO_REPORTS.txt
+          }
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rosmarops-run-${{ matrix.run }}
+          path: out
+          if-no-files-found: warn
