@@ -164,6 +164,16 @@
           "type": "string",
           "minLength": 1,
           "description": "Version of the rules layer that produced the findings."
+        },
+        "intel_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the embedded threat-data snapshot used for the cross; absent when no snapshot was loaded."
+        },
+        "intel_published_at": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Publication date of the threat-data snapshot used; absent when no snapshot was loaded."
         }
       }
     },
@@ -255,7 +265,8 @@
             "foreign_agent_config_writable",
             "foreign_agent_instructions_writable",
             "own_instructions_writable",
-            "own_config_writable"
+            "own_config_writable",
+            "package_known_malicious"
           ]
         },
         "rule_version": {
@@ -335,6 +346,25 @@
             "has_remote": {
               "type": "boolean",
               "description": "cred_in_git: a repository of the finding declares a remote."
+            },
+            "ecosystem": {
+              "enum": [
+                "pypi",
+                "npm"
+              ],
+              "description": "package_known_malicious: the package's ecosystem."
+            },
+            "package": {
+              "type": "string",
+              "description": "package_known_malicious: the package name, normalized for its ecosystem."
+            },
+            "version": {
+              "type": "string",
+              "description": "package_known_malicious: the exact installed/declared version."
+            },
+            "intel_id": {
+              "type": "string",
+              "description": "package_known_malicious: the id of the threat-data entry that matched."
             }
           },
           "description": "Typed values for the catalog texts. Never a secret value."

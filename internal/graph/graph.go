@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/schemaval"
 
 	"github.com/qtorb/rosmarops/internal/schemas"
@@ -127,6 +128,12 @@ type Node struct {
 
 	// agent, credential, resource
 	DiscoveredAt string `json:"discovered_at"`
+
+	// Malicious, when set, is the threat-data match for this node (BV-100,
+	// F0a). In memory only: it is never serialized to graph.v2.json, so the
+	// graph schema does not change. The rules layer emits
+	// package_known_malicious from it.
+	Malicious *intel.Match `json:"-"`
 }
 
 // Edge is any graph edge.

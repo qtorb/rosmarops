@@ -334,5 +334,5 @@ func readManifest(path string) (GlobalPackage, error) {
 	if m.Name == "" {
 		return GlobalPackage{}, fmt.Errorf("%s: no name", path)
 	}
-	return GlobalPackage{Name: m.Name, Version: m.Version}, nil
+	return GlobalPackage{Name: m.Name, Version: m.Version, Path: path}, nil
 }

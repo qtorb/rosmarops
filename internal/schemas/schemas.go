@@ -63,3 +63,9 @@ var FindingsMemoryV2Schema []byte
 //
 //go:embed v2/findings-memory.v3.schema.json
 var FindingsMemoryV3Schema []byte
+
+// IntelSchema is the embedded intel/intel.v1.schema.json schema: the
+// threat-data snapshot contract (BV-100, F0a).
+//
+//go:embed intel/intel.v1.schema.json
+var IntelSchema []byte

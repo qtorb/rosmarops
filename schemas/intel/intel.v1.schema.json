@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rosmarops.com/schemas/intel.v1.schema.json",
+  "title": "RosmarOps threat-data snapshot (intel.v1)",
+  "description": "The threat-data snapshot embedded in the binary and crossed locally, with no network, against what the scan reads. Only ids, enums and technical detail; never data from a user's machine. F0a carries malicious package releases only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "published_at",
+    "packages"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}\\.[0-9]+$",
+      "description": "Snapshot version, YYYY.MM.DD.n, increasing."
+    },
+    "published_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Snapshot publication date, YYYY-MM-DD."
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "ecosystem",
+          "package",
+          "versions",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{1,60}$",
+            "description": "Stable entry id, e.g. rosmarops-2026-0001."
+          },
+          "ecosystem": {
+            "enum": [
+              "pypi",
+              "npm"
+            ]
+          },
+          "package": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Package name, normalized for its ecosystem (PyPI: PEP 503)."
+          },
+          "versions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Exact affected versions. No ranges in F0a."
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "File names the release drops into site-packages, matched by presence of the name."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Other identifiers (MAL-, GHSA-)."
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "url",
+              "accessed_at"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^https://"
+              },
+              "accessed_at": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

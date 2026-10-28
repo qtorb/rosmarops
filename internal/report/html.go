@@ -486,6 +486,10 @@ func (c htmlCtx) renderStep1() {
 				}
 			}
 		}
+		if f.Rule == rules.RulePackageKnownMalicious { // BV-100: no html.headline key
+			headline = c.t("finding.package_known_malicious.title", malParams(f))
+			break
+		}
 		key := "html.headline." + f.Rule
 		if f.Rule == rules.RuleCredInGit && c.countRule(rules.RuleCredInGit) == 1 {
 			key = "html.headline.cred_in_git.one" // v3 §15.4
@@ -627,6 +631,13 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 				a, found = x, true
 			}
 		}
+	}
+	if ok && f.Rule == rules.RulePackageKnownMalicious { // BV-100: no auto-action; bespoke hero
+		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
+			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
+		return
 	}
 	if !found {
 		c.w(`<section class="now" aria-labelledby="step2">`)
@@ -778,7 +789,9 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	if g := c.gain(f, false); g != "" {
 		c.w(`%s`, g)
 	}
-	if a, ok := rules.BestAction(f, c.v.Findings); ok {
+	if f.Rule == rules.RulePackageKnownMalicious {
+		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f)))) // BV-100
+	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
 		c.w(`<p>%s</p>`, c.t("html.fix.none", p)) // v3 §15.3
@@ -1087,8 +1100,14 @@ func (c htmlCtx) credKey(f rules.Finding) string {
 // title is the finding's title (§4), escaped.
 func (c htmlCtx) title(f rules.Finding) string { return html.EscapeString(c.titleText(f)) }
 
+// malParams are the catalog params of a package_known_malicious finding (BV-100).
+func malParams(f rules.Finding) map[string]string { return findingParams(f) }
+
 // titleText is the finding's title (§4).
 func (c htmlCtx) titleText(f rules.Finding) string {
+	if f.Rule == rules.RulePackageKnownMalicious {
+		return c.cat.Text("finding.package_known_malicious.title", malParams(f))
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
 		return c.cat.Text("html.f.cred.title", p)
@@ -1167,6 +1186,9 @@ func (c htmlCtx) impact(f rules.Finding) string { return html.EscapeString(c.imp
 
 // impactText is the finding's impact (§4).
 func (c htmlCtx) impactText(f rules.Finding) string {
+	if f.Rule == rules.RulePackageKnownMalicious {
+		return c.cat.Text("finding.package_known_malicious.why", malParams(f))
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
 		if f.Params.HasRemote != nil && *f.Params.HasRemote {
@@ -1259,6 +1281,9 @@ func HTMLKeys() []string {
 		keys = append(keys, "html.signal."+sg)
 	}
 	for _, r := range rules.AllRules {
+		if r == rules.RulePackageKnownMalicious {
+			continue // BV-100: renders with finding.* title, no html.headline key
+		}
 		keys = append(keys, "html.headline."+r)
 	}
 	for _, a := range rules.AllActions {
@@ -1284,6 +1309,10 @@ func HTMLKeys() []string {
 			keys = append(keys, "unknown."+a)
 		}
 	}
+	// BV-100: the threat-intel finding renders with its finding.* texts (not
+	// html.f.*), plus the foot stamp.
+	keys = append(keys, "finding.package_known_malicious.title", "finding.package_known_malicious.why",
+		"finding.package_known_malicious.action", "report.intel_stamp")
 	sort.Strings(keys)
 	return keys
 }
@@ -1293,7 +1322,14 @@ var glossTerms = []string{"agent", "score", "master", "auto", "env", "config", "
 
 // LegacyHTMLKeys are the HTML keys allowed to fall back to English (v1 §9):
 // none since the legacy section left the HTML (v2 §3, CTO-7 M5).
-var LegacyHTMLKeys = map[string]bool{}
+var LegacyHTMLKeys = map[string]bool{
+	// BV-100: the threat-intel finding and the foot stamp; ES/CA fall back to
+	// English until the owner supplies translations.
+	"finding.package_known_malicious.title":  true,
+	"finding.package_known_malicious.why":    true,
+	"finding.package_known_malicious.action": true,
+	"report.intel_stamp":                     true,
+}
 
 // WriteHTMLPages writes the visual report to dir in every catalog language
 // (decision 2026-10-27, primer uso con un solo .exe, U7): <base>.<lang>.html

@@ -107,6 +107,10 @@ type V2Provenance struct {
 	Graph        *graph.Provenance `json:"graph"`
 	GraphSHA256  *string           `json:"graph_sha256"`
 	RulesVersion string            `json:"rules_version"`
+	// IntelVersion and IntelPublishedAt are the embedded threat-data snapshot
+	// used for the cross (BV-100); empty when no snapshot was loaded.
+	IntelVersion     string `json:"intel_version,omitempty"`
+	IntelPublishedAt string `json:"intel_published_at,omitempty"`
 }
 
 // V2Coverage summarises the graph's coverage and the run's scan errors.
@@ -224,6 +228,12 @@ type V2Input struct {
 	ExePath                 string
 	Weekly                  scheduledtasks.Weekly
 	NotificationUnavailable string
+
+	// IntelVersion and IntelPublishedAt are the embedded threat-data snapshot
+	// used for the cross (BV-100, F0a); empty when none was loaded. They stamp
+	// the provenance and the report's foot line.
+	IntelVersion     string
+	IntelPublishedAt string
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -257,7 +267,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	v := V2{
 		SchemaVersion: 2,
 		GeneratedAt:   in.GeneratedAt.UTC().Format(time.RFC3339),
-		Provenance:    V2Provenance{RulesVersion: rules.Version},
+		Provenance:    V2Provenance{RulesVersion: rules.Version, IntelVersion: in.IntelVersion, IntelPublishedAt: in.IntelPublishedAt},
 		Findings:      []rules.Finding{},
 		Posture:       []rules.Posture{},
 		repos:         len(in.RepoRoots),
@@ -400,6 +410,12 @@ func applyMemory(v *V2, in V2Input) {
 	}
 	cur := make([]memory.Finding, 0, len(v.Findings))
 	for _, f := range v.Findings {
+		// Threat-intel matches are not tracked in the findings memory (BV-100):
+		// they are always-red, re-derived each run from the embedded snapshot,
+		// and the memory schema's rule set is not theirs. They carry no verdict.
+		if f.Rule == rules.RulePackageKnownMalicious {
+			continue
+		}
 		mf := memory.Finding{ID: f.ID, Rule: f.Rule, Severity: f.Severity}
 		machine := rules.IsMachineFinding(f) // no agent: the credential is the key
 		for i, n := range f.Evidence.Nodes {
@@ -415,8 +431,17 @@ func applyMemory(v *V2, in V2Input) {
 	next, verdicts, root := memory.Update(in.Memory, run, cur, in.Salt)
 	root.Reset = in.MemoryReset
 	for i := range v.Findings {
-		m := verdicts[v.Findings[i].ID]
-		v.Findings[i].Memory = &m
+		if m, ok := verdicts[v.Findings[i].ID]; ok {
+			v.Findings[i].Memory = &m
+			continue
+		}
+		// Threat-intel matches are not tracked (BV-100): a not_comparable
+		// verdict satisfies report.v2's required memory object and renders no
+		// memory badge, while nothing is persisted to the memory file.
+		v.Findings[i].Memory = &rules.FindingMemory{
+			Verdict: memory.VerdictNotComparable, OpenSince: run.Date,
+			FirstSeen: run.Date, Reappeared: 0,
+		}
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
 	v.memoryLost = run.MemoryLost

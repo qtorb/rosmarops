@@ -22,6 +22,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/index"
+	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -32,6 +33,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
 	"github.com/qtorb/rosmarops/internal/scan/mcp"
+	"github.com/qtorb/rosmarops/internal/scan/pyenv"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -241,6 +243,17 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 	plat := windowsadapter.New()
 
+	// Threat-data snapshot (BV-100, F0a): validated against intel.v1 at load.
+	// An invalid snapshot is fail-secure — the cross is disabled and the run is
+	// marked in error, so it can never report green with broken threat data.
+	var intelMatcher *intel.Matcher
+	if snap, intelErr := intel.Load(); intelErr != nil {
+		slog.Warn("intel: embedded threat data did not validate; cross disabled", "err", intelErr)
+		scanErrors = append(scanErrors, finding.ScanError{Scope: "intel", Message: intelErr.Error()})
+	} else {
+		intelMatcher = intel.NewMatcher(snap)
+	}
+
 	repoPatterns := secrets.BuiltinPatterns()
 	for _, spec := range cfg.ExtraSecretPatterns {
 		p, compileErr := compileExtraPattern(spec)
@@ -272,6 +285,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// agents (A3); vscodeFirstRun is set on a first run (A5).
 		vscodeExts     []platform.VSCodeExtension
 		vscodeFirstRun *report.VSCodeFirstRun
+		// globalObs are the global npm/pnpm packages read this run, for the
+		// threat-intel cross (BV-100).
+		globalObs []globals.ObservedGlobal
 	)
 	salt, saltErr := st.Salt()
 	graphDone := false
@@ -379,7 +395,19 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				// The graph is built once the repositories are scanned: the
 				// secrets committed in them are part of it (CTO-7 §2.2).
 				buildGraph = func(repoGraph graph.Repos) {
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start)
+					// Python packages installed at rest (BV-100, F0a): a directed,
+					// one-level listing of the known site-packages folders; no
+					// recursion, so the forced exclusions are untouched. A folder
+					// that exists but cannot be read is coverage not read (yellow).
+					pyResult := pyenv.Scan(plat.PythonSitePackages(cfg.RepoRoots))
+					for _, fl := range pyResult.Failed {
+						scanErrors = append(scanErrors, finding.ScanError{
+							Scope:   "pyenv",
+							Message: fmt.Sprintf("%s: %s", fl.Path, fl.Reason),
+						})
+					}
+					pkgObs := packageObservations(pyResult, globalObs)
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -501,6 +529,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				findings = append(findings, globalsResult.Findings...)
 				allowListedTotal += globalsResult.AllowListedCount
 				allowHits = append(allowHits, globalsResult.Hits...)
+				globalObs = globalsResult.Observed
 				st.Baselines.GlobalPackages = globalsResult.NewPackageBaseline
 				if globalsResult.NewNpmrcSHA != "" {
 					st.Baselines.NpmrcSHA256 = globalsResult.NewNpmrcSHA
@@ -572,6 +601,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code,
+		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -660,6 +690,8 @@ func writeGraph(
 	st state.State,
 	dir string,
 	now time.Time,
+	matcher *intel.Matcher,
+	pkgObs []graph.PackageObservation,
 ) (*graph.Graph, string, string, error) {
 	fail := func(err error) (*graph.Graph, string, string, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -694,6 +726,11 @@ func writeGraph(
 	if err != nil {
 		return fail(err)
 	}
+	// Threat-intel cross (BV-100, F0a): mark matching mcp_server nodes and
+	// append one file resource node per matching package read at rest, before
+	// the graph is serialized so the match is reflected in the written file and
+	// its hash. A nil matcher (invalid snapshot) makes this a no-op.
+	graph.CrossIntel(&g, scan.Servers, pkgObs, matcher, now)
 	path, err := graph.WriteFile(dir, g)
 	if err != nil {
 		return nil, "", "", err
@@ -704,6 +741,47 @@ func writeGraph(
 		return fail(fmt.Errorf("hash graph: %w", err))
 	}
 	return &g, sha, path, nil
+}
+
+// intelVersion and intelPublishedAt are the snapshot stamp for the report, or
+// empty when the snapshot did not load (the stamp is then omitted).
+func intelVersion(m *intel.Matcher) string {
+	if m == nil {
+		return ""
+	}
+	return m.Version()
+}
+
+func intelPublishedAt(m *intel.Matcher) string {
+	if m == nil {
+		return ""
+	}
+	return m.PublishedAt()
+}
+
+// packageObservations turns the Python and npm packages read at rest into the
+// coordinates the threat-intel cross compares (BV-100, F0a). Python packages
+// are PyPI; npm and pnpm global packages are npm. Names are left as read; the
+// matcher normalizes them per ecosystem.
+func packageObservations(py pyenv.Result, globalObs []globals.ObservedGlobal) []graph.PackageObservation {
+	obs := make([]graph.PackageObservation, 0, len(py.Packages)+len(globalObs))
+	for _, p := range py.Packages {
+		obs = append(obs, graph.PackageObservation{
+			Ecosystem: intel.EcosystemPyPI,
+			Name:      p.Name,
+			Version:   p.Version,
+			Path:      p.Path,
+		})
+	}
+	for _, g := range globalObs {
+		obs = append(obs, graph.PackageObservation{
+			Ecosystem: intel.EcosystemNPM,
+			Name:      g.Name,
+			Version:   g.Version,
+			Path:      g.Path,
+		})
+	}
+	return obs
 }
 
 // familyRoots maps every repository root to the root of its family's first

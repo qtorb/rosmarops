@@ -37,6 +37,7 @@ func TestSchemasInSync(t *testing.T) {
 		"v2/index-history.v1.schema.json",
 		"v2/findings-memory.v1.schema.json",
 		"v2/findings-memory.v2.schema.json",
+		"intel/intel.v1.schema.json",
 	}
 
 	for _, name := range schemas {

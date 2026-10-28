@@ -86,6 +86,9 @@ func TestRenderHTML_V3Headline(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		for _, r := range rules.AllRules {
+			if r == rules.RulePackageKnownMalicious {
+				continue // BV-100: renders the finding title, not an html.headline key
+			}
 			v := cloneV2(base)
 			v.Findings[0].Rule = r
 			v.Findings[0].Params.Agent = "Agent X"

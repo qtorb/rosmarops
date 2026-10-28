@@ -1,0 +1,17 @@
+{
+  "version": "2026.10.28.1",
+  "published_at": "2026-10-28",
+  "packages": [
+    {
+      "id": "rosmarops-2026-0001",
+      "ecosystem": "pypi",
+      "package": "litellm",
+      "versions": ["1.107.0"],
+      "artifacts": ["cook.pth"],
+      "source": {
+        "url": "https://securitylabs.datadoghq.com/articles/litellm-compromised-pypi-docker/",
+        "accessed_at": "2026-10-28"
+      }
+    }
+  ]
+}

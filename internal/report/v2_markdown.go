@@ -66,7 +66,13 @@ var staticKeys = []string{
 // summary can emit, sorted.
 func CatalogKeys() []string {
 	keys := append([]string{}, staticKeys...)
+	keys = append(keys, "report.intel_stamp") // BV-100 foot stamp
 	for _, r := range rules.AllRules {
+		if r == rules.RulePackageKnownMalicious {
+			// BV-100: this finding has no "what"; its texts are title/why/action.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".why", "finding."+r+".action")
+			continue
+		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
 		if r == rules.RuleCredInGit {
 			keys = append(keys, "finding."+r+".why.remote", "finding."+r+".why.local")
@@ -138,7 +144,11 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 
 	// 2. If you do only one thing today.
 	w("## %s\n\n", t("section.today", nil))
-	if f, ok := byID[v.Today.FindingID]; ok {
+	if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RulePackageKnownMalicious {
+		p := findingParams(f)
+		w("**%s**\n\n%s\n\n%s\n\n", t("finding.package_known_malicious.title", p),
+			t("finding.package_known_malicious.why", p), t("finding.package_known_malicious.action", p))
+	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t("finding."+f.Rule+".title", p), t("finding."+f.Rule+".what", p))
 		for _, a := range f.Actions {
@@ -202,6 +212,17 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 				}
 				return key
 			}
+		}
+		if f.Rule == rules.RulePackageKnownMalicious { // BV-100: title/why/action
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t("finding.package_known_malicious.title", p))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding.package_known_malicious.why", p))
+			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), t("finding.package_known_malicious.action", p))
+			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi("finding."+f.Rule+".title"), p))
 		meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
@@ -425,6 +446,12 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		}
 		w("\n</details>\n\n")
 	}
+	// BV-100: the threat-data stamp at the foot. No match is not clean.
+	if v.Provenance.IntelVersion != "" {
+		w("%s\n", t("report.intel_stamp", map[string]string{
+			"version": v.Provenance.IntelVersion, "date": v.Provenance.IntelPublishedAt,
+		}))
+	}
 	return sb.String()
 }
 
@@ -518,6 +545,8 @@ func findingParams(f rules.Finding) map[string]string {
 	}
 	p["service_name"], p["cred_label"] = serviceName(f.Params.Service), credLabel(f)
 	p["cred_id"] = f.Params.CredID
+	// BV-100: package_known_malicious params.
+	p["package"], p["version"], p["intel_id"] = f.Params.Package, f.Params.Version, f.Params.IntelID
 	if len(f.Group.Members) > 0 && f.Group.Members[0].Family != "" {
 		p["family"] = untrusted.PlainText(path.Base(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/")))
 	}

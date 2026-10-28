@@ -74,6 +74,10 @@ type ScanResult struct {
 	// Hits are the warnings the allow-list hid, one per warning, with the
 	// entry that hid it (decision 2026-10-27, blindaje, B9).
 	Hits []config.AllowHit
+
+	// Observed are the global packages read this run (npm + pnpm), with the
+	// package.json each was read from, for the threat-intel cross (BV-100).
+	Observed []ObservedGlobal
 }
 
 // ScanGlobals collects global npm and pnpm packages, checks ~/.npmrc for a
@@ -106,6 +110,7 @@ func ScanGlobals(
 
 	var findings []finding.Finding
 	var newPkgBL []state.GlobalPackage
+	var observed []ObservedGlobal
 	allowListedCount := 0
 
 	// Collect globals from each supported manager.
@@ -134,6 +139,12 @@ func ScanGlobals(
 				Manager: mgr.name,
 				Name:    p.Name,
 				Version: p.Version,
+			})
+			observed = append(observed, ObservedGlobal{
+				Manager: mgr.name,
+				Name:    p.Name,
+				Version: p.Version,
+				Path:    p.Path,
 			})
 			if baselined[normPkg(mgr.name, p.Name)] {
 				continue // known package — no finding
@@ -175,6 +186,7 @@ func ScanGlobals(
 		NewNpmrcSHA:        newNpmrcSHA,
 		AllowListedCount:   allowListedCount,
 		Hits:               hits,
+		Observed:           observed,
 	}
 }
 
@@ -186,6 +198,19 @@ func ScanGlobals(
 type GlobalPackage struct {
 	Name    string
 	Version string
+	// Path is the package.json the name and version were read from (for the
+	// threat-intel cross, BV-100).
+	Path string
+}
+
+// ObservedGlobal is a global package read this run, with the manager it belongs
+// to and the package.json it was read from. The threat-intel cross (BV-100)
+// crosses these against the embedded snapshot.
+type ObservedGlobal struct {
+	Manager string
+	Name    string
+	Version string
+	Path    string
 }
 
 // listNpmGlobals lists npm's global packages from its global node_modules

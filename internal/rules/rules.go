@@ -27,7 +27,7 @@ import (
 // Version is the rules version recorded in the report's provenance, and
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
-	Version     = "2"
+	Version     = "3"
 	RuleVersion = "2"
 )
 
@@ -39,13 +39,14 @@ const (
 	RuleForeignAgentInstructionsWritable = "foreign_agent_instructions_writable"
 	RuleOwnInstructionsWritable          = "own_instructions_writable"
 	RuleOwnConfigWritable                = "own_config_writable"
+	RulePackageKnownMalicious            = "package_known_malicious"
 )
 
 // AllRules lists every rule code.
 var AllRules = []string{
 	RuleCredReadAndSend, RuleCredReadable, RuleCredInGit,
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
-	RuleOwnInstructionsWritable, RuleOwnConfigWritable,
+	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -280,6 +281,12 @@ type Params struct {
 	CredID    string `json:"cred_id,omitempty"`
 	CredType  string `json:"cred_type,omitempty"`
 	HasRemote *bool  `json:"has_remote,omitempty"`
+
+	// package_known_malicious (BV-100)
+	Ecosystem string `json:"ecosystem,omitempty"`
+	Package   string `json:"package,omitempty"`
+	Version   string `json:"version,omitempty"`
+	IntelID   string `json:"intel_id,omitempty"`
 }
 
 // Evidence is what the finding rests on.
@@ -458,6 +465,14 @@ func Evaluate(in Input) Result {
 		f.Actions = actionsFor(in, view(agentOf(*f)), *f, nodes)
 	}
 	res.Findings = append(res.Findings, git...)
+	// Threat-intel matches (BV-100, F0a): one red finding per node the cross
+	// marked. The match rides on the node in memory; nothing is read here that
+	// is not already in the graph.
+	for _, n := range g.Nodes {
+		if n.Malicious != nil {
+			res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
+		}
+	}
 	res.Silenced, res.TestData = silenced, testData
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
@@ -520,6 +535,36 @@ func allTemplates(cred graph.Node) bool {
 		}
 	}
 	return len(files) > 0
+}
+
+// maliciousPackageFinding is the red finding for a node the threat-intel cross
+// marked (BV-100, F0a): confidence high, radius any_project. Its params carry
+// the ecosystem, the normalized package name, the exact version and the intel
+// entry id — never a value read from the machine.
+func maliciousPackageFinding(in Input, n graph.Node) Finding {
+	m := n.Malicious
+	members := []string{}
+	if n.Path != "" {
+		members = []string{n.Path}
+	}
+	return Finding{
+		ID:          findingID(RulePackageKnownMalicious, n.ID, m.IntelID),
+		Rule:        RulePackageKnownMalicious,
+		RuleVersion: RuleVersion,
+		Severity:    SeverityRed,
+		Confidence:  ConfidenceHigh,
+		Radius:      RadiusAnyProject,
+		Params: Params{
+			Ecosystem: m.Ecosystem, Package: m.Package, Version: m.Version,
+			IntelID: m.IntelID, Count: 1,
+		},
+		Evidence: Evidence{Nodes: []string{n.ID}, Edges: []string{}, Locations: members, Assumptions: []string{}},
+		Group:    group(in, members),
+		// The fix is rendered from finding.package_known_malicious.action, not
+		// from the generic Actions machinery; the list is empty but present so
+		// the report validates against report.v2.
+		Actions: []Action{},
+	}
 }
 
 // writeRuleOf is the rule and finding key of a writes_config_of edge from

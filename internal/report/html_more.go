@@ -189,6 +189,11 @@ func WeeklyCommand(exe, lang string) string {
 // renderFoot writes the footer and the assumptions window
 // (§17.5).
 func (c htmlCtx) renderFoot() {
+	// BV-100: the threat-data stamp, next to the footer. No match is not clean.
+	if c.v.Provenance.IntelVersion != "" {
+		c.w(`<p class="foot">%s</p>`, html.EscapeString(c.t("report.intel_stamp",
+			map[string]string{"version": c.v.Provenance.IntelVersion, "date": c.v.Provenance.IntelPublishedAt})))
+	}
 	c.w(`<p class="foot"><button type="button" class="b2" id="as-open">%s</button>%s</p>`,
 		c.t("html.assume.open", nil), c.t("html.legacy.pointer", map[string]string{"file": c.v.base + ".md"}))
 }

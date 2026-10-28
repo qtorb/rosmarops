@@ -580,6 +580,14 @@ type Platform interface {
 	// (path, process, extension) as reported by Get-MpPreference.
 	// Returns nil, nil if Defender or PowerShell is not available.
 	ListDefenderExclusions(ctx context.Context) ([]DefenderExclusion, error)
+
+	// PythonSitePackages returns the site-packages directories to inspect for
+	// installed Python packages (BV-100, F0a): the interpreters' and user site,
+	// the Microsoft Store Python, pipx, uv tools, conda, and each repository's
+	// .venv and venv. The collector lists these one level deep; it does not
+	// recurse, so the forced exclusions are untouched. Non-existent paths may be
+	// returned and are skipped by the collector.
+	PythonSitePackages(repoRoots []string) []string
 }
 
 // CursorScan is what the Cursor collector read (decision 2026-10-25,
