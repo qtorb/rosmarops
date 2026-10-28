@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	windowsadapter "github.com/qtorb/rosmarops/adapters/windows"
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
@@ -241,7 +241,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Warn("run: could not resolve home dir; mcp_server_user_writable_command check disabled", "err", homeDirErr)
 	}
 
-	plat := windowsadapter.New()
+	plat := newPlatform()
 
 	// Threat-data snapshot (BV-100, F0a): validated against intel.v1 at load.
 	// An invalid snapshot is fail-secure — the cross is disabled and the run is
@@ -357,7 +357,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// files of every repo and the user's credential files, for the graph.
 		// No git, no subprocess; outside the per-repo budget. ---
 		{Name: "credentials", Run: func(ctx context.Context) func() {
-			scanned := credfiles.Collect(homeDir, cfg.RepoRoots, nil)
+			scanned := credfiles.CollectOn(agentdirs.Current(), homeDir, cfg.RepoRoots, nil)
 			// The envFile of Cursor's MCP servers (decision 2026-10-25,
 			// Cursor, K10).
 			var envFiles []string
@@ -383,7 +383,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, cfg.RepoRoots)
 			instructions, instructionsErr := plat.ListAgentInstructions(ctx, cfg.RepoRoots)
 			cursorScan, cursorErr := plat.ListCursor(ctx, cfg.RepoRoots)
-			instructionsErr = errors.Join(instructionsErr, cursorErr)
+			skillScan, skillsErr := plat.ListSkills(ctx, cfg.RepoRoots)
+			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
 			if ctx.Err() != nil {
 				settingsErr = errors.Join(settingsErr, fmt.Errorf("claude settings: %w", ctx.Err()))
 			}
@@ -399,15 +400,28 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					// one-level listing of the known site-packages folders; no
 					// recursion, so the forced exclusions are untouched. A folder
 					// that exists but cannot be read is coverage not read (yellow).
-					pyResult := pyenv.Scan(plat.PythonSitePackages(cfg.RepoRoots))
-					for _, fl := range pyResult.Failed {
-						scanErrors = append(scanErrors, finding.ScanError{
-							Scope:   "pyenv",
-							Message: fmt.Sprintf("%s: %s", fl.Path, fl.Reason),
-						})
+					// On a system whose layout does not apply (macOS, M1b) the
+					// resolver returns ErrNotApplicable: the Python cross does not
+					// run, and it is only logged — not a failure and not coverage.
+					// The MCP and npm-global crosses do not depend on it.
+					var pyResult pyenv.Result
+					pyDirs, pyErr := plat.PythonSitePackages(cfg.RepoRoots)
+					if errors.Is(pyErr, platform.ErrNotApplicable) {
+						slog.Info("pyenv", "err", pyErr)
+					} else if pyErr != nil {
+						slog.Warn("pyenv: could not resolve site-packages", "err", pyErr)
+						scanErrors = append(scanErrors, finding.ScanError{Scope: "pyenv", Message: pyErr.Error()})
+					} else {
+						pyResult = pyenv.Scan(pyDirs)
+						for _, fl := range pyResult.Failed {
+							scanErrors = append(scanErrors, finding.ScanError{
+								Scope:   "pyenv",
+								Message: fmt.Sprintf("%s: %s", fl.Path, fl.Reason),
+							})
+						}
 					}
 					pkgObs := packageObservations(pyResult, globalObs)
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -471,6 +485,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentProfiles, profErr := plat.ListShellProfiles(ctx)
 			profResult := shellprofile.ScanShellProfiles(currentProfiles, st.Baselines.ShellProfileSHA256)
 			return func() {
+				if errors.Is(profErr, platform.ErrNotApplicable) {
+					slog.Info("shellprofile", "err", profErr)
+					return
+				}
 				if profErr != nil {
 					slog.Warn("shellprofile: could not list profiles", "err", profErr)
 					scanErrors = append(scanErrors, finding.ScanError{
@@ -488,6 +506,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentTasks, tasksErr := plat.ListScheduledTasks(ctx)
 			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks, self, freshTaskHash)
 			return func() {
+				if errors.Is(tasksErr, platform.ErrNotApplicable) {
+					slog.Info("scheduledtasks", "err", tasksErr)
+					return
+				}
 				weekly = scheduledtasks.WeeklyOf(currentTasks, self)
 				if tasksErr != nil {
 					slog.Warn("scheduledtasks: could not list tasks", "err", tasksErr)
@@ -508,6 +530,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentExcls, avErr := plat.ListDefenderExclusions(ctx)
 			avResult := avexclusions.ScanAVExclusions(currentExcls, st.Baselines.AVExclusions, cfg.AllowList.AVExclusions)
 			return func() {
+				if errors.Is(avErr, platform.ErrNotApplicable) {
+					slog.Info("avexclusions", "err", avErr)
+					return
+				}
 				if avErr != nil {
 					slog.Warn("avexclusions: could not list Defender exclusions", "err", avErr)
 					scanErrors = append(scanErrors, finding.ScanError{
@@ -670,10 +696,10 @@ func compileExtraPattern(spec config.SecretPattern) (secrets.Pattern, error) {
 }
 
 // writeGraph builds the v2 graph from the MCP scan, the Claude Code settings
-// scan, the agent instruction files and the credential files, infers Claude Code's reaches and
-// writes_config_of edges (repoRoots and home anchor its permission rules),
-// and writes it to dir. Credential fingerprints and host_id are
-// keyed with the state's local salt. If the sources could not be listed, or
+// scan, the agent instruction files, the skills and the credential files,
+// infers Claude Code's reaches and writes_config_of edges (repoRoots and
+// home anchor its permission rules), and writes it to dir. Credential
+// fingerprints and host_id are keyed with the state's local salt. If the sources could not be listed, or
 // the salt is unusable, there is nothing trustworthy to build, so no graph is
 // written and any previous one is removed.
 func writeGraph(
@@ -682,6 +708,7 @@ func writeGraph(
 	settings platform.ClaudeSettingsScan,
 	cursor platform.CursorScan,
 	instructions platform.InstructionScan,
+	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
 	exts []platform.VSCodeExtension,
 	repoGraph graph.Repos,
@@ -711,6 +738,7 @@ func writeGraph(
 		return fail(err)
 	}
 	frag = graph.AddInstructions(frag, instructions, now)
+	frag = graph.AddSkills(frag, skillScan, now)
 	frag = graph.AddExtensions(frag, exts, filepath.Join(home, ".vscode", "extensions"), now)
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)

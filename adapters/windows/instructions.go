@@ -79,12 +79,12 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 	claude := instructionLister{scan: &scan, product: knowledge.ClaudeCodeProduct, configDir: claudeDir}
 	cursor := instructionLister{scan: &scan, product: cursorProduct, configDir: cursorDir}
 	// The agents detected and not evaluated: only when present.
-	has := agentdirs.Products(agentdirs.Detect(home, nil))
+	has := agentdirs.Products(w.layout.Detect(home, nil))
 	codexDir := agentdirs.CodexHome(home, nil)
 	codex := instructionLister{scan: &scan, product: agentdirs.Codex, configDir: codexDir, off: !has[agentdirs.Codex]}
 	geminiDir := agentdirs.AntigravityDir(home)
 	antigravity := instructionLister{scan: &scan, product: agentdirs.Antigravity, configDir: geminiDir, off: !has[agentdirs.Antigravity]}
-	hermes := instructionLister{scan: &scan, product: agentdirs.Hermes, configDir: agentdirs.HermesHome(home, nil), off: !has[agentdirs.Hermes]}
+	hermes := instructionLister{scan: &scan, product: agentdirs.Hermes, configDir: w.layout.HermesHome(home, nil), off: !has[agentdirs.Hermes]}
 
 	if override := filepath.Join(codexDir, "AGENTS.override.md"); anyExists(override) {
 		codex.file(override)

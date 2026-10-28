@@ -331,13 +331,25 @@ type InstructionScan struct {
 // InstructionFile is one existing instruction file and the agent that loads
 // it, identified as its ai_client is: product and configuration folder.
 type InstructionFile struct {
-	Product   string // "claude-code", "cursor", "codex", "antigravity" or "hermes"
+	Product   string // "claude-code", "cursor", "codex", "antigravity", "hermes", "cline" or "copilot"
 	ConfigDir string
 	Path      string
 
 	// Shared marks a file several agents load (AGENTS.md): it is listed once
 	// per agent, and each agent gets its own resource.
 	Shared bool
+}
+
+// SkillScan lists the files of the agent skills on disk (decision
+// 2026-10-28, skills y herramientas de agentes, K1): every <skill>/SKILL.md
+// as an instruction file and every file under <skill>/scripts/ as an
+// executable, one entry per agent that loads the folder, all Shared. Only
+// their existence is checked: no skill file is opened (Hermes Agent's
+// config.yaml is read for its trusted project roots, BV-99b).
+type SkillScan struct {
+	Instructions []InstructionFile
+	Executables  []InstructionFile
+	Failed       []InstructionFailure
 }
 
 // InstructionFailure is an instruction file or folder whose existence could
@@ -556,6 +568,10 @@ type Platform interface {
 	// that exist. Existence only: no file is opened.
 	ListAgentInstructions(ctx context.Context, repoRoots []string) (InstructionScan, error)
 
+	// ListSkills reports the agent skills (SKILL.md and scripts/) in the
+	// user's and each repository's skills folders (decision 2026-10-28, K1).
+	ListSkills(ctx context.Context, repoRoots []string) (SkillScan, error)
+
 	// ListCursor reads Cursor's permission, sandbox, CLI and hooks files
 	// (decision 2026-10-25, Cursor, K10). Every file considered is reported
 	// with its read outcome.
@@ -586,8 +602,10 @@ type Platform interface {
 	// the Microsoft Store Python, pipx, uv tools, conda, and each repository's
 	// .venv and venv. The collector lists these one level deep; it does not
 	// recurse, so the forced exclusions are untouched. Non-existent paths may be
-	// returned and are skipped by the collector.
-	PythonSitePackages(repoRoots []string) []string
+	// returned and are skipped by the collector. The layout is Windows-specific;
+	// on systems where it does not apply (macOS) this returns ErrNotApplicable,
+	// which is only logged — not a failure and not a coverage gap.
+	PythonSitePackages(repoRoots []string) ([]string, error)
 }
 
 // CursorScan is what the Cursor collector read (decision 2026-10-25,

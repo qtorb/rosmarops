@@ -11,8 +11,9 @@ import (
 // repository's .venv and venv. Wildcards are expanded; non-existent paths are
 // returned too and skipped by the collector. Reading these is a directed
 // listing of known folders, not a recursive walk, so the forced exclusions are
-// untouched. The layout is Windows's (Lib\site-packages).
-func (w *WindowsPlatform) PythonSitePackages(repoRoots []string) []string {
+// untouched. The layout is Windows's (Lib\site-packages); the error is always
+// nil on Windows (macOS returns platform.ErrNotApplicable instead, M1b).
+func (w *WindowsPlatform) PythonSitePackages(repoRoots []string) ([]string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = ""
@@ -57,7 +58,7 @@ func (w *WindowsPlatform) PythonSitePackages(repoRoots []string) []string {
 			filepath.Join(root, "venv", "Lib", "site-packages"),
 		)
 	}
-	return dirs
+	return dirs, nil
 }
 
 // envOr returns the environment variable value, or fallback when it is unset

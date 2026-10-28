@@ -2,16 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
 
-	windowsadapter "github.com/qtorb/rosmarops/adapters/windows"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
@@ -90,7 +91,7 @@ func runBaseline(cli.Invocation) error {
 		return err
 	}
 
-	plat := windowsadapter.New()
+	plat := newPlatform()
 
 	// Snapshot VS Code extensions (M4).
 	currentExts, extErr := plat.ListVSCodeExtensions(ctx)
@@ -137,7 +138,9 @@ func runBaseline(cli.Invocation) error {
 
 	// Snapshot shell profiles (M7).
 	currentProfiles, profErr := plat.ListShellProfiles(ctx)
-	if profErr != nil {
+	if errors.Is(profErr, platform.ErrNotApplicable) {
+		slog.Info("baseline: shell profiles", "err", profErr)
+	} else if profErr != nil {
 		slog.Warn("baseline: could not list shell profiles", "err", profErr)
 		fmt.Printf("  %-16s  WARNING: could not list shell profiles: %v\n", "shellprofile", profErr)
 	} else {
@@ -149,7 +152,9 @@ func runBaseline(cli.Invocation) error {
 
 	// Snapshot scheduled tasks (M7).
 	currentTasks, tasksErr := plat.ListScheduledTasks(ctx)
-	if tasksErr != nil {
+	if errors.Is(tasksErr, platform.ErrNotApplicable) {
+		slog.Info("baseline: scheduled tasks", "err", tasksErr)
+	} else if tasksErr != nil {
 		slog.Warn("baseline: could not list scheduled tasks", "err", tasksErr)
 		fmt.Printf("  %-16s  WARNING: could not list scheduled tasks: %v\n", "scheduledtasks", tasksErr)
 	} else {
@@ -167,7 +172,9 @@ func runBaseline(cli.Invocation) error {
 
 	// Snapshot Defender exclusions (M7).
 	currentExcls, avErr := plat.ListDefenderExclusions(ctx)
-	if avErr != nil {
+	if errors.Is(avErr, platform.ErrNotApplicable) {
+		slog.Info("baseline: Defender exclusions", "err", avErr)
+	} else if avErr != nil {
 		slog.Warn("baseline: could not list Defender exclusions", "err", avErr)
 		fmt.Printf("  %-16s  WARNING: could not list Defender exclusions: %v\n", "avexclusions", avErr)
 	} else {

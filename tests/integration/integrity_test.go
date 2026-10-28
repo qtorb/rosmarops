@@ -301,8 +301,9 @@ func TestUnattendedConfigAndLog(t *testing.T) {
 		t.Errorf("the log names the local configuration:\n%s", log)
 	}
 	// J10: the log says what happened to the notice (here, not on
-	// Windows: no notification and no report opened).
-	for _, want := range []string{"notify: failed err=", "notify: report not opened err="} {
+	// Windows: no notification and no report opened, as not applicable on
+	// this system, M1a).
+	for _, want := range []string{"notify: err=notify: not applicable on this system", "notify: report not opened err=notify: open report: not applicable on this system"} {
 		if !strings.Contains(string(log), want) {
 			t.Errorf("no %q in the log:\n%s", want, log)
 		}

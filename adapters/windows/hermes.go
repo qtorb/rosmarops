@@ -22,7 +22,7 @@ func (w *WindowsPlatform) ListHermes(_ context.Context) (platform.HermesScan, er
 	if err != nil {
 		return platform.HermesScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
-	return ReadHermes(home, nil), nil
+	return readHermes(w.layout, home, nil), nil
 }
 
 // ReadHermes reads <HERMES_HOME>\config.yaml (HERMES_HOME, or
@@ -31,7 +31,12 @@ func (w *WindowsPlatform) ListHermes(_ context.Context) (platform.HermesScan, er
 // reader (internal/yamlsubset). A file outside the subset is not read
 // (parse_error): never guessed. env is nil outside tests.
 func ReadHermes(home string, env agentdirs.Env) platform.HermesScan {
-	hermes := agentdirs.HermesHome(home, env)
+	return readHermes(agentdirs.WindowsLayout, home, env)
+}
+
+// readHermes is ReadHermes on layout l (~/.hermes on macOS).
+func readHermes(l agentdirs.Layout, home string, env agentdirs.Env) platform.HermesScan {
+	hermes := l.HermesHome(home, env)
 	var scan platform.HermesScan
 	dirs := []string{hermes}
 	if entries, err := os.ReadDir(filepath.Join(hermes, "profiles")); err == nil {

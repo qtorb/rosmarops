@@ -410,9 +410,11 @@ func applyMemory(v *V2, in V2Input) {
 	}
 	cur := make([]memory.Finding, 0, len(v.Findings))
 	for _, f := range v.Findings {
-		// Threat-intel matches are not tracked in the findings memory (BV-100):
-		// they are always-red, re-derived each run from the embedded snapshot,
-		// and the memory schema's rule set is not theirs. They carry no verdict.
+		// Decision F0a (BV-100): threat-intel matches are not tracked in the
+		// findings memory. They are always-red, re-derived each run from the
+		// embedded snapshot, and the memory schema's rule set is not theirs
+		// (tracking them would need a memory-schema change, out of F0a's scope).
+		// They carry a not_comparable verdict instead (see the verdict loop).
 		if f.Rule == rules.RulePackageKnownMalicious {
 			continue
 		}

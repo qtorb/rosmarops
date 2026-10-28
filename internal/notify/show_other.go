@@ -4,15 +4,19 @@ package notify
 
 import (
 	"context"
-	"errors"
+	"fmt"
+
+	"github.com/qtorb/rosmarops/internal/platform"
 )
 
-// Run is Windows-only: elsewhere there is no notification to show.
+// Run is Windows-only: elsewhere there is no notification to show
+// (platform.ErrNotApplicable; macOS's is M1b).
 func Run(context.Context, string) (string, error) {
-	return "", errors.New("notify: not on Windows")
+	return "", fmt.Errorf("notify: %w", platform.ErrNotApplicable)
 }
 
-// OpenReport is Windows-only: elsewhere no report is opened.
+// OpenReport is Windows-only: elsewhere no report is opened
+// (platform.ErrNotApplicable; macOS's is M1b).
 func OpenReport(string) error {
-	return errors.New("notify: not on Windows")
+	return fmt.Errorf("notify: open report: %w", platform.ErrNotApplicable)
 }

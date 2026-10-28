@@ -149,7 +149,13 @@ func TestNpmGlobalModulesDir_Precedence(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	want := filepath.Join(filepath.Dir(bin), "lib", "node_modules")
+	// The node executable's links are resolved: on macOS the temporary
+	// folder /var/folders/… is /private/var/folders/… (BV-98).
+	resolved, err := filepath.EvalSymlinks(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(filepath.Dir(resolved), "lib", "node_modules")
 	if got, _ := npmGlobalModulesDir(home); got != want {
 		t.Errorf("default: got %q, want %q", got, want)
 	}

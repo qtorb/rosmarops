@@ -86,7 +86,7 @@ type Env func(string) (string, bool)
 //   - unverified candidates: ~/.git-credentials and
 //     $XDG_CONFIG_HOME/git/credentials (git credential-store),
 //     ~/.supabase/access-token.
-func userFiles(home string, env Env) []userFile {
+func userFiles(l agentdirs.Layout, home string, env Env) []userFile {
 	if home == "" {
 		return nil
 	}
@@ -124,15 +124,20 @@ func userFiles(home string, env Env) []userFile {
 
 	// VS Code's user settings (decision 2026-10-24, memoria, §2.1: the
 	// v1 check vscode_terminal_env_secret becomes a collector source):
-	// %APPDATA%\Code\User on Windows, $XDG_CONFIG_HOME/Code/User or
+	// %APPDATA%\Code\User on Windows, ~/Library/Application
+	// Support/Code/User on macOS, $XDG_CONFIG_HOME/Code/User or
 	// ~/.config/Code/User elsewhere
-	// (https://code.visualstudio.com/docs/configure/settings#_settings-file-locations).
+	// (https://code.visualstudio.com/docs/configure/settings#_settings-file-locations;
+	// LECTURA-101 §2).
 	vscodeDir := filepath.Join(home, ".config", "Code", "User")
 	if v, ok := env("XDG_CONFIG_HOME"); ok && v != "" {
 		vscodeDir = filepath.Join(v, "Code", "User")
 	}
 	if v, ok := env("AppData"); ok && v != "" && runtime.GOOS == "windows" {
 		vscodeDir = filepath.Join(v, "Code", "User")
+	}
+	if l == agentdirs.MacOSLayout {
+		vscodeDir = l.VSCodeUserDir(home, agentdirs.Env(env))
 	}
 	out = append(out, userFile{filepath.Join(vscodeDir, "settings.json"), formatVSCodeSettings})
 
@@ -142,7 +147,7 @@ func userFiles(home string, env Env) []userFile {
 	// and user-guide/profiles: <H>\.env, <H>\profiles\<name>\.env).
 	adEnv := agentdirs.Env(env)
 	out = append(out, userFile{filepath.Join(agentdirs.CodexHome(home, adEnv), "auth.json"), formatCodexAuth})
-	hermes := agentdirs.HermesHome(home, adEnv)
+	hermes := l.HermesHome(home, adEnv)
 	out = append(out, userFile{filepath.Join(hermes, ".env"), formatEnv})
 	for _, profile := range profileDirs(filepath.Join(hermes, "profiles")) {
 		out = append(out, userFile{filepath.Join(profile, ".env"), formatEnv})
@@ -179,11 +184,18 @@ func profileDirs(dir string) []string {
 // first in lexicographic order of their relative path; the rest go to
 // coverage as file_count_limit_exceeded.
 func Collect(home string, repoRoots []string, env Env) platform.CredentialFileScan {
+	return CollectOn(agentdirs.WindowsLayout, home, repoRoots, env)
+}
+
+// CollectOn is Collect on layout l (agentdirs): VS Code's and Hermes Agent's
+// folders differ on macOS (decision 2026-10-28, macOS, M1a). Collect is the
+// Windows layout; a run passes agentdirs.Current().
+func CollectOn(l agentdirs.Layout, home string, repoRoots []string, env Env) platform.CredentialFileScan {
 	if env == nil {
 		env = os.LookupEnv
 	}
 	var scan platform.CredentialFileScan
-	for _, f := range userFiles(home, env) {
+	for _, f := range userFiles(l, home, env) {
 		exists := readFile(&scan, f.path, f.format)
 		slog.Info("credentials: user_file", "path", f.path, "exists", exists)
 	}

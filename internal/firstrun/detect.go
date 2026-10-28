@@ -113,6 +113,10 @@ func (env Env) keep(res *Result, seen map[string]bool, source string, paths []st
 		case seen[key]:
 			rule = RuleDuplicate
 		case len(res.Repos) >= MaxRepos:
+			// Seen too: on a case-insensitive file system (macOS) the same
+			// repository can come twice, ~/Projects and ~/projects; it is
+			// left out once (BV-98).
+			seen[key] = true
 			rule = RuleOverLimit
 			res.Over++
 		default:

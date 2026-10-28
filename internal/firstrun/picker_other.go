@@ -2,10 +2,14 @@
 
 package firstrun
 
-import "errors"
+import (
+	"fmt"
+
+	"github.com/qtorb/rosmarops/internal/platform"
+)
 
 // Pick is Windows-only: elsewhere there is no folder picker, as if
-// cancelled.
+// cancelled (platform.ErrNotApplicable; macOS's is M1b).
 func Pick(string) (string, error) {
-	return "", errors.New("folder picker: not on Windows")
+	return "", fmt.Errorf("folder picker: %w", platform.ErrNotApplicable)
 }

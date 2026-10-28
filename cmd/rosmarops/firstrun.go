@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/firstrun"
 	"github.com/qtorb/rosmarops/internal/notify"
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -118,7 +120,10 @@ func firstRunRepos(cat catalog.Catalog) []string {
 	}
 	fmt.Println(cat.Text("console.first_run.none", nil))
 	dir, err := pickFolder(cat.Text("console.first_run.picker_title", nil))
-	if err != nil {
+	switch {
+	case errors.Is(err, platform.ErrNotApplicable):
+		slog.Info("first run: folder picker not opened; treated as cancelled", "err", err)
+	case err != nil:
 		slog.Warn("first run: folder picker not opened; treated as cancelled", "err", err)
 	}
 	if dir == "" {
@@ -151,7 +156,11 @@ func logDecisions(res firstrun.Result) {
 // openReport opens the report in the default browser (U5, as J9's plan
 // B); false when it could not.
 func openReport(path string) bool {
-	if err := openReportFile(absPath(path)); err != nil {
+	switch err := openReportFile(absPath(path)); {
+	case errors.Is(err, platform.ErrNotApplicable):
+		slog.Info("report not opened", "err", err)
+		return false
+	case err != nil:
 		slog.Warn("report not opened", "err", err)
 		return false
 	}

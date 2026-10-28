@@ -5,7 +5,8 @@ package trust_test
 // Static part, never skipped (decision 2026-10-25, sustituir gojsonschema,
 // §4): no package of the module imports a network package directly; the
 // binary's dependency graph, for Windows and for Linux, holds no net, net/*
-// or crypto/tls package; the binary itself, built here, has no symbol of
+// or crypto/tls package (and for macOS, decision 2026-10-28, M1a: darwin
+// amd64 and arm64); the binary itself, built here, has no symbol of
 // those packages nor syscall.Socket, syscall.Connect or syscall.Sendto; and
 // no code of the module refers to a socket call of syscall or
 // golang.org/x/sys. Test imports do not count: gojsonschema, the oracle of
@@ -13,7 +14,9 @@ package trust_test
 //
 // Runtime part (Linux, needs strace): init, baseline and run in the sandbox of
 // no_writes_out_of_scope_test.go, with every child process traced; any
-// AF_INET or AF_INET6 connect/sendto/sendmsg fails the test.
+// AF_INET or AF_INET6 connect/sendto/sendmsg fails the test. It runs on
+// Linux only: on Windows and on macOS (no strace; decision 2026-10-28,
+// macOS, M1a) only the static part runs, declared as a limit.
 
 import (
 	"bufio"
@@ -88,12 +91,19 @@ func TestNoNetwork_ModuleImportsNoNetworkPackage(t *testing.T) {
 	}
 }
 
-// §4 check 1: the binary's dependency graph, for both platforms.
+// staticTargets are the GOOS/GOARCH pairs the static checks build: the
+// release's Windows and Linux, and macOS's (M1a).
+var staticTargets = []struct{ goos, goarch string }{
+	{"windows", "amd64"}, {"linux", "amd64"}, {"darwin", "amd64"}, {"darwin", "arm64"},
+}
+
+// §4 check 1: the binary's dependency graph, for every platform.
 func TestNoNetwork_BinaryDependencyGraph(t *testing.T) {
-	for _, goos := range []string{"windows", "linux"} {
+	for _, tg := range staticTargets {
+		goos := tg.goos + "/" + tg.goarch
 		cmd := exec.Command("go", "list", "-deps", "./cmd/rosmarops")
 		cmd.Dir = repoRoot(t)
-		cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=amd64")
+		cmd.Env = append(os.Environ(), "GOOS="+tg.goos, "GOARCH="+tg.goarch)
 		out, err := cmd.Output()
 		if err != nil {
 			t.Fatalf("go list -deps (%s): %v", goos, err)
@@ -112,13 +122,14 @@ func TestNoNetwork_BinaryDependencyGraph(t *testing.T) {
 }
 
 // §4 check 2: the symbols of the binary, built here for Windows and for
-// Linux as the release builds it.
+// Linux as the release builds it, and for macOS.
 func TestNoNetwork_BinarySymbols(t *testing.T) {
-	for _, goos := range []string{"windows", "linux"} {
-		bin := filepath.Join(t.TempDir(), "rosmarops-"+goos)
+	for _, tg := range staticTargets {
+		goos := tg.goos + "/" + tg.goarch
+		bin := filepath.Join(t.TempDir(), "rosmarops-"+tg.goos+"-"+tg.goarch)
 		build := exec.Command("go", "build", "-trimpath", "-o", bin, "./cmd/rosmarops")
 		build.Dir = repoRoot(t)
-		build.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=amd64")
+		build.Env = append(os.Environ(), "GOOS="+tg.goos, "GOARCH="+tg.goarch, "CGO_ENABLED=0")
 		if out, err := build.CombinedOutput(); err != nil {
 			t.Fatalf("build (%s): %v\n%s", goos, err, out)
 		}
@@ -218,6 +229,8 @@ func TestNoNetwork_ChecksCatch(t *testing.T) {
 
 func TestNoNetwork_RuntimeNoInetSockets(t *testing.T) {
 	if runtime.GOOS != "linux" {
+		// Declared limit (decision 2026-10-28, macOS, M1a): on Windows and
+		// macOS only the static checks above run.
 		t.Skip("runtime network check is implemented for Linux")
 	}
 	strace, err := exec.LookPath("strace")
