@@ -1,10 +1,12 @@
-# Temporary laboratory for LECTURA-95: can a clean GitHub Actions Windows
-# runner measure, with RosmarOps v0.3.0, the out-of-the-box exposure of Claude
-# Code and Cursor? It installs the agents by their official route WITHOUT
-# signing in, downloads the signed v0.3.0 rosmarops.exe (SHA-256 checked),
-# runs it non-interactively, and uploads the report. The job runs twice, on two
-# fresh runners, to check the result is identical. This file is temporary and
-# lives only on the lab-95 branch.
+# Temporary laboratory, LECTURA-97: what does each agent write to disk on its
+# FIRST launch, WITHOUT signing in? LECTURA-95 showed that merely installing
+# Claude Code and Cursor writes no config, so RosmarOps detects nothing. Here,
+# on a clean Windows runner, each agent is installed by its official route and
+# then launched once without an account (no keys, no sign-in, no settings
+# changed); the five config paths are listed (names, sizes, dates — never
+# contents) before and after each launch; then the signed v0.3.0 rosmarops.exe
+# (SHA-256 checked) runs and its report is uploaded. The job runs twice on fresh
+# runners to check the result is identical. Temporary; lives only on lab-95.
 name: lab-95
 on:
   push:
@@ -24,32 +26,80 @@ jobs:
         run: |
           cmd /c ver
           (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List | Out-String).Trim()
-          "OSVersion: $([System.Environment]::OSVersion.VersionString)"
 
-      - name: Install Claude Code (npm, official)
+      - name: Install Claude Code (npm, official) and Cursor (winget, official)
         shell: pwsh
         continue-on-error: true
         run: |
-          node --version
-          npm --version
           npm install -g "@anthropic-ai/claude-code"
-          "claude on PATH: $(Get-Command claude -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
-          claude --version
+          "claude: $(claude --version)"
+          winget install --id Anysphere.Cursor -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          "cursor path: $(Get-Command cursor -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
 
-      - name: Install Cursor (winget, official; may need interaction)
+      - name: First launch without sign-in (snapshots before/after each step)
         shell: pwsh
         continue-on-error: true
         run: |
-          winget --version
-          winget install --id Anysphere.Cursor -e --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
-          "cursor on PATH: $(Get-Command cursor -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
-
-      - name: Config at rest before running RosmarOps (no sign-in, no changes)
-        shell: pwsh
-        run: |
-          foreach ($p in @("$env:USERPROFILE\.claude", "$env:USERPROFILE\.claude.json", "$env:USERPROFILE\.cursor", "$env:APPDATA\Cursor", "$env:APPDATA\Claude")) {
-            if (Test-Path $p) { "PRESENT: $p" } else { "absent:  $p" }
+          $paths = @(
+            "$env:USERPROFILE\.claude",
+            "$env:USERPROFILE\.claude.json",
+            "$env:USERPROFILE\.cursor",
+            "$env:APPDATA\Cursor",
+            "$env:APPDATA\Claude"
+          )
+          function Snapshot($label) {
+            "===== SNAPSHOT: $label ====="
+            foreach ($p in $paths) {
+              if (Test-Path $p) {
+                if ((Get-Item $p -Force).PSIsContainer) {
+                  "DIR PRESENT: $p"
+                  Get-ChildItem $p -Force -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+                    Select-Object @{n='Rel';e={$_.FullName.Substring($p.Length)}}, Length, LastWriteTimeUtc |
+                    Format-Table -AutoSize | Out-String
+                } else {
+                  $i = Get-Item $p -Force
+                  "FILE PRESENT: $p  ($($i.Length) bytes, $($i.LastWriteTimeUtc) UTC)"
+                }
+              } else { "absent:  $p" }
+            }
           }
+          # Run a command with a hard time cap; never fail the step, capture all output.
+          function Capped($label, $seconds, [scriptblock]$cmd) {
+            "----- COMMAND: $label (cap ${seconds}s) -----"
+            $job = Start-Job -ScriptBlock $cmd
+            if (Wait-Job $job -Timeout $seconds) {
+              "exit: completed"
+              Receive-Job $job 2>&1 | Out-String
+            } else {
+              "exit: TIMEOUT after ${seconds}s (stopped)"
+              Stop-Job $job
+            }
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+          }
+
+          Snapshot "before any launch"
+
+          Capped "claude --version" 120 { claude --version 2>&1 }
+          Snapshot "after claude --version"
+
+          Capped "claude doctor" 120 { claude doctor 2>&1 }
+          Snapshot "after claude doctor"
+
+          Capped "claude -p hola (expected to fail: no session)" 120 { claude -p "hola" 2>&1 }
+          Snapshot "after claude -p"
+
+          # Cursor: launch the GUI exe, wait 90s, close it.
+          "----- COMMAND: launch Cursor, wait 90s, close -----"
+          $cursorExe = Join-Path $env:LOCALAPPDATA "Programs\cursor\Cursor.exe"
+          if (Test-Path $cursorExe) {
+            Start-Process -FilePath $cursorExe -PassThru | Out-Null
+            Start-Sleep -Seconds 90
+            Get-Process -Name "Cursor","cursor" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            "cursor launched and closed"
+          } else {
+            "cursor exe not found at $cursorExe"
+          }
+          Snapshot "after cursor launch"
 
       - name: Download rosmarops.exe v0.3.0 and verify SHA-256
         shell: pwsh
@@ -59,7 +109,7 @@ jobs:
           $got = (Get-FileHash rosmarops.exe -Algorithm SHA256).Hash.ToLower()
           "want: $want"
           "got:  $got"
-          if ($got -ne $want) { throw "SHA-256 mismatch: refusing to run (LECTURA-95 stop condition)" }
+          if ($got -ne $want) { throw "SHA-256 mismatch: refusing to run (stop condition)" }
 
       - name: Run RosmarOps non-interactively (init + run)
         shell: pwsh
@@ -76,7 +126,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path out | Out-Null
           if (Test-Path $reports) {
             Copy-Item "$reports\*" out -Recurse -Force
-            Get-ChildItem out -Recurse | Select-Object FullName, Length | Format-Table -AutoSize | Out-String
+            Get-ChildItem out -Recurse | Select-Object Name, Length | Format-Table -AutoSize | Out-String
           } else {
             "no reports directory at $reports" | Tee-Object -FilePath out\NO_REPORTS.txt
           }
