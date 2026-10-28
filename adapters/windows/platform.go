@@ -6,6 +6,8 @@ package windows
 import (
 	"path/filepath"
 	"runtime"
+
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 )
 
 // Claude Code managed settings locations on Windows
@@ -22,13 +24,41 @@ type WindowsPlatform struct {
 	// managed holds where Claude Code managed settings are read from; nil
 	// when they are not read (platforms other than Windows).
 	managed *managedLocations
+
+	// layout is the folder layout of the agents' files: Windows's (the zero
+	// value), or macOS's when the macOS adapter builds on these readers
+	// (NewOn; decision 2026-10-28, macOS, M1a). cursorEnterprise is
+	// Cursor's enterprise hooks file on that layout.
+	layout           agentdirs.Layout
+	cursorEnterprise string
+}
+
+// Options build a platform on these file readers for another layout: the
+// macOS adapter (adapters/darwin) uses them.
+type Options struct {
+	Layout agentdirs.Layout
+	// ManagedDir holds Claude Code's managed settings files
+	// (managed-settings.json, managed-settings.d, managed-mcp.json,
+	// CLAUDE.md); "" reads none. No registry is read.
+	ManagedDir string
+	// CursorEnterpriseHooks is Cursor's enterprise hooks file; "" reads none.
+	CursorEnterpriseHooks string
+}
+
+// NewOn returns a platform whose readers use o's layout and locations.
+func NewOn(o Options) *WindowsPlatform {
+	w := &WindowsPlatform{layout: o.Layout, cursorEnterprise: o.CursorEnterpriseHooks}
+	if o.ManagedDir != "" {
+		w.managed = &managedLocations{dir: filepath.Clean(o.ManagedDir)}
+	}
+	return w
 }
 
 // managedLocations are the sources of Claude Code managed settings.
 type managedLocations struct {
 	dir      string         // managed-settings.json, managed-settings.d\, managed-mcp.json
 	legacy   string         // legacy path: checked for existence only
-	registry RegistryReader // HKLM and HKCU Settings values
+	registry RegistryReader // HKLM and HKCU Settings values; nil: none (macOS)
 }
 
 // New returns a ready-to-use WindowsPlatform. Managed settings are read only

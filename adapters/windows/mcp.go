@@ -175,6 +175,9 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 
 	// 3. Cline (VS Code extension saoudrizwan.claude-dev).
 	clineDir := filepath.Join(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings")
+	if w.layout == agentdirs.MacOSLayout {
+		clineDir = w.layout.ClineDir(home, nil)
+	}
 	add(sourceSpec{
 		path: filepath.Join(clineDir, "cline_mcp_settings.json"), client: "cline",
 		format: formatMCPServers, loadsMCP: true, configDir: clineDir, scope: platform.MCPScopeUser,
@@ -200,7 +203,7 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 	// Agents detected by the existence of their configuration (decision
 	// 2026-10-27, agentes nuevos, N1): their MCP sources are read only when
 	// the agent is present.
-	present := agentdirs.Detect(home, nil)
+	present := w.layout.Detect(home, nil)
 	for _, p := range present {
 		scan.Present = append(scan.Present, platform.AgentPresence{Platform: p.Product, ConfigDir: p.ConfigDir, Marker: p.Marker})
 	}
@@ -208,7 +211,7 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 
 	// 5. Claude Desktop, installer path (the MSIX path is not covered).
 	if has[agentdirs.ClaudeDesktop] {
-		desktopDir := agentdirs.ClaudeDesktopDir(home, nil)
+		desktopDir := w.layout.ClaudeDesktopDir(home, nil)
 		add(sourceSpec{
 			path: filepath.Join(desktopDir, "claude_desktop_config.json"), client: agentdirs.ClaudeDesktop,
 			format: formatMCPServers, loadsMCP: true, configDir: desktopDir, scope: platform.MCPScopeUser,

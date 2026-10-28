@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/qtorb/rosmarops/internal/notify"
+	"github.com/qtorb/rosmarops/internal/platform"
 )
 
 // A scheduled review's notice (decision 2026-10-26, integridad y revisión
@@ -35,6 +36,10 @@ type notice struct {
 // is unavailable too, but only the log names it (it is not in the schema).
 func (n notifier) probe(ctx context.Context) notice {
 	setting, err := n.run(ctx, "")
+	if errors.Is(err, platform.ErrNotApplicable) {
+		slog.Info(fmt.Sprintf("notify: err=%v", err))
+		return notice{}
+	}
 	if err != nil {
 		slog.Warn(fmt.Sprintf("notify: failed err=%v", err))
 		return notice{}
@@ -72,6 +77,10 @@ func (n notifier) finish(ctx context.Context, nt notice, text string, ok bool, r
 		}
 	}
 	if err := n.open(reportPath); err != nil {
+		if errors.Is(err, platform.ErrNotApplicable) {
+			slog.Info(fmt.Sprintf("notify: report not opened err=%v", err))
+			return
+		}
 		slog.Warn(fmt.Sprintf("notify: report not opened err=%v", err))
 		return
 	}

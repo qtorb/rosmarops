@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/jsonc"
 	"github.com/qtorb/rosmarops/internal/jsonkeys"
@@ -30,7 +31,10 @@ func (w *WindowsPlatform) ListCursor(_ context.Context, repoRoots []string) (pla
 		return platform.CursorScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
 	enterprise := ""
-	if runtime.GOOS == "windows" {
+	switch {
+	case w.layout == agentdirs.MacOSLayout:
+		enterprise = w.cursorEnterprise
+	case runtime.GOOS == "windows":
 		enterprise = cursorEnterpriseHooks // where it exists, as managed settings
 	}
 	return ReadCursor(home, enterprise, repoRoots), nil

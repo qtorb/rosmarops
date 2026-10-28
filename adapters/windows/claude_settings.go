@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -94,7 +95,11 @@ func (w *WindowsPlatform) ListClaudeSettings(ctx context.Context, repoRoots []st
 	if appData == "" {
 		appData = filepath.Join(home, "AppData", "Roaming")
 	}
-	scan.VSCode = readVSCodeMode(filepath.Join(appData, "Code", "User", "settings.json"), dir)
+	vscodeUser := filepath.Join(appData, "Code", "User")
+	if w.layout == agentdirs.MacOSLayout {
+		vscodeUser = w.layout.VSCodeUserDir(home, nil)
+	}
+	scan.VSCode = readVSCodeMode(filepath.Join(vscodeUser, "settings.json"), dir)
 	if w.managed != nil {
 		w.managed.read(ctx, dir, &scan)
 	}
@@ -115,10 +120,12 @@ func (m *managedLocations) read(ctx context.Context, configDir string, scan *pla
 	scan.Managed = append(scan.Managed, platform.ManagedSource{
 		Kind: platform.ManagedRemote, Files: []platform.ClaudeSettingsFile{managed(filepath.Join(configDir, "remote-settings.json"))},
 	})
-	// 2. HKLM registry.
-	scan.Managed = append(scan.Managed, platform.ManagedSource{
-		Kind: platform.ManagedHKLM, Files: []platform.ClaudeSettingsFile{m.readRegistry(ctx, HiveHKLM, configDir)},
-	})
+	// 2. HKLM registry (Windows only).
+	if m.registry != nil {
+		scan.Managed = append(scan.Managed, platform.ManagedSource{
+			Kind: platform.ManagedHKLM, Files: []platform.ClaudeSettingsFile{m.readRegistry(ctx, HiveHKLM, configDir)},
+		})
+	}
 	// 3. managed-settings.json, then managed-settings.d/*.json in
 	// alphabetical order, hidden files and non-.json files ignored
 	// (managed-settings, "Split a file-based policy across teams").
@@ -147,17 +154,19 @@ func (m *managedLocations) read(ctx context.Context, configDir string, scan *pla
 		})
 	}
 	scan.Managed = append(scan.Managed, platform.ManagedSource{Kind: platform.ManagedFiles, Files: files})
-	// 4. HKCU registry (user-writable).
-	scan.Managed = append(scan.Managed, platform.ManagedSource{
-		Kind: platform.ManagedHKCU, Files: []platform.ClaudeSettingsFile{m.readRegistry(ctx, HiveHKCU, configDir)},
-	})
+	// 4. HKCU registry (user-writable; Windows only).
+	if m.registry != nil {
+		scan.Managed = append(scan.Managed, platform.ManagedSource{
+			Kind: platform.ManagedHKCU, Files: []platform.ClaudeSettingsFile{m.readRegistry(ctx, HiveHKCU, configDir)},
+		})
+	}
 
 	mcp := managed(filepath.Join(m.dir, "managed-mcp.json"))
 	mcp = platform.ClaudeSettingsFile{Scope: mcp.Scope, ConfigPath: mcp.ConfigPath, ConfigDir: mcp.ConfigDir, Status: mcp.Status, Reason: mcp.Reason}
 	scan.ManagedMCP = &mcp
 
 	// The legacy path is not read by Claude Code: existence only, never opened.
-	if _, err := os.Lstat(m.legacy); err == nil {
+	if _, err := os.Lstat(m.legacy); m.legacy != "" && err == nil {
 		scan.LegacyManagedPath = m.legacy
 	}
 }

@@ -143,3 +143,54 @@ func TestDetect(t *testing.T) {
 		t.Error("no home: something detected")
 	}
 }
+
+// BV-98 (decision 2026-10-28, macOS, M1a; LECTURA-101 §2): the macOS layout
+// moves Hermes Agent to ~/.hermes and Claude Desktop, Antigravity's user
+// folder, VS Code and Cline under ~/Library/Application Support; the
+// variables are respected as on Windows, and %APPDATA% is not read.
+func TestMacOSLayout(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "albert")
+	lib := filepath.Join(home, "Library", "Application Support")
+	env := envOf(map[string]string{"APPDATA": filepath.Join(home, "elsewhere"), "LOCALAPPDATA": filepath.Join(home, "elsewhere")})
+	l := MacOSLayout
+	for got, want := range map[string]string{
+		l.HermesHome(home, env):         filepath.Join(home, ".hermes"),
+		l.ClaudeDesktopDir(home, env):   filepath.Join(lib, "Claude"),
+		l.AntigravityUserDir(home, env): filepath.Join(lib, "Antigravity", "User"),
+		l.VSCodeUserDir(home, env):      filepath.Join(lib, "Code", "User"),
+		l.ClineDir(home, env):           filepath.Join(lib, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings"),
+	} {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+	custom := filepath.Join(home, "hh")
+	mkdir(t, custom)
+	if got := l.HermesHome(home, envOf(map[string]string{"HERMES_HOME": custom})); got != custom {
+		t.Errorf("HERMES_HOME ignored: %q", got)
+	}
+	touch(t, filepath.Join(home, ".hermes", "config.yaml"))
+	touch(t, filepath.Join(lib, "Claude", "claude_desktop_config.json"))
+	mkdir(t, filepath.Join(lib, "Antigravity", "User"))
+	got := detected(home, envOf(nil))
+	if len(got) != 0 {
+		t.Errorf("Windows layout detected %v in a macOS home", got)
+	}
+	mac := map[string]string{}
+	for _, p := range l.Detect(home, env) {
+		mac[p.Product] = p.ConfigDir
+	}
+	for product, want := range map[string]string{
+		Hermes:        filepath.Join(home, ".hermes"),
+		ClaudeDesktop: filepath.Join(lib, "Claude"),
+		Antigravity:   filepath.Join(home, ".gemini"),
+	} {
+		if mac[product] != want {
+			t.Errorf("%s = %q, want %q", product, mac[product], want)
+		}
+	}
+	// The package-level functions keep the Windows layout.
+	if HermesHome(home, env) != filepath.Join(home, "elsewhere", "hermes") {
+		t.Errorf("HermesHome = %q, want the Windows layout", HermesHome(home, env))
+	}
+}

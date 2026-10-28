@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	windowsadapter "github.com/qtorb/rosmarops/adapters/windows"
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
@@ -239,7 +239,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Warn("run: could not resolve home dir; mcp_server_user_writable_command check disabled", "err", homeDirErr)
 	}
 
-	plat := windowsadapter.New()
+	plat := newPlatform()
 
 	repoPatterns := secrets.BuiltinPatterns()
 	for _, spec := range cfg.ExtraSecretPatterns {
@@ -341,7 +341,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// files of every repo and the user's credential files, for the graph.
 		// No git, no subprocess; outside the per-repo budget. ---
 		{Name: "credentials", Run: func(ctx context.Context) func() {
-			scanned := credfiles.Collect(homeDir, cfg.RepoRoots, nil)
+			scanned := credfiles.CollectOn(agentdirs.Current(), homeDir, cfg.RepoRoots, nil)
 			// The envFile of Cursor's MCP servers (decision 2026-10-25,
 			// Cursor, K10).
 			var envFiles []string
@@ -444,6 +444,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentProfiles, profErr := plat.ListShellProfiles(ctx)
 			profResult := shellprofile.ScanShellProfiles(currentProfiles, st.Baselines.ShellProfileSHA256)
 			return func() {
+				if errors.Is(profErr, platform.ErrNotApplicable) {
+					slog.Info("shellprofile", "err", profErr)
+					return
+				}
 				if profErr != nil {
 					slog.Warn("shellprofile: could not list profiles", "err", profErr)
 					scanErrors = append(scanErrors, finding.ScanError{
@@ -461,6 +465,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentTasks, tasksErr := plat.ListScheduledTasks(ctx)
 			tasksResult := scheduledtasks.ScanScheduledTasks(currentTasks, st.Baselines.ScheduledTasks, cfg.AllowList.ScheduledTasks, self, freshTaskHash)
 			return func() {
+				if errors.Is(tasksErr, platform.ErrNotApplicable) {
+					slog.Info("scheduledtasks", "err", tasksErr)
+					return
+				}
 				weekly = scheduledtasks.WeeklyOf(currentTasks, self)
 				if tasksErr != nil {
 					slog.Warn("scheduledtasks: could not list tasks", "err", tasksErr)
@@ -481,6 +489,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			currentExcls, avErr := plat.ListDefenderExclusions(ctx)
 			avResult := avexclusions.ScanAVExclusions(currentExcls, st.Baselines.AVExclusions, cfg.AllowList.AVExclusions)
 			return func() {
+				if errors.Is(avErr, platform.ErrNotApplicable) {
+					slog.Info("avexclusions", "err", avErr)
+					return
+				}
 				if avErr != nil {
 					slog.Warn("avexclusions: could not list Defender exclusions", "err", avErr)
 					scanErrors = append(scanErrors, finding.ScanError{

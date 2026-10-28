@@ -42,11 +42,11 @@ func (t hermesTrust) trusts(root string) bool {
 // root with Path.resolve(); here they are compared cleaned, without
 // resolving links, and without case on Windows paths. A relative entry
 // (resolved against Hermes's working folder) matches no root.
-func readHermesTrust(home string, env agentdirs.Env) hermesTrust {
+func readHermesTrust(l agentdirs.Layout, home string, env agentdirs.Env) hermesTrust {
 	if home == "" {
 		return hermesTrust{}
 	}
-	path := filepath.Join(agentdirs.HermesHome(home, env), "config.yaml")
+	path := filepath.Join(l.HermesHome(home, env), "config.yaml")
 	fail := func(code, detail string) hermesTrust {
 		return hermesTrust{unknown: graph.Reason(code, path+": "+detail)}
 	}

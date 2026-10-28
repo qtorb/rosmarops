@@ -69,7 +69,9 @@ type agents struct {
 	claude, cursor, codex, antigravity, hermes, cline, copilot agent
 }
 
-func resolve(home string, env agentdirs.Env) agents {
+// resolve is the configuration folder of every agent, on layout l: Cline's
+// and Hermes Agent's differ between Windows and macOS (agentdirs).
+func resolve(l agentdirs.Layout, home string, env agentdirs.Env) agents {
 	if env == nil {
 		env = os.LookupEnv
 	}
@@ -77,17 +79,13 @@ func resolve(home string, env agentdirs.Env) agents {
 	if v, ok := env("CLAUDE_CONFIG_DIR"); ok && v != "" {
 		claudeDir = v
 	}
-	appData := filepath.Join(home, "AppData", "Roaming")
-	if v, ok := env("APPDATA"); ok && v != "" {
-		appData = v
-	}
 	return agents{
 		claude:      agent{knowledge.ClaudeCodeProduct, claudeDir},
 		cursor:      agent{cursorProduct, filepath.Join(home, ".cursor")},
 		codex:       agent{agentdirs.Codex, agentdirs.CodexHome(home, env)},
 		antigravity: agent{agentdirs.Antigravity, agentdirs.AntigravityDir(home)},
-		hermes:      agent{agentdirs.Hermes, agentdirs.HermesHome(home, env)},
-		cline:       agent{clineProduct, filepath.Join(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings")},
+		hermes:      agent{agentdirs.Hermes, l.HermesHome(home, env)},
+		cline:       agent{clineProduct, l.ClineDir(home, env)},
 		copilot:     agent{copilotProduct, filepath.Join(home, ".copilot")},
 	}
 }
@@ -143,12 +141,12 @@ func repoFolders(root string, a agents, trust hermesTrust) []folder {
 	return fs
 }
 
-// Discover lists the skills of home's folders and of each repository root,
-// one entry per agent that loads the folder. Each repository gets
-// repos.PerRepoTimeout (invariant 6); a repository over it, or a run whose
-// ctx ends, goes to coverage and the rest continues. An agent that is not
-// present still gets its entries: the graph keeps only those of the agents
-// it has.
+// Discover lists, on the Windows layout, the skills of home's folders and of
+// each repository root, one entry per agent that loads the folder. Each
+// repository gets repos.PerRepoTimeout (invariant 6); a repository over it,
+// or a run whose ctx ends, goes to coverage and the rest continues. An agent
+// that is not present still gets its entries: the graph keeps only those of
+// the agents it has.
 //
 // A skill that is a link counts when it points, in one step, to a skill
 // listed in a user skills folder or in the .agents\skills of its own
@@ -156,7 +154,13 @@ func repoFolders(root string, a agents, trust hermesTrust) []folder {
 // by their canonical paths, so each agent has one resource per file. Any
 // other link goes to coverage.
 func Discover(ctx context.Context, home string, env agentdirs.Env, repoRoots []string) platform.SkillScan {
-	a := resolve(home, env)
+	return DiscoverOn(ctx, agentdirs.WindowsLayout, home, env, repoRoots)
+}
+
+// DiscoverOn is Discover on layout l: the macOS adapter passes
+// agentdirs.MacOSLayout (decision 2026-10-28, macOS, M1a).
+func DiscoverOn(ctx context.Context, l agentdirs.Layout, home string, env agentdirs.Env, repoRoots []string) platform.SkillScan {
+	a := resolve(l, home, env)
 	d := &discovery{seen: map[string]bool{}, skills: map[string]*skillFiles{}}
 	users := map[string]bool{}
 	var user []folder
@@ -172,7 +176,7 @@ func Discover(ctx context.Context, home string, env agentdirs.Env, repoRoots []s
 	}
 	var trust hermesTrust
 	if len(repoRoots) > 0 {
-		trust = readHermesTrust(home, env)
+		trust = readHermesTrust(l, home, env)
 	}
 	for _, root := range repoRoots {
 		d.repo(ctx, root, a, trust, users)

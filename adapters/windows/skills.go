@@ -16,5 +16,5 @@ func (w *WindowsPlatform) ListSkills(ctx context.Context, repoRoots []string) (p
 	if err != nil {
 		return platform.SkillScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
-	return skills.Discover(ctx, home, nil, repoRoots), nil
+	return skills.DiscoverOn(ctx, w.layout, home, nil, repoRoots), nil
 }
