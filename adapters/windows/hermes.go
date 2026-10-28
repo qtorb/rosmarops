@@ -82,7 +82,10 @@ func readHermesConfig(path, dir string) (platform.HermesConfig, []platform.MCPSe
 	if status != platform.MCPSourceRead {
 		return cfg, nil
 	}
-	doc, err := yamlsubset.Parse(raw)
+	// Read only the keys RosmarOps uses; an unsupported YAML construct outside
+	// them is skipped, not a failure (BV-101, decision 1). A construct inside one
+	// of these sections is still a parse_error (fail-secure).
+	doc, err := yamlsubset.ParseKeys(raw, "approvals", "security", "mcp_servers")
 	if err != nil {
 		slog.Warn("hermes: config not read: outside the YAML subset", "path", path, "err", err)
 		cfg.Status, cfg.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
@@ -90,17 +93,22 @@ func readHermesConfig(path, dir string) (platform.HermesConfig, []platform.MCPSe
 	}
 	root, _ := doc.(yamlsubset.Map)
 
-	// approvals.mode (tools/approval_context.py:266-280): absent → manual;
-	// the YAML 1.1 boolean false («off») → off, true → manual; a string is
-	// matched lowercased; anything else → manual, as Hermes does.
-	cfg.ApprovalMode = "manual"
-	if s, ok := mapOf(root, "approvals")["mode"].(yamlsubset.Scalar); ok {
-		if b, isBool := s.Bool(); isBool {
-			if !b {
-				cfg.ApprovalMode = "off"
+	// approvals.mode: absent → «smart», the Hermes default (config_defaults.py:
+	// approvals.mode @ bf0203a; comment «manual | smart | off»). When the key is
+	// present, Hermes normalizes it (tools/approval_context.py:263-280): YAML 1.1
+	// false («off») → off, true → manual; a valid mode string wins; anything
+	// else (an unknown string, or a non-scalar) → manual.
+	cfg.ApprovalMode = "smart"
+	if mode, present := mapOf(root, "approvals")["mode"]; present {
+		cfg.ApprovalMode = "manual"
+		if s, ok := mode.(yamlsubset.Scalar); ok {
+			if b, isBool := s.Bool(); isBool {
+				if !b {
+					cfg.ApprovalMode = "off"
+				}
+			} else if m := strings.ToLower(strings.TrimSpace(s.Text)); hermesModes[m] {
+				cfg.ApprovalMode = m
 			}
-		} else if m := strings.ToLower(strings.TrimSpace(s.Text)); hermesModes[m] {
-			cfg.ApprovalMode = m
 		}
 	}
 	if s, ok := mapOf(root, "security")["protected_instruction_files"].(yamlsubset.Scalar); ok {

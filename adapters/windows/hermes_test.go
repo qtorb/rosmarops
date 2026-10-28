@@ -45,6 +45,8 @@ mcp_servers:
 `)
 	writeFile(t, filepath.Join(hermes, "profiles", "work", "config.yaml"), "approvals:\n  mode: Smart\nmcp_servers: {}\n")
 	writeFile(t, filepath.Join(hermes, "profiles", "play", "config.yaml"), "approvals:\n  mode: yolo\n")
+	// Anchors/aliases under keys RosmarOps does not read are skipped, not a
+	// failure (BV-101, decision 1); with no approvals section the mode defaults.
 	writeFile(t, filepath.Join(hermes, "profiles", "bad", "config.yaml"), "base: &b\n  x: 1\nother: *b\n")
 
 	scan := windows.ReadHermes(home, hermesEnv(hermes))
@@ -54,9 +56,9 @@ mcp_servers:
 	}
 	want := map[string]string{
 		"hermes": "off/" + string(platform.MCPSourceRead),
-		"work":   "/" + string(platform.MCPSourceFailed), // a flow mapping: not read
+		"work":   "/" + string(platform.MCPSourceFailed), // {} under mcp_servers (a read key): parse_error
 		"play":   "manual/" + string(platform.MCPSourceRead),
-		"bad":    "/" + string(platform.MCPSourceFailed),
+		"bad":    "smart/" + string(platform.MCPSourceRead), // anchors under non-read keys: skipped
 	}
 	for k, w := range want {
 		if modes[k] != w {
@@ -93,15 +95,15 @@ mcp_servers:
 // approvals.mode as Hermes reads it (tools/approval_context.py:266-280).
 func TestReadHermesApprovalModes(t *testing.T) {
 	for doc, want := range map[string]string{
-		"model:\n  default: x\n":         "manual", // absent
-		"approvals:\n  mode: off\n":      "off",    // YAML 1.1 false
+		"model:\n  default: x\n":         "smart", // absent → smart (BV-101 decision 2)
+		"approvals:\n  mode: off\n":      "off",   // YAML 1.1 false
 		"approvals:\n  mode: No\n":       "off",
 		"approvals:\n  mode: \"off\"\n":  "off", // the string
 		"approvals:\n  mode: on\n":       "manual",
 		"approvals:\n  mode: SMART\n":    "smart",
 		"approvals:\n  mode: auto\n":     "manual", // unknown
 		"approvals:\n  mode:\n":          "manual",
-		"approvals:\n  timeout: 300\n":   "manual",
+		"approvals:\n  timeout: 300\n":   "smart", // mode absent → smart (BV-101 decision 2)
 		"approvals:\n  mode: manual\n":   "manual",
 		"approvals:\n  mode: 'smart'\n":  "smart",
 		"approvals:\n  mode: [off]\n":    "manual",

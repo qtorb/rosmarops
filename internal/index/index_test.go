@@ -62,21 +62,25 @@ func fnd(id, rule, sev, class, radius string, actions ...rules.Action) rules.Fin
 	}
 }
 
-// I5, §2: a failed source that may hide a credential, or one in the agent's
-// folder, leaves no score; another does not. No agent: not applicable.
+// I5, §2 (BV-101 decision 3): only a failed source INSIDE the agent's own
+// configuration folder leaves it without a score; a source failing elsewhere no
+// longer does, whatever its reason. No agent: not applicable.
 func TestCoverage(t *testing.T) {
-	for reason, ok := range map[string]bool{
-		graph.Reason(graph.ReasonReadError, "x"):               true,
-		graph.Reason(graph.ReasonFileCountLimitExceeded, "/r"): true,
-		graph.Reason(graph.ReasonSourceUnsupported, "legacy"):  false,
+	// A failure outside the agent's folder does not void its score any more,
+	// regardless of the reason code.
+	for _, reason := range []string{
+		graph.Reason(graph.ReasonReadError, "x"),
+		graph.Reason(graph.ReasonFileCountLimitExceeded, "/r"),
+		graph.Reason(graph.ReasonParseError, "hermes"),
+		graph.Reason(graph.ReasonSourceUnsupported, "legacy"),
 	} {
 		in := agentInput(nil)
 		in.SourcesFailed = []graph.SourceFailed{{Path: "/elsewhere/x", Reason: reason}}
-		a := Compute(in).Agents[0]
-		if (a.Value == nil) != ok {
-			t.Errorf("%s: value %v", reason, a.Value)
+		if a := Compute(in).Agents[0]; a.Value == nil {
+			t.Errorf("%s elsewhere should not void the agent's score", reason)
 		}
 	}
+	// A failure inside the agent's own folder (any reason) leaves no score.
 	in := agentInput(nil)
 	in.SourcesFailed = []graph.SourceFailed{{Path: "/h/.claude/settings.json", Reason: graph.Reason(graph.ReasonSourceUnsupported, "x")}}
 	if a := Compute(in).Agents[0]; a.Value != nil || a.Unavailable != ReasonCoverage {

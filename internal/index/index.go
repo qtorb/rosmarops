@@ -8,7 +8,6 @@ package index
 import (
 	"math"
 	"sort"
-	"strings"
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -274,23 +273,22 @@ func Compute(in Input) Index {
 	return idx
 }
 
-// coverageCodes are the coverage reasons that may hide a credential (§2,
-// condition 4).
-var coverageCodes = map[string]bool{
-	graph.ReasonReadError: true, graph.ReasonParseError: true,
-	graph.ReasonSizeLimitExceeded: true, graph.ReasonFileCountLimitExceeded: true,
-}
-
-// covered reports the coverage conditions of §2 for agent a: the graph was
-// built; no source failed with a reason that may hide a credential; no
-// source in the agent's configuration folder failed.
+// covered reports the coverage conditions of §2 for agent a, per agent
+// (BV-101, decision 3; LECTURA-103 §2): the graph was built and no source of
+// THIS agent (a source inside its configuration folder) failed to be read. A
+// source failing elsewhere — another agent's, or a global step — no longer voids
+// this agent's score or note; it still raises the run to at least yellow (B6)
+// via the status reducer and is still listed in «What we could not read», both
+// independent of this function.
 func covered(in Input, a Agent) bool {
 	if !in.GraphBuilt {
 		return false
 	}
+	if a.ConfigDir == "" {
+		return true
+	}
 	for _, f := range in.SourcesFailed {
-		code, _, _ := strings.Cut(f.Reason, ": ")
-		if coverageCodes[code] || a.ConfigDir != "" && graph.Within(a.ConfigDir, f.Path) {
+		if graph.Within(a.ConfigDir, f.Path) {
 			return false
 		}
 	}

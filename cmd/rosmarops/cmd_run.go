@@ -438,48 +438,6 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			}
 		}},
 
-		// --- Repository scanner (M6) ---
-		{Name: "repos", Run: func(ctx context.Context) func() {
-			var repoFamilies [][]string
-			// The repository scan's allow-list hits come from its
-			// goroutines (B9): gathered here, handed over in the record.
-			var (
-				hitsMu   sync.Mutex
-				repoHits []config.AllowHit
-			)
-			scanCfg := repos.ScanConfig{
-				Patterns:     repoPatterns,
-				AllowHooks:   cfg.AllowList.GitHooks,
-				AllowHistory: cfg.AllowList.SecretsInHistory,
-				OnFamilies:   func(f [][]string) { repoFamilies = f },
-				OnAllowHit: func(h config.AllowHit) {
-					hitsMu.Lock()
-					defer hitsMu.Unlock()
-					repoHits = append(repoHits, h)
-				},
-				OnProgress: progress.repos,
-			}
-			if saltErr == nil {
-				// Committed secrets become salted references in the scan;
-				// their values are discarded at once (CTO-7 §2.2).
-				scanCfg.Identify = graph.Identifier(salt)
-			}
-			scanned, newRepoBaselines, repoErrs := repos.ScanAllRepos(
-				ctx, cfg.RepoRoots, st.Baselines.Repos, scanCfg,
-			)
-			return func() {
-				families = repoFamilies
-				hitsMu.Lock()
-				allowHits = append(allowHits, repoHits...)
-				hitsMu.Unlock()
-				repoFindings = scanned
-				findings = append(findings, scanned...)
-				scanErrors = append(scanErrors, repoErrs...)
-				// Update repo baselines in state.
-				st.Baselines.Repos = newRepoBaselines
-			}
-		}},
-
 		// --- Shell profile scanner (M7) ---
 		{Name: "shellprofile", Run: func(ctx context.Context) func() {
 			currentProfiles, profErr := plat.ListShellProfiles(ctx)
@@ -560,6 +518,57 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				if globalsResult.NewNpmrcSHA != "" {
 					st.Baselines.NpmrcSHA256 = globalsResult.NewNpmrcSHA
 				}
+			}
+		}},
+
+		// --- Repository scanner (M6) ---
+		// Runs LAST (BV-101, decision 4): the fast, always-applicable steps above
+		// (shellprofile, scheduledtasks, avexclusions, globals) finish first, so a
+		// repository scan that spends the global budget never keeps them from
+		// running. The per-repo (60 s) and global (300 s) limits are unchanged.
+		// The git-history scan stays per clone: LECTURA-103 did NOT confirm a
+		// per-family scan without losing findings (clones can diverge from the
+		// family's root commit, so each HEAD must still be enumerated, and the
+		// expensive commit-diff matching is already de-duplicated per run by the
+		// SHA-keyed cache), so it is not changed here.
+		{Name: "repos", Run: func(ctx context.Context) func() {
+			var repoFamilies [][]string
+			// The repository scan's allow-list hits come from its
+			// goroutines (B9): gathered here, handed over in the record.
+			var (
+				hitsMu   sync.Mutex
+				repoHits []config.AllowHit
+			)
+			scanCfg := repos.ScanConfig{
+				Patterns:     repoPatterns,
+				AllowHooks:   cfg.AllowList.GitHooks,
+				AllowHistory: cfg.AllowList.SecretsInHistory,
+				OnFamilies:   func(f [][]string) { repoFamilies = f },
+				OnAllowHit: func(h config.AllowHit) {
+					hitsMu.Lock()
+					defer hitsMu.Unlock()
+					repoHits = append(repoHits, h)
+				},
+				OnProgress: progress.repos,
+			}
+			if saltErr == nil {
+				// Committed secrets become salted references in the scan;
+				// their values are discarded at once (CTO-7 §2.2).
+				scanCfg.Identify = graph.Identifier(salt)
+			}
+			scanned, newRepoBaselines, repoErrs := repos.ScanAllRepos(
+				ctx, cfg.RepoRoots, st.Baselines.Repos, scanCfg,
+			)
+			return func() {
+				families = repoFamilies
+				hitsMu.Lock()
+				allowHits = append(allowHits, repoHits...)
+				hitsMu.Unlock()
+				repoFindings = scanned
+				findings = append(findings, scanned...)
+				scanErrors = append(scanErrors, repoErrs...)
+				// Update repo baselines in state.
+				st.Baselines.Repos = newRepoBaselines
 			}
 		}},
 	}

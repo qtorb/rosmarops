@@ -64,7 +64,9 @@ func readHermesTrust(l agentdirs.Layout, home string, env agentdirs.Env) hermesT
 	if err != nil {
 		return fail(graph.ReasonReadError, err.Error())
 	}
-	doc, err := yamlsubset.Parse(raw)
+	// Read only the «skills» section; an unsupported construct elsewhere in the
+	// file is skipped, not a failure (BV-101, decision 1).
+	doc, err := yamlsubset.ParseKeys(raw, "skills")
 	if err != nil {
 		return fail(graph.ReasonParseError, err.Error())
 	}

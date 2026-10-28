@@ -84,6 +84,83 @@ type line struct {
 // Parse reads raw (a leading UTF-8 BOM and CRLF line ends are accepted) and
 // returns its top-level value: a Map, or nil for an empty document.
 func Parse(raw []byte) (any, error) {
+	lines, err := prepare(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	p := &parser{lines: lines}
+	v, err := p.block(0, 1)
+	if err != nil {
+		return nil, err
+	}
+	if p.i < len(p.lines) {
+		return nil, fmt.Errorf("line %d: inconsistent indentation", p.lines[p.i].n)
+	}
+	if _, ok := v.(Map); !ok {
+		return nil, errors.New("the document is not a mapping")
+	}
+	return v, nil
+}
+
+// ParseKeys reads ONLY the given top-level keys, strictly, and skips every other
+// top-level section without parsing it (BV-101, decision 1; LECTURA-103 §5). So
+// an unsupported construct (an inline map/list, an anchor, an alias, a
+// multi-line block) under a key RosmarOps does not read is not an error; the
+// same construct inside a read key's section is still a parse error (fail-secure).
+// A top-level section is a column-0 "key:" line and every line indented beneath
+// it, up to the next column-0 line.
+func ParseKeys(raw []byte, required ...string) (any, error) {
+	lines, err := prepare(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	want := make(map[string]bool, len(required))
+	for _, k := range required {
+		want[k] = true
+	}
+	out := Map{}
+	for i := 0; i < len(lines); {
+		if lines[i].indent != 0 {
+			// A column-0 document can only start a section at column 0; an
+			// indented first line is malformed regardless of the key.
+			return nil, fmt.Errorf("line %d: inconsistent indentation", lines[i].n)
+		}
+		start := i
+		i++
+		for i < len(lines) && lines[i].indent > 0 {
+			i++
+		}
+		section := lines[start:i]
+		key, _, keyErr := splitKey(section[0].text)
+		if keyErr != nil || !want[key] {
+			// Not a "key:" line (e.g. a stray flow-close at column 0), or a key
+			// we do not read: skip the whole section, whatever it contains.
+			continue
+		}
+		sp := &parser{lines: section}
+		v, err := sp.mapping(0, 1)
+		if err != nil {
+			return nil, err
+		}
+		for k, val := range v {
+			if _, dup := out[k]; dup {
+				return nil, fmt.Errorf("line %d: a duplicate key", section[0].n)
+			}
+			out[k] = val
+		}
+	}
+	return out, nil
+}
+
+// prepare validates raw and splits it into meaningful lines (comments and blank
+// lines removed), shared by Parse and ParseKeys.
+func prepare(raw []byte) ([]line, error) {
 	if len(raw) > MaxBytes {
 		return nil, fmt.Errorf("%d bytes > %d", len(raw), MaxBytes)
 	}
@@ -124,18 +201,7 @@ func Parse(raw []byte) (any, error) {
 	if lines[0].indent != 0 {
 		return nil, fmt.Errorf("line %d: the document does not start at column 0", lines[0].n)
 	}
-	p := &parser{lines: lines}
-	v, err := p.block(0, 1)
-	if err != nil {
-		return nil, err
-	}
-	if p.i < len(p.lines) {
-		return nil, fmt.Errorf("line %d: inconsistent indentation", p.lines[p.i].n)
-	}
-	if _, ok := v.(Map); !ok {
-		return nil, errors.New("the document is not a mapping")
-	}
-	return v, nil
+	return lines, nil
 }
 
 type parser struct {

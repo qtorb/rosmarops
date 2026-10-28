@@ -46,6 +46,7 @@ func Run(ctx context.Context, steps []Step) *finding.ScanError {
 		if ctx.Err() != nil {
 			return timeoutError(ctx, "", steps[i:])
 		}
+		stepStart := time.Now()
 		done := make(chan func(), 1)
 		go func(s Step) { done <- s.Run(ctx) }(s)
 
@@ -64,6 +65,10 @@ func Run(ctx context.Context, steps []Step) *finding.ScanError {
 		if record != nil {
 			record()
 		}
+		// Per-step duration (BV-101, decision 5): technical codes only, no
+		// catalog text. Logged for every step, including one abandoned at the
+		// deadline (record == nil).
+		slog.Info("scan: step done", "step", s.Name, "duration_ms", time.Since(stepStart).Milliseconds())
 		if ctx.Err() != nil {
 			return timeoutError(ctx, s.Name, steps[i+1:])
 		}
