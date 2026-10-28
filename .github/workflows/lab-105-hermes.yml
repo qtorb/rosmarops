@@ -240,22 +240,31 @@ jobs:
             }
             foreach ($k in ($ka.Keys | Sort-Object)) { if (-not $kb.ContainsKey($k)) { "  removed: $k" } }
           }
-          # For the summary: every change outside %LOCALAPPDATA%\hermes, and Hermes' own
-          # files outside the code checkout and caches.
-          $sum = "$env:RUNNER_TEMP\lab\summary.txt"
-          "== changes between snapshots (no __pycache__, no hermes-agent checkout) ==" | Add-Content $sum
+          # For the summary, compact: Hermes' skills folder as a count; caches and the
+          # code checkout left out; at most 60 lines per step. Written to its own file
+          # and printed before the rest of the summary.
+          $chg = "$env:RUNNER_TEMP\lab\changes.txt"
+          "== changes between snapshots (compact) ==" | Set-Content $chg
           for ($i = 1; $i -lt $labels.Count; $i++) {
             $a = Load $labels[$i - 1]; $b = Load $labels[$i]
-            "-- $($labels[$i - 1]) -> $($labels[$i])" | Add-Content $sum
+            "-- $($labels[$i - 1]) -> $($labels[$i])" | Add-Content $chg
             $ka = @{}; foreach ($x in $a) { $ka["$($x.root)|$($x.rel)"] = $x }
             $kb = @{}; foreach ($x in $b) { $kb["$($x.root)|$($x.rel)"] = $x }
-            $keep = { param($k) $k -notmatch '__pycache__|\\hermes-agent\\' }
-            foreach ($k in ($kb.Keys | Sort-Object)) {
-              if (-not (& $keep $k)) { continue }
-              if (-not $ka.ContainsKey($k)) { "  added:   $k ($($kb[$k].size) bytes)" | Add-Content $sum }
-              elseif ($ka[$k].sha256 -ne $kb[$k].sha256 -or $ka[$k].size -ne $kb[$k].size) { "  changed: $k ($($ka[$k].size) -> $($kb[$k].size) bytes)" | Add-Content $sum }
+            $lines = @(); $skills = @{ added = 0; changed = 0; removed = 0 }
+            $note = {
+              param($kind, $k, $text)
+              if ($k -match '__pycache__|\\hermes-agent\\') { return }
+              if ($k -match '^hermes\|\\skills\\') { $skills[$kind]++; return }
+              $script:lines += $text
             }
-            foreach ($k in ($ka.Keys | Sort-Object)) { if ((& $keep $k) -and -not $kb.ContainsKey($k)) { "  removed: $k" | Add-Content $sum } }
+            foreach ($k in ($kb.Keys | Sort-Object)) {
+              if (-not $ka.ContainsKey($k)) { & $note 'added' $k "  added:   $k ($($kb[$k].size) bytes)" }
+              elseif ($ka[$k].sha256 -ne $kb[$k].sha256 -or $ka[$k].size -ne $kb[$k].size) { & $note 'changed' $k "  changed: $k ($($ka[$k].size) -> $($kb[$k].size) bytes)" }
+            }
+            foreach ($k in ($ka.Keys | Sort-Object)) { if (-not $kb.ContainsKey($k)) { & $note 'removed' $k "  removed: $k" } }
+            $lines | Select-Object -First 60 | Add-Content $chg
+            if ($lines.Count -gt 60) { "  ... $($lines.Count - 60) more" | Add-Content $chg }
+            "  hermes\skills: $($skills.added) added, $($skills.changed) changed, $($skills.removed) removed" | Add-Content $chg
           }
 
       - name: Collect
@@ -264,6 +273,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path out | Out-Null
           Copy-Item "$env:RUNNER_TEMP\lab\summary.txt" out -ErrorAction SilentlyContinue
+          Copy-Item "$env:RUNNER_TEMP\lab\changes.txt" out -ErrorAction SilentlyContinue
           Copy-Item "$env:RUNNER_TEMP\lab\snap-*.json" out -ErrorAction SilentlyContinue
           $r = "$env:USERPROFILE\.rosmarops\reports"
           if (Test-Path $r) { New-Item -ItemType Directory -Force -Path out\reports | Out-Null; Copy-Item "$r\*" out\reports -Recurse -Force }
@@ -272,7 +282,9 @@ jobs:
       - name: SUMMARY (last, so the end of the log has it)
         if: always()
         shell: pwsh
-        run: Get-Content "$env:RUNNER_TEMP\lab\summary.txt" -ErrorAction SilentlyContinue
+        run: |
+          Get-Content "$env:RUNNER_TEMP\lab\changes.txt" -ErrorAction SilentlyContinue
+          Get-Content "$env:RUNNER_TEMP\lab\summary.txt" -ErrorAction SilentlyContinue
 
       - name: Upload artifacts
         if: always()
