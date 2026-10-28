@@ -561,6 +561,11 @@ type Platform interface {
 	// with its read outcome.
 	ListCursor(ctx context.Context, repoRoots []string) (CursorScan, error)
 
+	// ListHermes reads Hermes Agent's config.yaml and every profile's
+	// (decision 2026-10-27, agentes nuevos, N2a): its approval mode, its
+	// protected instruction files and its MCP servers.
+	ListHermes(ctx context.Context) (HermesScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -644,4 +649,39 @@ type CursorFile struct {
 	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
 	// and each one is a config_key_case_conflict finding.
 	KeyConflicts []string
+}
+
+// HermesScan is what ListHermes read (N2a, BV-97). Hermes stays detected and
+// not evaluated: its MCP servers reach the graph as every agent's do; its
+// approvals are read and logged, not in the graph yet (N2b).
+type HermesScan struct {
+	// Configs are <HERMES_HOME>\config.yaml and every
+	// <HERMES_HOME>\profiles\<name>\config.yaml that exists.
+	Configs []HermesConfig
+
+	// Sources are the same files as MCP sources (Platform "hermes",
+	// LoadsMCP true): a file that exists and was not read is a failed
+	// source, so the run is at least yellow (blindaje, B6).
+	Sources []MCPSource
+
+	// Servers are the mcp_servers of the files read, as MCPServer (Client
+	// "hermes").
+	Servers []MCPServer
+}
+
+// HermesConfig is one config.yaml and its security keys.
+type HermesConfig struct {
+	Path      string
+	ConfigDir string // the Hermes folder (or the profile's) it belongs to
+	Status    MCPSourceStatus
+	Reason    string
+
+	// ApprovalMode is approvals.mode as Hermes reads it: "manual" (also
+	// when absent, true or unknown), "smart" or "off" (also the YAML 1.1
+	// boolean false, «mode: off»). Empty when the file was not read.
+	ApprovalMode string
+
+	// ProtectedInstructionFiles is security.protected_instruction_files;
+	// nil when absent or not a boolean.
+	ProtectedInstructionFiles *bool
 }

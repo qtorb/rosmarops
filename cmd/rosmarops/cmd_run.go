@@ -305,6 +305,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// --- MCP server scanner (M5) ---
 		{Name: "mcp", Run: func(ctx context.Context) func() {
 			scanned, listErr := plat.ListMCPServers(ctx, cfg.RepoRoots)
+			// Hermes Agent's config.yaml (N2a, BV-97): its MCP servers and
+			// its sources join every agent's; a config.yaml not read is a
+			// failed source (B6).
+			hermes, hermesErr := plat.ListHermes(ctx)
+			scanned.Sources = append(scanned.Sources, hermes.Sources...)
+			scanned.Servers = append(scanned.Servers, hermes.Servers...)
+			listErr = errors.Join(listErr, hermesErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
