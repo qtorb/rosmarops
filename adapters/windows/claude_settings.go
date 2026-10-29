@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
 
@@ -244,6 +246,11 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	f.EnableAllProjectMcpServers = s.EnableAllProjectMcpServers
 	f.Env = secretVars(s.Env, sortedKeys(s.Env))
 	f.Executables = executablePointers(s)
+	if f.Scope == platform.MCPScopeProject || f.Scope == platform.MCPScopeLocal {
+		// BV-107: only project configuration can carry a hook that runs a
+		// script of the repository it ships in.
+		f.HookScripts = resolveHookScripts(s, f.ScopePath)
+	}
 	f.AllowManagedPermissionRulesOnly = s.AllowManagedPermissionRulesOnly
 	f.ManagedSourcesBehavior = s.ManagedSourcesBehavior
 	return f
@@ -277,6 +284,89 @@ func executablePointers(s settingsFile) []string {
 		out = append(out, "/apiKeyHelper")
 	}
 	return out
+}
+
+// winVolume matches a Windows drive prefix (C:...): such a command token is
+// absolute, not a path inside the project.
+var winVolume = regexp.MustCompile(`^[A-Za-z]:`)
+
+// resolveHookScripts finds, for a project settings document, the commands
+// whose text names a regular file inside the project (BV-107, contract §2).
+// It walks the same command handlers as executablePointers, in the same
+// order, so the pointers match. The command text stays local to this call and
+// is never kept. root is the project root (ScopePath); it is empty for a
+// non-project file, where no candidate can resolve.
+func resolveHookScripts(s settingsFile, root string) []platform.HookScript {
+	if root == "" {
+		return nil
+	}
+	var out []platform.HookScript
+	add := func(pointer, command string) {
+		// The first token that resolves to a regular file inside the project
+		// wins: a command such as "node x.js || bun x.js" names one script.
+		for _, tok := range splitCommand(command) {
+			if rel, size, ok := repoScriptCandidate(tok, root); ok {
+				out = append(out, platform.HookScript{Pointer: pointer, Path: rel, Size: size})
+				return
+			}
+		}
+	}
+	events := make([]string, 0, len(s.Hooks))
+	for e := range s.Hooks {
+		events = append(events, e)
+	}
+	sort.Strings(events)
+	for _, event := range events {
+		for g, group := range s.Hooks[event] {
+			for h, handler := range group.Hooks {
+				if handler.Type == "command" && strings.TrimSpace(handler.Command) != "" {
+					add("/hooks/"+pointerEscape(event)+"/"+strconv.Itoa(g)+"/hooks/"+strconv.Itoa(h)+"/command", handler.Command)
+				}
+			}
+		}
+	}
+	if s.StatusLine != nil && s.StatusLine.Type == "command" && strings.TrimSpace(s.StatusLine.Command) != "" {
+		add("/statusLine/command", s.StatusLine.Command)
+	}
+	if strings.TrimSpace(s.APIKeyHelper) != "" {
+		add("/apiKeyHelper", s.APIKeyHelper)
+	}
+	return out
+}
+
+// splitCommand breaks a command into tokens: quotes are dropped and the shell
+// operators ||, &&, ; and | become separators, as does whitespace (contract
+// §2.1).
+func splitCommand(cmd string) []string {
+	return strings.Fields(strings.NewReplacer(
+		`"`, " ", `'`, " ", "||", " ", "&&", " ", ";", " ", "|", " ",
+	).Replace(cmd))
+}
+
+// repoScriptCandidate reports whether tok is a path, relative to the project
+// root, of a regular file inside the project (contract §2.2), and returns its
+// project-relative path (slash-separated) and size. It never opens the file
+// and never follows a symlink (Lstat). A forced-exclusion directory anywhere
+// in the path disqualifies it (invariant 5).
+func repoScriptCandidate(tok, root string) (string, int64, bool) {
+	tok = strings.TrimSpace(tok)
+	if tok == "" || strings.HasPrefix(tok, "/") || strings.HasPrefix(tok, `\`) || winVolume.MatchString(tok) {
+		return "", 0, false
+	}
+	clean := filepath.Clean(filepath.FromSlash(tok))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", 0, false
+	}
+	for _, seg := range strings.Split(filepath.ToSlash(clean), "/") {
+		if repos.IsForcedExclusion(seg) {
+			return "", 0, false
+		}
+	}
+	info, err := os.Lstat(filepath.Join(root, clean))
+	if err != nil || !info.Mode().IsRegular() {
+		return "", 0, false // missing, a directory, or a symlink
+	}
+	return filepath.ToSlash(clean), info.Size(), true
 }
 
 // hasPolicyKey reports whether a document sets a policy key: a key other

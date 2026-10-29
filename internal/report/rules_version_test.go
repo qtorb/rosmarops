@@ -20,7 +20,7 @@ import (
 // comparable: the score says the detection rules changed, with no
 // "prev → now", and the memory too.
 func TestRulesVersion2_NotComparable(t *testing.T) {
-	if rules.Version != "3" {
+	if rules.Version != "4" {
 		t.Fatalf("rules.Version %q", rules.Version)
 	}
 	g := v2Graph(t)
@@ -45,13 +45,13 @@ func TestRulesVersion2_NotComparable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw = []byte(strings.Replace(string(raw), `"rules_version":"3"`, `"rules_version":"1"`, 1))
+	raw = []byte(strings.Replace(string(raw), `"rules_version":"4"`, `"rules_version":"1"`, 1))
 	var mem memory.File
 	if err := json.Unmarshal(raw, &mem); err != nil || mem.LastChecked == nil || mem.LastChecked.RulesVersion != "1" {
 		t.Fatalf("memory %+v %v", mem.LastChecked, err)
 	}
 	entry := index.EntryOf(run1.Index, run1.GeneratedAt[:10])
-	if entry.RulesVersion != "3" {
+	if entry.RulesVersion != "4" {
 		t.Fatalf("history entry %+v", entry)
 	}
 	// Control: the same files at rules_version "3" compare directly.

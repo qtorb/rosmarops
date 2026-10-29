@@ -134,6 +134,15 @@ type Node struct {
 	// graph schema does not change. The rules layer emits
 	// package_known_malicious from it.
 	Malicious *intel.Match `json:"-"`
+
+	// ScriptPath and ScriptSize, when set on an agent_executable resource
+	// built from a project settings file, say its command runs a script that
+	// lives inside the project (BV-107): the script's project-relative path
+	// and its size in bytes. In memory only, like Malicious — never
+	// serialized to graph.v2.json, so the graph schema does not change; the
+	// rules layer emits project_hook_runs_repo_script from them.
+	ScriptPath string `json:"-"`
+	ScriptSize int64  `json:"-"`
 }
 
 // Edge is any graph edge.

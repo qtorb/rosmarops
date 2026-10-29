@@ -266,7 +266,8 @@
             "foreign_agent_instructions_writable",
             "own_instructions_writable",
             "own_config_writable",
-            "package_known_malicious"
+            "package_known_malicious",
+            "project_hook_runs_repo_script"
           ]
         },
         "rule_version": {

@@ -639,6 +639,13 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
 		return
 	}
+	if ok && f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107: no auto-action; bespoke hero
+		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
+			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
+		return
+	}
 	if !found {
 		c.w(`<section class="now" aria-labelledby="step2">`)
 		c.stepHead(2, "p", "step2", c.t("html.step.2", nil), "", true)
@@ -791,6 +798,8 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	}
 	if f.Rule == rules.RulePackageKnownMalicious {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f)))) // BV-100
+	} else if f.Rule == rules.RuleProjectHookRunsRepoScript {
+		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f)))) // BV-107
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
@@ -1108,6 +1117,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RulePackageKnownMalicious {
 		return c.cat.Text("finding.package_known_malicious.title", malParams(f))
 	}
+	if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107
+		return c.cat.Text(projectHookKey(f, "title"), c.params(f))
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
 		return c.cat.Text("html.f.cred.title", p)
@@ -1188,6 +1200,9 @@ func (c htmlCtx) impact(f rules.Finding) string { return html.EscapeString(c.imp
 func (c htmlCtx) impactText(f rules.Finding) string {
 	if f.Rule == rules.RulePackageKnownMalicious {
 		return c.cat.Text("finding.package_known_malicious.why", malParams(f))
+	}
+	if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107
+		return c.cat.Text("finding.project_hook_runs_repo_script.impact", c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
@@ -1281,8 +1296,8 @@ func HTMLKeys() []string {
 		keys = append(keys, "html.signal."+sg)
 	}
 	for _, r := range rules.AllRules {
-		if r == rules.RulePackageKnownMalicious {
-			continue // BV-100: renders with finding.* title, no html.headline key
+		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript {
+			continue // renders with finding.* title, no html.headline key (BV-100, BV-107)
 		}
 		keys = append(keys, "html.headline."+r)
 	}
@@ -1317,6 +1332,10 @@ func HTMLKeys() []string {
 	// html.f.*), plus the foot stamp.
 	keys = append(keys, "finding.package_known_malicious.title", "finding.package_known_malicious.why",
 		"finding.package_known_malicious.action", "report.intel_stamp")
+	// BV-107: the project-hook finding also renders with its finding.* texts.
+	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
+		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",
+		"finding.project_hook_runs_repo_script.impact", "finding.project_hook_runs_repo_script.fix")
 	sort.Strings(keys)
 	return keys
 }
@@ -1333,6 +1352,14 @@ var LegacyHTMLKeys = map[string]bool{
 	"finding.package_known_malicious.why":    true,
 	"finding.package_known_malicious.action": true,
 	"report.intel_stamp":                     true,
+	// BV-107: the project-hook finding's texts; ES/CA fall back to English
+	// until the owner supplies translations (contract §5).
+	"finding.project_hook_runs_repo_script.title":       true,
+	"finding.project_hook_runs_repo_script.title.large": true,
+	"finding.project_hook_runs_repo_script.what":        true,
+	"finding.project_hook_runs_repo_script.what.large":  true,
+	"finding.project_hook_runs_repo_script.impact":      true,
+	"finding.project_hook_runs_repo_script.fix":         true,
 	// BV-102: the macOS preview's texts; ES/CA fall back to English until
 	// the owner supplies translations (decision 2026-10-29, point 5).
 	"html.assume.scope.macos":    true,

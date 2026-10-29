@@ -153,13 +153,21 @@ func fromClaudeSettings(scan platform.ClaudeSettingsScan, policy managedPolicy, 
 			untrusted:   file.Scope == platform.MCPScopeProject && !trusted(scan.Trust, file.ScopePath),
 			managedOnly: policy.rulesOnly && file.Scope != platform.MCPScopeManaged,
 		}
+		scripts := map[string]platform.HookScript{} // BV-107: pointer → repo script
+		for _, hs := range file.HookScripts {
+			scripts[hs.Pointer] = hs
+		}
 		for _, ptr := range file.Executables {
 			path := file.ConfigPath + "#" + ptr
-			b.node(Node{
+			n := Node{
 				ID:   "res_agent_executable_" + keyHash(ResourceAgentExecutable, canonicalPath(file.ConfigPath)+"#"+ptr),
 				Kind: KindResource, Type: ResourceAgentExecutable,
 				Path: path, Configures: client, DiscoveredAt: seen,
-			})
+			}
+			if hs, ok := scripts[ptr]; ok { // BV-107: the command runs a repo script
+				n.ScriptPath, n.ScriptSize = hs.Path, hs.Size
+			}
+			b.node(n)
 		}
 		p := file.Permissions
 		for _, list := range []struct {

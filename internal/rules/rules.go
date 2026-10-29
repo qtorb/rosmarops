@@ -27,7 +27,7 @@ import (
 // Version is the rules version recorded in the report's provenance, and
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
-	Version     = "3"
+	Version     = "4" // BV-107: added project_hook_runs_repo_script
 	RuleVersion = "2"
 )
 
@@ -40,6 +40,7 @@ const (
 	RuleOwnInstructionsWritable          = "own_instructions_writable"
 	RuleOwnConfigWritable                = "own_config_writable"
 	RulePackageKnownMalicious            = "package_known_malicious"
+	RuleProjectHookRunsRepoScript        = "project_hook_runs_repo_script"
 )
 
 // AllRules lists every rule code.
@@ -47,6 +48,7 @@ var AllRules = []string{
 	RuleCredReadAndSend, RuleCredReadable, RuleCredInGit,
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
+	RuleProjectHookRunsRepoScript,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -473,6 +475,15 @@ func Evaluate(in Input) Result {
 			res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
 		}
 	}
+	// Project hooks that run a repo script (BV-107): one finding per
+	// agent_executable resource whose command named a file inside the project.
+	// The resolution happened in the adapter; the path and size ride on the
+	// node in memory.
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindResource && n.Type == graph.ResourceAgentExecutable && n.ScriptPath != "" {
+			res.Findings = append(res.Findings, projectHookFinding(in, n, nodes))
+		}
+	}
 	res.Silenced, res.TestData = silenced, testData
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
@@ -565,6 +576,41 @@ func maliciousPackageFinding(in Input, n graph.Node) Finding {
 		// the report validates against report.v2.
 		Actions: []Action{},
 	}
+}
+
+// maxReviewableScript is the size above which a hooked repo script is red:
+// too large to review by hand (contract §1; JFrog's were 12–14 MB).
+const maxReviewableScript = 1 << 20 // 1 048 576 bytes
+
+// projectHookFinding is the finding for a project configuration whose hook,
+// statusLine or apiKeyHelper runs a script inside the project (BV-107). It is
+// a finding of the project, not of the agent: its first evidence node is the
+// resource, never an agent, so it weighs 0 in every agent's score (like
+// package_known_malicious); it still raises the report's overall status. The
+// script's project-relative path and size ride on the node in memory; nothing
+// is read here that the adapter did not already resolve without opening the
+// file.
+func projectHookFinding(in Input, n graph.Node, nodes map[string]graph.Node) Finding {
+	configPath, _, _ := strings.Cut(n.Path, "#") // "<config>#<pointer>"
+	severity := SeverityYellow
+	if n.ScriptSize > maxReviewableScript {
+		severity = SeverityRed
+	}
+	f := Finding{
+		ID:          findingID(RuleProjectHookRunsRepoScript, n.ID),
+		Rule:        RuleProjectHookRunsRepoScript,
+		RuleVersion: RuleVersion,
+		Severity:    severity,
+		Confidence:  ConfidenceHigh,
+		Params:      Params{Agent: nodes[n.Configures].Name, Count: 1},
+		// Locations carry the two texts' data: [0] the configuration file,
+		// [1] the project-relative script. The renderer reads them for {file}
+		// and {script}; no new params field, so report.v2 does not change.
+		Evidence: Evidence{Nodes: []string{n.ID}, Edges: []string{}, Locations: []string{configPath, n.ScriptPath}, Assumptions: []string{}},
+		Group:    group(in, []string{configPath}),
+		Actions:  []Action{},
+	}
+	return f
 }
 
 // writeRuleOf is the rule and finding key of a writes_config_of edge from

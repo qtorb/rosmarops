@@ -73,6 +73,13 @@ func CatalogKeys() []string {
 			keys = append(keys, "finding."+r+".title", "finding."+r+".why", "finding."+r+".action")
 			continue
 		}
+		if r == rules.RuleProjectHookRunsRepoScript {
+			// BV-107: title/what (+ .large), impact and fix; no generic why.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".title.large",
+				"finding."+r+".what", "finding."+r+".what.large",
+				"finding."+r+".impact", "finding."+r+".fix")
+			continue
+		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
 		if r == rules.RuleCredInGit {
 			keys = append(keys, "finding."+r+".why.remote", "finding."+r+".why.local")
@@ -153,6 +160,10 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n%s\n\n", t("finding.package_known_malicious.title", p),
 			t("finding.package_known_malicious.why", p), t("finding.package_known_malicious.action", p))
+	} else if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RuleProjectHookRunsRepoScript {
+		p := findingParams(f) // BV-107: title/what/impact/fix, .large when red
+		w("**%s**\n\n%s\n\n%s\n\n", t(projectHookKey(f, "title"), p),
+			t(projectHookKey(f, "what"), p), t(projectHookKey(f, "fix"), p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
@@ -227,6 +238,18 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding.package_known_malicious.why", p))
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), t("finding.package_known_malicious.action", p))
+			continue
+		}
+		if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107: what/impact/fix
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(projectHookKey(f, "title"), p))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(projectHookKey(f, "what"), p))
+			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding.project_hook_runs_repo_script.impact", p))
+			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), t("finding.project_hook_runs_repo_script.fix", p))
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))
@@ -564,7 +587,28 @@ func findingParams(f rules.Finding) map[string]string {
 	if len(f.Group.Members) > 0 && f.Group.Members[0].Family != "" {
 		p["family"] = untrusted.PlainText(path.Base(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/")))
 	}
+	// BV-107: {file} is the project configuration file and {script} the
+	// project-relative script it runs; both are data read from disk, sanitized.
+	if f.Rule == rules.RuleProjectHookRunsRepoScript {
+		if len(f.Evidence.Locations) > 0 {
+			p["file"] = untrusted.PlainText(f.Evidence.Locations[0])
+		}
+		if len(f.Evidence.Locations) > 1 {
+			p["script"] = untrusted.PlainText(f.Evidence.Locations[1])
+		}
+	}
 	return p
+}
+
+// projectHookKey is the catalog code for part ("title", "what", "impact" or
+// "fix") of a project_hook_runs_repo_script finding (BV-107): the ".large"
+// variant of title and what when the script is large (red).
+func projectHookKey(f rules.Finding, part string) string {
+	k := "finding.project_hook_runs_repo_script." + part
+	if f.Severity == rules.SeverityRed && (part == "title" || part == "what") {
+		return k + ".large"
+	}
+	return k
 }
 
 // execVariantKeys are the catalog codes with an ".executable" variant for a

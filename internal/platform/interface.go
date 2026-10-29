@@ -283,6 +283,13 @@ type ClaudeSettingsFile struct {
 	// apiKeyHelper. The command text itself is never kept.
 	Executables []string
 
+	// HookScripts, for a project settings file only (BV-107), are the
+	// commands whose text named a regular file inside the project: the
+	// command's JSON Pointer, the file's project-relative path and its size
+	// in bytes. Resolved while the command text is in memory; the text itself
+	// is never kept (it may hold secrets).
+	HookScripts []HookScript
+
 	// Managed-only keys (https://code.claude.com/docs/en/settings-reference).
 	AllowManagedPermissionRulesOnly bool
 	ManagedSourcesBehavior          string
@@ -298,6 +305,15 @@ type ClaudeSettingsFile struct {
 	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
 	// and each one is a config_key_case_conflict finding.
 	KeyConflicts []string
+}
+
+// HookScript is one project command that runs a file inside the project
+// (BV-107): the command's JSON Pointer, the file's project-relative path and
+// its size in bytes. The command text is never kept.
+type HookScript struct {
+	Pointer string
+	Path    string
+	Size    int64
 }
 
 // ClaudePermissions is the subset of a Claude Code settings file that grants
