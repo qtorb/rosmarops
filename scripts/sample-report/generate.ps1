@@ -150,6 +150,26 @@ foreach ($e in $expected) {
     if ($enHTML -notmatch $e.HTML) { $failures.Add("the English HTML does not show $($e.What) ($($e.HTML))") }
 }
 
+# 1b. Another agent can change shop-api's CLAUDE.md: a
+# foreign_agent_instructions_writable finding whose evidence holds that file
+# (its node in graph.v2.json), shown in the English HTML.
+$graph = Get-Content -Raw -Path (Join-Path $reports 'graph.v2.json') | ConvertFrom-Json
+$claudeMD = Join-Path $SampleHome 'projects\shop-api\CLAUDE.md'
+$claudeMDNodes = @($graph.nodes | Where-Object { $_.PSObject.Properties['path'] -and $_.path -eq $claudeMD } | ForEach-Object { $_.id })
+$onClaudeMD = $v2.findings | Where-Object {
+    $f = $_
+    $f.rule -eq 'foreign_agent_instructions_writable' -and @($f.evidence.nodes | Where-Object { $claudeMDNodes -contains $_ }).Count -gt 0
+}
+if (-not $onClaudeMD) { $failures.Add("no foreign_agent_instructions_writable finding on $claudeMD") }
+if ($enHTML -notmatch 'shop-api[\\/]CLAUDE\.md') { $failures.Add('the English HTML does not show shop-api\CLAUDE.md') }
+
+# 1c. Claude Desktop is detected, not evaluated, with no note: listed in the
+# index's not_evaluated and in the English HTML, and in no coverage gap.
+if (@($v2.index.scope.not_evaluated) -notcontains 'Claude Desktop') { $failures.Add('Claude Desktop is not among the detected agents') }
+if ($enHTML -notmatch 'Detected, not evaluated yet: [^<]*Claude Desktop') { $failures.Add('the English HTML does not list Claude Desktop as detected') }
+$gaps = @($v2.coverage.sources_failed) + @($v2.coverage.agents_unsupported) + @($v2.coverage.scan_errors) | Where-Object { $_ }
+if ($gaps | Where-Object { ($_ | ConvertTo-Json -Compress) -match 'Claude' }) { $failures.Add('a coverage note names Claude Desktop') }
+
 # 2 and 3. No generated secret in full, and nothing that names the runner,
 # in any file RosmarOps wrote or in dist/.
 $outputs = @(Get-ChildItem -Path (Join-Path $SampleHome '.rosmarops') -Recurse -File) +
