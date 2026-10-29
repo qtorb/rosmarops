@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://shop:__SAMPLE_POSTGRES_PASSWORD__@localhost:5432/shop"]
+    }
+  }
+}
