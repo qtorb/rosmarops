@@ -1,11 +1,12 @@
 # generate.ps1: the sample report (decision 2026-10-29, informe de ejemplo;
 # BV-112). The released rosmarops.exe runs on a fictitious computer, the
 # testdata/sample-home fixture copied to C:\Users\sample, and the report it
-# writes is copied to dist/ in English and Spanish. Then it checks the
-# report: the expected findings are there, no generated secret appears in
-# full, nothing names the runner, and nothing comes from the runner's
-# Defender, scheduled tasks or global packages. Any failed check fails the
-# script.
+# writes is copied to dist/ in English and Spanish, with the language link
+# pointing to the other published page. Then it checks the report: the
+# expected findings are there, no generated secret appears in full, and the
+# published pages neither name the runner nor show anything from the
+# runner's Defender, scheduled tasks or global packages. Any failed check
+# fails the script.
 #
 # It writes only under C:\Users\sample and dist/. The fake secrets are made
 # here, with the formats RosmarOps' matchers know, and never written to the
@@ -123,8 +124,32 @@ finally {
 }
 
 $reports = Join-Path $SampleHome '.rosmarops\reports'
-Copy-Item -Path (Join-Path $reports 'report.en.html') -Destination (Join-Path $OutDir 'sample-report.en.html')
-Copy-Item -Path (Join-Path $reports 'report.es.html') -Destination (Join-Path $OutDir 'sample-report.es.html')
+$published = [ordered]@{ en = (Join-Path $OutDir 'sample-report.en.html'); es = (Join-Path $OutDir 'sample-report.es.html') }
+Copy-Item -Path (Join-Path $reports 'report.en.html') -Destination $published.en
+Copy-Item -Path (Join-Path $reports 'report.es.html') -Destination $published.es
+
+# The links of the published pages: the language link goes to the other
+# published page (exactly one replacement per page), and any other relative
+# href, to a file that is not published (.md, .json, .ai.md…), loses its
+# href and keeps its text. Nothing else in the HTML changes.
+$base = (Get-ChildItem -Path $reports -Filter 'report-*.md' | Select-Object -First 1).BaseName
+$unlinked = [System.Collections.Generic.List[string]]::new()
+foreach ($lang in $published.Keys) {
+    $other = if ($lang -eq 'en') { 'es' } else { 'en' }
+    $page = [System.IO.File]::ReadAllText($published[$lang])
+    $from = "href=`"$base.$other.html`""
+    $count = [regex]::Matches($page, [regex]::Escape($from)).Count
+    if ($count -ne 1) { throw "sample-report.$lang.html: $count language links to $base.$other.html, want 1" }
+    $page = $page.Replace($from, "href=`"sample-report.$other.html`"")
+    $page = [regex]::Replace($page, '\shref="(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|//|sample-report\.(?:en|es)\.html")([^"]*)"', {
+            param($m)
+            $unlinked.Add("sample-report.$($lang).html: $($m.Groups[1].Value)")
+            ''
+        })
+    [System.IO.File]::WriteAllText($published[$lang], $page, $utf8)
+}
+Write-Output 'Links to files that are not published, href removed:'
+if ($unlinked.Count -eq 0) { Write-Output '  (none)' } else { $unlinked | ForEach-Object { Write-Output "  $_" } }
 
 # --- The checks ------------------------------------------------------------
 
@@ -170,26 +195,37 @@ if ($enHTML -notmatch 'Detected, not evaluated yet: [^<]*Claude Desktop') { $fai
 $gaps = @($v2.coverage.sources_failed) + @($v2.coverage.agents_unsupported) + @($v2.coverage.scan_errors) | Where-Object { $_ }
 if ($gaps | Where-Object { ($_ | ConvertTo-Json -Compress) -match 'Claude' }) { $failures.Add('a coverage note names Claude Desktop') }
 
-# 2 and 3. No generated secret in full, and nothing that names the runner,
-# in any file RosmarOps wrote or in dist/.
-$outputs = @(Get-ChildItem -Path (Join-Path $SampleHome '.rosmarops') -Recurse -File) +
-    @(Get-Item (Join-Path $OutDir 'sample-report.en.html'), (Join-Path $OutDir 'sample-report.es.html'))
+# 2. No generated secret in full in anything RosmarOps wrote or in dist/.
+$outputs = @(Get-ChildItem -Path (Join-Path $SampleHome '.rosmarops') -Recurse -File) + @(Get-Item $published.en, $published.es)
 foreach ($f in $outputs) {
     $text = [System.IO.File]::ReadAllText($f.FullName)
     foreach ($k in $secrets.Keys) {
         if ($text.Contains($secrets[$k])) { $failures.Add("$($f.Name) contains the generated secret $k") }
     }
-    foreach ($n in $runnerNames) {
-        if ($text.IndexOf($n, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $failures.Add("$($f.Name) names the runner ($n)") }
-    }
 }
 
-# 4. Nothing from the runner's Defender, scheduled tasks, global packages,
-# shell profiles or VS Code extensions (the baseline recorded them).
+# 3 and 4, on the two published pages (decision of the advisor, BV-112): no
+# name of the runner, and nothing from its Defender, scheduled tasks, global
+# packages, shell profiles or VS Code extensions. Those are older checks:
+# the technical report (.md, .json) lists them, the HTML has no section for
+# them, and only the HTML is published.
 $v1 = Get-ChildItem -Path $reports -Filter 'report-*.json' | Select-Object -First 1
-$machine = (Get-Content -Raw -Path $v1.FullName | ConvertFrom-Json).findings |
-    Where-Object { $_.category -match '^(av_exclusion|scheduled_task|global_package|npmrc|shell_profile|vscode_extension)' }
-foreach ($m in $machine) { $failures.Add("finding from the runner: $($m.category) $($m.title)") }
+$machine = @((Get-Content -Raw -Path $v1.FullName | ConvertFrom-Json).findings |
+        Where-Object { $_.category -match '^(av_exclusion|scheduled_task|global_package|npmrc|shell_profile|vscode_extension)' })
+Write-Output "Findings from the runner in the technical report, not published: $($machine.Count)"
+$machine | ForEach-Object { Write-Output "  $($_.category): $($_.title)" }
+foreach ($lang in $published.Keys) {
+    $page = [System.IO.File]::ReadAllText($published[$lang])
+    foreach ($n in $runnerNames) {
+        if ($page.IndexOf($n, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $failures.Add("sample-report.$lang.html names the runner ($n)") }
+    }
+    foreach ($m in $machine) {
+        $detail = ($m.title -split ': ', 2)[-1]
+        if ($page.Contains($m.category) -or ($detail -and $page.Contains($detail))) {
+            $failures.Add("sample-report.$lang.html shows a finding from the runner: $($m.category) $($m.title)")
+        }
+    }
+}
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Output "FAIL: $_" }
