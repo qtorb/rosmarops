@@ -574,6 +574,16 @@ func writeAction(sb *strings.Builder, cat catalog.Catalog, f rules.Finding, a ru
 }
 
 // findingParams are the catalog params of a finding.
+// cut shortens s to at most n runes (BV-111: the backend value is bounded
+// before it reaches any output).
+func cut(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
 func findingParams(f rules.Finding) map[string]string {
 	p := map[string]string{
 		"agent": f.Params.Agent, "service": f.Params.Service, "scope": f.Params.Scope,
@@ -582,6 +592,11 @@ func findingParams(f rules.Finding) map[string]string {
 	}
 	p["service_name"], p["cred_label"] = serviceName(f.Params.Service), credLabel(f)
 	p["cred_id"] = f.Params.CredID
+	// BV-111: {backend} is Hermes Agent's unrecognized terminal.backend value,
+	// read from disk, sanitized and cut to 40 characters.
+	if f.Params.Backend != "" {
+		p["backend"] = cut(untrusted.PlainText(f.Params.Backend), 40)
+	}
 	// BV-100: package_known_malicious params.
 	p["package"], p["version"], p["intel_id"] = f.Params.Package, f.Params.Version, f.Params.IntelID
 	if len(f.Group.Members) > 0 && f.Group.Members[0].Family != "" {

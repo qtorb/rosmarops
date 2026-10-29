@@ -680,6 +680,13 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		c.w(`<div class="proj">%s</div>`, c.t(key, map[string]string{"agent": s.Agent, "now": strconv.Itoa(*s.Value), "then": strconv.Itoa(s.Projection.Value)}))
 	}
 	after := "html.after.full"
+	if a.Code == rules.ActionHermesIsolatedBackend {
+		mp := copyParams(p)
+		mp["file"] = userPath(a.File, c.home, c.v.homePrefix())
+		c.w(`<p class="how">%s</p><p class="after">%s</p></div></section>`,
+			c.t("html.action.hermes_isolated_backend.how", mp), c.t("html.after.full", p))
+		return
+	}
 	if a.Code == rules.ActionRotateCredential {
 		c.renderRotate(f, a, true)
 		c.w(`<p class="after">%s</p></div></section>`, c.t("html.after.rotate", p)) // v3 §13.2
@@ -1304,6 +1311,8 @@ func HTMLKeys() []string {
 	for _, a := range rules.AllActions {
 		keys = append(keys, "html.action."+a+".title")
 	}
+	// BV-111: the isolated-backend action also has a «how» line in the HTML.
+	keys = append(keys, "html.action.hermes_isolated_backend.how")
 	for _, g := range glossTerms {
 		keys = append(keys, "html.gloss."+g+".q", "html.gloss."+g+".a")
 	}
@@ -1373,6 +1382,13 @@ var LegacyHTMLKeys = map[string]bool{
 	"html.na.python_cross":       true,
 	"html.na.weekly":             true,
 	"html.na.display_language":   true,
+	// BV-111: the two Hermes Agent premises and the isolated-backend action;
+	// ES/CA fall back to English until the owner supplies translations
+	// (contract point 8).
+	"unknown.aux_model_permits":                 true,
+	"unknown.hermes_backend_unknown":            true,
+	"html.action.hermes_isolated_backend.title": true,
+	"html.action.hermes_isolated_backend.how":   true,
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language

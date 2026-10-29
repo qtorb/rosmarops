@@ -102,7 +102,7 @@ func TestCursor_CommandLists(t *testing.T) {
 		t.Errorf("network commands %q", got)
 	}
 	all, err := knowledge.All()
-	if err != nil || len(all) != 2 || all["cursor"].Product != "cursor" || all["claude-code"].Product != "claude-code" {
+	if err != nil || len(all) != 3 || all["cursor"].Product != "cursor" || all["claude-code"].Product != "claude-code" || all["hermes"].Product != "hermes" {
 		t.Errorf("All: %v %v", all, err)
 	}
 }

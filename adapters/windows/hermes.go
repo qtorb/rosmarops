@@ -85,7 +85,7 @@ func readHermesConfig(path, dir string) (platform.HermesConfig, []platform.MCPSe
 	// Read only the keys RosmarOps uses; an unsupported YAML construct outside
 	// them is skipped, not a failure (BV-101, decision 1). A construct inside one
 	// of these sections is still a parse_error (fail-secure).
-	doc, err := yamlsubset.ParseKeys(raw, "approvals", "security", "mcp_servers")
+	doc, err := yamlsubset.ParseKeys(raw, "approvals", "security", "mcp_servers", "terminal")
 	if err != nil {
 		slog.Warn("hermes: config not read: outside the YAML subset", "path", path, "err", err)
 		cfg.Status, cfg.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
@@ -114,6 +114,15 @@ func readHermesConfig(path, dir string) (platform.HermesConfig, []platform.MCPSe
 	if s, ok := mapOf(root, "security")["protected_instruction_files"].(yamlsubset.Scalar); ok {
 		if b, isBool := s.Bool(); isBool {
 			cfg.ProtectedInstructionFiles = &b
+		}
+	}
+	// terminal.backend: "local" when absent (Hermes docs, user-guide/features/
+	// tools, read 2026-10-29). An isolated backend keeps the tools inside it; an
+	// unrecognized value is treated as local (BV-111, decision 4).
+	cfg.TerminalBackend = "local"
+	if s, ok := mapOf(root, "terminal")["backend"].(yamlsubset.Scalar); ok {
+		if v := strings.ToLower(strings.TrimSpace(s.Text)); v != "" {
+			cfg.TerminalBackend = v
 		}
 	}
 	return cfg, hermesServers(mapOf(root, "mcp_servers"), path, dir)

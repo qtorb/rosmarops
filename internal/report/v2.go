@@ -268,6 +268,10 @@ type V2Input struct {
 	ClaudeSettings *platform.ClaudeSettingsScan
 	Home           string
 
+	// Hermes is the Hermes Agent scan the graph was built from (BV-111): the
+	// overview reads each agent's terminal.backend from it. Optional.
+	Hermes platform.HermesScan
+
 	// IntegrityNotChecked: the state could not be read, so this run checked
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).
@@ -347,7 +351,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		res = rules.Evaluate(rules.Input{
 			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
 			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
-			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
+			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home, Hermes: in.Hermes,
 		})
 		v.Silenced, v.TestData = res.Silenced, res.TestData
 		v.agentNames = map[string]string{}

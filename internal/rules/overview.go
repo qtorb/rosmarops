@@ -269,9 +269,200 @@ func notEvaluatedRows() []OverviewCell {
 func NotEvaluatedRows() []OverviewCell { return notEvaluatedRows() }
 
 func (oi overviewInputs) cells(v *agentView) []OverviewCell {
+	if v.node.Platform == knowledge.HermesProduct {
+		return oi.hermesCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
+}
+
+// hermesCells are Hermes Agent's six rows (BV-111). Its read, write, shell and
+// network tools run without asking (decider nobody); the permission mode
+// (smart / manual / off) decides only the ask-gated write of another agent's
+// protected instructions, which lands in the changes row. A local or absent
+// terminal backend reaches the whole computer (scope machine); an isolated
+// backend keeps the file and shell tools inside it (read/write scope none,
+// shell scope sandbox, basis configured), and an unrecognized value is treated
+// as local, with the reason noted on the findings.
+func (oi overviewInputs) hermesCells(v *agentView) []OverviewCell {
+	isolated := false
+	for _, c := range v.inForce {
+		if c.Basis == graph.BasisConfigured && c.TargetScope == graph.HermesScopeIsolated {
+			isolated = true
+		}
+	}
+	return []OverviewCell{
+		oi.hermesReadsCell(v, isolated), oi.hermesWritesCell(v, isolated),
+		oi.hermesRunsCell(v, isolated), oi.hermesSendsCell(v),
+		oi.hermesChangesCell(v, hermesMode(v)), oi.providerCell(v),
+	}
+}
+
+// hermesUnknownBackends maps each Hermes Agent node whose terminal.backend is
+// a value RosmarOps does not recognize (treated as local) to that raw value
+// (BV-111). Agents with a local, absent or isolated backend are not listed.
+func hermesUnknownBackends(nodes map[string]graph.Node, scan platform.HermesScan) map[string]string {
+	out := map[string]string{}
+	for _, n := range nodes {
+		if n.Kind != graph.KindAgent || n.Type != graph.AgentAIClient || n.Platform != knowledge.HermesProduct {
+			continue
+		}
+		for _, c := range scan.Configs {
+			if graph.CanonicalPath(c.ConfigDir) != graph.CanonicalPath(n.ConfigPath) {
+				continue
+			}
+			if b := c.TerminalBackend; b != "" && b != "local" && !graph.IsolatedBackend(b) {
+				out[n.ID] = b
+			}
+		}
+	}
+	return out
+}
+
+// hermesMode is Hermes Agent's permission mode from its permission_mode
+// capability (approvals.mode): smart, manual or off; smart when absent.
+func hermesMode(v *agentView) string {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapPermissionMode {
+			return c.TargetScope
+		}
+	}
+	return "smart"
+}
+
+// hermesCap is the in-force capability of type typ with an allow approval.
+func (v *agentView) hermesCap(typ string) *graph.Node {
+	for i := range v.inForce {
+		if v.inForce[i].Type == typ && v.inForce[i].Approval == graph.ApprovalAllow {
+			return &v.inForce[i]
+		}
+	}
+	return nil
+}
+
+func (oi overviewInputs) hermesReadsCell(v *agentView, isolated bool) OverviewCell {
+	scope, origin := ScopeMachine, OriginProductDefault
+	if isolated {
+		scope, origin = ScopeNone, OriginConfigured
+	}
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: scope, Origin: origin}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	var capID string
+	if c := v.hermesCap(graph.CapReadFiles); c != nil {
+		capID = c.ID
+	}
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", capID)
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) hermesWritesCell(v *agentView, isolated bool) OverviewCell {
+	scope, origin := ScopeMachine, OriginProductDefault
+	if isolated {
+		scope, origin = ScopeNone, OriginConfigured
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: DeciderNobody, Scope: scope, Origin: origin}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.EditAllowRules = intp(hermesConfiguredAllow(v, graph.CapWriteFiles))
+	r := NoFindingNotAFinding
+	cell.NoFindingReason = &r
+	cell.Data.Excluded = []string{ExcludedProtectedPaths}
+	return cell
+}
+
+func (oi overviewInputs) hermesRunsCell(v *agentView, isolated bool) OverviewCell {
+	scope, origin := ScopeMachine, OriginProductDefault
+	if isolated {
+		scope, origin = ScopeSandbox, OriginConfigured
+	}
+	cell := OverviewCell{Row: RowRunsCommands, Decider: DeciderNobody, Scope: scope, Origin: origin}
+	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(hermesConfiguredAllow(v, graph.CapExecuteShell)), intp(0)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) hermesSendsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Decider: DeciderNobody, Scope: ScopeAnyDestination, Origin: OriginProductDefault}
+	var capID string
+	if c := v.hermesCap(graph.CapNetwork); c != nil {
+		capID = c.ID
+	}
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "egress_network", capID)
+	if len(oi.reaches[v.node.ID]) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// hermesChangesCell (BV-111): Hermes's writes to another agent's resources. A
+// config or executable is written without asking (nobody); another agent's
+// protected instructions are the one ask-gated write, decided by the mode
+// (smart → the auxiliary model, manual → you, off or absent → nobody).
+func (oi overviewInputs) hermesChangesCell(v *agentView, mode string) OverviewCell {
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		targets = append(targets, r.Configures)
+		if r.Type == graph.ResourceAgentInstructions {
+			dec, assume := hermesAskDecider(mode)
+			cs = append(cs, candidate{decider: dec, scope: ScopeInstructions, assumptions: assume, basis: []string{graph.BasisProductDefault}})
+			continue
+		}
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisProductDefault}})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	return cell
+}
+
+// hermesAskDecider is who decides an ask-gated action under a Hermes mode
+// (BV-111): the auxiliary model for smart (a premise, aux_model_permits), you
+// for manual, nobody for off or any non-asking mode.
+func hermesAskDecider(mode string) (string, []string) {
+	switch mode {
+	case "smart":
+		return DeciderModel, []string{AssumeAuxModelPermits}
+	case "manual":
+		return DeciderYou, nil
+	default:
+		return DeciderNobody, nil
+	}
+}
+
+// hermesConfiguredAllow counts the agent's configured allow capabilities of
+// type typ (an isolated backend turns its file and shell tools configured).
+func hermesConfiguredAllow(v *agentView, typ string) int {
+	n := 0
+	for _, c := range v.inForce {
+		if c.Type == typ && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			n++
+		}
+	}
+	return n
 }
 
 // dontAsk reports Claude Code's effective mode dontAsk, in which every
