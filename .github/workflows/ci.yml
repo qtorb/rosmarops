@@ -9,6 +9,8 @@
 # on macos-latest. The static network checks (no network package or symbol,
 # for windows, linux and darwin) run in go test on every job; the runtime
 # network trace with strace stays Linux-only, a declared limit on macOS.
+# BV-102: the verify job vets and staticchecks darwin too, and checks the
+# release flags of an alpha tag and a stable one.
 name: ci
 
 on:
@@ -42,11 +44,15 @@ jobs:
       - name: Strace for the runtime network trust test
         run: sudo apt-get update && sudo apt-get install -y strace
       - name: go vet
-        run: go vet ./... && GOOS=windows go vet ./...
+        run: go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./...
       - name: staticcheck
-        run: staticcheck ./... && GOOS=windows staticcheck ./...
+        run: staticcheck ./... && GOOS=windows staticcheck ./... && GOOS=darwin staticcheck ./...
       - name: gofumpt
         run: test -z "$(gofumpt -l .)"
+      - name: Release flags (a tag with a hyphen is a prerelease, not latest)
+        run: |
+          test "$(sh .github/scripts/release-flags.sh v0.5.0-alpha.1)" = "--prerelease --latest=false"
+          test "$(sh .github/scripts/release-flags.sh v0.5.0)" = "--latest"
       - name: go test (trust tests included)
         run: go test -count=1 ./...
 

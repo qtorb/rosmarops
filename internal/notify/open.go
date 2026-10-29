@@ -3,7 +3,7 @@ package notify
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -22,7 +22,7 @@ type runner func(ctx context.Context, name string, args ...string) error
 // report's absolute path, with no shell; macOS picks the browser. open
 // exits non-zero when it could not, so its exit code is the outcome.
 func openWith(run runner, path string) error {
-	if !filepath.IsAbs(path) {
+	if !strings.HasPrefix(path, "/") { // a macOS absolute path
 		return fmt.Errorf("notify: open report: not an absolute path: %q", path)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
