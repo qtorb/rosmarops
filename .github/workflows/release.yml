@@ -1,8 +1,10 @@
 # Release of RosmarOps (decision 2026-10-24, distribución, CTO-8 and CTO-8b):
 # only on a tag v*; the checks the repository requires, a Windows build,
-# rosmarops.exe alone with its SHA256SUMS.txt (decision 2026-10-27, primer
-# uso con un solo .exe), a build provenance attestation and the GitHub
-# release.
+# rosmarops.exe alone (decision 2026-10-27, primer uso con un solo .exe),
+# the macOS preview's rosmarops-darwin-arm64 and rosmarops-darwin-amd64
+# (decision 2026-10-29, macOS vista previa, point 6), each checked for no
+# network, their SHA256SUMS.txt, a build provenance attestation and the
+# GitHub release.
 #
 # Third-party actions are pinned by commit SHA (the tag in the comment).
 # The release is created with the GitHub CLI that the runner ships with.
@@ -35,9 +37,9 @@ jobs:
       - name: Strace for the runtime network trust test
         run: sudo apt-get update && sudo apt-get install -y strace
       - name: go vet
-        run: go vet ./... && GOOS=windows go vet ./...
+        run: go vet ./... && GOOS=windows go vet ./... && GOOS=darwin go vet ./...
       - name: staticcheck
-        run: staticcheck ./... && GOOS=windows staticcheck ./...
+        run: staticcheck ./... && GOOS=windows staticcheck ./... && GOOS=darwin staticcheck ./...
       - name: gofumpt
         run: test -z "$(gofumpt -l .)"
       - name: go test (trust tests included)
@@ -71,23 +73,39 @@ jobs:
         run: |
           mkdir -p dist/pkg
           go build -trimpath -ldflags="-X main.version=${TAG#v}" -o dist/pkg/rosmarops.exe ./cmd/rosmarops
-      - name: No network in the binary
+      - name: Build rosmarops-darwin-arm64 and rosmarops-darwin-amd64
+        env:
+          CGO_ENABLED: "0"
+          GOOS: darwin
         run: |
-          if GOOS=windows GOARCH=amd64 go list -deps ./cmd/rosmarops | grep -E '^(net|crypto/tls)(/|$)'; then exit 1; fi
-          if go tool nm dist/pkg/rosmarops.exe | awk '{print $NF}' | grep -E '^(net\.|net/|crypto/tls\.|syscall\.(Socket|Connect|Sendto)$)'; then exit 1; fi
+          for arch in arm64 amd64; do
+            GOARCH=$arch go build -trimpath -ldflags="-X main.version=${TAG#v}" -o "dist/pkg/rosmarops-darwin-$arch" ./cmd/rosmarops
+          done
+      - name: No network in the binaries
+        run: |
+          check() { # GOOS GOARCH binary
+            if GOOS=$1 GOARCH=$2 go list -deps ./cmd/rosmarops | grep -E '^(net|crypto/tls)(/|$)'; then exit 1; fi
+            if go tool nm "$3" | awk '{print $NF}' | grep -E '^(net\.|net/|crypto/tls\.|syscall\.(Socket|Connect|Sendto)$)'; then exit 1; fi
+          }
+          check windows amd64 dist/pkg/rosmarops.exe
+          check darwin arm64 dist/pkg/rosmarops-darwin-arm64
+          check darwin amd64 dist/pkg/rosmarops-darwin-amd64
       - name: Checksums
         run: |
           cd dist
-          cp pkg/rosmarops.exe .
-          sha256sum rosmarops.exe > SHA256SUMS.txt
+          cp pkg/rosmarops.exe pkg/rosmarops-darwin-arm64 pkg/rosmarops-darwin-amd64 .
+          sha256sum rosmarops.exe rosmarops-darwin-arm64 rosmarops-darwin-amd64 > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: dist/rosmarops.exe
+          subject-path: |
+            dist/rosmarops.exe
+            dist/rosmarops-darwin-arm64
+            dist/rosmarops-darwin-amd64
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${TAG}" \
-            dist/rosmarops.exe dist/SHA256SUMS.txt \
+            dist/rosmarops.exe dist/rosmarops-darwin-arm64 dist/rosmarops-darwin-amd64 dist/SHA256SUMS.txt \
             --repo "${GITHUB_REPOSITORY}" --title "RosmarOps ${TAG}" --notes-file "docs/release-notes/${TAG}.md" --verify-tag

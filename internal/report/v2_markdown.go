@@ -414,6 +414,15 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("- `graph.v2.json`\n")
 	}
 	w("\n")
+	// What this system does not check yet: shown here, not a gap (decision
+	// 2026-10-29, point 3).
+	if len(v.NotChecked) > 0 {
+		w("**%s** %s\n\n", t("html.na.title", nil), t("html.na.intro", nil))
+		for _, code := range v.NotChecked {
+			w("- %s\n", t("html.na."+code, nil))
+		}
+		w("\n")
+	}
 
 	// 6. Other checks (legacy).
 	w("## %s\n\n", t("section.legacy", nil))

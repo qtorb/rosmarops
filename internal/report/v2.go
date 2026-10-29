@@ -88,6 +88,58 @@ type V2 struct {
 	integrityNotChecked bool
 	exePath             string
 	weekly              scheduledtasks.Weekly
+	// OS is the operating system of the run, from the v1 report's platform
+	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
+	// sections (decision 2026-10-29, macOS vista previa).
+	OS string `json:"-"`
+	// NotChecked are the checks that do not apply on this system yet, by
+	// code (NotCheckedCodes), in that order: shown, not in the JSON
+	// (decision 2026-10-29, macOS vista previa, point 3).
+	NotChecked []string `json:"-"`
+}
+
+// NotCheckedCodes are the codes of NotChecked, in the order they are shown;
+// each has its html.na.<code> text.
+var NotCheckedCodes = []string{"scheduledtasks", "avexclusions", "shellprofile", "python_cross", "weekly", "display_language"}
+
+// macOS reports a run on macOS.
+func (v V2) macOS() bool { return v.OS == "macos" }
+
+// homePrefix is how the agent prompt names the user's folder: "~" on
+// macOS, "%USERPROFILE%" elsewhere (decision 2026-10-29, point 6).
+func (v V2) homePrefix() string {
+	if v.macOS() {
+		return "~"
+	}
+	return "%USERPROFILE%"
+}
+
+// osKey is key, or its macOS text (key + ".macos") on macOS (decision
+// 2026-10-29, point 5).
+func (v V2) osKey(key string) string {
+	if v.macOS() {
+		return key + ".macos"
+	}
+	return key
+}
+
+// notChecked keeps the known codes of in, once each, in NotCheckedCodes'
+// order; only on macOS, whose texts they have (html.na.title names it).
+func notChecked(os string, in []string) []string {
+	if os != "macos" {
+		return nil
+	}
+	got := map[string]bool{}
+	for _, c := range in {
+		got[c] = true
+	}
+	var out []string
+	for _, c := range NotCheckedCodes {
+		if got[c] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // NextMemory is findings-memory.json after this run, to write.
@@ -234,6 +286,11 @@ type V2Input struct {
 	// the provenance and the report's foot line.
 	IntelVersion     string
 	IntelPublishedAt string
+
+	// NotChecked are the checks that returned platform.ErrNotApplicable on
+	// this system, by code (NotCheckedCodes); unknown codes are dropped
+	// and the rest shown in NotCheckedCodes' order, on macOS only.
+	NotChecked []string
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -276,6 +333,8 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		integrityNotChecked: in.IntegrityNotChecked,
 		exePath:             in.ExePath,
 		weekly:              in.Weekly,
+		OS:                  in.V1.Platform.OS,
+		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
 		NotificationUnavailable: in.NotificationUnavailable,
 	}

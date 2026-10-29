@@ -26,12 +26,32 @@ Run it again after you change something: the report remembers the previous run a
 
 To run it every week without thinking about it, the report gives you the exact command to schedule a review every Friday at 09:00 (or your agent can run it for you). RosmarOps does not create the task itself. When the scheduled review finishes, Windows shows a notification; if notifications are turned off, the report opens in your browser.
 
+## Install and run (macOS, preview)
+
+1. Download `rosmarops-darwin-arm64` (Apple silicon) or `rosmarops-darwin-amd64` (Intel) from the [latest release](https://github.com/qtorb/rosmarops/releases/latest).
+2. Check it (see [Check the download](#check-the-download)).
+3. In Terminal, in the folder where you saved it:
+
+       chmod +x rosmarops-darwin-arm64
+       xattr -d com.apple.quarantine rosmarops-darwin-arm64
+       ./rosmarops-darwin-arm64
+
+4. The report opens in your browser when it finishes.
+
+The macOS version is a preview. The report lists what it does not check yet on macOS; none of that counts as clean. It is not signed or notarised by Apple: the `xattr` command removes the warning macOS shows for downloaded programs.
+
 ## Check the download
 
 Each release has a `SHA256SUMS.txt` file and a GitHub artifact attestation:
 
 ```
 gh attestation verify rosmarops.exe --repo qtorb/rosmarops
+```
+
+```
+# macOS
+shasum -a 256 -c SHA256SUMS.txt
+gh attestation verify rosmarops-darwin-arm64 --repo qtorb/rosmarops
 ```
 
 The program is not signed with a code-signing certificate yet, so Windows SmartScreen may warn you the first time you open it. Check the attestation and the checksum first: they are how you know it is the build from this repository. Then choose «More info» and «Run anyway».
@@ -44,6 +64,8 @@ Requires Go 1.22 or later.
 git clone https://github.com/qtorb/rosmarops.git
 cd rosmarops
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o rosmarops.exe ./cmd/rosmarops
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o rosmarops-darwin-arm64 ./cmd/rosmarops
+CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o rosmarops-darwin-amd64 ./cmd/rosmarops
 ```
 
 To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and build it with Go 1.24.7, passing the version without the «v» (for v0.1.0: `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.1.0" -o rosmarops.exe ./cmd/rosmarops`). Its SHA-256 matches the one in `SHA256SUMS.txt`.

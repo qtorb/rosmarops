@@ -93,7 +93,15 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 	for _, s := range v.NewMCP {
 		fmt.Fprintf(&tail, "%s\n\n", cat.Text("memory.new_mcp", mcpParams(cat, s)))
 	}
-	tail.WriteString(cat.Text("ai.limits", nil) + "\n")
+	tail.WriteString(cat.Text(v.osKey("ai.limits"), nil) + "\n")
+	// What this system does not check yet, next to the limits (decision
+	// 2026-10-29, point 3).
+	if len(v.NotChecked) > 0 {
+		fmt.Fprintf(&tail, "\n%s %s\n\n", cat.Text("html.na.title", nil), cat.Text("html.na.intro", nil))
+		for _, code := range v.NotChecked {
+			tail.WriteString("- " + cat.Text("html.na."+code, nil) + "\n")
+		}
+	}
 
 	full := make([]string, len(v.Findings))
 	line := make([]string, len(v.Findings))
