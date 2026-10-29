@@ -155,7 +155,18 @@ func TestDoubleClickFirstUse(t *testing.T) {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	en := catalogOf(t, "en")
-	for _, k := range []string{"console.first_run.detecting", "console.checking", "console.press_enter"} {
+	// On macOS the report opens (buildCmd's fake open): the window says so
+	// and does not ask for Enter (BV-102, point 1). Elsewhere here, no
+	// browser: the path and «Press Enter».
+	opened := runtime.GOOS == "darwin"
+	keys := []string{"console.first_run.detecting", "console.checking", "console.press_enter"}
+	if opened {
+		keys = []string{"console.first_run.detecting", "console.checking", "console.report_opened"}
+		if strings.Contains(out, en["console.press_enter"]) {
+			t.Errorf("window asks for Enter after opening the report:\n%s", out)
+		}
+	}
+	for _, k := range keys {
 		if !strings.Contains(out, en[k]) {
 			t.Errorf("window lacks %s:\n%s", k, out)
 		}
@@ -164,7 +175,7 @@ func TestDoubleClickFirstUse(t *testing.T) {
 		t.Errorf("window: not 5 projects found:\n%s", out)
 	}
 	reports := filepath.Join(home, ".rosmarops", "reports")
-	if want := strings.ReplaceAll(en["console.report_not_opened"], "{path}", filepath.Join(reports, "report.html")); !strings.Contains(out, want) {
+	if want := strings.ReplaceAll(en["console.report_not_opened"], "{path}", filepath.Join(reports, "report.html")); !opened && !strings.Contains(out, want) {
 		t.Errorf("window lacks %q (no browser here):\n%s", want, out)
 	}
 
