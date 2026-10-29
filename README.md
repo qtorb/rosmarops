@@ -4,7 +4,7 @@
 
 Free and open source (AGPL-3.0). It runs on your computer, only reads, and sends nothing. Each agent it evaluates gets an Agent Posture Score out of 100.
 
-RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code and Cursor; Cline, GitHub Copilot, Continue, Codex, Antigravity, Hermes Agent and Claude Desktop are detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
+RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code, Cursor and Hermes Agent; Cline, GitHub Copilot, Continue, Codex, Antigravity and Claude Desktop are detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
 
 - which keys each agent can read without asking you;
 - whether it can send them out, and who decides that: you, another AI model, or nobody;
@@ -78,13 +78,13 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 
 | Agent or source | What RosmarOps reads |
 |---|---|
-| Claude Code | Its settings at every level (managed, user, project, local), permission rules and modes, hooks, MCP servers, `CLAUDE.md` and rules, and the environment settings that choose where it sends your requests |
+| Claude Code | Its settings at every level (managed, user, project, local), permission rules and modes, hooks, MCP servers, `CLAUDE.md` and rules, its login file (`.credentials.json`), and the environment settings that choose where it sends your requests |
 | Cursor | `~/.cursor` and each project's `.cursor`: permissions, sandbox, MCP servers, hooks, rules, and Claude Code hooks that Cursor also loads |
 | Cline | Its MCP servers (scored in a later version) |
 | VS Code extensions | Which AI agent extensions are installed (Cline, GitHub Copilot, Continue), to list them as detected; any other new extension is listed in the technical report |
 | Codex | Detected, not scored yet: the keys in its `auth.json`, and `AGENTS.md` as its instructions |
 | Antigravity | Detected, not scored yet: its MCP servers (`~/.gemini/config/mcp_config.json` and each project's `.agents/mcp_config.json`) and its instruction files (`GEMINI.md`, `AGENTS.md`, `.agents/rules`) |
-| Hermes Agent | Detected, not scored yet: the keys in its `.env` files, and its instruction files |
+| Hermes Agent | Its approval mode and terminal backend (`config.yaml`), MCP servers, the keys in its `.env` and `auth.json` files, its skills, and its instruction files (including `SOUL.md`) |
 | Claude Desktop | Detected, not scored yet: its MCP servers in `claude_desktop_config.json` |
 | Credentials | `.env` files in your repositories, MCP `env` and `headers` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
