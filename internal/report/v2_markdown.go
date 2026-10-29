@@ -83,6 +83,11 @@ func CatalogKeys() []string {
 	// The merged rows' texts (v3 §14.2).
 	keys = append(keys, "finding.cred_read_and_send.title.multi", "finding.cred_read_and_send.what.multi",
 		"finding.cred_read_and_send.why.multi", "finding.cred_readable.title.multi", "finding.cred_readable.what.multi")
+	// BV-103: a config-writable finding whose resource is an executable paints
+	// its own title (both rules) and, for the foreign rule, its own "what".
+	keys = append(keys, "finding.foreign_agent_config_writable.title.executable",
+		"finding.foreign_agent_config_writable.what.executable",
+		"finding.own_config_writable.title.executable")
 	for _, a := range rules.AllActions {
 		keys = append(keys, "action."+a+".label", "action."+a+".how")
 	}
@@ -150,7 +155,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			t("finding.package_known_malicious.why", p), t("finding.package_known_malicious.action", p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
-		w("**%s**\n\n%s\n\n", t("finding."+f.Rule+".title", p), t("finding."+f.Rule+".what", p))
+		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
 		for _, a := range f.Actions {
 			if a.ID != v.Today.ActionID {
 				continue
@@ -224,13 +229,13 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), t("finding.package_known_malicious.action", p))
 			continue
 		}
-		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi("finding."+f.Rule+".title"), p))
+		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))
 		meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
 		if f.Radius != "" {
 			meta = append(meta, t("radius."+f.Radius, p))
 		}
 		w("%s\n\n", strings.Join(meta, " · "))
-		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(multi("finding."+f.Rule+".what"), p))
+		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(multi(execVariant(f, "finding."+f.Rule+".what")), p))
 		w("#### %s\n\n%s\n\n", t("finding.part.why", p), t(multi(whyKey(f)), p))
 		head := func(m rules.Finding) { // the agent's name, in a merged row
 			if len(members) > 1 {
@@ -560,6 +565,39 @@ func findingParams(f rules.Finding) map[string]string {
 		p["family"] = untrusted.PlainText(path.Base(strings.ReplaceAll(f.Group.Members[0].Family, `\`, "/")))
 	}
 	return p
+}
+
+// execVariantKeys are the catalog codes with an ".executable" variant for a
+// config-writable finding whose resource is an executable (BV-103): the title
+// of both rules (in the Markdown/AI "finding.*" copy and the HTML "html.f.*"
+// copy), plus the "what" (Markdown) and "impact" (HTML) of
+// foreign_agent_config_writable. Only the painted text changes; the finding
+// id, rule, severity and schema do not.
+var execVariantKeys = map[string]bool{
+	"finding.foreign_agent_config_writable.title": true,
+	"finding.foreign_agent_config_writable.what":  true,
+	"html.f.foreign_agent_config_writable.title":  true,
+	"html.f.foreign_agent_config_writable.impact": true,
+	"finding.own_config_writable.title":           true,
+	"html.f.own_config_writable.title":            true,
+}
+
+// execVariant returns key with an ".executable" suffix when f is a
+// config-writable finding (foreign_agent_config_writable or own_config_writable)
+// about an executable resource and key has such a variant; otherwise key
+// unchanged (BV-103). It picks only the text; it reads no schema field beyond
+// the resource type the engine already records.
+func execVariant(f rules.Finding, key string) string {
+	if f.Params.ResourceType != graph.ResourceAgentExecutable {
+		return key
+	}
+	switch f.Rule {
+	case rules.RuleForeignAgentConfigWritable, rules.RuleOwnConfigWritable:
+		if execVariantKeys[key] {
+			return key + ".executable"
+		}
+	}
+	return key
 }
 
 // serviceNames are the display names of services (BV-38, literal table).
