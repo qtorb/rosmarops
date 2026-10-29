@@ -1115,7 +1115,7 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RuleCredInGit {
 		return c.cat.Text("html.f.cred_in_git.title", p)
 	}
-	return c.cat.Text("html.f."+f.Rule+".title", p)
+	return c.cat.Text(execVariant(f, "html.f."+f.Rule+".title"), p)
 }
 
 // rowTitle is the title of the finding's row (v3 §12.2): with the agents
@@ -1197,7 +1197,7 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 		return c.cat.Text("html.f.cred_in_git.impact.local", p)
 	}
 	if f.Rule != rules.RuleCredReadAndSend && f.Rule != rules.RuleCredReadable {
-		return c.cat.Text("html.f."+f.Rule+".impact", p)
+		return c.cat.Text(execVariant(f, "html.f."+f.Rule+".impact"), p)
 	}
 	k := c.credKey(f)
 	key := "html.cred." + k + ".impact"
@@ -1298,6 +1298,10 @@ func HTMLKeys() []string {
 	for _, r := range []string{rules.RuleForeignAgentConfigWritable, rules.RuleForeignAgentInstructionsWritable, rules.RuleOwnConfigWritable, rules.RuleOwnInstructionsWritable} {
 		keys = append(keys, "html.f."+r+".title", "html.f."+r+".impact")
 	}
+	// BV-103: the executable-resource variants of the two config-writable rules.
+	keys = append(keys, "html.f.foreign_agent_config_writable.title.executable",
+		"html.f.foreign_agent_config_writable.impact.executable",
+		"html.f.own_config_writable.title.executable")
 	for _, k := range []string{"db", "private_key", "generic", "supabase", "supabase.service_role", "supabase.secret", "github", "npm", "railway", "stripe", "aws", "slack"} {
 		keys = append(keys, "html.cred."+k+".name", "html.cred."+k+".impact")
 	}
