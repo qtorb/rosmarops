@@ -11,8 +11,10 @@ import (
 // point 1).
 const openTimeout = 30 * time.Second
 
-// MacOpen is macOS's open, by its absolute path.
-const MacOpen = "/usr/bin/open"
+// macOpen is macOS's open, by its absolute path. A variable only so that
+// the integration tests can link a fake (-ldflags -X); nothing changes it
+// at run time.
+var macOpen = "/usr/bin/open"
 
 // runner runs name with args and no shell, and waits for it; tests replace
 // it.
@@ -27,7 +29,7 @@ func openWith(run runner, path string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), openTimeout)
 	defer cancel()
-	if err := run(ctx, MacOpen, path); err != nil {
+	if err := run(ctx, macOpen, path); err != nil {
 		return fmt.Errorf("notify: open report: %w", err)
 	}
 	return nil

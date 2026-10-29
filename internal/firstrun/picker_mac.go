@@ -6,9 +6,11 @@ import (
 	"strings"
 )
 
-// MacOsascript is macOS's osascript, by its absolute path (decision
-// 2026-10-29, macOS vista previa, point 2).
-const MacOsascript = "/usr/bin/osascript"
+// macOsascript is macOS's osascript, by its absolute path (decision
+// 2026-10-29, macOS vista previa, point 2). A variable only so that the
+// integration tests can link a fake (-ldflags -X); nothing changes it at
+// run time.
+var macOsascript = "/usr/bin/osascript"
 
 // MacPickerScript opens macOS's folder picker (choose folder). It is
 // constant: the title comes as its only argument (argv), never in the
@@ -59,7 +61,7 @@ func pickMac(run macRunner, title string, env []string) (string, error) {
 	if strings.HasPrefix(title, "-") {
 		return "", errors.New("folder picker: the title starts with -")
 	}
-	out, errb, err := run(MacOsascript, MacPickerArgs(title), macPickerEnv(env))
+	out, errb, err := run(macOsascript, MacPickerArgs(title), macPickerEnv(env))
 	if err != nil {
 		if strings.Contains(errb, macCancelled) {
 			return "", nil

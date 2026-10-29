@@ -15,8 +15,7 @@ import (
 func TestVersionFromLdflags(t *testing.T) {
 	_, work, home, env := integrityEnv(t)
 	bin := filepath.Join(t.TempDir(), "rosmarops")
-	build := exec.Command("go", "build", "-trimpath", "-ldflags=-X main.version=9.9.9", "-o", bin, "./cmd/rosmarops")
-	build.Dir = filepath.Join("..", "..")
+	build := buildCmd(t, bin, "-X main.version=9.9.9", "-trimpath")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}

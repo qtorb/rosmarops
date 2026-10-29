@@ -22,8 +22,7 @@ func firstRunEnv(t *testing.T) (bin, root, home string, env []string) {
 		t.Skip("black-box run is implemented for Unix-like hosts")
 	}
 	bin = filepath.Join(t.TempDir(), "rosmarops")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/rosmarops")
-	build.Dir = filepath.Join("..", "..")
+	build := buildCmd(t, bin, "")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
@@ -331,7 +330,9 @@ func TestDoubleClickNothingFound(t *testing.T) {
 		t.Errorf("repo_roots %v", cfg.RepoRoots)
 	}
 	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "last-run-log.txt"))
-	if !strings.Contains(string(log), "folder picker not opened") || !strings.Contains(string(log), "no folder chosen") {
+	// On macOS the picker opens (here, a fake osascript that cancels):
+	// only «no folder chosen» (BV-102).
+	if (runtime.GOOS != "darwin" && !strings.Contains(string(log), "folder picker not opened")) || !strings.Contains(string(log), "no folder chosen") {
 		t.Errorf("the log does not say what happened:\n%s", log)
 	}
 }
