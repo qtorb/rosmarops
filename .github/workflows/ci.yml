@@ -10,7 +10,8 @@
 # for windows, linux and darwin) run in go test on every job; the runtime
 # network trace with strace stays Linux-only, a declared limit on macOS.
 # BV-102: the verify job vets and staticchecks darwin too, and checks the
-# release flags of an alpha tag and a stable one.
+# release flags of an alpha tag and a stable one. BV-112: verify-windows
+# makes and checks the sample report (scripts/sample-report/generate.ps1).
 name: ci
 
 on:
@@ -76,6 +77,22 @@ jobs:
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      # BV-112: the sample report, made by this commit's rosmarops.exe on
+      # the fictitious computer of testdata/sample-home and checked; nothing
+      # is uploaded. The two checked pages go to the log, gzip and base64,
+      # one line each, for review.
+      - name: Sample report
+        run: |
+          go build -trimpath -o dist/rosmarops.exe ./cmd/rosmarops
+          ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
+          foreach ($lang in 'en', 'es') {
+            $out = [System.IO.MemoryStream]::new()
+            $gz = [System.IO.Compression.GZipStream]::new($out, [System.IO.Compression.CompressionLevel]::Optimal)
+            $raw = [System.IO.File]::ReadAllBytes("dist/sample-report.$lang.html")
+            $gz.Write($raw, 0, $raw.Length)
+            $gz.Dispose()
+            Write-Output "SAMPLE-REPORT-$lang $([Convert]::ToBase64String($out.ToArray()))"
+          }
 
   verify-macos:
     runs-on: macos-latest

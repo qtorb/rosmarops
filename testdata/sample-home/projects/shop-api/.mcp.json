@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "shop-docs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./docs"]
+    }
+  }
+}

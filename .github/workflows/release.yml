@@ -5,7 +5,10 @@
 # (decision 2026-10-29, macOS vista previa, point 6), each checked for no
 # network, their SHA256SUMS.txt, a build provenance attestation and the
 # GitHub release. A tag with a hyphen (v0.5.0-alpha.1) is published as a
-# prerelease, never «latest» (.github/scripts/release-flags.sh).
+# prerelease, never «latest» (.github/scripts/release-flags.sh). BV-112:
+# then the released rosmarops.exe, checked against SHA256SUMS.txt, makes the
+# sample report on Windows (scripts/sample-report/generate.ps1), and its
+# English and Spanish pages are added to the release.
 #
 # Third-party actions are pinned by commit SHA (the tag in the comment).
 # The release is created with the GitHub CLI that the runner ships with.
@@ -120,3 +123,26 @@ jobs:
           gh release create "${TAG}" \
             dist/rosmarops.exe dist/rosmarops-macos-apple-silicon dist/rosmarops-macos-intel dist/SHA256SUMS.txt \
             --repo "${GITHUB_REPOSITORY}" --title "RosmarOps ${TAG}" --notes-file "docs/release-notes/${TAG}.md" --verify-tag ${flags}
+
+  sample-report:
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the released rosmarops.exe
+        run: |
+          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
+          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
+          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
+          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+      - name: Sample report
+        run: ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
+      - name: Add the sample report to the release
+        run: gh release upload "$env:TAG" dist/sample-report.en.html dist/sample-report.es.html --repo "$env:GITHUB_REPOSITORY" --clobber
