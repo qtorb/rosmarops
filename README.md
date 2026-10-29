@@ -2,6 +2,8 @@
 
 **See what your AI coding agents can reach on your computer — and how one agent can change another.**
 
+Free and open source (AGPL-3.0). It runs on your computer, only reads, and sends nothing. Each agent it evaluates gets an Agent Posture Score out of 100.
+
 RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code and Cursor; Cline, GitHub Copilot, Continue, Codex, Antigravity, Hermes Agent and Claude Desktop are detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
 
 - which keys each agent can read without asking you;
