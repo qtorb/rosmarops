@@ -132,7 +132,9 @@ Copy-Item -Path (Join-Path $reports 'report.es.html') -Destination $published.es
 # published page (exactly one replacement per page), and any other relative
 # href, to a file that is not published (.md, .json, .ai.md…), loses its
 # href and keeps its text. Nothing else in the HTML changes.
-$base = (Get-ChildItem -Path $reports -Filter 'report-*.md' | Select-Object -First 1).BaseName
+$v1Files = @(Get-ChildItem -Path $reports -Filter 'report-*.json')
+if ($v1Files.Count -ne 1) { throw "$($v1Files.Count) report-*.json in $reports, want 1" }
+$base = $v1Files[0].BaseName # report-<date>__<STATUS>__<counts>, the pages' base
 $unlinked = [System.Collections.Generic.List[string]]::new()
 foreach ($lang in $published.Keys) {
     $other = if ($lang -eq 'en') { 'es' } else { 'en' }
@@ -209,7 +211,7 @@ foreach ($f in $outputs) {
 # packages, shell profiles or VS Code extensions. Those are older checks:
 # the technical report (.md, .json) lists them, the HTML has no section for
 # them, and only the HTML is published.
-$v1 = Get-ChildItem -Path $reports -Filter 'report-*.json' | Select-Object -First 1
+$v1 = $v1Files[0]
 $machine = @((Get-Content -Raw -Path $v1.FullName | ConvertFrom-Json).findings |
         Where-Object { $_.category -match '^(av_exclusion|scheduled_task|global_package|npmrc|shell_profile|vscode_extension)' })
 Write-Output "Findings from the runner in the technical report, not published: $($machine.Count)"
