@@ -50,7 +50,7 @@ gh attestation verify rosmarops.exe --repo qtorb/rosmarops
 
 ```
 # macOS
-shasum -a 256 -c SHA256SUMS.txt
+shasum -a 256 -c --ignore-missing SHA256SUMS.txt
 gh attestation verify rosmarops-darwin-arm64 --repo qtorb/rosmarops
 ```
 
