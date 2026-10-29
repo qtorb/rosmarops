@@ -2,6 +2,7 @@ package graph
 
 import (
 	"path"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -104,6 +105,19 @@ func cursorBase(extra ...string) []string {
 
 // cursorModeAssumptions are the assumptions of a way through Auto-review:
 // the IDE mode is not readable (K4) and the classifier decides (§2).
+// sandboxPlatformUnknown: Cursor documents its sandbox for macOS and Linux,
+// not for Windows, so the assumption holds only there (decision
+// 2026-10-29, macOS vista previa, point 5); tests replace it.
+var sandboxPlatformUnknown = runtime.GOOS == "windows"
+
+// sandboxPlatformAssumptions is AssumeSandboxPlatformUnknown where it holds.
+func sandboxPlatformAssumptions() []string {
+	if sandboxPlatformUnknown {
+		return []string{AssumeSandboxPlatformUnknown}
+	}
+	return nil
+}
+
 func cursorModeAssumptions(extra ...string) []string {
 	return cursorBase(append([]string{AssumeIDERunModeNotReadable, AssumeAutoClassifierPermits}, extra...)...)
 }
@@ -281,7 +295,7 @@ func (in cursorInference) readWays(files []string) []cursorWay {
 		out = append(out, cursorWay{*in.fileRead, cursorBase()})
 	}
 	if in.modeCap != nil && usedBy(func(_ string, inside bool) bool { return inside || !in.readBoundary }) {
-		out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)})
+		out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(sandboxPlatformAssumptions()...)})
 	}
 	if len(files) == 0 {
 		return out
@@ -352,7 +366,7 @@ func (in cursorInference) writeWays(file, resType string) []cursorWay {
 		}
 		switch {
 		case inside && (!protected || in.insecureFor(file)), !inside && readwrite:
-			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeSandboxPlatformUnknown)})
+			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(sandboxPlatformAssumptions()...)})
 		case !inside:
 			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeShellWriteUnchecked)})
 		}

@@ -141,6 +141,7 @@ func hasAll(list []string, want ...string) bool {
 // (annex 3 point 2), and reach a credential file in the repository that is
 // not ignored, with no mode or classifier assumption.
 func TestInferCursor_EnvReachedByTerminal(t *testing.T) {
+	defer graph.SetSandboxPlatformUnknown(true)()
 	es := cursorEdges(t, cursorGraph(t, cursorFixture{}))
 	for _, file := range []string{cursorEnv, outsideEnv} {
 		got := findEdges(es, graph.EdgeReaches, file, "run_mode_builtin")
@@ -155,6 +156,31 @@ func TestInferCursor_EnvReachedByTerminal(t *testing.T) {
 	plain := findEdges(es, graph.EdgeReaches, plainKeys, "file_tools_read")
 	if len(plain) != 1 || contains(plain[0].assumptions, graph.AssumeAutoClassifierPermits) || !contains(plain[0].assumptions, graph.AssumeTeamPolicyUnknown) {
 		t.Errorf("not-ignored file by the file tools: %+v", plain)
+	}
+}
+
+// BV-102 (decision 2026-10-29, macOS vista previa, point 5): off Windows,
+// where Cursor documents its sandbox, the same edges carry no
+// sandbox_platform_unknown; the rest of their assumptions stay.
+func TestInferCursor_SandboxPlatformOnlyOnWindows(t *testing.T) {
+	defer graph.SetSandboxPlatformUnknown(false)()
+	es := cursorEdges(t, cursorGraph(t, cursorFixture{}))
+	n := 0
+	for _, e := range es {
+		if contains(e.assumptions, graph.AssumeSandboxPlatformUnknown) {
+			t.Errorf("sandbox_platform_unknown off Windows: %+v", e)
+		}
+	}
+	for _, file := range []string{cursorEnv, outsideEnv} {
+		got := findEdges(es, graph.EdgeReaches, file, "run_mode_builtin")
+		if len(got) != 1 || !hasAll(got[0].assumptions, graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits,
+			graph.AssumeTeamPolicyUnknown, assumeUser, assumeVersion) {
+			t.Errorf("%s: %+v", file, got)
+		}
+		n += len(got)
+	}
+	if n != 2 {
+		t.Errorf("%d edges, want 2", n)
 	}
 }
 

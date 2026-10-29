@@ -234,6 +234,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	sort.Strings(langs)
 	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs}
 	weekly := scheduledtasks.Weekly{State: scheduledtasks.WeeklyNone}
+	// The checks that do not apply on this system yet (ErrNotApplicable),
+	// by report.NotCheckedCodes' code: the macOS report lists them
+	// (decision 2026-10-29, macOS vista previa, point 3).
+	var notChecked []string
+	if !displayLanguageChecked {
+		notChecked = append(notChecked, "display_language")
+	}
 
 	// Resolve home dir once — used by the MCP writable-path check.
 	homeDir, homeDirErr := os.UserHomeDir()
@@ -408,6 +415,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					pyDirs, pyErr := plat.PythonSitePackages(cfg.RepoRoots)
 					if errors.Is(pyErr, platform.ErrNotApplicable) {
 						slog.Info("pyenv", "err", pyErr)
+						notChecked = append(notChecked, "python_cross")
 					} else if pyErr != nil {
 						slog.Warn("pyenv: could not resolve site-packages", "err", pyErr)
 						scanErrors = append(scanErrors, finding.ScanError{Scope: "pyenv", Message: pyErr.Error()})
@@ -445,6 +453,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				if errors.Is(profErr, platform.ErrNotApplicable) {
 					slog.Info("shellprofile", "err", profErr)
+					notChecked = append(notChecked, "shellprofile")
 					return
 				}
 				if profErr != nil {
@@ -466,6 +475,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				if errors.Is(tasksErr, platform.ErrNotApplicable) {
 					slog.Info("scheduledtasks", "err", tasksErr)
+					// No task list: no weekly review either (point 4).
+					notChecked = append(notChecked, "scheduledtasks", "weekly")
 					return
 				}
 				weekly = scheduledtasks.WeeklyOf(currentTasks, self)
@@ -490,6 +501,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				if errors.Is(avErr, platform.ErrNotApplicable) {
 					slog.Info("avexclusions", "err", avErr)
+					notChecked = append(notChecked, "avexclusions")
 					return
 				}
 				if avErr != nil {
@@ -635,7 +647,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
 		IntegrityNotChecked: integrityNotChecked,
-		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code,
+		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))

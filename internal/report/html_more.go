@@ -27,12 +27,35 @@ const moreCSS = `
 #as-dlg-title{font-size:17px;font-weight:700;margin:0 0 10px}
 #as-dialog ul{font-size:14px;line-height:1.5;padding-left:18px;margin:0}`
 
+// macOSCSS is the style the macOS preview adds (decision 2026-10-29): the
+// strip in two columns, the list of what is not checked yet. Only on macOS,
+// so that the Windows page does not change.
+const macOSCSS = `
+#as-dialog ul ul{margin:4px 0 0}
+.more.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1099px){.more.two{grid-template-columns:minmax(0,1fr)}}`
+
+// osCSS is macOSCSS on macOS, else nothing.
+func (c htmlCtx) osCSS() string {
+	if c.v.macOS() {
+		return macOSCSS
+	}
+	return ""
+}
+
 // renderMore writes div.more (§17.1–§17.4).
 func (c htmlCtx) renderMore(local time.Time) {
-	c.w(`<div class="more"><div><h3>%s</h3>`, c.t("html.since.title", nil))
-	c.renderSince()
-	c.w(`</div><div><h3>%s</h3>`, c.t("html.weekly.title", nil))
-	c.renderWeekly()
+	if c.v.macOS() {
+		// No weekly review on macOS yet: two columns (decision 2026-10-29,
+		// point 4).
+		c.w(`<div class="more two"><div><h3>%s</h3>`, c.t("html.since.title", nil))
+		c.renderSince()
+	} else {
+		c.w(`<div class="more"><div><h3>%s</h3>`, c.t("html.since.title", nil))
+		c.renderSince()
+		c.w(`</div><div><h3>%s</h3>`, c.t("html.weekly.title", nil))
+		c.renderWeekly()
+	}
 	c.w(`</div><div><h3>%s</h3><p>%s</p>`, c.t("html.agentfix.title", nil), c.t("html.agentfix.body", nil))
 	c.w(`<button type="button" class="b2" id="ai-copy" data-done="%s">%s</button><span class="live" aria-live="polite"></span><button type="button" class="b2" id="ai-download" data-file="rosmarops-ai-%s.md">%s</button><template id="ai-export">%s</template>`,
 		c.t("html.fix.copied", nil), c.t("html.ai.copy", nil), local.Format("2006-01-02"), c.t("html.ai.download", nil),
@@ -199,7 +222,8 @@ func (c htmlCtx) renderFoot() {
 }
 
 // renderAssumeDialog is the window of the analysis assumptions (§17.5): the
-// common line, one per evaluated agent in the columns' order, the scope.
+// common line, one per evaluated agent in the columns' order, the scope;
+// then what this system does not check yet (decision 2026-10-29, point 3).
 func (c htmlCtx) renderAssumeDialog() {
 	c.w(`<dialog id="as-dialog" aria-labelledby="as-dlg-title" hidden><button type="button" class="b2" id="as-close">%s</button><h2 id="as-dlg-title">%s</h2><ul><li>%s</li>`,
 		c.t("html.ov.close", nil), c.t("html.assume.title", nil), c.t("html.assume.common", nil))
@@ -210,7 +234,15 @@ func (c htmlCtx) renderAssumeDialog() {
 		}
 		c.w(`<li>%s</li>`, c.t("html.assume."+product, nil))
 	}
-	c.w(`<li>%s</li></ul></dialog>`, c.t("html.assume.scope", nil))
+	c.w(`<li>%s</li>`, c.t(c.v.osKey("html.assume.scope"), nil))
+	if len(c.v.NotChecked) > 0 {
+		c.w(`<li id="not-checked"><strong>%s</strong> %s<ul>`, c.t("html.na.title", nil), c.t("html.na.intro", nil))
+		for _, code := range c.v.NotChecked {
+			c.w(`<li>%s</li>`, c.t("html.na."+code, nil))
+		}
+		c.w(`</ul></li>`)
+	}
+	c.w(`</ul></dialog>`)
 }
 
 // dialogJS opens and closes a window (v3 §16.2, §17.5): showModal, close,
@@ -228,12 +260,16 @@ func moreKeys() []string {
 		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score",
 		"html.lang_switch", "html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note", "html.weekly.copy_command",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
-		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope",
+		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope", "html.assume.scope.macos",
+		"html.na.title", "html.na.intro",
 		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",
 		"html.abort.run_failed", // BV-93, B3: the run-could-not-finish page
 	}
 	for _, d := range []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"} {
 		keys = append(keys, "html.day."+d)
+	}
+	for _, code := range NotCheckedCodes {
+		keys = append(keys, "html.na."+code)
 	}
 	for _, r := range notify.Reasons {
 		keys = append(keys, "html.notify.unavailable."+r)

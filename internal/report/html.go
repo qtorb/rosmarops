@@ -304,7 +304,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
 	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><style>%s</style></head><body><main>`,
-		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS())
+		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS())
 
 	// §1.1 Header.
 	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t("html.header", map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
@@ -583,7 +583,7 @@ func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 	p := c.params(f)
 	c.w(`<ol class="rot"><li>%s</li><li>%s</li><li>%s</li></ol>`, c.t("html.fix.rotate.step1", p), c.t("html.fix.rotate.step2", p), c.t("html.fix.rotate.step3", p))
 	pp := copyParams(p)
-	pp["file"] = userPath(a.File, c.home, "%USERPROFILE%")
+	pp["file"] = userPath(a.File, c.home, c.v.homePrefix())
 	class := ""
 	if wide {
 		class = ` class="wide"`
@@ -690,7 +690,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 			prompt, add = "html.agent.prompt.create", "html.fix.manual.create"
 		}
 		pp := copyParams(p)
-		pp["file"] = userPath(a.File, c.home, "%USERPROFILE%")
+		pp["file"] = userPath(a.File, c.home, c.v.homePrefix())
 		c.w(`<pre hidden>%s
 
 %s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
@@ -962,7 +962,7 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 		prompt = "html.agent.prompt.create"
 	}
 	pp := copyParams(p)
-	pp["file"] = userPath(a.File, c.home, "%USERPROFILE%")
+	pp["file"] = userPath(a.File, c.home, c.v.homePrefix())
 	c.w(`<ol><li>%s</li><li>%s</li><li>%s</li></ol>`, c.t("html.fix.step1", p), c.t("html.fix.step2", p), c.t("html.fix.step3", p))
 	c.w(`<pre>%s
 
@@ -983,7 +983,7 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 
 // manualOpen is html.fix.manual.open with the path in code.
 func (c htmlCtx) manualOpen(p map[string]string) string {
-	return c.withHTML("html.fix.manual.open", p, "file", "<code>"+html.EscapeString(p["file"])+"</code>")
+	return c.withHTML(c.v.osKey("html.fix.manual.open"), p, "file", "<code>"+html.EscapeString(p["file"])+"</code>")
 }
 
 func copyParams(p map[string]string) map[string]string {
@@ -1233,7 +1233,7 @@ func HTMLKeys() []string {
 		"html.unknown.body", "html.coverage.title", "html.coverage.body",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
 		"html.fix.title", "html.fix.step1", "html.fix.step2", "html.fix.step3", "html.fix.copy", "html.fix.copied",
-		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
+		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.open.macos", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
 		"html.fix.remove", "html.agent.prompt.merge", "html.agent.prompt.create",
 		"html.after.full", "html.after.radius", "html.after.partial",
 		"html.history.reset", "html.today.projection",
@@ -1241,7 +1241,7 @@ func HTMLKeys() []string {
 		// v2
 		"html.index.unchanged", "html.legacy.pointer",
 		"html.ai.copy", "html.ai.download",
-		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.more",
+		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.limits.macos", "ai.more",
 		"html.memory.first", "html.memory.lost", "html.history.missing", // B8
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
@@ -1333,6 +1333,19 @@ var LegacyHTMLKeys = map[string]bool{
 	"finding.package_known_malicious.why":    true,
 	"finding.package_known_malicious.action": true,
 	"report.intel_stamp":                     true,
+	// BV-102: the macOS preview's texts; ES/CA fall back to English until
+	// the owner supplies translations (decision 2026-10-29, point 5).
+	"html.assume.scope.macos":    true,
+	"ai.limits.macos":            true,
+	"html.fix.manual.open.macos": true,
+	"html.na.title":              true,
+	"html.na.intro":              true,
+	"html.na.scheduledtasks":     true,
+	"html.na.avexclusions":       true,
+	"html.na.shellprofile":       true,
+	"html.na.python_cross":       true,
+	"html.na.weekly":             true,
+	"html.na.display_language":   true,
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language

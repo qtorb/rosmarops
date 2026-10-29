@@ -10,3 +10,6 @@ func uiLanguage() uint16 {
 	r, _, _ := syscall.NewLazyDLL("kernel32.dll").NewProc("GetUserDefaultUILanguage").Call()
 	return uint16(r)
 }
+
+// displayLanguageChecked: the report follows the Windows display language.
+const displayLanguageChecked = true

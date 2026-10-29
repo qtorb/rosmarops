@@ -26,7 +26,7 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 | # | Claim | How to check it |
 |---|-------|-----------------|
 | 1 | The source code is public, under AGPL-3.0 | The GitHub repository and its `LICENSE` file. The full commit history is visible. |
-| 2 | The program contains no networking code | Run `go list -deps ./cmd/rosmarops` with `GOOS=windows` and with `GOOS=linux`: no package named `net`, starting with `net/`, or `crypto/tls` appears. `tests/trust/no_network_test.go` checks this, checks the compiled binary's symbols, checks that the source never opens a socket through system calls, and runs the program on Linux while tracing the network system calls (connect, sendto, sendmsg) of every process it starts: a single internet connection attempt fails the test. |
+| 2 | The program contains no networking code | Run `go list -deps ./cmd/rosmarops` with `GOOS=windows`, with `GOOS=darwin` and with `GOOS=linux`: no package named `net`, starting with `net/`, or `crypto/tls` appears. `tests/trust/no_network_test.go` checks this, checks the compiled binary's symbols, checks that the source never opens a socket through system calls, and runs the program on Linux while tracing the network system calls (connect, sendto, sendmsg) of every process it starts: a single internet connection attempt fails the test. |
 | 3 | It writes only inside `~/.rosmarops/` and the reports folder you configure (by default `~/.rosmarops/reports/`) | Every file write in the source goes to one of those two places. `tests/trust/no_writes_out_of_scope_test.go` runs the program in a sandbox and fails if anything is written elsewhere. |
 | 4 | Secrets are never shown in full | A detected secret is shown as its first 4 characters, ` ... `, and its last 4. The graph of what each agent can reach stores only a salted fingerprint of each key, never the value. `tests/trust/no_full_secret_leak_test.go` and `no_secret_in_graph_test.go` feed known fake secrets and fail if the full value appears in any output, log or state. |
 | 5 | The visual report loads nothing from outside your computer | The HTML report has its styles and script inside the file, and no external fonts, images or links. `tests/trust/no_external_in_html_test.go` checks it. |
@@ -42,9 +42,9 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 
 Every release on GitHub includes:
 
-- the Windows program, `rosmarops.exe`, with a `SHA256SUMS.txt` file;
-- a **GitHub artifact attestation** that ties the program to the exact commit and the GitHub workflow that built it. Check it with `gh attestation verify rosmarops.exe --repo qtorb/rosmarops`;
-- a **reproducible build**: building the tagged commit from a clean git clone with Go 1.24.7 and the documented command (`GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=<tag without v>"`) produces a `rosmarops.exe` with the same SHA-256 as the one in the release.
+- the Windows program, `rosmarops.exe`, and the macOS preview, `rosmarops-darwin-arm64` and `rosmarops-darwin-amd64`, with a `SHA256SUMS.txt` file;
+- a **GitHub artifact attestation** that ties the program to the exact commit and the GitHub workflow that built it. Check it with `gh attestation verify rosmarops.exe --repo qtorb/rosmarops` (on macOS, `gh attestation verify rosmarops-darwin-arm64 --repo qtorb/rosmarops`);
+- a **reproducible build**: building the tagged commit from a clean git clone with Go 1.24.7 and the documented command (`GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=<tag without v>"`) produces a `rosmarops.exe` with the same SHA-256 as the one in the release; for macOS, the same with `GOOS=darwin GOARCH=arm64` or `GOOS=darwin GOARCH=amd64`.
 
 ---
 

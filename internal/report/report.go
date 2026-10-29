@@ -418,8 +418,11 @@ func parseDate(rfc3339 string) string {
 	return t.UTC().Format("2006-01-02")
 }
 
+// goos is the system the run is on; the tests set it.
+var goos = runtime.GOOS
+
 func currentPlatform() Platform {
-	osName := runtime.GOOS
+	osName := goos
 	if osName == "darwin" {
 		osName = "macos"
 	}

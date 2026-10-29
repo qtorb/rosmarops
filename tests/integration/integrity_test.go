@@ -23,8 +23,7 @@ func integrityEnv(t *testing.T) (bin, work, home string, env []string) {
 		t.Skip("black-box run is implemented for Unix-like hosts")
 	}
 	bin = filepath.Join(t.TempDir(), "rosmarops")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/rosmarops")
-	build.Dir = filepath.Join("..", "..")
+	build := buildCmd(t, bin, "")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
@@ -301,9 +300,14 @@ func TestUnattendedConfigAndLog(t *testing.T) {
 		t.Errorf("the log names the local configuration:\n%s", log)
 	}
 	// J10: the log says what happened to the notice (here, not on
-	// Windows: no notification and no report opened, as not applicable on
-	// this system, M1a).
-	for _, want := range []string{"notify: err=notify: not applicable on this system", "notify: report not opened err=notify: open report: not applicable on this system"} {
+	// Windows: no notification, as not applicable on this system, M1a; the
+	// report opened on macOS, with the fake open of buildCmd, BV-102, and
+	// not opened elsewhere).
+	opened := "notify: report not opened err=notify: open report: not applicable on this system"
+	if runtime.GOOS == "darwin" {
+		opened = "notify: report opened"
+	}
+	for _, want := range []string{"notify: err=notify: not applicable on this system", opened} {
 		if !strings.Contains(string(log), want) {
 			t.Errorf("no %q in the log:\n%s", want, log)
 		}

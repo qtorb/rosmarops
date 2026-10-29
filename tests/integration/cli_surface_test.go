@@ -43,8 +43,7 @@ func TestCLISurface(t *testing.T) {
 		t.Skip("black-box run is implemented for Unix-like hosts")
 	}
 	bin := filepath.Join(t.TempDir(), "rosmarops")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/rosmarops")
-	build.Dir = filepath.Join("..", "..")
+	build := buildCmd(t, bin, "")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
