@@ -38,10 +38,34 @@ const (
 
 // Limits (decision K1, item 4): skills listed per skills folder and files
 // listed per scripts folder. The rest are not listed and the folder goes to
-// coverage.
+// coverage. MaxSkillsPerFolder was raised 200 → 1000 (BV-101b, decision 2c,
+// signed) because Hermes ships ~306 skills; the per-scripts limit stays 200.
 const (
-	MaxSkillsPerFolder = 200
+	MaxSkillsPerFolder = 1000
 	MaxScriptFiles     = 200
+	// maxSkillDepth caps the recursive SKILL.md search in Hermes skills folders
+	// (BV-101b, decision 2a): Hermes itself searches any depth; we stop at 8 as
+	// a resource limit. The skills root is depth 0, its children depth 1.
+	maxSkillDepth = 8
+)
+
+// Hermes's own skill-walk pruning sets, copied literally from
+// agent/skill_utils.py @ bf0203a (EXCLUDED_SKILL_DIRS, SKILL_SUPPORT_DIRS) so
+// RosmarOps discovers the same SKILL.md files Hermes does (BV-101b, decision 2a).
+// A dir in excludedSkillDirs is never descended; a support dir is not descended
+// when its parent already holds a SKILL.md (Hermes does not look for sub-skills
+// inside references/templates/assets/scripts of a skill).
+var (
+	excludedSkillDirs = map[string]bool{
+		".git": true, ".github": true, ".hub": true, ".archive": true,
+		".curator_backups": true, ".locks": true, ".venv": true, "venv": true,
+		"node_modules": true, "site-packages": true, "__pycache__": true,
+		".tox": true, ".nox": true, ".pytest_cache": true, ".mypy_cache": true,
+		".ruff_cache": true,
+	}
+	skillSupportDirs = map[string]bool{
+		"references": true, "templates": true, "assets": true, "scripts": true,
+	}
 )
 
 // agent identifies an ai_client: product and configuration folder.
@@ -324,6 +348,15 @@ func (d *discovery) folder(ctx context.Context, f folder) {
 	if len(f.agents) == 0 {
 		return
 	}
+	// Hermes searches its skills folders at any depth (BV-101b, decision 2a);
+	// the other agents stay at one level (decision 2b). A folder that Hermes
+	// loads (its user folder, or a trusted project folder) uses the deep walk,
+	// which attributes depth-1 skills to the other agents too.
+	hermes, shallow := splitHermes(f.agents)
+	if len(hermes) > 0 {
+		d.folderDeep(ctx, f, hermes, shallow)
+		return
+	}
 	entries, err := os.ReadDir(f.path)
 	if err != nil {
 		d.fail(f, f.path, graph.ReasonReadError, err.Error())
@@ -352,6 +385,103 @@ func (d *discovery) folder(ctx context.Context, f folder) {
 		d.skills[pathKey(skill)] = sf
 		d.emit(f.agents, sf)
 	}
+}
+
+// splitHermes separates Hermes from the one-level agents of a folder.
+func splitHermes(agents []agent) (hermes, shallow []agent) {
+	for _, a := range agents {
+		if a.product == agentdirs.Hermes {
+			hermes = append(hermes, a)
+		} else {
+			shallow = append(shallow, a)
+		}
+	}
+	return hermes, shallow
+}
+
+// folderDeep lists a Hermes skills folder, finding SKILL.md at any depth up to
+// maxSkillDepth (BV-101b, decision 2a). It prunes Hermes's own
+// excludedSkillDirs and, inside a skill, its support dirs (skillSupportDirs) —
+// both copied literally from agent/skill_utils.py — and also RosmarOps's forced
+// exclusions (invariant 5). Each discovered skill's scripts/ is still listed by
+// skill() (BV-99b, the «salvo scripts»). Depth-1 skills are attributed to the
+// one-level agents too (decision 2b); every depth goes to Hermes. Links are
+// handled as before: a direct-child link is kept for resolveLinks, a deeper one
+// is never followed and goes to coverage.
+func (d *discovery) folderDeep(ctx context.Context, f folder, hermes, shallow []agent) {
+	n := 0
+	stop := false
+	var walk func(dir string, depth int)
+	walk = func(dir string, depth int) {
+		if stop {
+			return
+		}
+		if d.expired(ctx, f, dir) {
+			stop = true
+			return
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			// ReadDir returns the entries read before the error; continue.
+			d.fail(f, dir, graph.ReasonReadError, err.Error())
+		}
+		hasMd := false
+		for _, e := range entries {
+			if e.Name() == "SKILL.md" && !e.IsDir() {
+				hasMd = true
+				break
+			}
+		}
+		if hasMd {
+			if n == MaxSkillsPerFolder {
+				d.fail(f, f.path, graph.ReasonFileCountLimitExceeded, fmt.Sprintf("more than %d skills", MaxSkillsPerFolder))
+				stop = true
+				return
+			}
+			n++
+			sf := d.skill(ctx, f, dir)
+			d.skills[pathKey(dir)] = sf
+			d.emit(hermes, sf)
+			if depth == 1 {
+				d.emit(shallow, sf)
+			}
+		}
+		if depth >= maxSkillDepth {
+			return
+		}
+		for _, e := range entries {
+			if stop {
+				return
+			}
+			name := e.Name()
+			if !e.IsDir() && !isLink(e.Type()) {
+				continue
+			}
+			if excludedSkillDirs[name] || repos.IsForcedExclusion(name) {
+				continue
+			}
+			if hasMd && skillSupportDirs[name] {
+				// Inside a skill, support dirs are not re-scanned for sub-skills
+				// (Hermes). scripts/ is read by skill(), not walked here.
+				continue
+			}
+			child := filepath.Join(dir, name)
+			if isLink(e.Type()) {
+				if depth == 0 {
+					// A direct child of the skills root that is a link: kept for
+					// resolveLinks (BV-99b), as the one-level path does.
+					target, err := os.Readlink(child)
+					d.links = append(d.links, link{f: f, path: child, target: target, err: err})
+				} else {
+					// Never follow a link deeper in the tree (BV-99b): coverage.
+					d.notFollowed(f, child)
+				}
+				continue
+			}
+			walk(child, depth+1)
+		}
+	}
+	walk(f.path, 0)
 }
 
 // emit lists sf's files and failures for agents.
