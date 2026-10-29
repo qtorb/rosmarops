@@ -2,7 +2,7 @@
 # BV-112). The released rosmarops.exe runs on a fictitious computer, the
 # testdata/sample-home fixture copied to C:\Users\sample, and the report it
 # writes is copied to dist/ in English and Spanish, with the language link
-# pointing to the other published page. Then it checks the report: the
+# pointing to the other published page and the sample band at the top. Then it checks the report: the
 # expected findings are there, no generated secret appears in full, and the
 # published pages neither name the runner nor show anything from the
 # runner's Defender, scheduled tasks or global packages. Any failed check
@@ -153,6 +153,20 @@ foreach ($lang in $published.Keys) {
 Write-Output 'Links to files that are not published, href removed:'
 if ($unlinked.Count -eq 0) { Write-Output '  (none)' } else { $unlinked | ForEach-Object { Write-Output "  $_" } }
 
+# The sample band (decision 2026-10-29, informe de ejemplo, §2: the label is
+# always visible): the first child of <body>, which must appear exactly once.
+$bandStyle = "background:#1B1A18;color:#FFFFFF;font:600 14px/1.4 system-ui,-apple-system,'Segoe UI',sans-serif;padding:10px 16px;text-align:center"
+$bands = [ordered]@{
+    en = "<div role=`"note`" style=`"$bandStyle`">Sample report, made with example data: the computer, the user, the projects and the keys are invented.</div>"
+    es = "<div role=`"note`" style=`"$bandStyle`">Informe de ejemplo, hecho con datos de ejemplo: el ordenador, el usuario, los proyectos y las claves son inventados.</div>"
+}
+foreach ($lang in $published.Keys) {
+    $page = [System.IO.File]::ReadAllText($published[$lang])
+    $count = [regex]::Matches($page, '<body>').Count
+    if ($count -ne 1) { throw "sample-report.$lang.html: <body> appears $count times, want 1" }
+    [System.IO.File]::WriteAllText($published[$lang], $page.Replace('<body>', '<body>' + $bands[$lang]), $utf8)
+}
+
 # --- The checks ------------------------------------------------------------
 
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -218,6 +232,7 @@ Write-Output "Findings from the runner in the technical report, not published: $
 $machine | ForEach-Object { Write-Output "  $($_.category): $($_.title)" }
 foreach ($lang in $published.Keys) {
     $page = [System.IO.File]::ReadAllText($published[$lang])
+    if (-not $page.Contains('<body>' + $bands[$lang])) { $failures.Add("sample-report.$lang.html does not open with the sample band") }
     foreach ($n in $runnerNames) {
         if ($page.IndexOf($n, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) { $failures.Add("sample-report.$lang.html names the runner ($n)") }
     }
