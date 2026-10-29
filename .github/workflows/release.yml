@@ -1,7 +1,7 @@
 # Release of RosmarOps (decision 2026-10-24, distribución, CTO-8 and CTO-8b):
 # only on a tag v*; the checks the repository requires, a Windows build,
 # rosmarops.exe alone (decision 2026-10-27, primer uso con un solo .exe),
-# the macOS preview's rosmarops-darwin-arm64 and rosmarops-darwin-amd64
+# the macOS preview's rosmarops-macos-apple-silicon and rosmarops-macos-intel
 # (decision 2026-10-29, macOS vista previa, point 6), each checked for no
 # network, their SHA256SUMS.txt, a build provenance attestation and the
 # GitHub release. A tag with a hyphen (v0.5.0-alpha.1) is published as a
@@ -78,13 +78,17 @@ jobs:
         run: |
           mkdir -p dist/pkg
           go build -trimpath -ldflags="-X main.version=${TAG#v}" -o dist/pkg/rosmarops.exe ./cmd/rosmarops
-      - name: Build rosmarops-darwin-arm64 and rosmarops-darwin-amd64
+      - name: Build rosmarops-macos-apple-silicon and rosmarops-macos-intel
         env:
           CGO_ENABLED: "0"
           GOOS: darwin
         run: |
           for arch in arm64 amd64; do
-            GOARCH=$arch go build -trimpath -ldflags="-X main.version=${TAG#v}" -o "dist/pkg/rosmarops-darwin-$arch" ./cmd/rosmarops
+            case $arch in
+              arm64) name=rosmarops-macos-apple-silicon ;;
+              amd64) name=rosmarops-macos-intel ;;
+            esac
+            GOARCH=$arch go build -trimpath -ldflags="-X main.version=${TAG#v}" -o "dist/pkg/$name" ./cmd/rosmarops
           done
       - name: No network in the binaries
         run: |
@@ -93,20 +97,20 @@ jobs:
             if go tool nm "$3" | awk '{print $NF}' | grep -E '^(net\.|net/|crypto/tls\.|syscall\.(Socket|Connect|Sendto)$)'; then exit 1; fi
           }
           check windows amd64 dist/pkg/rosmarops.exe
-          check darwin arm64 dist/pkg/rosmarops-darwin-arm64
-          check darwin amd64 dist/pkg/rosmarops-darwin-amd64
+          check darwin arm64 dist/pkg/rosmarops-macos-apple-silicon
+          check darwin amd64 dist/pkg/rosmarops-macos-intel
       - name: Checksums
         run: |
           cd dist
-          cp pkg/rosmarops.exe pkg/rosmarops-darwin-arm64 pkg/rosmarops-darwin-amd64 .
-          sha256sum rosmarops.exe rosmarops-darwin-arm64 rosmarops-darwin-amd64 > SHA256SUMS.txt
+          cp pkg/rosmarops.exe pkg/rosmarops-macos-apple-silicon pkg/rosmarops-macos-intel .
+          sha256sum rosmarops.exe rosmarops-macos-apple-silicon rosmarops-macos-intel > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/rosmarops.exe
-            dist/rosmarops-darwin-arm64
-            dist/rosmarops-darwin-amd64
+            dist/rosmarops-macos-apple-silicon
+            dist/rosmarops-macos-intel
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -114,5 +118,5 @@ jobs:
           flags=$(sh .github/scripts/release-flags.sh "${TAG}")
           # shellcheck disable=SC2086 # the flags are words
           gh release create "${TAG}" \
-            dist/rosmarops.exe dist/rosmarops-darwin-arm64 dist/rosmarops-darwin-amd64 dist/SHA256SUMS.txt \
+            dist/rosmarops.exe dist/rosmarops-macos-apple-silicon dist/rosmarops-macos-intel dist/SHA256SUMS.txt \
             --repo "${GITHUB_REPOSITORY}" --title "RosmarOps ${TAG}" --notes-file "docs/release-notes/${TAG}.md" --verify-tag ${flags}

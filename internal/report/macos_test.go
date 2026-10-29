@@ -28,7 +28,7 @@ func macReport(t *testing.T, os string, notChecked []string) report.V2 {
 	v, _ := report.BuildV2(report.V2Input{
 		Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Base: base, RepoRoots: []string{"/src/a", "/src/b"},
 		Families: [][]string{{"/src/a"}, {"/src/b"}}, V1: v1, GeneratedAt: v2Now,
-		ExePath: "/Users/ana/Downloads/rosmarops-darwin-arm64", NotChecked: notChecked,
+		ExePath: "/Users/ana/Downloads/rosmarops-macos-apple-silicon", NotChecked: notChecked,
 	})
 	return v
 }

@@ -42,8 +42,8 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 
 Every release on GitHub includes:
 
-- the Windows program, `rosmarops.exe`, and the macOS preview, `rosmarops-darwin-arm64` and `rosmarops-darwin-amd64`, with a `SHA256SUMS.txt` file;
-- a **GitHub artifact attestation** that ties the program to the exact commit and the GitHub workflow that built it. Check it with `gh attestation verify rosmarops.exe --repo qtorb/rosmarops` (on macOS, `gh attestation verify rosmarops-darwin-arm64 --repo qtorb/rosmarops`);
+- the Windows program, `rosmarops.exe`, and the macOS preview, `rosmarops-macos-apple-silicon` and `rosmarops-macos-intel`, with a `SHA256SUMS.txt` file;
+- a **GitHub artifact attestation** that ties the program to the exact commit and the GitHub workflow that built it. Check it with `gh attestation verify rosmarops.exe --repo qtorb/rosmarops` (on macOS, `gh attestation verify rosmarops-macos-apple-silicon --repo qtorb/rosmarops`);
 - a **reproducible build**: building the tagged commit from a clean git clone with Go 1.24.7 and the documented command (`GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=<tag without v>"`) produces a `rosmarops.exe` with the same SHA-256 as the one in the release; for macOS, the same with `GOOS=darwin GOARCH=arm64` or `GOOS=darwin GOARCH=amd64`.
 
 ---
