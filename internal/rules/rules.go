@@ -55,6 +55,17 @@ var AllRules = []string{
 // (D4): an execute_shell allow rule counted as an unrestricted shell.
 const AssumeCodeLauncherRule = graph.AssumeCodeLauncherRule
 
+// AssumeAuxModelPermits: a smart-mode action was allowed by Hermes Agent's
+// auxiliary approval model, which RosmarOps cannot confirm at rest (BV-111,
+// point 3). Same pattern as graph.AssumeAutoClassifierPermits: a premise, so
+// it lowers the finding's confidence to medium.
+const AssumeAuxModelPermits = "aux_model_permits"
+
+// AssumeHermesBackendUnknown: Hermes Agent's terminal.backend is a value
+// RosmarOps does not recognize, treated as running on the computer (BV-111,
+// follow-up). The {backend} parameter carries the value, redacted and cut.
+const AssumeHermesBackendUnknown = "hermes_backend_unknown"
+
 // AllAssumptions lists every assumption a finding can carry: the graph's and
 // code_launcher_rule.
 var AllAssumptions = []string{
@@ -64,6 +75,7 @@ var AllAssumptions = []string{
 	graph.AssumeUIModeChoiceUnknown, AssumeCodeLauncherRule,
 	graph.AssumeIDERunModeNotReadable, graph.AssumeThirdPartyImportsNotReadable, graph.AssumeSandboxPlatformUnknown,
 	graph.AssumeConfigFileProtectionUnknown, graph.AssumeTeamPolicyUnknown, AssumeRemoteVisibilityUnknown,
+	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -74,6 +86,7 @@ var premiseAssumptions = map[string]bool{
 	graph.AssumeAutoModeAvailable:     true,
 	graph.AssumeUIModeChoiceUnknown:   true,
 	graph.AssumeIDERunModeNotReadable: true,
+	AssumeAuxModelPermits:             true,
 }
 
 // Severities, confidences and radii.
@@ -182,6 +195,12 @@ type Input struct {
 	// probe's target outside the roots (annex 2). Both optional.
 	ClaudeSettings *platform.ClaudeSettingsScan
 	Home           string
+
+	// Hermes is the Hermes Agent scan (BV-111): the overview reads each
+	// agent's terminal.backend from it (local, an isolated backend, or an
+	// unrecognized value treated as local) to scope its read/write/shell
+	// rows. Optional.
+	Hermes platform.HermesScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -283,6 +302,11 @@ type Params struct {
 	CredID    string `json:"cred_id,omitempty"`
 	CredType  string `json:"cred_type,omitempty"`
 	HasRemote *bool  `json:"has_remote,omitempty"`
+
+	// Backend is Hermes Agent's unrecognized terminal.backend value, carried
+	// by findings that assume it runs on the computer (BV-111). Redacted and
+	// cut to 40 characters when rendered.
+	Backend string `json:"backend,omitempty"`
 
 	// package_known_malicious (BV-100)
 	Ecosystem string `json:"ecosystem,omitempty"`
@@ -427,6 +451,13 @@ func Evaluate(in Input) Result {
 			continue
 		}
 		a, cred := view(p.agent), nodes[p.cred]
+		if ownsAccountFile(a, cred) {
+			// §3 (BV-111): an agent's own session file (its .credentials.json
+			// or auth.json, under its configuration folder) is not a finding
+			// against that agent; it still is against every other agent that
+			// reaches it, so only this (agent, credential) pair is skipped.
+			continue
+		}
 		class := classOf(cred, scopes[cred.ID])
 		if allTemplates(cred) {
 			addPosture(PostureInTemplatesOnly, cred.ID, class)
@@ -505,6 +536,24 @@ func Evaluate(in Input) Result {
 	}
 	sort.Slice(res.Launchers, func(i, j int) bool { return res.Launchers[i].Capability < res.Launchers[j].Capability })
 
+	// BV-111: a Hermes Agent with an unrecognized terminal.backend is scored
+	// as if its tools run on the computer; its findings carry the premise that
+	// the backend is unknown, with the raw value.
+	if unk := hermesUnknownBackends(nodes, in.Hermes); len(unk) > 0 {
+		for i := range res.Findings {
+			f := &res.Findings[i]
+			if len(f.Evidence.Nodes) == 0 {
+				continue
+			}
+			if b, ok := unk[f.Evidence.Nodes[0]]; ok {
+				f.Params.Backend = b
+				if !contains(f.Evidence.Assumptions, AssumeHermesBackendUnknown) {
+					f.Evidence.Assumptions = append(f.Evidence.Assumptions, AssumeHermesBackendUnknown)
+				}
+			}
+		}
+	}
+
 	// agents_overview (decision 2026-10-25, cómo trabajan tus agentes,
 	// cálculo): from the same views and findings, and the probe's targets.
 	oi := overviewInputs{
@@ -532,6 +581,30 @@ func Evaluate(in Input) Result {
 	oi.probe = probe
 	res.AgentsOverview = overview(oi)
 	return res
+}
+
+// ownsAccountFile reports that cred is the agent's own session file: a
+// .credentials.json or auth.json whose every location is under the agent's
+// configuration folder (§3). Reading one's own session credential is not a
+// finding against its owner (it is against any other agent that reaches it).
+func ownsAccountFile(a *agentView, cred graph.Node) bool {
+	if a.node.ConfigPath == "" {
+		return false
+	}
+	files := graph.CredentialFiles(cred)
+	if len(files) == 0 {
+		return false
+	}
+	for _, f := range files {
+		base := strings.ToLower(path.Base(strings.ReplaceAll(f, `\`, "/")))
+		if base != ".credentials.json" && base != "auth.json" {
+			return false
+		}
+		if !graph.Within(a.node.ConfigPath, f) {
+			return false
+		}
+	}
+	return true
 }
 
 // agentOf is the agent node of a finding (the first evidence node).
@@ -667,8 +740,36 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 		v.egress = v.cursorEgress(base)
 		return v
 	}
+	if n.Platform == knowledge.HermesProduct {
+		v.egress = v.hermesEgress()
+		return v
+	}
 	v.egress = v.egressWays(base, launchers)
 	return v
+}
+
+// hermesEgress are Hermes Agent's ways to send data out without a person
+// (BV-111): the network tool (any destination) and the shell tool on the
+// computer. An isolated terminal backend keeps the shell in its sandbox, so
+// it is no egress of the computer's data; the network tool is not isolated.
+func (v *agentView) hermesEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}
+	var out []way
+	for _, c := range v.inForce {
+		if c.Approval != graph.ApprovalAllow {
+			continue
+		}
+		switch c.Type {
+		case graph.CapNetwork:
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		case graph.CapExecuteShell:
+			if c.TargetScope == graph.HermesScopeIsolated {
+				continue
+			}
+			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
+		}
+	}
+	return out
 }
 
 // cursorEgress are Cursor's ways to send data out without a person

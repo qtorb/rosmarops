@@ -22,6 +22,8 @@
   "html.action.ask_edit_rule.title": "Make {agent} ask before editing these files",
   "html.action.ask_read_rule.title": "Make {agent} ask before reading this file",
   "html.action.block_reads_outside.title": "Stop {agent} from reading outside the project it is working in",
+  "html.action.hermes_isolated_backend.how": "In {file}, set `terminal.backend: docker` (and a `docker_image`). Hermes then runs its terminal, file and code tools inside that container instead of on your computer.",
+  "html.action.hermes_isolated_backend.title": "Run {agent} in a container",
   "html.action.manual_default_mode.title": "Make {agent} start every session by asking first",
   "html.action.remove_from_disk.title": "Take this key off your computer",
   "html.action.rotate_credential.title": "Change this key at its provider",
@@ -370,5 +372,7 @@
   "html.weekly.pitch": "Schedule a review every Friday at 09:00. When it finishes, Windows shows you a notification; if notifications are turned off, the report opens in your browser.",
   "html.weekly.prompt": "Run exactly this PowerShell command, without changing it and without administrator rights. If it fails, stop and show me the error.",
   "html.weekly.title": "Weekly review",
+  "unknown.aux_model_permits": "Hermes Agent's smart mode: another AI model decides only on commands that match a dangerous pattern; other commands run without asking. RosmarOps assumes it lets them through.",
+  "unknown.hermes_backend_unknown": "Hermes Agent uses a terminal backend RosmarOps does not recognize ({backend}). RosmarOps treats it as running on your computer.",
   "unknown.remote_visibility_unknown": "Knows that a remote is declared, not whether it is public or whether these commits were pushed."
 }

@@ -726,4 +726,10 @@ type HermesConfig struct {
 	// ProtectedInstructionFiles is security.protected_instruction_files;
 	// nil when absent or not a boolean.
 	ProtectedInstructionFiles *bool
+
+	// TerminalBackend is terminal.backend lowercased (BV-111): "local" when
+	// absent; "docker", "ssh", "modal", "daytona" or "vercel_sandbox" for an
+	// isolated backend; any other value is an unrecognized plugin, treated as
+	// local with a note. Empty when the file was not read.
+	TerminalBackend string
 }

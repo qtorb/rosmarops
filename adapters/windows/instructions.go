@@ -98,6 +98,13 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 	if w.managed != nil {
 		claude.file(filepath.Join(w.managed.dir, "CLAUDE.md"))
 	}
+
+	// Hermes Agent's own user-level instructions: <HERMES_HOME>\SOUL.md
+	// (BV-111, point 5; Hermes docs, user-guide/configuration). macOS resolves
+	// HermesHome under ~/.hermes through the layout.
+	if !hermes.off {
+		hermes.file(filepath.Join(hermes.configDir, "SOUL.md"))
+	}
 	for _, root := range repoRoots {
 		claude.file(filepath.Join(root, "CLAUDE.md"))
 		claude.file(filepath.Join(root, ".claude", "CLAUDE.md"))

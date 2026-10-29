@@ -22,10 +22,15 @@ const (
 	// ActionSandboxReadBoundary is Cursor's readBoundary "workspace" in
 	// ~/.cursor/sandbox.json (capacidades de Cursor, K2).
 	ActionSandboxReadBoundary = "sandbox_read_boundary_workspace"
+
+	// ActionHermesIsolatedBackend sets Hermes Agent's terminal.backend to an
+	// isolated backend in its config.yaml, so its terminal, file and code
+	// tools run off the computer (BV-111, point 7).
+	ActionHermesIsolatedBackend = "hermes_isolated_backend"
 )
 
 // AllActions lists every action code.
-var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential}
+var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential, ActionHermesIsolatedBackend}
 
 // Completeness of an action.
 const (
@@ -157,6 +162,12 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 			act.File, act.FileExists = "", false
 			act.Locations = f.Evidence.Locations
 			act.files = len(credFilesOf(f))
+		case ActionHermesIsolatedBackend:
+			// The change is in Hermes's own config.yaml, not a settings.json:
+			// it moves its terminal, file and code tools off the computer.
+			act.File = inConfigDir(a.node.ConfigPath, "config.yaml")
+			act.FileExists = configExists(in.Graph, act.File)
+			act.Key, act.Value = "", ""
 		}
 		if len(act.Rules) > 0 {
 			act.Rules = sortedUnique(act.Rules)

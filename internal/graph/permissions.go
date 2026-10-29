@@ -482,6 +482,12 @@ func FromScansWithCursor(mcp platform.MCPScan, settings platform.ClaudeSettingsS
 	return FromScansWithRepos(mcp, settings, cursor, credFiles, Repos{}, salt, discoveredAt)
 }
 
+// FromScansWithHermes is FromScansWithRepos with Hermes Agent's config.yaml
+// (BV-111): approvals.mode and terminal.backend drive Hermes's capabilities.
+func FromScansWithHermes(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
+	return fromScans(mcp, settings, cursor, credFiles, repos, hermes, salt, discoveredAt)
+}
+
 // Repos is what the repository scan gives the graph (decision 2026-10-24,
 // memoria, §2.2): its findings, whose secrets carry their salted
 // references, and the families of the repositories (root → root of the
@@ -496,6 +502,10 @@ type Repos struct {
 // with the same fingerprint), git_repository resources and committed_in
 // edges; a tracked file is also a location of its credential.
 func FromScansWithRepos(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
+	return fromScans(mcp, settings, cursor, credFiles, repos, platform.HermesScan{}, salt, discoveredAt)
+}
+
+func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
 	policy := resolveManaged(settings.Managed)
 	extra := append(settingsCredentialInputs(settings, policy), credentialFileInputsFor(credFiles, mcp.Servers)...)
 	extra = append(extra, committedInputs(repos.Findings)...) // last: the collector's identity of a key wins
@@ -522,6 +532,10 @@ func FromScansWithRepos(mcp platform.MCPScan, settings platform.ClaudeSettingsSc
 	for _, product := range []string{knowledge.ClaudeCodeProduct, knowledge.CursorProduct} {
 		defaults = append(defaults, ProductDefaults(merged.Nodes, bases[product]))
 	}
+	// Hermes Agent builds its own capabilities (BV-111): product_default
+	// read/write/shell/network/mcp, scoped to the sandbox when the backend is
+	// isolated, plus the permission_mode of approvals.mode.
+	defaults = append(defaults, HermesDefaults(merged.Nodes, bases[knowledge.HermesProduct], hermes))
 	return withDisabledBuiltinMode(Merge(defaults...), base), stats, nil
 }
 
