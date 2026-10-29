@@ -469,12 +469,10 @@ func applyMemory(v *V2, in V2Input) {
 	}
 	cur := make([]memory.Finding, 0, len(v.Findings))
 	for _, f := range v.Findings {
-		// Decision F0a (BV-100): threat-intel matches are not tracked in the
-		// findings memory. They are always-red, re-derived each run from the
-		// embedded snapshot, and the memory schema's rule set is not theirs
-		// (tracking them would need a memory-schema change, out of F0a's scope).
-		// They carry a not_comparable verdict instead (see the verdict loop).
-		if f.Rule == rules.RulePackageKnownMalicious {
+		// MemoryUntracked rules are not tracked in the findings memory (F0a,
+		// BV-107b); they carry a not_comparable verdict instead (see the
+		// verdict loop).
+		if MemoryUntracked[f.Rule] {
 			continue
 		}
 		mf := memory.Finding{ID: f.ID, Rule: f.Rule, Severity: f.Severity}
@@ -496,9 +494,9 @@ func applyMemory(v *V2, in V2Input) {
 			v.Findings[i].Memory = &m
 			continue
 		}
-		// Threat-intel matches are not tracked (BV-100): a not_comparable
-		// verdict satisfies report.v2's required memory object and renders no
-		// memory badge, while nothing is persisted to the memory file.
+		// A MemoryUntracked rule (F0a, BV-107b): a not_comparable verdict
+		// satisfies report.v2's required memory object and renders no memory
+		// badge, while nothing is persisted to the memory file.
 		v.Findings[i].Memory = &rules.FindingMemory{
 			Verdict: memory.VerdictNotComparable, OpenSince: run.Date,
 			FirstSeen: run.Date, Reappeared: 0,
@@ -513,6 +511,23 @@ func applyMemory(v *V2, in V2Input) {
 		v.NewMCP = mcpServerLines(*in.Graph, root.NewMCP, in.Home)
 		v.MCPChanged = mcpServerLines(*in.Graph, root.MCPChanged, in.Home)
 	}
+}
+
+// MemoryUntracked are the rules the findings memory does not track: their
+// findings are not written to findings-memory.json and get a not_comparable
+// verdict each run. The memory schema's rule enum is not theirs, and adding
+// them would be a memory-schema change.
+//   - package_known_malicious (decision F0a, BV-100): always red, re-derived
+//     each run from the embedded threat-data snapshot.
+//   - project_hook_runs_repo_script (BV-107b): BV-107 added the rule without
+//     a memory decision, and writing it failed the memory's schema
+//     validation, so the run stopped before saving its state.
+//
+// Every rule is either in the memory schema's enum or here
+// (TestMemoryCoversEveryRule).
+var MemoryUntracked = map[string]bool{
+	rules.RulePackageKnownMalicious:     true,
+	rules.RuleProjectHookRunsRepoScript: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).
