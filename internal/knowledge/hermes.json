@@ -1,0 +1,66 @@
+{
+  "product": "hermes",
+  "version": "2026-10-29",
+  "entries": [
+    {
+      "id": "read_any_path",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "any_path",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/agent/file_safety.py#L335-L414",
+      "verified": "2026-10-28"
+    },
+    {
+      "id": "write_any_path",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "any_path",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/tools/file_tools_write_guards.py#L166-L179",
+      "verified": "2026-10-28"
+    },
+    {
+      "id": "write_protected_instructions",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "protected_instructions",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/tools/file_tools_write_guards.py#L189-L262",
+      "verified": "2026-10-28"
+    },
+    {
+      "id": "shell_no_sandbox",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "*",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/hermes_cli/config_defaults.py#L297-L298",
+      "verified": "2026-10-28"
+    },
+    {
+      "id": "network_any_destination",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/hermes_cli/config_defaults.py#L396-L401",
+      "verified": "2026-10-28"
+    },
+    {
+      "id": "mcp_all_tools",
+      "type": "invoke_mcp_tool",
+      "approval": "allow",
+      "target_scope": "*:*",
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/tools/mcp_tool.py#L519-L533",
+      "verified": "2026-10-28"
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "hermes_isolated_backend",
+      "setting": "terminal_backend",
+      "completeness": "by_cuts",
+      "cuts": ["any_reach"],
+      "magnitude": 3,
+      "source_url": "https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/docs/user-guide/features/tools.md",
+      "verified": "2026-10-28"
+    }
+  ],
+  "code_launchers": []
+}

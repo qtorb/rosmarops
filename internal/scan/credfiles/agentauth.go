@@ -151,6 +151,49 @@ func parseHermesAuth(path string, raw []byte) ([]platform.CredentialEntry, []str
 	return out, conflicts, nil
 }
 
+// claudeCredentialsFile is the part of Claude Code's <~/.claude>\.credentials.json
+// RosmarOps reads (BV-111, point 6): the account OAuth tokens under
+// claudeAiOauth. Read with exact keys; nothing else of the file (expiry,
+// scopes, subscription type) is read.
+type claudeCredentialsFile struct {
+	ClaudeAiOauth *struct {
+		AccessToken  *string `json:"accessToken"`
+		RefreshToken *string `json:"refreshToken"`
+	} `json:"claudeAiOauth"`
+}
+
+// parseClaudeCredentials returns the access and refresh tokens of Claude
+// Code's .credentials.json: /claudeAiOauth/accessToken and
+// /claudeAiOauth/refreshToken. They are Anthropic account OAuth tokens
+// (claude_code_oauth_token): their service is known, so the built-in patterns
+// do not override it.
+func parseClaudeCredentials(path string, raw []byte) ([]platform.CredentialEntry, []string, error) {
+	if !isObject(raw) {
+		return nil, nil, errors.New("not a JSON object")
+	}
+	var file claudeCredentialsFile
+	conflicts, err := jsonkeys.Decode(raw, &file)
+	if err != nil {
+		return nil, nil, errors.New("claudeAiOauth has a value of the wrong type")
+	}
+	var out []platform.CredentialEntry
+	if file.ClaudeAiOauth != nil {
+		out = appendClaudeSecret(out, path, "/claudeAiOauth/accessToken", "accessToken", file.ClaudeAiOauth.AccessToken)
+		out = appendClaudeSecret(out, path, "/claudeAiOauth/refreshToken", "refreshToken", file.ClaudeAiOauth.RefreshToken)
+	}
+	sort.Strings(conflicts)
+	return out, conflicts, nil
+}
+
+// appendClaudeSecret adds a non-empty Claude Code account token, always as
+// claude_code_oauth_token (its service, Anthropic, is known from the file).
+func appendClaudeSecret(out []platform.CredentialEntry, path, pointer, key string, v *string) []platform.CredentialEntry {
+	if v == nil || strings.TrimSpace(*v) == "" {
+		return out
+	}
+	return append(out, platform.CredentialEntry{Path: path, Key: key, Pointer: pointer, Kind: "claude_code_oauth_token", Value: secrets.NewSecretValue(*v)})
+}
+
 // appendSecret adds a non-empty value. A value a built-in secret pattern
 // recognises (an Anthropic or OpenAI key in Hermes' pool, say) is left to
 // the patterns, so that it is the same credential, with the same service,

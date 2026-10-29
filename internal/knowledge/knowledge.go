@@ -19,6 +19,7 @@ import (
 const (
 	ClaudeCodeProduct = "claude-code"
 	CursorProduct     = "cursor"
+	HermesProduct     = "hermes"
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -29,11 +30,17 @@ const Version = "2026-10-24"
 // CursorVersion is the version of the embedded Cursor base (cursor.json).
 const CursorVersion = "2026-10-25"
 
+// HermesVersion is the version of the embedded Hermes base (hermes.json,
+// BV-111).
+const HermesVersion = "2026-10-29"
+
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
 // product and joined with ";" (decision 2026-10-25, cómo trabajan tus
 // agentes, cálculo, T9). A change in any base changes it.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CursorProduct + "@" + CursorVersion
+// The parts are sorted by product (claude-code < cursor < hermes), as
+// CompositeOf sorts them.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CursorProduct + "@" + CursorVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -50,6 +57,9 @@ var claudeCodeJSON []byte
 
 //go:embed cursor.json
 var cursorJSON []byte
+
+//go:embed hermes.json
+var hermesJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -200,11 +210,29 @@ func Cursor() (Base, error) {
 	return b, nil
 }
 
+// Hermes returns the embedded Hermes Agent knowledge base (BV-111), with
+// Claude Code's code launcher table (as Cursor reuses it).
+func Hermes() (Base, error) {
+	b, err := decode(hermesJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != HermesVersion {
+		return Base{}, fmt.Errorf("knowledge base hermes: version %q, want %q", b.Version, HermesVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes} {
 		b, err := load()
 		if err != nil {
 			return nil, err

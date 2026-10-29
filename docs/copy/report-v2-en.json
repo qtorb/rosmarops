@@ -6,6 +6,8 @@
   "action.block_reads_outside.how": "Set this in {file}. {agent}'s file tools then refuse files outside the project it is working in, in every mode, and the file-reading commands it recognises in the shell ask you before reading them.",
   "action.block_reads_outside.label": "Stop reads outside the current project",
   "action.file_missing": "This file does not exist yet. Create it with exactly this content:",
+  "action.hermes_isolated_backend.how": "In {file}, set `terminal.backend: docker` (and a `docker_image`). Hermes then runs its terminal, file and code tools inside that container instead of on your computer.",
+  "action.hermes_isolated_backend.label": "Run {agent} in a container",
   "action.manual_default_mode.how": "Set this in {file}. {agent} starts every session asking before it acts, instead of in auto mode. This changes how you work day to day.",
   "action.manual_default_mode.label": "Start sessions in manual mode",
   "action.remove_from_disk.how": "Move this credential out of the files below, for example into your hosting provider's secrets, then rotate it if it may have been read. RosmarOps changes nothing.",

@@ -70,6 +70,9 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case knowledge.CursorProduct:
 			in := p.cursorInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+		case knowledge.HermesProduct:
+			in := p.hermesInference(client)
+			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {
 			if _, dup := edges[e.ID]; !dup {

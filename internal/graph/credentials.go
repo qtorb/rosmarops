@@ -86,6 +86,9 @@ var credentialKinds = map[string]credentialKind{
 	"hermes_refresh_token":    {CredentialOAuthToken, ServiceUnknown},
 	"hermes_agent_key":        {CredentialAPIKey, ServiceUnknown},
 	"hermes_api_key":          {CredentialAPIKey, ServiceUnknown},
+
+	// Claude Code's account OAuth tokens (BV-111): the service is Anthropic.
+	"claude_code_oauth_token": {CredentialOAuthToken, "anthropic"},
 }
 
 // supabaseKeyScopes is the observed_scope read from the prefix of Supabase

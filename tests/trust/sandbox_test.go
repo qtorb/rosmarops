@@ -106,6 +106,13 @@ func newSandbox(t *testing.T) *sandbox {
 	mustMkdir(t, filepath.Join(root, "localappdata", "hermes"))
 	mustWrite(t, filepath.Join(root, "localappdata", "hermes", "config.yaml"), "model: x\n")
 	mustWrite(t, filepath.Join(root, "localappdata", "hermes", ".env"), "LOG_LEVEL=debug\n")
+	// Claude Code's account credentials (BV-111, point 6): a fake OAuth token
+	// the run reads; no file it writes may hold it, and the local Hermes
+	// Agent reaches it, so the finding's path is rendered. ~/.claude holds the
+	// .credentials.json next to the .claude.json above.
+	mustMkdir(t, filepath.Join(s.home, ".claude"))
+	mustWrite(t, filepath.Join(s.home, ".claude", ".credentials.json"),
+		`{"claudeAiOauth": {"accessToken": "`+fakeClaudeOAuthToken+`", "refreshToken": "`+fakeClaudeRefreshToken+`"}}`)
 	mustMkdir(t, filepath.Join(root, "appdata", "Claude"))
 	mustWrite(t, filepath.Join(root, "appdata", "Claude", "claude_desktop_config.json"), `{"mcpServers": {}}`)
 	s.initRepo(t)

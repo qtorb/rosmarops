@@ -275,11 +275,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Each step scans under ctx and returns a function that records its
 	// results; scan.Run calls it on this goroutine (see scan.Step).
 	var (
-		mcpScan   platform.MCPScan
-		mcpErr    error
-		credFiles platform.CredentialFileScan
-		built     *graph.Graph // the graph written this run, for the v2 report
-		builtSHA  string
+		mcpScan    platform.MCPScan
+		mcpErr     error
+		hermesScan platform.HermesScan // BV-111: config.yaml drives Hermes's caps
+		credFiles  platform.CredentialFileScan
+		built      *graph.Graph // the graph written this run, for the v2 report
+		builtSHA   string
 		// builtSettings is the Claude Code settings scan the graph was built
 		// from, for the model provider row (T12).
 		builtSettings *platform.ClaudeSettingsScan
@@ -334,6 +335,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			hermes, hermesErr := plat.ListHermes(ctx)
 			scanned.Sources = append(scanned.Sources, hermes.Sources...)
 			scanned.Servers = append(scanned.Servers, hermes.Servers...)
+			hermesScan = hermes // BV-111: kept for the graph step (approvals.mode, terminal.backend)
 			listErr = errors.Join(listErr, hermesErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
@@ -429,7 +431,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 						}
 					}
 					pkgObs := packageObservations(pyResult, globalObs)
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -645,7 +647,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
-		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir,
+		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
@@ -728,6 +730,7 @@ func writeGraph(
 	listErr error,
 	settings platform.ClaudeSettingsScan,
 	cursor platform.CursorScan,
+	hermes platform.HermesScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -754,7 +757,7 @@ func writeGraph(
 	if err != nil {
 		return fail(err)
 	}
-	frag, stats, err := graph.FromScansWithRepos(scan, settings, cursor, credFiles, repoGraph, salt, now)
+	frag, stats, err := graph.FromScansWithHermes(scan, settings, cursor, credFiles, repoGraph, hermes, salt, now)
 	if err != nil {
 		return fail(err)
 	}

@@ -485,7 +485,8 @@
             "manual_default_mode",
             "remove_from_disk",
             "sandbox_read_boundary_workspace",
-            "rotate_credential"
+            "rotate_credential",
+            "hermes_isolated_backend"
           ]
         },
         "file": {
