@@ -34,10 +34,12 @@ jobs:
     # Manual «Run workflow» only (BV-127): a tag push skips this job. It checks
     # the request and creates the tag on master. A tag pushed with GITHUB_TOKEN
     # does not start another workflow run, so there is no double publish.
+    # actions: read lets check e read ci.yml's runs; without it the API 403s.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,6 +118,9 @@ jobs:
 
   release:
     needs: verify
+    # Explicit so a skipped «tag» (on a tag push) does not cascade a skip
+    # down the needs chain: run whenever verify actually succeeded.
+    if: ${{ !cancelled() && needs.verify.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -188,6 +193,8 @@ jobs:
 
   sample-report:
     needs: release
+    # Explicit, for the same reason as release: run whenever release succeeded.
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
     runs-on: windows-latest
     permissions:
       contents: write
