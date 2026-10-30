@@ -15,6 +15,8 @@ You get a visual report with a score per agent, the first thing to do with the e
 
 How each agent behaves out of the box, version by version, is tracked in the [RosmarOps Observatory](https://rosmarops.com/observatory/). How findings and scores are worked out: [Methodology](https://rosmarops.com/methodology/).
 
+Want to see the report before you run it? Open the [sample report](https://rosmarops.com/sample-report/), made with example data.
+
 ---
 
 ## Install and run (Windows)
