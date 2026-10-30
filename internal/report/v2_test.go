@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -133,7 +134,7 @@ var reservedKeys = []string{
 func allEmitted() []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, ks := range [][]string{report.CatalogKeys(), report.HTMLKeys(), cli.HelpKeys, reservedKeys} {
+	for _, ks := range [][]string{report.CatalogKeys(), report.HTMLKeys(), cli.HelpKeys, kit.MessageKeys, reservedKeys} {
 		for _, k := range ks {
 			if !seen[k] {
 				seen[k] = true

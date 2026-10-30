@@ -34,8 +34,9 @@ These cannot be violated by any code you write. They are the product.
 
 1. **No outbound network.** Do not import `net/http` client packages, `net.Dial`, `net.Listen` (except localhost-only in v0.4+, which is out of scope now), or anything that opens a socket. If a check seems to require network, stop and ask the human owner.
 
-2. **No writes outside scope.** Only two write targets allowed:
+2. **No writes outside scope.** Only three write targets allowed:
    - `~/.rosmarops/state.json`
+   - the kit key file: `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS and Linux)
    - the configured reports directory (default `~/.rosmarops/reports/`).
    No other `os.Create`, `os.WriteFile`, `os.OpenFile`, or `os.MkdirAll` calls outside these paths.
 

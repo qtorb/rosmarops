@@ -1,6 +1,6 @@
 module github.com/qtorb/rosmarops
 
-go 1.22
+go 1.24
 
 require github.com/xeipuuv/gojsonschema v1.2.0
 

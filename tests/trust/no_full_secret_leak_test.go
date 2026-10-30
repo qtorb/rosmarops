@@ -5,7 +5,10 @@ package trust_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"html"
 	"log/slog"
 	"os"
@@ -702,4 +705,118 @@ func TestNoMCPDestinationSecretInReports(t *testing.T) {
 			}
 		}
 	}
+}
+
+// BV-118 (point 6): the kit key, the phrase and the recovery code never
+// reach a file RosmarOps writes but the kit key file itself: not the log,
+// the reports, the state, the graph, the export for your AI (in the HTML) or
+// the kit file. The test goes through the whole cycle: create, a run, import in another
+// profile, new-phrase there, and import of that file in a third profile with
+// the old phrase (refused) and then the code (opens the same key): the
+// BV-118 final check.
+func TestNoKitSecretInOutputs(t *testing.T) {
+	s := newSandbox(t)
+	s.initHome(t, s.home)
+	code, file := s.kitCreate(t, s.home)
+	key := storedKey(t, s.home)
+	for _, step := range [][]string{{"baseline"}, {"run"}, {"run", "--unattended"}} {
+		out, err := s.kitRun(t, s.home, step, func(string) (string, bool) { return "", false })
+		var exitErr *exec.ExitError
+		if err != nil && !(step[0] == "run" && errors.As(err, &exitErr)) {
+			t.Fatalf("%s: %v\n%s", step[0], err, out)
+		}
+	}
+	reports := filepath.Join(s.home, ".rosmarops", "reports")
+	for _, f := range []string{"graph.v2.json", "report.v2.json", "report.html", "last-scheduled-run-log.txt"} {
+		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
+			t.Fatalf("run did not complete: %v", err)
+		}
+	}
+
+	second := filepath.Join(s.root, "home2")
+	s.initHome(t, second)
+	out, err := s.kitRun(t, second, []string{"kit", "import", file}, func(line string) (string, bool) { return kitPhrase, true })
+	if err != nil || !strings.Contains(out, "Key imported.") {
+		t.Fatalf("import with the phrase: %v\n%s", err, out)
+	}
+	salt := func(home string) string {
+		st, err := os.ReadFile(filepath.Join(home, ".rosmarops", "state.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v struct {
+			LocalSalt string `json:"local_salt"`
+		}
+		if err := json.Unmarshal(st, &v); err != nil {
+			t.Fatal(err)
+		}
+		return v.LocalSalt
+	}
+	if salt(second) != salt(s.home) || storedKey(t, second) != key {
+		t.Fatal("import did not take the kit's key and user salt")
+	}
+	const newPhrase = "the second phrase, new one"
+	out, err = s.kitRun(t, second, []string{"kit", "new-phrase"}, func(line string) (string, bool) { return newPhrase, true })
+	if err != nil || !strings.Contains(out, "New phrase set.") {
+		t.Fatalf("new-phrase: %v\n%s", err, out)
+	}
+	newFile := filepath.Join(second, ".rosmarops", "reports", filepath.Base(file))
+	third := filepath.Join(s.root, "home3")
+	s.initHome(t, third)
+	answers := []string{kitPhrase, strings.ToLower(code)}
+	out, err = s.kitRun(t, third, []string{"kit", "import", newFile}, func(line string) (string, bool) {
+		if !strings.HasSuffix(line, ":") || len(answers) == 0 {
+			return "", false
+		}
+		a := answers[0]
+		answers = answers[1:]
+		return a, true
+	})
+	if err != nil || !strings.Contains(out, "That doesn't open this key file.") || !strings.Contains(out, "Key imported.") {
+		t.Fatalf("import with the old phrase, then the code: %v\n%s", err, out)
+	}
+	if storedKey(t, third) != key {
+		t.Fatal("the code opened another key")
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets := map[string]string{
+		"key (base64)": key, "key (hex)": hex.EncodeToString(raw), "key (raw)": string(raw),
+		"phrase": kitPhrase, "new phrase": newPhrase, "code": code, "grouped code": codeLine.FindStringSubmatch("Your recovery code is: " + groupOf4(code) + ".")[1],
+	}
+	files := 0
+	err = filepath.WalkDir(s.root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() == "kit.key" || d.Type()&os.ModeSymlink != 0 {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files++
+		for what, v := range secrets {
+			if bytes.Contains(content, []byte(v)) {
+				t.Errorf("%s holds the kit %s", path, what)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files < 10 {
+		t.Fatalf("walked %d files", files)
+	}
+}
+
+// groupOf4 is code in groups of 4, as kit create shows it.
+func groupOf4(code string) string {
+	var g []string
+	for i := 0; i < len(code); i += 4 {
+		g = append(g, code[i:i+4])
+	}
+	return strings.Join(g, "-")
 }

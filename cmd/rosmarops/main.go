@@ -67,6 +67,7 @@ func newRootCmd() *cli.Command {
 			newStatusCmd(),   // cmd_status.go
 			newAllowCmd(),    // stub → M4
 			newScheduleCmd(), // stub → M8
+			newKitCmd(),      // cmd_kit.go
 		},
 	}
 }

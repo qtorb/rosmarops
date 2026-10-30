@@ -1389,6 +1389,13 @@ var LegacyHTMLKeys = map[string]bool{
 	"unknown.hermes_backend_unknown":            true,
 	"html.action.hermes_isolated_backend.title": true,
 	"html.action.hermes_isolated_backend.how":   true,
+	// BV-118: the kit command's help; ES/CA fall back to English until the
+	// owner supplies translations (point 5).
+	"cli.cmd.kit.short":            true,
+	"cli.cmd.kit.long":             true,
+	"cli.cmd.kit.create.short":     true,
+	"cli.cmd.kit.import.short":     true,
+	"cli.cmd.kit.new_phrase.short": true,
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language
