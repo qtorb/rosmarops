@@ -69,10 +69,10 @@ var staticKeys = []string{
 func mcpExternalKeys() []string {
 	base := "finding." + rules.RuleMCPExternalAction
 	keys := []string{
-		base + ".title.money.asking", base + ".another_model", base + ".action", base + ".vendor_note",
+		base + ".title.money.asking", base + ".why.money.asking", base + ".another_model", base + ".action", base + ".vendor_note",
 	}
 	for _, c := range knowledge.AllMCPCategories {
-		keys = append(keys, base+".title."+c)
+		keys = append(keys, base+".title."+c, base+".why."+c)
 	}
 	for _, id := range rules.MCPVendorNoteIDs() {
 		keys = append(keys, base+".vendor."+id)
@@ -189,12 +189,8 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("**%s**\n\n%s\n\n%s\n\n", t(projectHookKey(f, "title"), p),
 			t(projectHookKey(f, "what"), p), t(projectHookKey(f, "fix"), p))
 	} else if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RuleMCPExternalAction {
-		p := findingParams(f) // BV-117/BV-121: title, caveats, action
-		w("**%s**\n\n", t(mcpTitleKey(f), p))
-		if body := mcpBody(cat, f, p); body != "" {
-			w("%s\n\n", body)
-		}
-		w("%s\n\n", mcpAction(cat, p))
+		p := findingParams(f) // BV-117/BV-121/BV-124: title, what it means, action
+		w("**%s**\n\n%s\n\n%s\n\n", t(mcpTitleKey(f), p), mcpWhatItMeans(cat, f, p), mcpAction(cat, p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
@@ -290,9 +286,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 				meta = append(meta, t("radius."+f.Radius, p))
 			}
 			w("%s\n\n", strings.Join(meta, " · "))
-			if body := mcpBody(cat, f, p); body != "" {
-				w("#### %s\n\n%s\n\n", t("finding.part.why", p), body)
-			}
+			w("#### %s\n\n%s\n\n", t("finding.part.why", p), mcpWhatItMeans(cat, f, p))
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), mcpAction(cat, p))
 			continue
 		}

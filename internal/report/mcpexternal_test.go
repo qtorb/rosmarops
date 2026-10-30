@@ -82,6 +82,29 @@ func TestMCPExternal_JSONValidatesWithServices(t *testing.T) {
 	}
 }
 
+// BV-124: the «what it means» text (why.<category>) renders in the report
+// below the title of an mcp_external_action finding, like other rules' why,
+// and the action is shown too.
+func TestMCPExternal_WhyAndAction(t *testing.T) {
+	v := mcpV2(t, []struct {
+		name, service, category, rule string
+		readOnly                      bool
+	}{{"stripe", "Stripe", "money", "allow", false}}) // nobody → red money, is today
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		p := map[string]string{"agent": "Claude Code", "service": "Stripe"}
+		why := cat.Text("finding.mcp_external_action.why.money", p)
+		action := cat.Text("finding.mcp_external_action.action", p)
+		if !strings.Contains(page, htmlEscape(why)) {
+			t.Errorf("%s: the money «what it means» text is not in the report", lang)
+		}
+		if !strings.Contains(page, htmlEscape(action)) {
+			t.Errorf("%s: the «what to do» action is not in the report", lang)
+		}
+	}
+}
+
 func TestMCPExternal_HTMLServices(t *testing.T) {
 	v := mcpV2(t, mcpScenario)
 	for _, lang := range []string{"en", "es"} {
