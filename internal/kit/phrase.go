@@ -2,7 +2,7 @@ package kit
 
 import (
 	"crypto/rand"
-	"errors"
+	_ "embed"
 	"fmt"
 	"math/big"
 	"strings"
@@ -12,32 +12,35 @@ import (
 // large wordlist, about 64.6 bits (CTO-10 point 7).
 const PhraseWords = 5
 
-// effListSize is the EFF large wordlist's length.
-const effListSize = 7776
+// effList is the EFF Large Wordlist for Passphrases, unchanged (BV-120;
+// attribution in THIRD_PARTY_NOTICES.md): 7,776 lines of five dice digits, a
+// tab and a word.
+//
+//go:embed eff_large_wordlist.txt
+var effList string
 
-// effWords is the EFF large wordlist, embedded with its attribution in the
-// license notices. Empty until the list is added to the repository (BV-118
-// point 3): a generated phrase is then refused, never made from another list.
-var effWords []string
+// effWords are effList's words, in order.
+var effWords = parseWordlist(effList)
 
-// ErrNoWordlist is a generated phrase asked of a build without the list.
-var ErrNoWordlist = errors.New("kit: this build has no word list for generated phrases yet")
+func parseWordlist(list string) []string {
+	var words []string
+	for _, line := range strings.Split(strings.TrimRight(list, "\n"), "\n") {
+		_, word, _ := strings.Cut(line, "\t")
+		words = append(words, word)
+	}
+	return words
+}
 
 // GeneratePhrase is five words of the EFF large wordlist, each chosen with
 // crypto/rand, separated by spaces.
-func GeneratePhrase() (string, error) { return generatePhrase(effWords) }
-
-func generatePhrase(words []string) (string, error) {
-	if len(words) != effListSize {
-		return "", ErrNoWordlist
-	}
+func GeneratePhrase() (string, error) {
 	picked := make([]string, PhraseWords)
 	for i := range picked {
-		n, err := rand.Int(rand.Reader, big.NewInt(effListSize))
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(effWords))))
 		if err != nil {
 			return "", fmt.Errorf("kit: pick a word: %w", err)
 		}
-		picked[i] = words[n.Int64()]
+		picked[i] = effWords[n.Int64()]
 	}
 	return strings.Join(picked, " "), nil
 }

@@ -1,3 +1,5 @@
 # Golden pages are compared byte for byte: no end-of-line conversion on
 # checkout (Windows).
 internal/report/testdata/** -text
+# The EFF wordlist is embedded unchanged and checked by its SHA-256 (BV-120).
+internal/kit/eff_large_wordlist.txt -text
