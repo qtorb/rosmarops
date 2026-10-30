@@ -12,24 +12,85 @@
 #
 # Third-party actions are pinned by commit SHA (the tag in the comment).
 # The release is created with the GitHub CLI that the runner ships with.
+# BV-127: it can also be started by hand (Run workflow) with a tag; the
+# workflow creates the tag on master after its checks.
 name: release
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version tag to create on master, for example v0.6.0"
+        required: true
+        type: string
 
 permissions: {}
 
 jobs:
+  tag:
+    # Manual «Run workflow» only (BV-127): a tag push skips this job. It checks
+    # the request and creates the tag on master. A tag pushed with GITHUB_TOKEN
+    # does not start another workflow run, so there is no double publish.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+      - name: Check the request and create the tag on master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ github.sha }}
+        run: |
+          # a. publish only from master
+          if [ "${{ github.ref }}" != "refs/heads/master" ]; then
+            echo "Run workflow only from master (got ${{ github.ref }})"; exit 1
+          fi
+          # b. tag format vX.Y.Z or vX.Y.Z-prerelease
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "Invalid tag \"$TAG\": want vX.Y.Z or vX.Y.Z-prerelease"; exit 1
+          fi
+          # c. the tag must not exist yet
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG"; then
+            echo "Tag $TAG already exists"; exit 1
+          fi
+          # d. the release note must exist at this commit
+          if [ ! -s "docs/release-notes/${TAG}.md" ]; then
+            echo "No docs/release-notes/${TAG}.md at ${SHA}"; exit 1
+          fi
+          # e. the checks workflow (ci.yml) must be green on this commit
+          green=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SHA}&status=completed" --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          if [ "${green:-0}" -lt 1 ]; then
+            echo "The checks workflow (ci.yml) is not green on ${SHA}"; exit 1
+          fi
+          # all checks passed: create and push the annotated tag with GITHUB_TOKEN
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "RosmarOps $TAG"
+          git push origin "refs/tags/$TAG"
+
   verify:
+    needs: [tag]
+    # Runs after a successful manual tag, or directly on a tag push (tag
+    # skipped). A failed tag job (a check did not pass) skips verify and
+    # everything after it, so nothing is published.
+    if: ${{ always() && (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.TAG }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.24.7"
@@ -61,11 +122,12 @@ jobs:
       id-token: write
       attestations: write
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.TAG }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.24.7"
@@ -130,12 +192,13 @@ jobs:
     permissions:
       contents: write
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ env.TAG }}
       - name: Download the released rosmarops.exe
         run: |
           gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
