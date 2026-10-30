@@ -1,6 +1,6 @@
 // Package schemas embeds the canonical JSON Schema files (the v1 config and
-// report schemas, the v1 and v2 state schemas, and the v2 graph and report
-// schemas under v2/) into the binary.
+// report schemas, the v1 and v2 state schemas, the v2 graph and report
+// schemas under v2/, and the v1 kit schema) into the binary.
 // These are the source of truth for validation at runtime; the copies under
 // /schemas/ at the repo root are the human-readable reference.
 //
@@ -69,3 +69,9 @@ var FindingsMemoryV3Schema []byte
 //
 //go:embed intel/intel.v1.schema.json
 var IntelSchema []byte
+
+// KitSchema is the embedded kit.v1.schema.json schema: the rosmarops-kit
+// file (BV-118, CTO-10 point 5).
+//
+//go:embed kit.v1.schema.json
+var KitSchema []byte

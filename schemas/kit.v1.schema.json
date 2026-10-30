@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/kit.v1.schema.json",
+  "title": "RosmarOps — Kit file",
+  "description": "The rosmarops-kit file (CTO-10 §3): the kit key and the user salt, each wrapped with PBKDF2-SHA256 and AES-256-GCM, once under the secret phrase and once under the recovery code. Holds no key, salt, phrase or code in the clear.",
+  "type": "object",
+  "required": ["format", "version", "kit_id", "key_id", "envelopes"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "type": "string", "const": "rosmarops-kit" },
+    "version": { "type": "integer", "const": 1 },
+    "kit_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "16 random bytes, hex."
+    },
+    "key_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$",
+      "description": "HMAC-SHA256(key, \"rosmarops-key-id\"), first 16 bytes, hex."
+    },
+    "envelopes": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/definitions/envelope" },
+      "description": "The phrase envelope, then the recovery_code envelope."
+    }
+  },
+  "definitions": {
+    "envelope": {
+      "type": "object",
+      "required": ["type", "kdf", "iterations", "salt", "nonce", "ciphertext"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["phrase", "recovery_code"] },
+        "kdf": { "type": "string", "const": "pbkdf2-sha256" },
+        "iterations": { "type": "integer", "minimum": 100000 },
+        "salt": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{22}==$",
+          "description": "16 random bytes, standard base64, new for each envelope."
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{16}$",
+          "description": "12 random bytes, standard base64, new for each envelope."
+        },
+        "ciphertext": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{108}$",
+          "description": "AES-256-GCM of 1 version byte, the 32-byte key and the 32-byte user salt, with the GCM tag; standard base64. AAD: format|version|kit_id|key_id|type|kdf|iterations."
+        }
+      }
+    }
+  }
+}
