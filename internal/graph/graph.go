@@ -143,6 +143,25 @@ type Node struct {
 	// rules layer emits project_hook_runs_repo_script from them.
 	ScriptPath string `json:"-"`
 	ScriptSize int64  `json:"-"`
+
+	// ExternalAction, when set on an mcp_server node, is the catalog match for
+	// a known MCP server that acts outside the machine (BV-117/BV-121). In
+	// memory only, like Malicious — never serialized to graph.v2.json, so the
+	// graph schema does not change; the rules layer emits mcp_external_action
+	// and the services list from it.
+	ExternalAction *ExternalActionMatch `json:"-"`
+}
+
+// ExternalActionMatch is an mcp_server node's catalog match (BV-117/BV-121):
+// the service and its category, whether it writes, and whether the local
+// configuration makes it read-only (a read-only server is still listed but
+// yields no finding).
+type ExternalActionMatch struct {
+	ID       string // catalog entry id
+	Service  string // display name from the catalog
+	Category string // money, infrastructure, …
+	Writes   bool   // the catalog says the server writes
+	ReadOnly bool   // --read-only, read_only=true, /readonly or DISALLOW_WRITES
 }
 
 // Edge is any graph edge.
