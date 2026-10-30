@@ -413,7 +413,38 @@ func (c htmlCtx) renderOverviewDialog() {
 		}
 		c.w(`</p>`)
 	}
-	c.w(`</div><p class="ovf">%s</p></dialog>`, c.t("html.ov.foot", nil))
+	c.w(`</div>`)
+	// BV-121: «What it's connected to», one block per evaluated agent.
+	for _, a := range cols {
+		c.renderServices(a)
+	}
+	c.w(`<p class="ovf">%s</p></dialog>`, c.t("html.ov.foot", nil))
+}
+
+// renderServices writes an agent's known external MCP servers (BV-121): the
+// list «{service} · {category} · {approval}», read-only shown in the approval
+// place, each linking to its finding when it gave one; or the «none» line.
+func (c htmlCtx) renderServices(a rules.OverviewAgent) {
+	c.w(`<div class="ovsvc"><p><b>%s</b> · %s</p>`, html.EscapeString(a.Agent), c.t("report.services_h", nil))
+	if len(a.Services) == 0 {
+		c.w(`<p>%s</p></div>`, c.t("report.services_none", nil))
+		return
+	}
+	c.w(`<ul>`)
+	for _, s := range a.Services {
+		approval := s.Approval
+		if s.Access == "read_only" {
+			approval = "read_only"
+		}
+		line := html.EscapeString(s.Service) + " · " +
+			c.t("category."+s.Category, nil) + " · " +
+			c.t("approval."+approval, nil)
+		if s.FindingID != nil {
+			line = `<a href="#` + html.EscapeString(*s.FindingID) + `">` + line + `</a>`
+		}
+		c.w(`<li>%s</li>`, line)
+	}
+	c.w(`</ul></div>`)
 }
 
 // headScore is the rest of a column's small (§11.3): the attributes and

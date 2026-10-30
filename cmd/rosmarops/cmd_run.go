@@ -783,6 +783,14 @@ func writeGraph(
 	// the graph is serialized so the match is reflected in the written file and
 	// its hash. A nil matcher (invalid snapshot) makes this a no-op.
 	graph.CrossIntel(&g, scan.Servers, pkgObs, matcher, now)
+	// MCP catalog cross (BV-117/BV-121): mark mcp_server nodes of known servers
+	// that act outside the machine. In-memory only (ExternalAction), so it does
+	// not change the written file; the rules layer reads it.
+	catalog, err := knowledge.LoadMCPCatalog()
+	if err != nil {
+		return nil, "", "", fmt.Errorf("mcp catalog: %w", err)
+	}
+	graph.CrossMCPCatalog(&g, scan.Servers, catalog, now)
 	path, err := graph.WriteFile(dir, g)
 	if err != nil {
 		return nil, "", "", err

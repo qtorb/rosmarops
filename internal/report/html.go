@@ -623,6 +623,11 @@ var adjustActions = map[string]bool{
 
 // renderStep2 is v3 §4: what you do today.
 func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
+	if ok {
+		// BV-121: an anchor so agents_overview.services can link to the today
+		// finding (it is not among step 3's rows).
+		c.w(`<span class="fa" id="%s"></span>`, html.EscapeString(f.ID))
+	}
 	var a rules.Action
 	found := false
 	if ok {
@@ -644,6 +649,12 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
 		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
 			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
+		return
+	}
+	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121: no auto-action; the guidance is in the impact
+		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p></div></section>`, c.title(f), c.impact(f))
 		return
 	}
 	if !found {
@@ -788,8 +799,8 @@ func (c htmlCtx) renderStep3(todayID string) {
 // verdict as text; open, the card body of v1 §3.6.
 func (c htmlCtx) renderRow(f rules.Finding) {
 	p := c.params(f)
-	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb"><p>%s%s</p>`,
-		c.rowTitle(f), c.verdict(f), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
+	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s"><p>%s%s</p>`,
+		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
 	}
@@ -807,6 +818,8 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f)))) // BV-100
 	} else if f.Rule == rules.RuleProjectHookRunsRepoScript {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f)))) // BV-107
+	} else if f.Rule == rules.RuleMCPExternalAction {
+		// BV-117/BV-121: the impact already carries the «what to do».
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
@@ -1127,6 +1140,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107
 		return c.cat.Text(projectHookKey(f, "title"), c.params(f))
 	}
+	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121
+		return c.cat.Text(mcpTitleKey(f), c.params(f))
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
 		return c.cat.Text("html.f.cred.title", p)
@@ -1210,6 +1226,9 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107
 		return c.cat.Text("finding.project_hook_runs_repo_script.impact", c.params(f))
+	}
+	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121
+		return mcpImpact(c.cat, f, c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
@@ -1299,12 +1318,20 @@ func HTMLKeys() []string {
 		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.same_as_today")
 	// v3 §11 (BV-61)
 	keys = append(keys, overviewKeys()...)
+	// BV-121: the agents_overview services list (§11).
+	keys = append(keys, "report.services_h", "report.services_none")
+	for _, c := range knowledge.AllMCPCategories {
+		keys = append(keys, "category."+c)
+	}
+	for _, a := range []string{rules.MCPApprovalPerson, rules.MCPApprovalAnotherModel, rules.MCPApprovalNobody, rules.MCPApprovalDeny, "read_only"} {
+		keys = append(keys, "approval."+a)
+	}
 	for _, sg := range SignalOrder {
 		keys = append(keys, "html.signal."+sg)
 	}
 	for _, r := range rules.AllRules {
-		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript {
-			continue // renders with finding.* title, no html.headline key (BV-100, BV-107)
+		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction {
+			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117)
 		}
 		keys = append(keys, "html.headline."+r)
 	}
@@ -1396,6 +1423,27 @@ var LegacyHTMLKeys = map[string]bool{
 	"cli.cmd.kit.create.short":     true,
 	"cli.cmd.kit.import.short":     true,
 	"cli.cmd.kit.new_phrase.short": true,
+	// BV-117/BV-121: the mcp_external_action finding's texts; ES/CA fall back
+	// to English until the owner supplies translations (brief: the services[]
+	// texts are translated, the finding texts are not).
+	"finding.mcp_external_action.title.money":             true,
+	"finding.mcp_external_action.title.money.asking":      true,
+	"finding.mcp_external_action.title.infrastructure":    true,
+	"finding.mcp_external_action.title.database":          true,
+	"finding.mcp_external_action.title.messaging":         true,
+	"finding.mcp_external_action.title.email_drafts":      true,
+	"finding.mcp_external_action.title.code_repo":         true,
+	"finding.mcp_external_action.title.cloud_docs":        true,
+	"finding.mcp_external_action.title.calendar":          true,
+	"finding.mcp_external_action.title.issue_tracker":     true,
+	"finding.mcp_external_action.title.crm":               true,
+	"finding.mcp_external_action.another_model":           true,
+	"finding.mcp_external_action.action":                  true,
+	"finding.mcp_external_action.vendor_note":             true,
+	"finding.mcp_external_action.vendor.stripe":           true,
+	"finding.mcp_external_action.vendor.shopify_checkout": true,
+	"finding.mcp_external_action.vendor.hubspot":          true,
+	"finding.mcp_external_action.vendor.supabase":         true,
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language

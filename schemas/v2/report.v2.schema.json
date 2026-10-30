@@ -267,7 +267,8 @@
             "own_instructions_writable",
             "own_config_writable",
             "package_known_malicious",
-            "project_hook_runs_repo_script"
+            "project_hook_runs_repo_script",
+            "mcp_external_action"
           ]
         },
         "rule_version": {
@@ -1335,9 +1336,81 @@
             "$ref": "#/definitions/overviewCell"
           },
           "description": "The six rows of T1, in their order; all not_evaluated when the agent is not evaluated."
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/overviewService"
+          },
+          "description": "The known external MCP servers the agent is configured to use (BV-121): every catalog server it loads, read-only and denied included. Only scored agents carry it; absent when none."
         }
       },
       "description": "One detected agent (§6): an ai_client and an extension of one product are one agent."
+    },
+    "overviewService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "category",
+        "access",
+        "approval",
+        "scope",
+        "finding_id"
+      ],
+      "properties": {
+        "service": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The catalog name of the service."
+        },
+        "category": {
+          "enum": [
+            "money",
+            "infrastructure",
+            "database",
+            "messaging",
+            "email_drafts",
+            "code_repo",
+            "cloud_docs",
+            "calendar",
+            "issue_tracker",
+            "crm"
+          ]
+        },
+        "access": {
+          "enum": [
+            "writes",
+            "read_only"
+          ]
+        },
+        "approval": {
+          "enum": [
+            "person",
+            "another_model",
+            "nobody",
+            "deny"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "user",
+            "project"
+          ]
+        },
+        "finding_id": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/definitions/findingId"
+            }
+          ],
+          "description": "The mcp_external_action finding this service gave, or null when it gave none."
+        }
+      },
+      "description": "One catalog MCP server an agent is configured to use (BV-121)."
     },
     "overviewCell": {
       "type": "object",

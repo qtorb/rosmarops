@@ -89,6 +89,34 @@ var credentialKinds = map[string]credentialKind{
 
 	// Claude Code's account OAuth tokens (BV-111): the service is Anthropic.
 	"claude_code_oauth_token": {CredentialOAuthToken, "anthropic"},
+
+	// Payment keys recognised by the variable name (AP-10 Anexo 1, point 3).
+	// These gateways publish no key prefix, so the kind comes from the name;
+	// privilege medium, not high (the name does not tell a production key from
+	// a test one). Stripe stays by prefix as high.
+	"paypal_key_by_name":    {CredentialAPIKey, "paypal"},
+	"adyen_key_by_name":     {CredentialAPIKey, "adyen"},
+	"square_key_by_name":    {CredentialAPIKey, "square"},
+	"braintree_key_by_name": {CredentialAPIKey, "braintree"},
+}
+
+// paymentKeyByName maps the exact, unambiguous name of a payment credential
+// variable to its kind (AP-10 Anexo 1, point 3, «classified by variable
+// name»). Matched case-insensitively, before the value patterns; the whole
+// value is then the secret.
+var paymentKeyByName = map[string]string{
+	"PAYPAL_CLIENT_SECRET":   "paypal_key_by_name",
+	"PAYPAL_SECRET":          "paypal_key_by_name",
+	"ADYEN_API_KEY":          "adyen_key_by_name",
+	"SQUARE_ACCESS_TOKEN":    "square_key_by_name",
+	"BRAINTREE_PRIVATE_KEY":  "braintree_key_by_name",
+	"BRAINTREE_ACCESS_TOKEN": "braintree_key_by_name",
+}
+
+// PaymentKeyByName returns the credential kind for a payment variable name, or
+// "" when the name is not one. Exported for the rules/tests.
+func PaymentKeyByName(key string) string {
+	return paymentKeyByName[strings.ToUpper(strings.TrimSpace(key))]
 }
 
 // supabaseKeyScopes is the observed_scope read from the prefix of Supabase
@@ -284,6 +312,11 @@ func credentialsFromRepos(inputs []credentialInput, families map[string]string, 
 		if in.kind != "" {
 			// The source states the kind: the whole value is the secret.
 			patternID, secret = in.kind, strings.TrimSpace(ev.Value.Reveal())
+			ok = secret != ""
+		} else if pid := PaymentKeyByName(ev.Key); pid != "" {
+			// A payment key recognised by its variable name (AP-10 Anexo 1):
+			// no prefix, so the whole value is the secret.
+			patternID, secret = pid, strings.TrimSpace(ev.Value.Reveal())
 			ok = secret != ""
 		} else {
 			patternID, secret, ok = secrets.ClassifyEnv(ev.Key, ev.Value, patterns)
