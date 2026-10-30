@@ -2,6 +2,8 @@ module github.com/qtorb/rosmarops
 
 go 1.24
 
+godebug winsymlink=0
+
 require github.com/xeipuuv/gojsonschema v1.2.0
 
 require (

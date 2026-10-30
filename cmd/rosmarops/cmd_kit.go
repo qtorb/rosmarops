@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
@@ -78,11 +81,13 @@ func resolveKitPaths() (kitPaths, error) {
 	return kitPaths{store: store, state: st, reports: reports}, nil
 }
 
-// console reads answers line by line and writes catalog texts.
+// console reads answers line by line and writes catalog texts. tty is the
+// input when it is a console, where secrets are typed without echo.
 type console struct {
 	in  *bufio.Reader
 	out io.Writer
 	cat catalog.Catalog
+	tty *os.File
 }
 
 func newConsole(inv cli.Invocation) (*console, error) {
@@ -90,7 +95,11 @@ func newConsole(inv cli.Invocation) (*console, error) {
 	if err != nil {
 		return nil, fmt.Errorf("lang_unsupported: %q (en, es)", inv.Flags["lang"])
 	}
-	return &console{in: bufio.NewReader(kitInput), out: kitOutput, cat: cat}, nil
+	c := &console{in: bufio.NewReader(kitInput), out: kitOutput, cat: cat}
+	if f, ok := kitInput.(*os.File); ok && isTerminal(f) {
+		c.tty = f
+	}
+	return c, nil
 }
 
 func (c *console) say(key string, params map[string]string) {
@@ -108,11 +117,52 @@ func (c *console) ask(key string) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
+// askSecret is ask without echo when the input is a console (BV-120, point
+// 2): the phrase and the code are not shown as they are typed. The echo is
+// restored when the line is read, and on an interrupt. Elsewhere (a pipe, the
+// tests) the line is read as ask reads it.
+func (c *console) askSecret(key string) (string, error) {
+	if c.tty == nil {
+		return c.ask(key)
+	}
+	restore, err := echoOff(c.tty)
+	if err != nil {
+		slog.Warn("kit: the answer will be shown as it is typed", "err", err)
+		return c.ask(key)
+	}
+	stop := restoreOnInterrupt(restore)
+	defer stop()
+	line, err := c.ask(key)
+	fmt.Fprintln(c.out) // the Enter typed was not echoed either
+	return line, err
+}
+
+// restoreOnInterrupt runs restore if the program is interrupted before stop,
+// and then exits; stop runs restore and ends the watch.
+func restoreOnInterrupt(restore func()) (stop func()) {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-sig:
+			restore()
+			os.Exit(130)
+		case <-done:
+		}
+	}()
+	return func() {
+		signal.Stop(sig)
+		close(done)
+		restore()
+	}
+}
+
 // choosePhrase asks for an own phrase of 16 characters or more, typed twice,
 // or makes one of five words when the answer is empty.
 func (c *console) choosePhrase() (string, error) {
 	for {
-		p, err := c.ask("kit.phrase_prompt")
+		p, err := c.askSecret("kit.phrase_prompt")
 		if err != nil {
 			return "", err
 		}
@@ -128,7 +178,7 @@ func (c *console) choosePhrase() (string, error) {
 			c.say("kit.phrase_too_short", nil)
 			continue
 		}
-		again, err := c.ask("kit.phrase_again")
+		again, err := c.askSecret("kit.phrase_again")
 		if err != nil {
 			return "", err
 		}
@@ -245,7 +295,7 @@ func kitImport(c *console, paths kitPaths, file string) error {
 	}
 	var sec kit.Secret
 	for {
-		typed, err := c.ask("kit.import_prompt")
+		typed, err := c.askSecret("kit.import_prompt")
 		if err != nil {
 			return err
 		}

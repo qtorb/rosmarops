@@ -2,7 +2,9 @@ package kit
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,7 +12,6 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -208,19 +209,48 @@ func TestPhraseRules(t *testing.T) {
 	if PhraseLongEnough("fifteen chars!!") || !PhraseLongEnough("sixteen chars!!!") || !PhraseLongEnough("ñandú ñandú ñand") {
 		t.Error("16-character rule")
 	}
-	if _, err := generatePhrase(nil); !errors.Is(err, ErrNoWordlist) {
-		t.Errorf("no list: %v", err)
+	inList := map[string]bool{}
+	for _, w := range effWords {
+		inList[w] = true
 	}
-	words := make([]string, effListSize)
-	for i := range words {
-		words[i] = "w" + strconv.Itoa(i)
+	for range 20 {
+		p, err := GeneratePhrase()
+		if err != nil {
+			t.Fatal(err)
+		}
+		words := strings.Split(p, " ")
+		if len(words) != PhraseWords {
+			t.Fatalf("%d words: %q", len(words), p)
+		}
+		for _, w := range words {
+			if !inList[w] {
+				t.Errorf("%q is not in the EFF list", w)
+			}
+		}
 	}
-	p, err := generatePhrase(words)
-	if err != nil {
-		t.Fatal(err)
+}
+
+// The embedded list is the EFF large wordlist, unchanged (BV-120, point 1):
+// its SHA-256 and 7,776 unique words, each line numbered by five dice.
+func TestEFFWordlist(t *testing.T) {
+	sum := sha256.Sum256([]byte(effList))
+	if got := hex.EncodeToString(sum[:]); got != "addd35536511597a02fa0a9ff1e5284677b8883b83e986e43f15a3db996b903e" {
+		t.Fatalf("eff_large_wordlist.txt SHA-256 %s", got)
 	}
-	if n := len(strings.Fields(p)); n != PhraseWords {
-		t.Errorf("%d words: %q", n, p)
+	if len(effWords) != 7776 {
+		t.Fatalf("%d words", len(effWords))
+	}
+	seen := map[string]bool{}
+	dice := regexp.MustCompile(`^[1-6]{5}\t[a-z-]+$`)
+	for i, line := range strings.Split(strings.TrimRight(effList, "\n"), "\n") {
+		if !dice.MatchString(line) {
+			t.Fatalf("line %d: %q", i+1, line)
+		}
+		w := effWords[i]
+		if w == "" || seen[w] {
+			t.Errorf("line %d: empty or repeated word %q", i+1, w)
+		}
+		seen[w] = true
 	}
 }
 
