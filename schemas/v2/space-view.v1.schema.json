@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "space-view.v1",
+  "title": "RosmarOps space view v1 (content of a rosmarops-results v1 package)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rosmarops_version", "generated_at", "host_id", "os", "agents", "findings", "keys", "changes", "top_action"],
+  "properties": {
+    "schema_version": { "const": "space-view.v1" },
+    "rosmarops_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "host_id": { "type": "string", "pattern": "^[0-9a-f]{16,64}$" },
+    "os": { "enum": ["windows", "macos", "linux"] },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "evaluated", "score", "band", "not_evaluated_reason", "top_finding_id", "services"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" },
+          "name": { "type": "string", "maxLength": 60 },
+          "evaluated": { "type": "boolean" },
+          "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+          "band": { "enum": ["red", "yellow", "green", null] },
+          "not_evaluated_reason": { "type": ["string", "null"], "pattern": "^[a-z0-9_.]{1,80}$", "description": "Stable code; null when evaluated." },
+          "top_finding_id": { "type": ["string", "null"] },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["service", "category", "access", "approval", "finding_id"],
+              "properties": {
+                "service": { "type": "string", "maxLength": 60 },
+                "category": { "enum": ["money", "infrastructure", "database", "messaging", "email_drafts", "code_repo", "cloud_docs", "calendar", "issue_tracker", "crm"] },
+                "access": { "enum": ["writes", "read_only"] },
+                "approval": { "enum": ["person", "another_model", "nobody", "deny"] },
+                "finding_id": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule", "severity", "agent_id", "weight", "score_after_fix", "file", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "rule": { "type": "string", "pattern": "^[a-z0-9_]{1,60}$" },
+          "severity": { "enum": ["red", "yellow"] },
+          "agent_id": { "type": ["string", "null"] },
+          "weight": { "type": "number", "minimum": 0 },
+          "score_after_fix": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+          "file": { "type": ["string", "null"], "maxLength": 400 },
+          "text": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["en"],
+            "properties": {
+              "en": { "$ref": "#/$defs/finding_text" },
+              "es": { "$ref": "#/$defs/finding_text" }
+            }
+          }
+        }
+      }
+    },
+    "keys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fingerprint", "access", "agent_ids", "label"],
+        "properties": {
+          "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{16,64}$", "description": "HMAC with the user salt; same key, same fingerprint on every computer of the user." },
+          "access": { "enum": ["high", "medium", "unclassified"] },
+          "agent_ids": { "type": "array", "items": { "type": "string" } },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["en"],
+            "properties": { "en": { "type": "string", "maxLength": 80 }, "es": { "type": "string", "maxLength": 80 } }
+          }
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "description": "Against the previous run on this computer; empty on the first run.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "finding_id", "score_delta", "text"],
+        "properties": {
+          "kind": { "enum": ["new", "fixed"] },
+          "finding_id": { "type": ["string", "null"] },
+          "score_delta": { "type": ["integer", "null"] },
+          "text": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["en"],
+            "properties": { "en": { "type": "string", "maxLength": 200 }, "es": { "type": "string", "maxLength": 200 } }
+          }
+        }
+      }
+    },
+    "top_action": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["finding_id", "score_from", "score_to"],
+      "properties": {
+        "finding_id": { "type": "string" },
+        "score_from": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "score_to": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    }
+  },
+  "$defs": {
+    "finding_text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "what_it_means", "steps", "paste_block"],
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "what_it_means": { "type": "string", "maxLength": 600 },
+        "steps": { "type": "array", "items": { "type": "string", "maxLength": 300 } },
+        "paste_block": { "type": ["string", "null"], "maxLength": 4000 }
+      }
+    }
+  }
+}

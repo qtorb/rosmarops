@@ -651,10 +651,11 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
 		return
 	}
-	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121: no auto-action; the guidance is in the impact
+	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124: why below the title, then the action
 		c.w(`<section class="now" aria-labelledby="today-title">`)
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p></div></section>`, c.title(f), c.impact(f))
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
+			c.title(f), c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
 		return
 	}
 	if !found {
@@ -819,7 +820,7 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	} else if f.Rule == rules.RuleProjectHookRunsRepoScript {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f)))) // BV-107
 	} else if f.Rule == rules.RuleMCPExternalAction {
-		// BV-117/BV-121: the impact already carries the «what to do».
+		c.w(`<p>%s</p>`, html.EscapeString(mcpAction(c.cat, c.params(f)))) // BV-124: the «what to do»
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
@@ -1227,8 +1228,8 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	if f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107
 		return c.cat.Text("finding.project_hook_runs_repo_script.impact", c.params(f))
 	}
-	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121
-		return mcpImpact(c.cat, f, c.params(f))
+	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124
+		return mcpWhatItMeans(c.cat, f, c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {

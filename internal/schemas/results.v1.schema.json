@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/results.v1.schema.json",
+  "title": "rosmarops-results v1",
+  "description": "The closed package written for the customer area (BV-119, AP-17 §2). The header is in clear; the data key wraps under the kit key and the content (space-view.v1) is sealed with it, both AES-256-GCM with the header as additional data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "header",
+    "wrapped_key",
+    "nonce",
+    "ciphertext"
+  ],
+  "properties": {
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "version",
+        "kit_id",
+        "key_id",
+        "host_id",
+        "created_at",
+        "rosmarops_version"
+      ],
+      "properties": {
+        "format": {
+          "const": "rosmarops-results"
+        },
+        "version": {
+          "const": 1
+        },
+        "kit_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "host_id": {
+          "type": "string",
+          "pattern": "^host_[0-9a-f]{16}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rosmarops_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "wrapped_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "description": "base64: the per-package data key wrapped under the kit key, its own nonce prepended."
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "description": "base64: the content's AES-256-GCM nonce."
+    },
+    "ciphertext": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "description": "base64: the space-view.v1 content sealed with the data key."
+    }
+  }
+}
