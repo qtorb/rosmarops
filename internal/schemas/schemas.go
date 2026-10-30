@@ -81,3 +81,10 @@ var KitSchema []byte
 //
 //go:embed results.v1.schema.json
 var ResultsSchema []byte
+
+// SpaceViewSchema is the embedded v2/space-view.v1.schema.json schema: the
+// content of a rosmarops-results v1 package (BV-119/BV-122, copied unchanged
+// from vigil).
+//
+//go:embed v2/space-view.v1.schema.json
+var SpaceViewSchema []byte
