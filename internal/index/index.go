@@ -17,9 +17,10 @@ import (
 // the coverage conditions change (I7). Version 2 adds cred_in_git
 // (decision 2026-10-24, memoria, M8); version 3 counts the agent extensions
 // as agents present, not evaluated (decision 2026-10-26, agentes y MCP
-// nuevos, A3), with the weights of version 2. The weights of versions 1 and
-// 2 are kept for the double calculation of I7.
-const Version = 3
+// nuevos, A3), with the weights of version 2. Version 4 adds
+// mcp_external_action (AP-10, BV-117/BV-121). The weights of versions 1 to 3
+// are kept for the double calculation of I7.
+const Version = 4
 
 // K is the constant of the formula (I3).
 const K = 80.0
@@ -160,7 +161,32 @@ func weightOf(f rules.Finding) float64 { return weightIn(Version, f) }
 // weightIn is a finding's weight in an index version: version 1 has no
 // cred_in_git (weight 0); versions 2 and 3 weigh it 20 when red, ×1.5 with
 // a remote in some member, and 8 when yellow. Version 3 changes no weight.
+// Version 4 adds mcp_external_action, weight 0 before it (AP-10, «Gravedad y
+// peso»): money 20 red / 6 asking; infrastructure and database 15; every
+// other class 8; ×1.5 when it reaches every project (radius any_project).
 func weightIn(version int, f rules.Finding) float64 {
+	if f.Rule == rules.RuleMCPExternalAction {
+		if version < 4 {
+			return 0
+		}
+		var w float64
+		switch f.Params.Category {
+		case rules.CategoryMoney:
+			if f.Severity == rules.SeverityRed {
+				w = 20
+			} else {
+				w = 6
+			}
+		case rules.CategoryInfrastructure, rules.CategoryDatabase:
+			w = 15
+		default:
+			w = 8
+		}
+		if f.Radius == rules.RadiusAnyProject {
+			w *= 1.5
+		}
+		return w
+	}
 	if f.Rule == rules.RuleCredInGit {
 		if version < 2 {
 			return 0

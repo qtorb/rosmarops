@@ -9,8 +9,9 @@ import (
 
 // Decision 2026-10-26 (agentes y MCP nuevos, A3): with Copilot present as an
 // extension, the machine score is not available (agents not evaluated) and
-// index_version is 3; the per-agent scores do not change, and against an
-// index_version 2 entry the double calculation gives 0 by method.
+// index_version is 4 (AP-10, BV-117/BV-121); the per-agent scores do not
+// change, and against an index_version 2 entry the double calculation gives 0
+// by method.
 func TestExtensionsNotEvaluated(t *testing.T) {
 	fs := []rules.Finding{
 		fnd("f_r", rules.RuleCredReadAndSend, rules.SeverityRed, rules.ClassHigh, rules.RadiusSameProject),
@@ -20,7 +21,7 @@ func TestExtensionsNotEvaluated(t *testing.T) {
 	in := agentInput(fs)
 	in.Agents = append(in.Agents, Agent{ID: "agent_ext_x", Name: "GitHub Copilot", Product: "github-copilot"})
 	with := Compute(in)
-	if with.IndexVersion != 3 || with.Machine.Unavailable != ReasonAgentsNotEvaluated || without.Machine.Value == nil {
+	if with.IndexVersion != 4 || with.Machine.Unavailable != ReasonAgentsNotEvaluated || without.Machine.Value == nil {
 		t.Fatalf("machine %+v (version %d), without Copilot %+v", with.Machine, with.IndexVersion, without.Machine)
 	}
 	if !reflect.DeepEqual(with.Scope.NotEvaluated, []string{"GitHub Copilot"}) || *with.Agents[0].Value != *without.Agents[0].Value {

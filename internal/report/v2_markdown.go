@@ -11,6 +11,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/untrusted"
@@ -62,6 +63,23 @@ var staticKeys = []string{
 	"notify.run_failed",
 }
 
+// mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
+// BV-121): a title per category, money's asking variant, the another-model and
+// vendor-note sentences, the per-provider vendor notes, and the action.
+func mcpExternalKeys() []string {
+	base := "finding." + rules.RuleMCPExternalAction
+	keys := []string{
+		base + ".title.money.asking", base + ".another_model", base + ".action", base + ".vendor_note",
+	}
+	for _, c := range knowledge.AllMCPCategories {
+		keys = append(keys, base+".title."+c)
+	}
+	for _, id := range rules.MCPVendorNoteIDs() {
+		keys = append(keys, base+".vendor."+id)
+	}
+	return keys
+}
+
 // CatalogKeys returns every code the v2 Markdown and the run's console
 // summary can emit, sorted.
 func CatalogKeys() []string {
@@ -78,6 +96,12 @@ func CatalogKeys() []string {
 			keys = append(keys, "finding."+r+".title", "finding."+r+".title.large",
 				"finding."+r+".what", "finding."+r+".what.large",
 				"finding."+r+".impact", "finding."+r+".fix")
+			continue
+		}
+		if r == rules.RuleMCPExternalAction {
+			// BV-117/BV-121: a title per category (money has an asking
+			// variant), the another-model and vendor sentences, and the action.
+			keys = append(keys, mcpExternalKeys()...)
 			continue
 		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
@@ -164,6 +188,13 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		p := findingParams(f) // BV-107: title/what/impact/fix, .large when red
 		w("**%s**\n\n%s\n\n%s\n\n", t(projectHookKey(f, "title"), p),
 			t(projectHookKey(f, "what"), p), t(projectHookKey(f, "fix"), p))
+	} else if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RuleMCPExternalAction {
+		p := findingParams(f) // BV-117/BV-121: title, caveats, action
+		w("**%s**\n\n", t(mcpTitleKey(f), p))
+		if body := mcpBody(cat, f, p); body != "" {
+			w("%s\n\n", body)
+		}
+		w("%s\n\n", mcpAction(cat, p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
@@ -250,6 +281,19 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(projectHookKey(f, "what"), p))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding.project_hook_runs_repo_script.impact", p))
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), t("finding.project_hook_runs_repo_script.fix", p))
+			continue
+		}
+		if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121: title/why?/todo
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(mcpTitleKey(f), p))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			if body := mcpBody(cat, f, p); body != "" {
+				w("#### %s\n\n%s\n\n", t("finding.part.why", p), body)
+			}
+			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), mcpAction(cat, p))
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))

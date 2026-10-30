@@ -86,8 +86,14 @@ func catalogMatch(srv platform.MCPServer, catalog knowledge.MCPCatalog, sandbox 
 func matchEntry(e knowledge.MCPCatalogEntry, srv platform.MCPServer, urls, raw []string) bool {
 	for _, ru := range e.RemoteURLs {
 		n := normalizeURL(ru)
+		if n == "" {
+			continue
+		}
 		for _, u := range urls {
-			if u == n {
+			// The server's read-only endpoint (a /readonly suffix on the
+			// catalog URL) is the same service, recognised and marked
+			// read-only (AP-10 Anexo 1, e.g. Linear …/mcp/readonly).
+			if u == n || u == n+"/readonly" {
 				return true
 			}
 		}
