@@ -28,7 +28,7 @@ import (
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
 	Version     = "4" // BV-107: added project_hook_runs_repo_script
-	RuleVersion = "2"
+	RuleVersion = "3" // BV-117/BV-121: added mcp_external_action
 )
 
 // Rule codes (§1).
@@ -48,7 +48,7 @@ var AllRules = []string{
 	RuleCredReadAndSend, RuleCredReadable, RuleCredInGit,
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
-	RuleProjectHookRunsRepoScript,
+	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -145,6 +145,10 @@ func classOf(cred graph.Node, scope string) string {
 	case cred.Type == graph.CredentialAPIKey && (cred.Service == "stripe" || cred.Service == "aws"):
 		return ClassHigh
 	case cred.Type == graph.CredentialAPIKey && (cred.Service == "openai" || cred.Service == "openrouter" || cred.Service == "anthropic"):
+		return ClassMedium
+	// Payment keys classified by variable name (AP-10 Anexo 1, point 3):
+	// medium, not high, because the name does not tell production from test.
+	case cred.Type == graph.CredentialAPIKey && (cred.Service == "paypal" || cred.Service == "adyen" || cred.Service == "square" || cred.Service == "braintree"):
 		return ClassMedium
 	}
 	return ClassUnclassified
@@ -313,6 +317,16 @@ type Params struct {
 	Package   string `json:"package,omitempty"`
 	Version   string `json:"version,omitempty"`
 	IntelID   string `json:"intel_id,omitempty"`
+
+	// mcp_external_action (BV-117/BV-121). In memory only (json:"-"): they do
+	// not enter report.v2 findings[].params; the category drives the index
+	// weight and the title, the disposition the title and the «another model»
+	// sentence, MCPID and VendorNote the provider note. {service} and {agent}
+	// come from Service and Agent above.
+	Category    string `json:"-"`
+	Disposition string `json:"-"`
+	MCPID       string `json:"-"`
+	VendorNote  bool   `json:"-"`
 }
 
 // Evidence is what the finding rests on.
@@ -515,6 +529,12 @@ func Evaluate(in Input) Result {
 			res.Findings = append(res.Findings, projectHookFinding(in, n, nodes))
 		}
 	}
+	// MCP servers that act outside the machine (BV-117/BV-121): one finding
+	// per (scored agent, catalog server) that is used without a person, plus
+	// the per-agent services list for agents_overview. The catalog match rides
+	// on the server node in memory (graph.ExternalAction).
+	mcpFindings, mcpServices := mcpExternal(in, nodes, view)
+	res.Findings = append(res.Findings, mcpFindings...)
 	res.Silenced, res.TestData = silenced, testData
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
@@ -559,6 +579,7 @@ func Evaluate(in Input) Result {
 	oi := overviewInputs{
 		in: in, nodes: nodes, view: view, findings: res.Findings, scopes: scopes,
 		reaches: map[string]map[string]bool{}, foreign: map[string][]graph.Edge{},
+		services: mcpServices,
 	}
 	for p := range reaches {
 		if oi.reaches[p.agent] == nil {

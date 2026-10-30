@@ -526,12 +526,16 @@ func applyMemory(v *V2, in V2Input) {
 //   - project_hook_runs_repo_script (BV-107b): BV-107 added the rule without
 //     a memory decision, and writing it failed the memory's schema
 //     validation, so the run stopped before saving its state.
+//   - mcp_external_action (BV-117/BV-121): a stable configuration finding
+//     re-derived each run; tracking it would need a memory-schema change,
+//     which BV-121 does not sign.
 //
 // Every rule is either in the memory schema's enum or here
 // (TestMemoryCoversEveryRule).
 var MemoryUntracked = map[string]bool{
 	rules.RulePackageKnownMalicious:     true,
 	rules.RuleProjectHookRunsRepoScript: true,
+	rules.RuleMCPExternalAction:         true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

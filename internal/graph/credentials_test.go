@@ -114,6 +114,38 @@ func TestCredentialsFromMCP_SameKeyInTwoServers(t *testing.T) {
 	}
 }
 
+// Payment keys recognised by the variable name (AP-10 Anexo 1, point 3): the
+// credential takes the provider's service and the api_key type, and only the
+// salted fingerprint is kept (the value never appears).
+func TestCredentialsFromMCP_PaymentKeyByName(t *testing.T) {
+	cases := []struct{ key, service string }{
+		{"PAYPAL_CLIENT_SECRET", "paypal"},
+		{"PAYPAL_SECRET", "paypal"},
+		{"ADYEN_API_KEY", "adyen"},
+		{"SQUARE_ACCESS_TOKEN", "square"},
+		{"BRAINTREE_PRIVATE_KEY", "braintree"},
+		{"BRAINTREE_ACCESS_TOKEN", "braintree"},
+	}
+	for _, c := range cases {
+		secret := "pay-" + c.key + "-value-0123456789"
+		servers := []platform.MCPServer{credServer("claude-code", globalPath, "gw", env(c.key, secret))}
+		nodes, _ := credentials(t, servers, testSalt)
+		if len(nodes) != 1 {
+			t.Fatalf("%s: %d credential nodes, want 1", c.key, len(nodes))
+		}
+		n := nodes[0]
+		if n.Type != graph.CredentialAPIKey || n.Service != c.service {
+			t.Errorf("%s: type %q service %q, want api_key %s", c.key, n.Type, n.Service, c.service)
+		}
+		if n.Fingerprint == "" || strings.Contains(n.Fingerprint, secret) {
+			t.Errorf("%s: fingerprint %q leaks the value or is empty", c.key, n.Fingerprint)
+		}
+	}
+	if graph.PaymentKeyByName("paypal_client_secret") == "" || graph.PaymentKeyByName("OPENAI_API_KEY") != "" {
+		t.Error("PaymentKeyByName: case-insensitive match, empty for non-payment names")
+	}
+}
+
 func TestCredentialsFromMCP_FingerprintDependsOnSalt(t *testing.T) {
 	servers := []platform.MCPServer{credServer("cursor", cursorConfig, "aws", env("AWS_ACCESS_KEY_ID", fakeAWSKeyID))}
 

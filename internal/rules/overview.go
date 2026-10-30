@@ -121,6 +121,23 @@ type OverviewAgent struct {
 	NotEvaluatedReason *string           `json:"not_evaluated_reason"`
 	Knowledge          OverviewKnowledge `json:"knowledge"`
 	Rows               []OverviewCell    `json:"rows"`
+
+	// Services are the known external MCP servers the agent is configured to
+	// use (BV-121): every catalog server it loads, read-only and denied
+	// included, with who approves its use and the finding it gave, if any.
+	// Only scored agents carry it; omitted when none.
+	Services []OverviewService `json:"services,omitempty"`
+}
+
+// OverviewService is one catalog MCP server an agent is configured to use
+// (BV-121, agents_overview.services[]).
+type OverviewService struct {
+	Service   string  `json:"service"`    // the catalog name
+	Category  string  `json:"category"`   // money, infrastructure, …
+	Access    string  `json:"access"`     // writes | read_only
+	Approval  string  `json:"approval"`   // person | another_model | nobody | deny
+	Scope     string  `json:"scope"`      // user | project
+	FindingID *string `json:"finding_id"` // the finding it gave, or null
 }
 
 // OverviewKnowledge is the date of the agent's knowledge base and whether it
@@ -194,9 +211,10 @@ type overviewInputs struct {
 	view     func(string) *agentView
 	findings []Finding
 	probe    map[string]graph.AgentProbe
-	reaches  map[string]map[string]bool // agent → credentials it reaches
-	scopes   map[string]string          // credential → observed scope
-	foreign  map[string][]graph.Edge    // agent → writes_config_of to another agent's resources
+	reaches  map[string]map[string]bool   // agent → credentials it reaches
+	scopes   map[string]string            // credential → observed scope
+	foreign  map[string][]graph.Edge      // agent → writes_config_of to another agent's resources
+	services map[string][]OverviewService // agent → catalog MCP servers it uses (BV-121)
 }
 
 // overview derives agents_overview for the evaluated agents (those with a
@@ -237,6 +255,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		date := base.Version
 		a.Knowledge = OverviewKnowledge{Date: &date, Stale: stale(date, oi.in.Now)}
 		a.Rows = oi.cells(oi.view(n.ID))
+		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
