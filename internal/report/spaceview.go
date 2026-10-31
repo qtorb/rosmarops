@@ -453,17 +453,11 @@ func svCredKey(cat catalog.Catalog, n graph.Node, scope string) string {
 	return "generic"
 }
 
-// svChanges is what is new against the previous run: each finding the memory
-// marks "new", with the finding's own title as its text (the catalog text the
-// report already shows for it).
-//
-// Fuera de alcance (BV-119): the "fixed" (no-longer-observed) changes. A gone
-// finding keeps only its rule, severity and dates in the memory, not the
-// params its title needs, and the one catalog line for it
-// (memory.no_longer_observed.line) both names the run's report file and can
-// exceed the schema's 200-character text limit. A short per-change "fixed"
-// label is not in the catalog, so writing one here would be new copy. Left
-// for a signed short text.
+// svChanges is what changed against the previous run: each finding the memory
+// marks "new", with the finding's own title as its text; and one "fixed"
+// element per finding no longer observed this run, with the parameterless
+// catalog line space.change_fixed (BV-128b). A gone finding keeps no title
+// params in the memory, so its text names no finding; finding_id is null.
 func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 	out := []SVChange{}
 	for _, f := range v.Findings {
@@ -476,6 +470,13 @@ func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 			text[lang] = c.titleText(f)
 		}
 		out = append(out, SVChange{Kind: "new", FindingID: &id, Text: text})
+	}
+	for range v.Memory.NoLongerObserved {
+		text := map[string]string{}
+		for lang, c := range ctxs {
+			text[lang] = c.cat.Text("space.change_fixed", nil)
+		}
+		out = append(out, SVChange{Kind: "fixed", FindingID: nil, Text: text})
 	}
 	return out
 }

@@ -1352,6 +1352,8 @@ func HTMLKeys() []string {
 	keys = append(keys, "report.services_h", "report.services_none")
 	// BV-119: the «Your space» section (AP-17 §2).
 	keys = append(keys, "report.space_h2", "report.space_p", "report.space_button", "report.space_no_kit")
+	// BV-128b: the space-view's «fixed» change line (parameterless).
+	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {
 		keys = append(keys, "category."+c)
 	}
