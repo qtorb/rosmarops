@@ -10,6 +10,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // AIMaxBytes is the hard cap of the export for your AI (informe HTML v2,
@@ -183,7 +184,7 @@ func (c htmlCtx) aiAction(f rules.Finding, a rules.Action) string {
 		}
 		pp := copyParams(p)
 		pp["file"] = userPath(a.File, c.home, "~")
-		fmt.Fprintf(&b, "%s\n\n```json\n%s\n```\n\n", c.cat.Text(prompt, pp), homeInRules(a.Value, c.home))
+		fmt.Fprintf(&b, "%s\n\n```json\n%s\n```\n\n", c.cat.Text(prompt, pp), untrusted.VisiblePaste(homeInRules(a.Value, c.home)))
 		after = map[string]string{
 			rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
 		}[a.Completeness]

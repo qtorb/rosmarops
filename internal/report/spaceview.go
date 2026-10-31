@@ -13,6 +13,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/schemas"
 	"github.com/qtorb/rosmarops/internal/schemaval"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // SpaceView mirrors schemas/v2/space-view.v1.schema.json (BV-119/BV-122,
@@ -194,14 +195,15 @@ func svBand(b string) *string {
 	return &s
 }
 
-// svAccess maps a credential class to the keys list's access bucket: high
-// and medium keep their name, low and unclassified are unclassified (the
-// signed schema has three buckets, not four).
+// svAccess maps a credential class to the keys list's access bucket (the
+// signed schema has three, not four): high stays high; medium and low are
+// both medium («Limited access» in the area, CTO-11 point 9); unclassified
+// stays unclassified, only for a key the program cannot classify.
 func svAccess(class string) string {
 	switch class {
 	case rules.ClassHigh:
 		return "high"
-	case rules.ClassMedium:
+	case rules.ClassMedium, rules.ClassLow:
 		return "medium"
 	}
 	return "unclassified"
@@ -225,7 +227,7 @@ func svAgents(v V2, ctxs map[string]htmlCtx) []SVAgent {
 			id = oa.AgentID
 		}
 		a := SVAgent{
-			ID: id, Name: oa.Agent, Evaluated: oa.Evaluated,
+			ID: id, Name: untrusted.PlainText(oa.Agent), Evaluated: oa.Evaluated,
 			NotEvaluatedReason: oa.NotEvaluatedReason,
 			Services:           []SVService{},
 		}
@@ -317,12 +319,13 @@ func weightAndAfter(v V2) (map[string]float64, map[string]*int) {
 }
 
 // svFile is the finding's file as the space view shows it: its first
-// location in ~ form, or empty when it has none.
+// location in ~ form, with any deceptive character shown as ⟨U+XXXX⟩ (CTO-11
+// C3: a path is read from disk); empty when it has none.
 func svFile(f rules.Finding, home string) string {
 	if len(f.Evidence.Locations) == 0 {
 		return ""
 	}
-	return userPath(f.Evidence.Locations[0], home, "~")
+	return untrusted.PlainText(userPath(f.Evidence.Locations[0], home, "~"))
 }
 
 // svSteps are a finding's numbered steps and its paste block, from the same
@@ -367,7 +370,10 @@ func svSteps(c htmlCtx, f rules.Finding, home string) ([]string, *string) {
 	if after != "" {
 		steps = append(steps, c.cat.Text(after, p))
 	}
-	paste := homeInRules(a.Value, c.home)
+	// The paste block carries values read from the configuration (paths,
+	// server commands): show any deceptive character as ⟨U+XXXX⟩, keeping only
+	// newline and tab (CTO-11 C3).
+	paste := untrusted.VisiblePaste(homeInRules(a.Value, c.home))
 	return steps, &paste
 }
 
