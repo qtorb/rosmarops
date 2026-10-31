@@ -92,6 +92,10 @@ type runMode struct {
 	unattended bool
 	window     bool
 	log        *deferredLog
+	// onPackage, when set, is called with the closed package's path once this
+	// run has written it (BV-131, H4: the double click then opens Explorer with
+	// that file selected). It is not called when no package was written.
+	onPackage func(path string)
 }
 
 // runWith is a run; it returns report.html's path.
@@ -708,6 +712,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}
 		if pkgPath != "" {
 			slog.Info("results package written", "path", pkgPath)
+			if m.onPackage != nil {
+				m.onPackage(pkgPath)
+			}
 		}
 	}
 

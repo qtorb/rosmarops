@@ -55,6 +55,7 @@ Every release on GitHub includes:
 - **The program is not signed with a code-signing certificate.** Windows SmartScreen may warn you the first time you run it. Use the attestation and the checksum above to check it instead.
 - **No independent security review has been published.**
 - **RosmarOps does not see everything.** It reads configuration at rest. It does not see what an agent does while it runs, settings that exist only inside an app's database or on a vendor's servers, or anything you set only in one terminal session. The report lists what it assumes and what it could not read, and never counts what it could not read as clean.
+- On a double-click, if this computer has no key for your online space yet, RosmarOps looks in your Downloads folder for a file named rosmarops-kit-<8 characters>.json (also with « (1)» and so on), up to 64 KB, without following links. It reads only that file, never deletes it and never writes to Downloads.
 
 ---
 

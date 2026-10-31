@@ -92,6 +92,8 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
 | Windows | The list of scheduled tasks and Windows Defender's exclusions, to tell you when a new one appears, and whether Windows allows notifications |
 
+On a double-click, if this computer has no key for your online space yet, RosmarOps looks in your Downloads folder for a file named rosmarops-kit-<8 characters>.json (also with « (1)» and so on), up to 64 KB, without following links. It reads only that file, never deletes it and never writes to Downloads.
+
 ## What it does not see
 
 - What an agent does while it runs. RosmarOps reads configuration at rest.

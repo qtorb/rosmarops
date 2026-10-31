@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,8 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/kitfind"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -32,6 +35,14 @@ var (
 	pickFolder     = firstrun.Pick
 	openReportFile = notify.OpenReport
 	closeDelay     = 3 * time.Second // the window closes by itself after a run that opened the report
+	// BV-131 seams, replaced in tests. Off Windows they are no-ops
+	// (ErrNotApplicable / a window that never opens), so the double click
+	// behaves exactly as before.
+	downloadsDir     = kitfind.DownloadsDir
+	scanDownloads    = kitfind.Scan
+	askKitPhrase     = firstrun.AskKitPhrase
+	revealInExplorer = notify.RevealInExplorer
+	kitStorePath     = kit.StorePath
 )
 
 // runNoArgs is the double click; it returns the exit code.
@@ -87,8 +98,15 @@ func runNoArgs() int {
 		}
 	}
 
+	// BV-131 (AP-20 / CTO-12): passwordless onboarding. If this computer has no
+	// kit yet, look in Downloads for a kit file and offer the phrase window; a
+	// correct phrase imports the kit so this very run writes the closed package.
+	// Windows only; elsewhere the seams no-op and nothing changes.
+	maybeImportKitFromDownloads(cat, lang)
+
 	fmt.Println(cat.Text("console.checking", nil))
-	htmlPath, err := runWith(lang, runMode{window: true, log: log})
+	var pkgPath string
+	htmlPath, err := runWith(lang, runMode{window: true, log: log, onPackage: func(p string) { pkgPath = p }})
 	if err != nil {
 		// B3 (BV-93): a double click never fails in silence — the red
 		// "could not finish" page, opened. The run's log was already flushed
@@ -96,6 +114,12 @@ func runNoArgs() int {
 		abortRun(abortOptions{lang: lang, window: true}, err)
 		return exitRunFailed
 	}
+	// BV-131 (CTO-12 H4): if this run wrote the closed package, open Explorer
+	// with that file selected, so the person can drag it into their space.
+	// RevealInExplorer declines a UNC or quote-bearing path itself (H4); off
+	// Windows it is ErrNotApplicable.
+	revealPackage(pkgPath)
+
 	if openReport(htmlPath) {
 		fmt.Println(cat.Text("console.report_opened", nil))
 		if isTerminal(os.Stdout) {
@@ -106,6 +130,112 @@ func runNoArgs() int {
 	fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
 	pressEnter(cat)
 	return 0
+}
+
+// maybeImportKitFromDownloads is BV-131's Downloads onboarding (AP-20, CTO-12
+// H2/H3). It runs only on the double click and only when this computer has no
+// kit yet. It never writes to Downloads and never deletes anything; the only
+// write is the kit key the invariant already allows, and only after a correct
+// phrase. «Not now», a closed window, five wrong phrases, Constrained Language
+// Mode or any PowerShell failure all leave the run without a kit (fail closed),
+// and the next double click asks again. Only the file name is logged.
+func maybeImportKitFromDownloads(cat catalog.Catalog, lang string) {
+	store, err := kitStorePath()
+	if err != nil {
+		slog.Warn("kit onboarding skipped: store path", "err", err)
+		return
+	}
+	if fileExists(store) {
+		return // this computer already has a key
+	}
+	dir, err := downloadsDir()
+	switch {
+	case errors.Is(err, platform.ErrNotApplicable):
+		return // not Windows
+	case err != nil:
+		slog.Warn("kit onboarding skipped: downloads folder", "err", err)
+		return
+	}
+	found := scanDownloads(dir)
+	if found == nil {
+		return // no kit file in Downloads
+	}
+	slog.Info("kit onboarding: key file found in Downloads", "file", filepath.Base(found.Path))
+
+	cfg := firstrun.KitConfig{
+		Title:  cat.Text("firstrun.kit_title", nil),
+		Found:  cat.Text("firstrun.kit_found", nil),
+		Ask:    cat.Text("firstrun.kit_ask", nil),
+		Use:    cat.Text("firstrun.kit_use", nil),
+		NotNow: cat.Text("firstrun.kit_not_now", nil),
+		Wrong:  cat.Text("firstrun.kit_wrong", nil),
+	}
+	if found.ShowDate {
+		// The report's date format, language-independent (report.go).
+		cfg.Date = cat.Text("firstrun.kit_date", map[string]string{"date": found.ModTime.Local().Format("2006-01-02")})
+	}
+
+	if askKitPhrase(cfg, func(phrase string) bool {
+		return importKitWithPhrase(store, found.Path, phrase)
+	}) {
+		slog.Info("kit onboarding: key imported from Downloads")
+	} else {
+		slog.Info("kit onboarding: no key imported; the review goes on without one")
+	}
+}
+
+// importKitWithPhrase opens the kit file at path with phrase and, if it opens,
+// keeps its key on this computer and aligns the state's local salt (as
+// `rosmarops kit import` does). It returns whether the phrase opened the key.
+// Any read, parse or save error is a closed door: false, so the window shows
+// «wrong phrase» rather than leaking a different failure.
+func importKitWithPhrase(store, path, phrase string) bool {
+	f, err := readKitFile(path)
+	if err != nil {
+		slog.Warn("kit onboarding: kit file could not be read", "file", filepath.Base(path), "err", err)
+		return false
+	}
+	sec, err := kit.Open(f, phrase)
+	if err != nil {
+		return false // wrong phrase, or any other reason the key did not open
+	}
+	stored, err := kit.FromFile(f, sec)
+	if err != nil {
+		slog.Warn("kit onboarding: kit could not be stored", "err", err)
+		return false
+	}
+	if err := kit.Save(store, stored); err != nil {
+		slog.Warn("kit onboarding: kit key could not be saved", "err", err)
+		return false
+	}
+	if stPath, err := state.StatePath(); err == nil {
+		if st, err := state.LoadState(stPath); err == nil {
+			if salt := hex.EncodeToString(sec.Salt); st.LocalSalt != salt {
+				st.LocalSalt = salt
+				if err := state.SaveState(stPath, st); err != nil {
+					slog.Warn("kit onboarding: could not align local salt", "err", err)
+				}
+			}
+		}
+	}
+	return true
+}
+
+// revealPackage opens Explorer with the written package selected (BV-131 H4).
+// Nothing happens without a package, off Windows, or for a path Explorer must
+// not be pointed at (UNC or quote-bearing); none of that fails the run.
+func revealPackage(pkgPath string) {
+	if pkgPath == "" {
+		return
+	}
+	switch err := revealInExplorer(absPath(pkgPath)); {
+	case err == nil:
+		slog.Info("package shown in Explorer", "path", filepath.Base(pkgPath))
+	case errors.Is(err, platform.ErrNotApplicable):
+		slog.Info("package not shown in Explorer", "err", err)
+	default:
+		slog.Warn("package not shown in Explorer", "err", err)
+	}
 }
 
 // firstRunRepos is U3, and U4 when U3 finds nothing: the repositories of
