@@ -174,6 +174,7 @@
   "report.space_h2": "Your space",
   "report.space_no_kit": "To see all your computers together, first create your key: run «rosmarops kit create» in a terminal.",
   "report.space_p": "See all your computers together, in your browser. Open your space and send this file: {file}. It's locked with your key: we can't read it.",
+  "space.change_fixed": "One issue was fixed since the last check.",
   "category.money": "Payments",
   "category.infrastructure": "Infrastructure",
   "category.database": "Database",
