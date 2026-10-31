@@ -28,6 +28,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/results"
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -439,6 +440,31 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 		values[k] = val
 	}
 	outputs := map[string]string{"report.v2.json": string(js), "markdown": md}
+	// BV-119: the closed package's content (space-view.v1), decrypted. Sealed
+	// with a kit key, opened again, and checked for any full secret like every
+	// other output.
+	v.OS = "linux" // the space-view os enum; the run sets it from the platform
+	sv, err := report.BuildSpaceView(v, &g, home, "0.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := report.RenderSpaceViewJSON(sv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sv.Keys) == 0 {
+		t.Fatal("space view carries no keys — the package leak check would be vacuous")
+	}
+	kitKey := []byte("kitkitkitkitkitkitkitkitkitkit12") // 32 bytes
+	pkg, err := results.Seal(kitKey, results.Header{KitID: strings.Repeat("a", 32), KeyID: strings.Repeat("b", 32), HostID: g.Provenance.HostID, CreatedAt: now.Format(time.RFC3339), RosmaropsVersion: "0.1.0"}, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := results.Open(kitKey, pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs["results package (decrypted)"] = string(opened)
 	// BV-40: the HTML in en and es, the card in it, and index-history.json.
 	for _, lang := range []string{"en", "es"} {
 		lc, err := catalog.Load(lang)

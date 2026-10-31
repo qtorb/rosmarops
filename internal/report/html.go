@@ -109,6 +109,11 @@ h1.hl{font-size:21px;font-weight:700;line-height:1.3;margin:0 0 12px}
 .proj{display:inline-block;font-size:14px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:3px 12px;margin:0 0 12px}
 button{font-family:inherit;font-size:14px;font-weight:600;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;border:0;cursor:pointer;min-height:44px}
 button.wide{display:flex;width:100%;justify-content:center;align-items:center;min-height:48px;border-radius:10px;font-size:16px}
+.space{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 22px;margin:20px 0}
+.space h2{font-size:18px;margin:0 0 8px}
+.space p{margin:0 0 14px;font-size:15px;color:var(--ink)}
+.space code{background:var(--code);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
+a.spacebtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:8px;background:var(--ink);color:var(--bg);font-family:inherit;font-size:14px;font-weight:600;text-decoration:none}
 .live{margin-left:10px;font-size:14px}
 .how{font-size:14px;color:var(--mut);margin:10px 0 0}
 .tbox details.manual{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
@@ -313,6 +318,13 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	today, hasToday := c.todayFinding()
 	c.w(`<div class="flow">`)
 	c.renderStep1()
+	c.w(`</div>`)
+
+	// «Your space» (BV-119, AP-17 §2): after the summary (step 1) and before
+	// the findings (steps 2 and 3).
+	c.renderYourSpace()
+
+	c.w(`<div class="flow">`)
 	c.renderStep2(today, hasToday)
 	c.renderStep3(today.ID)
 	c.w(`</div>`)
@@ -435,6 +447,23 @@ func (c htmlCtx) stepHead(n int, tag, id, title, hint string, arrow bool) {
 		c.w(`<span class="line" aria-hidden="true"></span>`)
 	}
 	c.w(`</div>`)
+}
+
+// renderYourSpace is the «Your space» section (BV-119, AP-17 §2): the link
+// to the customer area and the name of the closed package to send, when a
+// kit wrote one this run; otherwise how to create the key. Its only external
+// URL is the exact https://app.rosmarops.com/upload, the one the trust test
+// allows.
+func (c htmlCtx) renderYourSpace() {
+	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
+	if c.v.SpacePackageFile == "" {
+		c.w(`<p>%s</p>`, c.t("report.space_no_kit", nil))
+	} else {
+		c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/upload">%s</a>`,
+			c.t("report.space_p", map[string]string{"file": c.v.SpacePackageFile}),
+			c.t("report.space_button", nil))
+	}
+	c.w(`</section>`)
 }
 
 // renderStep1 is v3 §3: your situation.
@@ -1321,6 +1350,8 @@ func HTMLKeys() []string {
 	keys = append(keys, overviewKeys()...)
 	// BV-121: the agents_overview services list (§11).
 	keys = append(keys, "report.services_h", "report.services_none")
+	// BV-119: the «Your space» section (AP-17 §2).
+	keys = append(keys, "report.space_h2", "report.space_p", "report.space_button", "report.space_no_kit")
 	for _, c := range knowledge.AllMCPCategories {
 		keys = append(keys, "category."+c)
 	}

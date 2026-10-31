@@ -474,7 +474,7 @@ func FuzzDifferential(f *testing.F) {
 // date-time, items as an array and a reference that is not local.
 func TestCompile_RefusesUnsupported(t *testing.T) {
 	for _, s := range []string{
-		`{"patternProperties": {}}`, `{"anyOf": [true]}`, `{"maxLength": 1}`, `{"exclusiveMinimum": 1}`,
+		`{"patternProperties": {}}`, `{"anyOf": [true]}`, `{"exclusiveMinimum": 1}`,
 		`{"multipleOf": 2}`, `{"contains": true}`, `{"dependencies": {}}`, `{"propertyNames": true}`,
 		`{"minProperties": 1}`, `{"additionalItems": true}`, `{"format": "email"}`, `{"items": [true]}`,
 		`{"$ref": "http://example.com/s.json"}`, `{"$ref": "other.json#/a"}`, `{"$ref": "#/definitions/missing"}`,

@@ -7,7 +7,8 @@
 //
 // Where the draft leaves room, it follows gojsonschema v1.2.0, the test
 // oracle (G3): a number is an integer when its value is whole; enum, const
-// and uniqueItems compare canonical JSON; minLength counts code points; a
+// and uniqueItems compare canonical JSON; minLength and maxLength count code
+// points; a
 // $ref replaces its siblings; date-time accepts the layouts gojsonschema
 // accepts.
 package schemaval
@@ -49,10 +50,10 @@ type node struct {
 	pattern *regexp.Regexp
 	format  string
 
-	minLength          *int
-	minimum, maximum   *big.Rat
-	minItems, maxItems *int
-	uniqueItems        bool
+	minLength, maxLength *int
+	minimum, maximum     *big.Rat
+	minItems, maxItems   *int
+	uniqueItems          bool
 
 	oneOf, allOf           []*node
 	not, ifN, thenN, elseN *node
@@ -249,7 +250,7 @@ func (c *compiler) compile(v any, at string) (*node, error) {
 				return nil, fmt.Errorf("%s: format %v is not supported", at, val)
 			}
 			n.format = "date-time"
-		case "minLength", "minItems", "maxItems":
+		case "minLength", "maxLength", "minItems", "maxItems":
 			i, err := nonNegative(val)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %s: %w", at, k, err)
@@ -257,6 +258,8 @@ func (c *compiler) compile(v any, at string) (*node, error) {
 			switch k {
 			case "minLength":
 				n.minLength = &i
+			case "maxLength":
+				n.maxLength = &i
 			case "minItems":
 				n.minItems = &i
 			default:
@@ -520,6 +523,9 @@ func (n *node) validate(v any, field string, r *Result) {
 
 	switch x := v.(type) {
 	case string:
+		if n.maxLength != nil && utf8.RuneCountInString(x) > *n.maxLength {
+			r.add(field, "String length must be less than or equal to %d", *n.maxLength)
+		}
 		if n.minLength != nil && utf8.RuneCountInString(x) < *n.minLength {
 			r.add(field, "String length must be greater than or equal to %d", *n.minLength)
 		}
