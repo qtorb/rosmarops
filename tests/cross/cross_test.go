@@ -1,0 +1,207 @@
+// Package cross_test holds the cross-repository test vector (CTO-11 B2): a kit
+// and a closed results package made by the real program, which rosmarops-app's
+// browser tests open to prove the two sides agree on the package's additional
+// authenticated data. The files live in <repo>/testdata/cross/; BA copies them
+// into rosmarops-app, so their names must not change once the PR is open.
+package cross_test
+
+import (
+	"encoding/base64"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/qtorb/rosmarops/internal/finding"
+	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/results"
+	"github.com/qtorb/rosmarops/internal/scan/secrets"
+	"github.com/qtorb/rosmarops/internal/schemas"
+	"github.com/qtorb/rosmarops/internal/schemaval"
+)
+
+// crossPhrase is the only phrase that opens the vector's kit. It is a test
+// value with no worth outside these tests.
+const crossPhrase = "cross vector phrase only for tests"
+
+// crossSalt is the fixed user salt of the vector (32 bytes).
+var crossSalt = []byte("cross-vector-user-salt-0123456789")[:32]
+
+func crossDir(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "testdata", "cross")
+}
+
+// crossContent builds a small but real space-view v1 content (validated), the
+// payload the package seals.
+func crossContent(t *testing.T, now time.Time) (report.V2, *graph.Graph) {
+	t.Helper()
+	salt := crossSalt
+	home := "/home/crossuser"
+	repo := home + "/project"
+	entries := []platform.CredentialEntry{
+		{Path: repo + "/.env", Line: 1, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
+	}
+	claudeDir := home + "/.claude"
+	settings := platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{{
+		Scope: platform.MCPScopeUser, ConfigPath: claudeDir + "/settings.json", ConfigDir: claudeDir,
+		Status: platform.MCPSourceRead, Permissions: platform.ClaudePermissions{Allow: []string{"Bash(npm test)"}},
+	}}}
+	frag, _, err := graph.FromScans(platform.MCPScan{}, settings, platform.CredentialFileScan{Entries: entries}, salt, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := graph.Infer(graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now), []string{repo}, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := knowledge.ClaudeCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := report.BuildV2(report.V2Input{
+		Graph: &g, GraphSHA256: strings.Repeat("0", 64), Base: base, RepoRoots: []string{repo},
+		V1: report.Build("0.6.0", []finding.Finding{}, nil, 0, 0, 0, 0, nil), GeneratedAt: now,
+	})
+	v.OS = "linux"
+	return v, &g
+}
+
+// serviceRoleJWT is a fake Supabase service_role token (its payload names the
+// role, no real signature), enough for the scanner to classify it.
+var serviceRoleJWT = seg(`{"alg":"HS256","typ":"JWT"}`) + "." + seg(`{"iss":"supabase","ref":"abcdefghijklmnopqrst","role":"service_role"}`) + ".ZmFrZS1zaWduYXR1cmUtZmlsbGVy"
+
+func seg(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
+
+// TestRegenCrossVector regenerates the committed vector. It is skipped in a
+// normal run; set ROSMAROPS_REGEN_CROSS=1 to rewrite the files.
+func TestRegenCrossVector(t *testing.T) {
+	if os.Getenv("ROSMAROPS_REGEN_CROSS") == "" {
+		t.Skip("set ROSMAROPS_REGEN_CROSS=1 to regenerate the cross vector")
+	}
+	dir := crossDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Remove the old vector so a changed kit_id or host_id leaves no stale file.
+	for _, glob := range []string{"rosmarops-kit-*.json", "rosmarops-results-*.locked.json"} {
+		matches, _ := filepath.Glob(filepath.Join(dir, glob))
+		for _, m := range matches {
+			_ = os.Remove(m)
+		}
+	}
+
+	now := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+	sec, err := kit.NewSecret(crossSalt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitID, err := kit.NewKitID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := kit.NewRecoveryCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kf, err := kit.Seal(sec, kitID, crossPhrase, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitBytes, err := kit.Marshal(kf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, kit.ExportName(kitID)), kitBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "recovery-code.txt"), []byte(code+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	v, g := crossContent(t, now)
+	pkgPath, err := report.WriteResultsPackage(v, g, "/home/crossuser", "0.6.0", sec.Key, kitID, kit.KeyID(sec.Key), now, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readme := "# Cross test vector (CTO-11 B2)\n" +
+		"Generated by `ROSMAROPS_REGEN_CROSS=1 go test ./tests/cross/` with the phrase in cross_test.go (crossPhrase).\n" +
+		"The kit opens with that phrase or the recovery code in recovery-code.txt; the package holds a space-view.v1, sealed with the kit key.\n"
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte(readme), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("wrote cross vector to %s (package %s)", dir, filepath.Base(pkgPath))
+}
+
+// TestCrossVector opens the committed vector the way the browser will: the kit
+// with the phrase, then the package with the kit key, and validates the
+// content against space-view.v1 (CTO-11 B2).
+func TestCrossVector(t *testing.T) {
+	dir := crossDir(t)
+	kitMatches, _ := filepath.Glob(filepath.Join(dir, "rosmarops-kit-*.json"))
+	pkgMatches, _ := filepath.Glob(filepath.Join(dir, "rosmarops-results-*.locked.json"))
+	if len(kitMatches) != 1 || len(pkgMatches) != 1 {
+		t.Fatalf("cross vector missing: kit files %v, package files %v (regenerate with ROSMAROPS_REGEN_CROSS=1)", kitMatches, pkgMatches)
+	}
+
+	kitRaw, err := os.ReadFile(kitMatches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	kf, err := kit.Parse(kitRaw)
+	if err != nil {
+		t.Fatalf("parse kit: %v", err)
+	}
+	sec, err := kit.Open(kf, crossPhrase)
+	if err != nil {
+		t.Fatalf("open kit with the phrase: %v", err)
+	}
+
+	pkgRaw, err := os.ReadFile(pkgMatches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := results.Parse(pkgRaw)
+	if err != nil {
+		t.Fatalf("parse package: %v", err)
+	}
+	content, err := results.Open(sec.Key, pkg)
+	if err != nil {
+		t.Fatalf("open package with the kit key: %v", err)
+	}
+
+	schema, err := schemaval.Compile(schemas.SpaceViewSchema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := schema.Validate(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Valid() {
+		msgs := ""
+		for _, e := range res.Errors() {
+			msgs += "\n  " + e.String()
+		}
+		t.Fatalf("package content is not a valid space-view.v1:%s", msgs)
+	}
+
+	// The recovery code is present for BA's tests and opens the same key.
+	code, err := os.ReadFile(filepath.Join(dir, "recovery-code.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := kit.Open(kf, strings.TrimSpace(string(code))); err != nil {
+		t.Errorf("open kit with the recovery code: %v", err)
+	}
+}

@@ -601,7 +601,7 @@ func writeAction(sb *strings.Builder, cat catalog.Catalog, f rules.Finding, a ru
 		}
 	}
 	if a.Value != "" {
-		fmt.Fprintf(sb, "```json\n%s\n```\n\n", a.Value)
+		fmt.Fprintf(sb, "```json\n%s\n```\n\n", untrusted.VisiblePaste(a.Value))
 	}
 	for _, l := range a.Locations {
 		fmt.Fprintf(sb, "- `%s`\n", untrusted.PlainText(l))

@@ -620,12 +620,12 @@ func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 	c.w(`<pre hidden>%s
 
 %s</pre><button type="button"%s data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
-		c.t("html.agent.prompt.rotated", pp), html.EscapeString(a.Value), class, c.t("html.fix.copied", p), c.t("html.fix.copy.rotated", p))
+		c.t("html.agent.prompt.rotated", pp), html.EscapeString(untrusted.VisiblePaste(a.Value)), class, c.t("html.fix.copied", p), c.t("html.fix.copy.rotated", p))
 	mp := copyParams(p)
 	mp["file"] = userPath(a.File, c.home, "~")
 	// By hand, the entry inside its list, nested in full (v3 §14.3).
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
-		c.t("html.fix.manual", p), c.manualOpen(mp), c.t("html.fix.manual.rotated", p), html.EscapeString(rotatedNested(a.Value)), c.t("html.fix.manual.save", p))
+		c.t("html.fix.manual", p), c.manualOpen(mp), c.t("html.fix.manual.rotated", p), html.EscapeString(rotatedNested(untrusted.VisiblePaste(a.Value))), c.t("html.fix.manual.save", p))
 }
 
 // rotatedNested is the rotate_credential entry inside
@@ -749,7 +749,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		c.w(`<pre hidden>%s
 
 %s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
-			c.t(prompt, pp), html.EscapeString(a.Value), c.t("html.fix.copied", p), c.t("html.fix.copy", p))
+			c.t(prompt, pp), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.copied", p), c.t("html.fix.copy", p))
 		c.w(`<p class="how">%s %s</p>`, c.t("html.fix.step2", p), c.t("html.fix.step3", p))
 		mp := copyParams(p)
 		mp["file"] = userPath(a.File, c.home, "~")
@@ -758,7 +758,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 			settings = c.help("settings")
 		}
 		c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
-			c.t("html.fix.manual", p), c.manualOpen(mp), settings, c.t(add, p), html.EscapeString(a.Value), c.t("html.fix.manual.save", p))
+			c.t("html.fix.manual", p), c.manualOpen(mp), settings, c.t(add, p), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.manual.save", p))
 		after = map[string]string{
 			rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
 		}[a.Completeness]
@@ -1025,7 +1025,7 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 	c.w(`<ol><li>%s</li><li>%s</li><li>%s</li></ol>`, c.t("html.fix.step1", p), c.t("html.fix.step2", p), c.t("html.fix.step3", p))
 	c.w(`<pre>%s
 
-%s</pre><button type="button" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`, c.t(prompt, pp), html.EscapeString(a.Value), c.t("html.fix.copied", p), c.t("html.fix.copy", p))
+%s</pre><button type="button" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`, c.t(prompt, pp), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.copied", p), c.t("html.fix.copy", p))
 	mp := copyParams(p)
 	mp["file"] = userPath(a.File, c.home, "~")
 	add := "html.fix.manual.add"
@@ -1033,7 +1033,7 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 		add = "html.fix.manual.create"
 	}
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
-		c.t("html.fix.manual", p), c.manualOpen(mp), c.t(add, p), html.EscapeString(a.Value), c.t("html.fix.manual.save", p))
+		c.t("html.fix.manual", p), c.manualOpen(mp), c.t(add, p), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.manual.save", p))
 	after := map[string]string{
 		rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
 	}[a.Completeness]

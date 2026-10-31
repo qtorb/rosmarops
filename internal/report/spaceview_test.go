@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
+	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
 
 // buildSpaceViewScenario builds a v2 report from the shared graph fixture
@@ -26,6 +28,48 @@ func buildSpaceViewScenario(t *testing.T) (report.V2, report.SpaceView) {
 		t.Fatalf("BuildSpaceView: %v", err)
 	}
 	return v, sv
+}
+
+// TestBuildSpaceView_VisibleChars (CTO-11 C3): a deceptive character in a
+// path read from disk — a bidi override U+202E and a zero-width space U+200B —
+// reaches the space view only as the visible literal ⟨U+XXXX⟩, never raw, in
+// the finding's file and in its paste block.
+func TestBuildSpaceView_VisibleChars(t *testing.T) {
+	// The secret value is the fixture service_role JWT; the path carries the
+	// deceptive characters. It sits under /src/a so it is in scope.
+	path := "/src/a/da\u200bsh\u202eboard/.env.local"
+	g := v2GraphWith(t, []platform.CredentialEntry{
+		{Path: path, Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
+	}, nil)
+	v1 := report.Build("t", nil, nil, 0, 0, 0, 0, nil)
+	v := buildV2(t, &g, v1)
+	v.OS = "windows"
+	sv, err := report.BuildSpaceView(v, &g, "/h", "0.6.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, err := report.RenderSpaceViewJSON(sv)
+	if err != nil {
+		t.Fatalf("space view does not validate: %v", err)
+	}
+	s := string(js)
+	if strings.Contains(s, "\u202e") || strings.Contains(s, "\u200b") {
+		t.Error("a raw deceptive character reached the space view")
+	}
+	if !strings.Contains(s, "⟨U+202E⟩") || !strings.Contains(s, "⟨U+200B⟩") {
+		t.Errorf("the deceptive characters are not shown as ⟨U+XXXX⟩:\n%s", s)
+	}
+	// Not vacuous: a finding with the file was produced, and it carries the
+	// visible form.
+	found := false
+	for _, f := range sv.Findings {
+		if f.File != nil && strings.Contains(*f.File, "⟨U+202E⟩") {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("no finding file carries the visible bidi override — test would be vacuous")
+	}
 }
 
 // TestBuildSpaceView_ValidatesAndTexts: the space view validates against

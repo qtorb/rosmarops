@@ -50,10 +50,23 @@ type Package struct {
 	Ciphertext string `json:"ciphertext"`
 }
 
-// aad is the canonical header bytes (struct field order is fixed, so
-// json.Marshal is deterministic): the additional authenticated data.
+// aad is the additional authenticated data: the header as canonical JSON with
+// the keys in alphabetical order (CTO-11 B2). It encodes a map, not the
+// struct, because encoding/json sorts a map's keys and escapes < > & and
+// U+2028/U+2029 exactly as the browser's canonicalJSON does (rosmarops-app
+// public/space.mjs); a package the program seals then opens in the browser.
+// The cleartext header in the file keeps the struct's order; only these bytes
+// must match on both sides.
 func (h Header) aad() ([]byte, error) {
-	b, err := json.Marshal(h)
+	b, err := json.Marshal(map[string]any{
+		"format":            h.Format,
+		"version":           h.Version,
+		"kit_id":            h.KitID,
+		"key_id":            h.KeyID,
+		"host_id":           h.HostID,
+		"created_at":        h.CreatedAt,
+		"rosmarops_version": h.RosmaropsVersion,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("results: encode header: %w", err)
 	}
