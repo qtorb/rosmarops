@@ -23,6 +23,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/intel"
+	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -659,6 +660,20 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	slog.Info("report: launcher rules counted as unrestricted shell", "count", len(launcherRules), "rules", launcherRules)
 	slog.Info("report: v2", "status", v2.Status, "findings", len(v2.Findings), "today", v2.Today.FindingID, "action", v2.Today.ActionID)
 
+	// Closed package for the customer area (BV-119, AP-17 §2): only when a
+	// kit is present on this computer and a graph was built. The package name
+	// is set on the report before the HTML is written, so the «Your space»
+	// section names the file this run writes; without a kit nothing is
+	// written and the report is identical to before.
+	pkgNow := time.Now()
+	stored, kitErr := loadKitIfPresent()
+	if kitErr != nil {
+		slog.Warn("results package skipped: kit could not be read", "err", kitErr)
+	}
+	if stored != nil && built != nil {
+		v2.SpacePackageFile = report.ResultsFileName(pkgNow, built.Provenance.HostID)
+	}
+
 	// Write report files.
 	progress.line("console.progress.report", nil)
 	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, reportDir)
@@ -682,6 +697,19 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+
+	// Seal and write the closed package now the report is written (its name
+	// was reserved above for the «Your space» section).
+	if stored != nil {
+		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
+			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
+		if err != nil {
+			return "", fmt.Errorf("results package: %w", err)
+		}
+		if pkgPath != "" {
+			slog.Info("results package written", "path", pkgPath)
+		}
+	}
 
 	// Update state with the run's status (the highest of v1 and v2).
 	st.LastRun = r.GeneratedAt
@@ -863,4 +891,23 @@ func absPath(p string) string {
 		return a
 	}
 	return p
+}
+
+// loadKitIfPresent reads the kit key of this computer (BV-119): (nil, nil)
+// when there is no kit yet, the stored kit when there is one, an error when
+// the kit file exists but cannot be read. The run writes the closed package
+// only when a kit is present.
+func loadKitIfPresent() (*kit.Stored, error) {
+	path, err := kit.StorePath()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	stored, err := kit.Load(path)
+	if err != nil {
+		return nil, err
+	}
+	return &stored, nil
 }

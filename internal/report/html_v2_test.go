@@ -71,10 +71,11 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 			}
 		}
 
-		// v3 §7: one h1, six h2 (step 1, today's action, step 3, §11's
-		// section and its window, v3 §16, and the assumptions' window, §17.5),
-		// the score an image named by its value.
-		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 6 {
+		// v3 §7: one h1, seven h2 (step 1, the «Your space» section (BV-119),
+		// today's action, step 3, §11's section and its window, v3 §16, and
+		// the assumptions' window, §17.5), the score an image named by its
+		// value.
+		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 7 {
 			t.Errorf("%s: headings h1 %d, h2 %d", lang, strings.Count(page, "<h1"), strings.Count(page, "<h2"))
 		}
 		of := cat.Text("html.index.of", nil)

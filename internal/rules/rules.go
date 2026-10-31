@@ -154,6 +154,11 @@ func classOf(cred graph.Node, scope string) string {
 	return ClassUnclassified
 }
 
+// ClassOf is the public class table: the class of a credential node given
+// its observed scope (BV-119, for the space-view keys list). It is the one
+// source of truth the report shares with the engine; see classOf.
+func ClassOf(cred graph.Node, scope string) string { return classOf(cred, scope) }
+
 // isTemplate reports a template file (A2): .env.example, .env.sample,
 // .env.template, or a name ending in .example.
 func isTemplate(file string) bool {

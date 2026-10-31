@@ -96,6 +96,12 @@ type V2 struct {
 	// code (NotCheckedCodes), in that order: shown, not in the JSON
 	// (decision 2026-10-29, macOS vista previa, point 3).
 	NotChecked []string `json:"-"`
+	// SpacePackageFile is the name of the closed results package this run
+	// writes to the reports directory (BV-119, AP-17 §2), for the «Your
+	// space» section of the HTML. Empty when there is no kit on this
+	// computer: the section then shows how to create the key instead. Set by
+	// the command before the HTML is rendered; not in the JSON.
+	SpacePackageFile string `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;
