@@ -251,3 +251,23 @@ func TestRenderHTML_TitleOthers(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderHTML_YourSpaceOnlyWithKey (BV-132): the «Your space» section and
+// its app.rosmarops.com URL appear only when this run wrote a closed package
+// (a key on this computer); without a key neither is in the HTML, in en and es.
+func TestRenderHTML_YourSpaceOnlyWithKey(t *testing.T) {
+	g := v2Graph(t)
+	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	for _, lang := range []string{"en", "es"} {
+		noKit := renderHTML(t, lang, v)
+		if strings.Contains(noKit, `class="space"`) || strings.Contains(noKit, "app.rosmarops.com") {
+			t.Errorf("%s: no key, but the HTML has the «Your space» section or URL", lang)
+		}
+		v.SpacePackageFile = "rosmarops-results-2026-10-25-0123456789ab.locked.json"
+		withKit := renderHTML(t, lang, v)
+		v.SpacePackageFile = ""
+		if !strings.Contains(withKit, `class="space"`) || !strings.Contains(withKit, `href="https://app.rosmarops.com/upload"`) {
+			t.Errorf("%s: with a key, the HTML lacks the «Your space» section or its button URL", lang)
+		}
+	}
+}
