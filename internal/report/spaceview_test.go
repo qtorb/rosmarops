@@ -7,7 +7,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
@@ -69,6 +73,64 @@ func TestBuildSpaceView_VisibleChars(t *testing.T) {
 	}
 	if !found {
 		t.Error("no finding file carries the visible bidi override — test would be vacuous")
+	}
+}
+
+// TestBuildSpaceView_FixedChange (BV-128b): when a finding is no longer
+// observed this run, changes[] carries a "fixed" element with the
+// parameterless catalog text in en and es and a null finding_id, and the view
+// validates against space-view.v1.
+func TestBuildSpaceView_FixedChange(t *testing.T) {
+	salt := []byte("0123456789abcdef0123456789abcdef")
+	base, err := knowledge.ClaudeCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(g graph.Graph, at time.Time, mem memory.File) report.V2 {
+		v, _ := report.BuildV2(report.V2Input{
+			Graph: &g, GraphSHA256: strings.Repeat("0", 64), Base: base,
+			RepoRoots: []string{"/src/a", "/src/b"}, Families: [][]string{{"/src/a"}, {"/src/b"}},
+			V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: at,
+			Memory: mem, Salt: salt, PriorRuns: mem.Runs > 0,
+		})
+		return v
+	}
+	// Run 1 has the service_role credential (a finding); run 2 has no
+	// credential, so the finding is no longer observed.
+	v1 := run(v2Graph(t), time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC), memory.File{})
+	if len(v1.Findings) == 0 {
+		t.Fatal("run 1 has no finding — test would be vacuous")
+	}
+	g2 := v2GraphWith(t, nil, []string{"/src/a/CLAUDE.md"})
+	v2 := run(g2, time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC), v1.NextMemory())
+	if len(v2.Memory.NoLongerObserved) == 0 {
+		t.Fatal("no finding went no-longer-observed — test would be vacuous")
+	}
+	v2.OS = "windows"
+	sv, err := report.BuildSpaceView(v2, &g2, "/h", "0.6.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := report.RenderSpaceViewJSON(sv); err != nil {
+		t.Fatalf("space view does not validate: %v", err)
+	}
+	var fixed *report.SVChange
+	for i := range sv.Changes {
+		if sv.Changes[i].Kind == "fixed" {
+			fixed = &sv.Changes[i]
+		}
+	}
+	if fixed == nil {
+		t.Fatal("no fixed change in the space view")
+	}
+	if fixed.FindingID != nil {
+		t.Errorf("fixed change finding_id = %v, want null", *fixed.FindingID)
+	}
+	if fixed.Text["en"] != "One issue was fixed since the last check." {
+		t.Errorf("en text = %q", fixed.Text["en"])
+	}
+	if fixed.Text["es"] != "Se arregló un problema desde la revisión anterior." {
+		t.Errorf("es text = %q", fixed.Text["es"])
 	}
 }
 
