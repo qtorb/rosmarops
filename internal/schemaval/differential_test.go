@@ -99,23 +99,20 @@ func fixtures(t testing.TB) map[string][][]byte {
 // types. An oracle panic (a number beyond float64 under enum, const or
 // uniqueItems) counts as invalid: the own validator fails secure there.
 //
-// The oracle (gojsonschema) is the weak party here, not our validator. On the
-// Windows runner of run 40588092908 (attempt 1) this test's oracle reported a
-// spurious "own true, oracle false" at graph.v2 [coverage agents_unsupported]
-// whose error types were about *nodes* (number_one_of / const / condition_then)
-// — impossible for a correct verdict on a mutation of a coverage array — and
-// moments later tried to allocate ~768 GiB and the process died with
-// "out of memory". The same commit's attempt 2 passed, and Linux always
-// passes. Both are the oracle's own behaviour under memory pressure, not a
-// permissiveness bug in schemaval: our validator gives the JSON Schema-correct
-// verdict on every single mutation of that path (checked exhaustively) and
-// validates a 1001-node grown doc in milliseconds with linear memory, where
-// gojsonschema's exhaustive error collection over the node oneOf blows up.
-// gojsonschema is a dev/test-only dependency (decision 2026-10-25, G2-G3); it
-// is never linked into the shipped binary. If verify-windows dies here again,
-// it is this allocation, reproducible on a given host with the logged seed —
-// not something to fix by weakening schemaval or the mutation set.
-// https://github.com/xeipuuv/gojsonschema/issues (unbounded error aggregation).
+// The oracle (gojsonschema) is the weak party here, not our validator: our
+// validator gives the JSON Schema-correct verdict on every mutation (checked
+// exhaustively) and validates a 1001-item grown doc in milliseconds with
+// linear memory. gojsonschema builds every error's human description eagerly,
+// and on a grown array (e.g. a 1001-item mutation of an array bounded at
+// maxItems 1000) its message building blew up — on a Windows runner it tried
+// to allocate ~768 GiB and the process died with "out of memory", while Linux
+// and a second Windows attempt passed (host-dependent, BV-129). Since this
+// test reads only the verdict and each error's Type and Field, never the
+// description, quietLocale (oracle_locale_test.go) makes gojsonschema's
+// descriptions constant, so that building can no longer grow without bound;
+// the verdict comparison, including the maxItems-1000 mutation, is unchanged.
+// gojsonschema is a dev/test-only dependency (decision 2026-10-25, G2-G3),
+// never linked into the shipped binary.
 func verdicts(t testing.TB, p pair, doc []byte) (own, oracle bool, oracleTypes []string) {
 	t.Helper()
 	r, err := p.own.Validate(doc)
