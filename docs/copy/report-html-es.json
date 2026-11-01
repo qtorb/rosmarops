@@ -35,6 +35,7 @@
   "connect.expired": "La conexión no se confirmó a tiempo. Puedes volver a intentarlo la próxima vez que abras RosmarOps.",
   "connect.failed": "No hemos podido conectar este ordenador. Revisa tu conexión a internet y vuelve a intentarlo la próxima vez que abras RosmarOps.",
   "connect.no": "Ahora no",
+  "connect.ok": "Aceptar",
   "connect.number": "Tu navegador te pedirá que elijas este número:",
   "connect.q": "¿Quieres ver tus resultados en tu espacio?",
   "connect.text": "RosmarOps enviará tus resultados después de cada revisión, cifrados. Solo los resultados: nada más sale de este ordenador. Puedes pararlo cuando quieras.",

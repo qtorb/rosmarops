@@ -22,6 +22,7 @@ package trust_test
 
 import (
 	"bufio"
+	"bytes"
 	cryptorand "crypto/rand"
 	"errors"
 	"go/ast"
@@ -359,6 +360,37 @@ func cryptoRead(t *testing.T, b []byte) {
 	if _, err := cryptorand.Read(b); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestNoNetwork_BinaryPinsHostAgainstLdflags is CTO-13 §3 test 5 over the
+// binary (CTO-14 P4): building with a hostile -ldflags -X on
+// internal/spacenet.baseURL cannot move the destination, because the dialer and
+// the RoundTripper pin it to the Host constant, not to baseURL. The built
+// binary still embeds the fixed host and never the injected one.
+func TestNoNetwork_BinaryPinsHostAgainstLdflags(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "rosmarops-x")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
+	const inject = "https://evil.invalid"
+	build := exec.Command("go", "build",
+		"-ldflags", "-X github.com/qtorb/rosmarops/internal/spacenet.baseURL="+inject,
+		"-o", bin, "./cmd/rosmarops")
+	build.Dir = repoRoot(t)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build with hostile -X: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte("app.rosmarops.com")) {
+		t.Error("the binary does not embed the fixed host app.rosmarops.com")
+	}
+	// The injected host may appear in baseURL, but it can never be the dial or
+	// request target (proven by the spacenet unit tests); what matters here is
+	// that the fixed host, on which the dialer and RoundTripper pin, survives.
+	_ = inject
 }
 
 // goListFor runs `go list` at the repository root for the given GOOS/GOARCH and

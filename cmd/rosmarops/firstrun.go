@@ -87,6 +87,13 @@ func runNoArgs() int {
 		}
 	}
 
+	// The connect window (BV-137 point 5): on Windows, when this computer is
+	// not connected, offer to connect before the run, so the run sends. A
+	// no-op off Windows (macOS/Linux use `rosmarops connect`).
+	if paths, perr := resolveSpacePaths(); perr == nil {
+		maybeConnectWindow(paths, cat)
+	}
+
 	fmt.Println(cat.Text("console.checking", nil))
 	htmlPath, err := runWith(lang, runMode{window: true, log: log})
 	if err != nil {
