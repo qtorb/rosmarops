@@ -92,7 +92,7 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
 | Windows | The list of scheduled tasks and Windows Defender's exclusions, to tell you when a new one appears, and whether Windows allows notifications |
 
-On a double-click, if this computer has no key for your online space yet, RosmarOps looks in your Downloads folder for a file named rosmarops-kit-<8 characters>.json (also with « (1)» and so on), up to 64 KB, without following links. It reads only that file, never deletes it and never writes to Downloads.
+RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log in your reports folder.
 
 ## What it does not see
 
