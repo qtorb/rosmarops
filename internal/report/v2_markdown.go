@@ -56,6 +56,9 @@ var staticKeys = []string{
 	// BV-68: the integrity questions and a scheduled review's notification
 	"console.first_run.detecting", "console.first_run.found", "console.first_run.none", "console.first_run.picker_title",
 	"console.first_run.agents_only", "console.checking", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	// BV-131: the «use the key from Downloads» phrase window.
+	"firstrun.kit_title", "firstrun.kit_found", "firstrun.kit_ask", "firstrun.kit_date",
+	"firstrun.kit_use", "firstrun.kit_not_now", "firstrun.kit_wrong",
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",

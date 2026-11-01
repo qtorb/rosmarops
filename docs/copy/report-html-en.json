@@ -52,7 +52,7 @@
   "report.services_none": "No connected services that can act for you.",
   "report.space_button": "Open your space",
   "report.space_h2": "Your space",
-  "report.space_p": "See all your computers together, in your browser. Open your space and send this file: {file}. It's locked with your key: we can't read it.",
+  "report.space_p": "Drag this file into your space: {file}. It's locked with your key: we can't read it.",
   "space.change_fixed": "One issue was fixed since the last check.",
   "category.money": "Payments",
   "category.infrastructure": "Infrastructure",
