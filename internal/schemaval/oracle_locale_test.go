@@ -1,6 +1,7 @@
 package schemaval_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -73,7 +74,16 @@ func (quietLocale) ConditionThen() string                { return "invalid" }
 func (quietLocale) ConditionElse() string                { return "invalid" }
 func (quietLocale) ErrorFormat() string                  { return "invalid" }
 
-func init() { gojsonschema.Locale = quietLocale{} }
+// TestMain sets gojsonschema's package-global Locale exactly once, before any
+// test runs, and no test writes it again (BV-133). gojsonschema.Locale is
+// shared mutable state of the oracle: setting it in TestMain (not an init, not
+// a test body) keeps every later gojsonschema access a read of a value fixed
+// before m.Run starts, so no test can write this global while another is using
+// the oracle. The go test -race gate on the Linux CI job guards that property.
+func TestMain(m *testing.M) {
+	gojsonschema.Locale = quietLocale{}
+	os.Exit(m.Run())
+}
 
 // TestQuietLocaleBoundsOracle is the BV-129 regression guard: the oracle still
 // rejects a 1001-item array that its schema bounds at maxItems 1000 (the
