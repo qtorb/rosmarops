@@ -21,6 +21,12 @@ import (
 // streams; it is tested with pipes. The window itself (the PowerShell WinForms
 // script and the exec that starts it) is in connectwindow_windows.go.
 
+// connectWindowHook is the double click's call to the connect window. It is a
+// seam: production is maybeConnectWindow (a real window on Windows, a no-op
+// elsewhere); the cmd tests disable it (TestMain), since a real WinForms window
+// would hang a headless test with nobody to answer it.
+var connectWindowHook = maybeConnectWindow
+
 // driveConnectWindow drives the window over its streams. It reads the first
 // line the window writes: "connect" starts the protocol, anything else (or a
 // closed stream) means the person declined. On "connect" it runs run, wiring
