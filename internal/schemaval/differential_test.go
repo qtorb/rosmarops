@@ -46,6 +46,7 @@ type pair struct {
 
 func compileAll(t testing.TB) map[string]pair {
 	t.Helper()
+	skipOracleOnWindows(t) // BV-134: the oracle runs on linux/darwin (and the Windows diagnostic job)
 	out := map[string]pair{}
 	for name, raw := range schemaSet {
 		own, err := schemaval.Compile(raw)
