@@ -12,6 +12,7 @@
 # BV-102: the verify job vets and staticchecks darwin too, and checks the
 # release flags of an alpha tag and a stable one. BV-112: verify-windows
 # makes and checks the sample report (scripts/sample-report/generate.ps1).
+# BV-136: the Windows diagnostic (BV-134) moved to diagnostic-windows.yml, run by hand.
 name: ci
 
 on:
@@ -125,34 +126,3 @@ jobs:
       # network checks run.
       - name: go test (trust tests included)
         run: go test -count=1 ./...
-
-  # BV-134 diagnostic, non-blocking: the gojsonschema-oracle differential tests
-  # are skipped on the normal verify-windows job (a Go runtime GC fatal — "found
-  # bad pointer in Go heap" / "found pointer to free object" — hits the
-  # windows-latest runner inside pure-Go code; not a data race). Here they run
-  # anyway (ROSMAROPS_SCHEMAVAL_ORACLE), 20x, on the latest stable Go and on the
-  # pinned 1.24.7, to measure how often the fatal reproduces on each. It never
-  # blocks (continue-on-error) and the publication job's Go version is untouched.
-  verify-windows-go-latest:
-    runs-on: windows-latest
-    continue-on-error: true
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        go: ["stable", "1.24.7"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: ${{ matrix.go }}
-          cache: false
-      - name: go version
-        run: go version
-      - name: go test oracle on Windows, 20x (diagnostic)
-        env:
-          ROSMAROPS_SCHEMAVAL_ORACLE: "1"
-        run: go test ./internal/schemaval/ -count=20 -timeout 90m
