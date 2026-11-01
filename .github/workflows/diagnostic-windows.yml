@@ -1,0 +1,40 @@
+# BV-134 diagnostic, non-blocking, run by hand (BV-136): the gojsonschema-oracle
+# differential tests are skipped on the normal verify-windows job (a Go runtime
+# GC fatal — "found bad pointer in Go heap" / "found pointer to free object" —
+# hits the windows-latest runner inside pure-Go code; not a data race). Here they
+# run anyway (ROSMAROPS_SCHEMAVAL_ORACLE), 20x, on the latest stable Go and on
+# the pinned 1.24.7, to measure how often the fatal reproduces on each. Moved out
+# of ci.yml (BV-136) so its ~1h loop no longer holds the ci.yml run open and
+# delays release.yml; started only from the Actions tab (Run workflow).
+name: diagnostic-windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-windows-go-latest:
+    runs-on: windows-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["stable", "1.24.7"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      - name: go version
+        run: go version
+      - name: go test oracle on Windows, 20x (diagnostic)
+        env:
+          ROSMAROPS_SCHEMAVAL_ORACLE: "1"
+        run: go test ./internal/schemaval/ -count=20 -timeout 90m

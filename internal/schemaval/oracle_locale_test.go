@@ -12,7 +12,7 @@ import (
 // oracleOnWindowsEnv, when set, lets the gojsonschema-oracle differential tests
 // run on Windows (BV-134). They always run on linux and darwin; on Windows they
 // are skipped on the normal CI job and run only where this is set — the
-// non-blocking verify-windows-go-latest diagnostic job.
+// non-blocking diagnostic workflow (diagnostic-windows.yml).
 const oracleOnWindowsEnv = "ROSMAROPS_SCHEMAVAL_ORACLE"
 
 // skipOracleOnWindows skips the gojsonschema-oracle differential tests on
@@ -23,8 +23,9 @@ const oracleOnWindowsEnv = "ROSMAROPS_SCHEMAVAL_ORACLE"
 // runtime / runner issue, not a data race: go test -race is clean on Linux
 // across the whole suite. gojsonschema is a dev/test-only oracle (decision
 // 2026-10-25, G2-G3), so the oracle comparison runs on linux and darwin;
-// schemaval's own tests still run on Windows. The diagnostic job sets
-// oracleOnWindowsEnv to run the oracle on Windows anyway and measure the fatal.
+// schemaval's own tests still run on Windows. The diagnostic workflow
+// (diagnostic-windows.yml) sets oracleOnWindowsEnv to run the oracle on
+// Windows anyway and measure the fatal.
 func skipOracleOnWindows(t testing.TB) {
 	t.Helper()
 	if runtime.GOOS == "windows" && os.Getenv(oracleOnWindowsEnv) == "" {
