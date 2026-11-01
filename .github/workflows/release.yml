@@ -2,8 +2,9 @@
 # only on a tag v*; the checks the repository requires, a Windows build,
 # rosmarops.exe alone (decision 2026-10-27, primer uso con un solo .exe),
 # the macOS preview's rosmarops-macos-apple-silicon and rosmarops-macos-intel
-# (decision 2026-10-29, macOS vista previa, point 6), each checked for no
-# network, their SHA256SUMS.txt, a build provenance attestation and the
+# (decision 2026-10-29, macOS vista previa, point 6), each checked so the
+# network enters only through internal/spacenet (invariant 1, option B),
+# their SHA256SUMS.txt, a build provenance attestation and the
 # GitHub release. A tag with a hyphen (v0.5.0-alpha.1) is published as a
 # prerelease, never «latest» (.github/scripts/release-flags.sh). BV-112:
 # then the released rosmarops.exe, checked against SHA256SUMS.txt, makes the
@@ -160,15 +161,9 @@ jobs:
             esac
             GOARCH=$arch go build -trimpath -ldflags="-X main.version=${TAG#v}" -o "dist/pkg/$name" ./cmd/rosmarops
           done
-      - name: No network in the binaries
+      - name: Network only through internal/spacenet
         run: |
-          check() { # GOOS GOARCH binary
-            if GOOS=$1 GOARCH=$2 go list -deps ./cmd/rosmarops | grep -E '^(net|crypto/tls)(/|$)'; then exit 1; fi
-            if go tool nm "$3" | awk '{print $NF}' | grep -E '^(net\.|net/|crypto/tls\.|syscall\.(Socket|Connect|Sendto)$)'; then exit 1; fi
-          }
-          check windows amd64 dist/pkg/rosmarops.exe
-          check darwin arm64 dist/pkg/rosmarops-macos-apple-silicon
-          check darwin amd64 dist/pkg/rosmarops-macos-intel
+          go test ./tests/trust -count=1 -run '^TestNoNetwork_(OnlySpacenetImportsNetwork|NetworkPackagesOnlyViaSpacenet|NoDirectSocketCalls|ChecksCatch|BinaryPinsHostAgainstLdflags)$' -v
       - name: Checksums
         run: |
           cd dist
