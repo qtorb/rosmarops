@@ -2,7 +2,7 @@
 
 **See what your AI coding agents can reach on your computer — and how one agent can change another.**
 
-Free and open source (AGPL-3.0). It runs on your computer, only reads, and sends nothing. Each agent it evaluates gets an Agent Posture Score out of 100.
+Free and open source (AGPL-3.0). It runs on your computer and only reads. Nothing leaves your devices unless you approve it first. Each agent it evaluates gets an Agent Posture Score out of 100.
 
 RosmarOps reads the configuration of the AI agents on your Windows computer (today Claude Code, Cursor and Hermes Agent; Cline, GitHub Copilot, Continue, Codex, Antigravity and Claude Desktop are detected but not scored yet), your repositories and your local credentials. It tells you, with evidence:
 
@@ -11,7 +11,7 @@ RosmarOps reads the configuration of the AI agents on your Windows computer (tod
 - which agents can rewrite another agent's configuration or instructions;
 - which keys are saved in git.
 
-You get a visual report with a score per agent, the first thing to do with the exact setting to change, and a table of how each agent works: who decides what it does (nobody, another AI model, or you) and how far it reaches. It reads only. It never changes anything and never connects to the network.
+You get a visual report with a score per agent, the first thing to do with the exact setting to change, and a table of how each agent works: who decides what it does (nobody, another AI model, or you) and how far it reaches. It reads only and never changes anything.
 
 How each agent behaves out of the box, version by version, is tracked in the [RosmarOps Observatory](https://rosmarops.com/observatory/). How findings and scores are worked out: [Methodology](https://rosmarops.com/methodology/).
 
@@ -92,7 +92,7 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Repositories | Keys in tracked files and in git history, hooks, workflows |
 | Windows | The list of scheduled tasks and Windows Defender's exclusions, to tell you when a new one appears, and whether Windows allows notifications |
 
-On a double-click, if this computer has no key for your online space yet, RosmarOps looks in your Downloads folder for a file named rosmarops-kit-<8 characters>.json (also with « (1)» and so on), up to 64 KB, without following links. It reads only that file, never deletes it and never writes to Downloads.
+RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log in your reports folder.
 
 ## What it does not see
 
@@ -109,10 +109,10 @@ Whatever it could not read is listed in the report and never counted as clean.
 
 RosmarOps reads broad parts of your computer, which is the same shape malware has. So every claim is something you can check:
 
-- no networking code in the program;
+- network only with your permission: to send your encrypted results to your space, and nowhere else;
 - writes only inside `~/.rosmarops/` and its reports folder;
 - secrets never shown in full;
-- no telemetry, ever: there is no switch because there is no code that could send anything.
+- no telemetry, ever: the only thing it can send is your encrypted results, to your space, with your permission.
 
 Each claim, and how to check it: [`docs/trust-model.md`](docs/trust-model.md).
 

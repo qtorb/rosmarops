@@ -29,6 +29,10 @@
       "default": 0,
       "description": "Resets to 0 on any non-green run. After 3+, rosmarops suggests biweekly cadence."
     },
+    "space_permission": {
+      "type": "boolean",
+      "description": "True once the person approved connecting this computer to their online space (BV-137). The only space state kept here; the key and send credential live in the kit DPAPI blob. No network happens unless this is true."
+    },
     "integrity": {
       "type": "object",
       "required": ["vigil_binary_sha256", "config_sha256"],

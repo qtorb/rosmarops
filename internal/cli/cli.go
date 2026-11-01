@@ -26,7 +26,8 @@ import (
 // them against the command tree and the catalogs.
 var HelpKeys = []string{
 	"cli.cmd.allow.add.short", "cli.cmd.allow.list.short", "cli.cmd.allow.remove.short", "cli.cmd.allow.short",
-	"cli.cmd.baseline.long", "cli.cmd.baseline.short", "cli.cmd.init.long", "cli.cmd.init.short",
+	"cli.cmd.baseline.long", "cli.cmd.baseline.short", "cli.cmd.connect.short", "cli.cmd.disconnect.short",
+	"cli.cmd.init.long", "cli.cmd.init.short",
 	"cli.cmd.kit.create.short", "cli.cmd.kit.import.short", "cli.cmd.kit.long", "cli.cmd.kit.new_phrase.short", "cli.cmd.kit.short",
 	"cli.cmd.run.long", "cli.cmd.run.short", "cli.cmd.schedule.short", "cli.cmd.status.long", "cli.cmd.status.short",
 	"cli.flag.lang", "cli.flag.repos_under", "cli.help.more", "cli.usage",
