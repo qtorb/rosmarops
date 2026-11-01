@@ -460,8 +460,11 @@ func (c htmlCtx) renderYourSpace() {
 		return
 	}
 	line := c.t("report.space_pending", nil)
-	if c.v.SpaceSentDate != "" {
+	switch {
+	case c.v.SpaceSentDate != "":
 		line = c.t("report.space_sent", map[string]string{"date": c.v.SpaceSentDate})
+	case c.v.SpaceRejected:
+		line = c.t("report.space_rejected", nil)
 	}
 	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
 	c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/space">%s</a>`,
@@ -1355,7 +1358,7 @@ func HTMLKeys() []string {
 	keys = append(keys, "report.services_h", "report.services_none")
 	// BV-119: the «Your space» section (AP-17 §2); BV-132: shown only with a
 	// key, so report.space_no_kit is gone.
-	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_button")
+	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_rejected", "report.space_button")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {

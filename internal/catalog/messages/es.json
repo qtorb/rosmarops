@@ -444,6 +444,7 @@
   "report.space_button": "Abrir tu espacio",
   "report.space_h2": "Tu espacio",
   "report.space_pending": "Aún no enviado: no hay conexión. Se enviará después de la próxima revisión.",
+  "report.space_rejected": "Esta revisión no se ha podido enviar a tu espacio.",
   "report.space_sent": "Enviado a tu espacio el {date}.",
   "space.change_fixed": "Se arregló un problema desde la revisión anterior.",
   "category.money": "Pagos",

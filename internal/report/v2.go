@@ -100,10 +100,13 @@ type V2 struct {
 	// space (BV-137): the «Your space» section is shown only then. Set by the
 	// command before the HTML is rendered; not in the JSON.
 	SpaceConnected bool `json:"-"`
-	// SpaceSentDate is the local date of the most recent successful send to
-	// the space, or empty when nothing has been sent yet (pending). Drives the
-	// section's sent/pending line. Not in the JSON.
+	// SpaceSentDate is the local date this run's package was sent to the space,
+	// or empty when it was not sent this run (CTO-15 PR5). Not in the JSON.
 	SpaceSentDate string `json:"-"`
+	// SpaceRejected is true when this run's package was refused by the area
+	// (400/403/409/413) and dropped, so the section says so instead of
+	// "pending" (CTO-15 PR5). Not in the JSON.
+	SpaceRejected bool `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;

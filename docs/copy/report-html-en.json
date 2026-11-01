@@ -53,6 +53,7 @@
   "report.space_button": "Open your space",
   "report.space_h2": "Your space",
   "report.space_pending": "Not sent yet: no connection. It will be sent after the next check.",
+  "report.space_rejected": "This check couldn't be sent to your space.",
   "report.space_sent": "Sent to your space on {date}.",
   "space.change_fixed": "One issue was fixed since the last check.",
   "category.money": "Payments",

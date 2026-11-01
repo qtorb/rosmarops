@@ -8,10 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/winpath"
 )
 
 // connectWindowConfig is the window's text, all from the catalog. Passed as
@@ -155,7 +157,16 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 	if isSpaceConnected(paths) {
 		return // already connected (permission AND credential): no window
 	}
-	cmd := exec.Command("powershell", connectWindowArgs()...)
+	// PowerShell by absolute path, with PSModulePath narrowed to the system
+	// modules, like the folder picker and the notifier (CTO-15 PR4, BV-93 B4):
+	// a tampered PATH or profile cannot substitute the interpreter or its
+	// modules.
+	ps := winpath.PowerShellExe()
+	if ps == "" {
+		ps = "powershell"
+	}
+	cmd := exec.Command(ps, connectWindowArgs()...)
+	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return
@@ -174,8 +185,20 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 		defer cancel()
 		return spaceConnect(ctx, paths, onNumber, onOpen)
 	}
-	if driveConnectWindow(stdout, stdin, run) {
-		slog.Info("connect window: this computer is now connected")
+	// If nobody answers the window within 10 minutes, close it as «Not now»
+	// and let the run go on (CTO-15 PR5). Killing the process closes its
+	// stdout, so driveConnectWindow returns.
+	done := make(chan bool, 1)
+	go func() { done <- driveConnectWindow(stdout, stdin, run) }()
+	select {
+	case connected := <-done:
+		if connected {
+			slog.Info("connect window: this computer is now connected")
+		}
+	case <-time.After(10 * time.Minute):
+		slog.Info("connect window: no answer in 10 minutes; closing as «Not now» and continuing")
+		_ = cmd.Process.Kill()
+		<-done
 	}
 	_ = stdin.Close()
 	_ = cmd.Wait()

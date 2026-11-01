@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -45,13 +46,25 @@ const (
 	sendBadRequest   = "bad_request"  // 400
 	sendError        = "error"        // unexpected status
 	sendDeferred     = "deferred"     // no connection, 429 or 5xx: try again next run
+	sendSkipped      = "skipped"      // not a closed package with our key_id, or over 2 MB
 )
 
 // terminalResults are the results that mean "do not send this package again".
 var terminalResults = map[string]bool{
 	sendSent: true, sendUnauthorized: true, sendRejected: true,
 	sendTooLarge: true, sendOtherDevice: true, sendBadRequest: true, sendError: true,
+	sendSkipped: true,
 }
+
+// rejectedResults are the terminal results, other than a 401, that mean the
+// area refused this run's package; the report says so (report.space_rejected).
+var rejectedResults = map[string]bool{
+	sendRejected: true, sendTooLarge: true, sendOtherDevice: true, sendBadRequest: true,
+}
+
+// maxPackageBytes is the largest file spaceSend will send (CTO-15 PR5): a
+// closed results package is a few KB; anything over 2 MB is skipped.
+const maxPackageBytes = 2 << 20
 
 // spacePaths are where the space work reads and writes: the kit key file, the
 // state, and the reports directory.
@@ -105,6 +118,13 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 	if err != nil {
 		revertSpacePermission(paths.state)
 		return err
+	}
+	// Never replace a different local key (CTO-15 PR5): if this computer
+	// already holds a kit with another key_id, refuse — revert the permission
+	// so the window shows connect.failed — rather than silently overwrite it.
+	if existing, _ := loadKitFrom(paths.store); existing != nil && kit.KeyID(existing.Secret.Key) != kit.KeyID(m.Secret.Key) {
+		revertSpacePermission(paths.state)
+		return fmt.Errorf("spacenet: this computer already holds a different space key")
 	}
 	// Store the space key and credential BEFORE acking (BV-137 point 4, CTO-14
 	// P5): the area deletes the connection only on ack, so a failed save never
@@ -210,12 +230,20 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 		return
 	}
 	hostID := graph.HostID(salt)
+	keyID := kit.KeyID(stored.Secret.Key)
 	logPath := filepath.Join(paths.reports, SendsLogName)
 
 	for _, pkg := range packagesToSend(paths.reports, currentPkg, maxPending) {
 		body, err := os.ReadFile(pkg)
 		if err != nil {
 			slog.Warn("space send: read package", "path", pkg, "err", err)
+			continue
+		}
+		// Only a closed results package no larger than 2 MB, sealed with this
+		// kit's key, ever leaves (CTO-15 PR5); anything else is logged skipped
+		// and never sent.
+		if !sealedPackageForKey(body, keyID) {
+			appendSendLog(logPath, now, filepath.Base(pkg), len(body), sendSkipped)
 			continue
 		}
 		status, sendErr := sendPackage(ctx, perm, hostID, stored.SpaceCredential, body)
@@ -259,6 +287,56 @@ func sendResultFor(status int, err error) string {
 		}
 		return sendError
 	}
+}
+
+// sealedPackageForKey reports whether body is a closed rosmarops-results
+// package no larger than 2 MB, sealed with the given key_id (CTO-15 PR5). Only
+// such a file is ever sent; anything else (a stray file matching the name, a
+// package for another key, or an oversized one) is skipped.
+func sealedPackageForKey(body []byte, keyID string) bool {
+	if len(body) > maxPackageBytes {
+		return false
+	}
+	var p struct {
+		Header struct {
+			KeyID string `json:"key_id"`
+		} `json:"header"`
+		WrappedKey string `json:"wrapped_key"`
+		Ciphertext string `json:"ciphertext"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return false
+	}
+	return p.Header.KeyID == keyID && p.WrappedKey != "" && p.Ciphertext != ""
+}
+
+// currentPackageStatus reads the sends log for this run's package and reports
+// the local date it was sent (empty if not sent this run) and whether the area
+// refused it (CTO-15 PR5). The last matching line wins.
+func currentPackageStatus(reportsDir, currentPkg string, loc *time.Location) (sentDate string, rejected bool) {
+	if currentPkg == "" {
+		return "", false
+	}
+	base := filepath.Base(currentPkg)
+	raw, err := os.ReadFile(filepath.Join(reportsDir, SendsLogName))
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 5 || f[4] != base {
+			continue
+		}
+		switch {
+		case f[3] == sendSent:
+			if t, perr := time.Parse(time.RFC3339, f[0]); perr == nil {
+				sentDate, rejected = t.In(loc).Format("2006-01-02"), false
+			}
+		case rejectedResults[f[3]]:
+			sentDate, rejected = "", true
+		}
+	}
+	return sentDate, rejected
 }
 
 // packagesToSend returns the package paths to send this run, oldest first: the
@@ -318,26 +396,6 @@ func terminalFilenames(reportsDir string) map[string]bool {
 	return out
 }
 
-// lastSentDate returns the local date (YYYY-MM-DD) of the most recent line in
-// the sends log whose result is "sent", or "" when nothing has been sent.
-func lastSentDate(reportsDir string, loc *time.Location) string {
-	raw, err := os.ReadFile(filepath.Join(reportsDir, SendsLogName))
-	if err != nil {
-		return ""
-	}
-	date := ""
-	for _, line := range strings.Split(string(raw), "\n") {
-		f := strings.Fields(line)
-		if len(f) < 5 || f[3] != sendSent {
-			continue
-		}
-		if t, err := time.Parse(time.RFC3339, f[0]); err == nil {
-			date = t.In(loc).Format("2006-01-02")
-		}
-	}
-	return date
-}
-
 // appendSendLog writes one line to the sends log: the UTC time, the size in
 // bytes, the destination host, the result, and the package filename. Never
 // content (BV-137 point 6).
@@ -347,6 +405,17 @@ func appendSendLog(path string, now time.Time, filename string, size int, result
 		return
 	}
 	line := fmt.Sprintf("%s %d %s %s %s\n", now.UTC().Format(time.RFC3339), size, spacenet.Host, result, filename)
+	// Keep the log to its last maxSendLogLines (CTO-15 PR5). It grows a few
+	// lines a week, so a read-trim-rewrite on each append is cheap; the rename
+	// stays inside the reports directory (invariant 2).
+	if prev, err := os.ReadFile(path); err == nil {
+		lines := strings.Split(strings.TrimRight(string(prev), "\n"), "\n")
+		if len(lines) >= maxSendLogLines {
+			kept := lines[len(lines)-(maxSendLogLines-1):]
+			rewriteSendLog(path, strings.Join(kept, "\n")+"\n"+line)
+			return
+		}
+	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		slog.Warn("sends log: open", "err", err)
@@ -355,6 +424,35 @@ func appendSendLog(path string, now time.Time, filename string, size int, result
 	defer f.Close()
 	if _, err := f.WriteString(line); err != nil {
 		slog.Warn("sends log: write", "err", err)
+	}
+}
+
+// maxSendLogLines caps rosmarops-sends.log (CTO-15 PR5).
+const maxSendLogLines = 1000
+
+// rewriteSendLog replaces the log atomically with content (temp file + rename,
+// both inside the reports directory).
+func rewriteSendLog(path, content string) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".sends-*.tmp")
+	if err != nil {
+		slog.Warn("sends log: temp", "err", err)
+		return
+	}
+	name := tmp.Name()
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(name)
+		slog.Warn("sends log: write temp", "err", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(name)
+		slog.Warn("sends log: close temp", "err", err)
+		return
+	}
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		slog.Warn("sends log: rename", "err", err)
 	}
 }
 

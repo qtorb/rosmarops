@@ -197,6 +197,17 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if reportDir == "" {
 		reportDir = defaultDir
 	}
+
+	// The connect window (CTO-15 PR5, invariant 8): only on the double click,
+	// and only AFTER the integrity check above — never before a connection. On
+	// Windows, when this computer is not connected, it offers to connect so a
+	// fresh connection sends this run's results. A no-op off Windows and for
+	// the `run` command (m.window is false there).
+	if m.window {
+		if storePath, perr := kit.StorePath(); perr == nil {
+			connectWindowHook(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat)
+		}
+	}
 	// Invariant §6: every scanner and subprocess runs under the global cap,
 	// which counts from after the integrity questions: the time a person
 	// takes to answer is not the scan's (J13).
@@ -694,7 +705,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// during the send forgets both, and then the section is not shown.
 		if isSpaceConnected(sp) {
 			v2.SpaceConnected = true
-			v2.SpaceSentDate = lastSentDate(reportDir, time.Local)
+			// This run's package: sent (with this send's date), refused, or
+			// still pending (CTO-15 PR5).
+			v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
 		}
 	} else {
 		slog.Warn("space send skipped: kit path", "err", perr)
