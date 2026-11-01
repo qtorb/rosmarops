@@ -66,7 +66,11 @@ func TestNoExternalInHTML(t *testing.T) {
 			}
 		}
 		page = strings.Replace(page, spaceHref, "", 1)
-		if strings.Contains(page, "app.rosmarops.com") {
+		// Any other app.rosmarops.com URL (scheme + host) is forbidden; the AI
+		// export's ai.what mentions the bare domain in prose, which loads
+		// nothing, so only a schemed URL counts (the general scheme ban below
+		// catches it too).
+		if strings.Contains(page, "https://app.rosmarops.com") || strings.Contains(page, "http://app.rosmarops.com") {
 			t.Errorf("%s: an app.rosmarops.com URL other than the allowed one is present", lang)
 		}
 

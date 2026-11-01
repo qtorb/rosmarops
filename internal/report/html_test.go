@@ -260,7 +260,11 @@ func TestRenderHTML_YourSpaceOnlyWhenConnected(t *testing.T) {
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
 		notConnected := renderHTML(t, lang, v)
-		if strings.Contains(notConnected, `class="space"`) || strings.Contains(notConnected, "app.rosmarops.com") {
+		// Not connected: no «Your space» section and no space button URL. (The
+		// AI export's ai.what mentions app.rosmarops.com in prose, which is not
+		// a loaded resource, so the bare domain may appear; the button URL must
+		// not.)
+		if strings.Contains(notConnected, `class="space"`) || strings.Contains(notConnected, "app.rosmarops.com/space") {
 			t.Errorf("%s: not connected, but the HTML has the «Your space» section or URL", lang)
 		}
 		// Connected but nothing sent yet: the pending line, no date.
