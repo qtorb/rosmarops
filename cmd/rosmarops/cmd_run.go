@@ -690,12 +690,14 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
 		spaceSend(sendCtx, sp, currentPkg, pkgNow)
 		cancelSend()
+		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401
+		// during the send forgets both, and then the section is not shown.
+		if isSpaceConnected(sp) {
+			v2.SpaceConnected = true
+			v2.SpaceSentDate = lastSentDate(reportDir, time.Local)
+		}
 	} else {
 		slog.Warn("space send skipped: kit path", "err", perr)
-	}
-	if stAfter, err := state.LoadState(stPath); err == nil && stAfter.SpacePermission {
-		v2.SpaceConnected = true
-		v2.SpaceSentDate = lastSentDate(reportDir, time.Local)
 	}
 
 	// Write report files.
@@ -721,6 +723,15 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+
+	// Re-read the space permission from disk before saving the run's own
+	// fields (CTO-15 PR2): spaceSend's 401 wipe, or a reverted connect, may
+	// have changed it while this run held an older copy. runWith owns the
+	// status and the baselines; the permission belongs to the space paths, so
+	// take its latest value — a 401 during the run must end "not connected".
+	if cur, curErr := state.LoadState(stPath); curErr == nil {
+		st.SpacePermission = cur.SpacePermission
+	}
 
 	// Update state with the run's status (the highest of v1 and v2).
 	st.LastRun = r.GeneratedAt

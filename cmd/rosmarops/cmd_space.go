@@ -94,16 +94,23 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 	}
 	perm, err := spacenet.FromState(st)
 	if err != nil {
+		revertSpacePermission(paths.state)
 		return err
 	}
-	m, ack, err := spacenet.Connect(ctx, perm, hostID, onNumber, onOpen)
+	// Any connection that does not end stored reverts the permission (CTO-15
+	// PR2): a cancel, an expiry, a network error or a failed save must leave
+	// this computer "not connected", so the next double click offers the
+	// window again and the report does not say "connected" forever.
+	m, ack, err := connectProtocol(ctx, perm, hostID, onNumber, onOpen)
 	if err != nil {
+		revertSpacePermission(paths.state)
 		return err
 	}
 	// Store the space key and credential BEFORE acking (BV-137 point 4, CTO-14
 	// P5): the area deletes the connection only on ack, so a failed save never
 	// loses the credential.
 	if err := kit.Save(paths.store, kit.Stored{KitID: m.KitID, Secret: m.Secret, SpaceCredential: m.Credential}); err != nil {
+		revertSpacePermission(paths.state)
 		return fmt.Errorf("store the space key and credential: %w", err)
 	}
 	if err := ack(ctx); err != nil {
@@ -112,6 +119,38 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 		slog.Warn("connect: ack failed; the connection is stored locally", "err", err)
 	}
 	return nil
+}
+
+// connectProtocol is the program-side connect run. It is a seam: production is
+// spacenet.Connect; tests replace it to exercise spaceConnect's revert without
+// a real connection.
+var connectProtocol = spacenet.Connect
+
+// revertSpacePermission puts the permission back to not-connected after a
+// connection that did not end stored (CTO-15 PR2). No credential is ever
+// written on a failed connect, so only the permission needs undoing.
+func revertSpacePermission(statePath string) {
+	st, err := state.LoadState(statePath)
+	if err != nil || !st.SpacePermission {
+		return
+	}
+	st.SpacePermission = false
+	if err := state.SaveState(statePath, st); err != nil {
+		slog.Warn("revert space permission", "err", err)
+	}
+}
+
+// isSpaceConnected reports whether this computer is connected to the space:
+// the permission is recorded AND a send credential is stored (CTO-15 PR2). A
+// permission with no credential (e.g. a connection that failed to finish) is
+// not "connected".
+func isSpaceConnected(sp spacePaths) bool {
+	st, err := state.LoadState(sp.state)
+	if err != nil || !st.SpacePermission {
+		return false
+	}
+	stored, err := loadKitFrom(sp.store)
+	return err == nil && stored != nil && len(stored.SpaceCredential) > 0
 }
 
 // spaceDisconnect revokes this computer at the area (best effort) and forgets

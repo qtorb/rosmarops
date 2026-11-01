@@ -111,15 +111,22 @@ func (c *console) say(key string, params map[string]string) {
 var errSpaceConnected = errors.New("this computer is connected to a space; disconnect it first")
 
 // refuseIfConnected prints the connected notice and reports true when this
-// computer is connected to a space: kit create and import would drop the send
+// computer is connected to a space — the permission recorded AND a send
+// credential stored (CTO-15 PR2). kit create and import would drop the
 // credential (and a new key would stop matching the account), so they are
-// refused until the person runs `rosmarops disconnect`.
-func (c *console) refuseIfConnected(st state.State) bool {
-	if st.SpacePermission {
-		c.say("kit.space_connected", nil)
-		return true
+// refused until the person runs `rosmarops disconnect`. A permission with no
+// credential (a connection that did not finish) is not "connected" and does
+// not block the kit commands.
+func (c *console) refuseIfConnected(st state.State, storePath string) bool {
+	if !st.SpacePermission {
+		return false
 	}
-	return false
+	stored, err := loadKitFrom(storePath)
+	if err != nil || stored == nil || len(stored.SpaceCredential) == 0 {
+		return false
+	}
+	c.say("kit.space_connected", nil)
+	return true
 }
 
 // ask writes the text of key and reads one line, without its line ending. An
@@ -243,7 +250,7 @@ func kitCreate(c *console, paths kitPaths) error {
 	// would stop matching the account (CTO-14 P6): refuse until the person
 	// disconnects. Checked before the store-exists check so the person sees
 	// the connected notice, not "already has a kit key".
-	if c.refuseIfConnected(st) {
+	if c.refuseIfConnected(st, paths.store) {
 		return errSpaceConnected
 	}
 	if _, err := os.Stat(paths.store); err == nil {
@@ -318,7 +325,7 @@ func kitImport(c *console, paths kitPaths, file string) error {
 	}
 	// A connected computer would lose its send credential on import (CTO-14
 	// P6): refuse until the person disconnects.
-	if c.refuseIfConnected(st) {
+	if c.refuseIfConnected(st, paths.store) {
 		return errSpaceConnected
 	}
 	var sec kit.Secret

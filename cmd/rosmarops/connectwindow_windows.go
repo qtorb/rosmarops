@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
-	"github.com/qtorb/rosmarops/internal/state"
 )
 
 // connectWindowConfig is the window's text, all from the catalog. Passed as
@@ -153,9 +152,8 @@ if (-not $script:answered) { [Console]::Out.WriteLine('no'); [Console]::Out.Flus
 // (BV-137 point 5). Any failure to show the window is logged and ignored: the
 // run goes on, and `rosmarops connect` is always available.
 func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
-	st, err := state.LoadState(paths.state)
-	if err != nil || st.SpacePermission {
-		return // no state yet, or already connected: no window
+	if isSpaceConnected(paths) {
+		return // already connected (permission AND credential): no window
 	}
 	cmd := exec.Command("powershell", connectWindowArgs()...)
 	stdin, err := cmd.StdinPipe()
