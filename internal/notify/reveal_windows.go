@@ -15,15 +15,17 @@ import (
 // CTO-12 H4): explorer.exe by its absolute system path, with the literal
 // command line `explorer.exe /select,"<path>"` set as SysProcAttr.CmdLine so
 // the quoting is ours. It is not opened for a path with a double quote or a
-// UNC path. Explorer's exit code is not meaningful, so only a failure to
+// UNC path, nor when the absolute Explorer path cannot be resolved — it never
+// falls back to a bare "explorer.exe" that %PATH% could redirect (BV-135,
+// CTO-12 H4). Explorer's exit code is not meaningful, so only a failure to
 // start it is an error.
 func RevealInExplorer(path string) error {
 	if err := revealPathOK(path); err != nil {
 		return err
 	}
-	exe := winpath.ExplorerExe()
-	if exe == "" {
-		exe = "explorer.exe"
+	exe, err := revealExe(winpath.ExplorerExe())
+	if err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

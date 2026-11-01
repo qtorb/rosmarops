@@ -27,6 +27,20 @@ func TestRevealPathOK(t *testing.T) {
 	}
 }
 
+// BV-135, CTO-12 H4: Explorer is launched only by its absolute path. An empty
+// path (winpath.ExplorerExe found nothing) is an error, never a bare
+// "explorer.exe" fallback that %PATH% could redirect.
+func TestRevealExe(t *testing.T) {
+	if _, err := revealExe(""); err == nil {
+		t.Error("revealExe(\"\") = nil, want error (no bare explorer.exe fallback)")
+	}
+	abs := `C:\Windows\explorer.exe`
+	got, err := revealExe(abs)
+	if err != nil || got != abs {
+		t.Errorf("revealExe(%q) = %q, %v; want %q, nil", abs, got, err, abs)
+	}
+}
+
 func TestRevealCmdLine(t *testing.T) {
 	got := revealCmdLine(`C:\Windows\explorer.exe`, `C:\Users\Al Garcia\r.json`)
 	want := `C:\Windows\explorer.exe /select,"C:\Users\Al Garcia\r.json"`
