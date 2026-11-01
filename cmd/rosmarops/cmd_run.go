@@ -660,18 +660,42 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	slog.Info("report: launcher rules counted as unrestricted shell", "count", len(launcherRules), "rules", launcherRules)
 	slog.Info("report: v2", "status", v2.Status, "findings", len(v2.Findings), "today", v2.Today.FindingID, "action", v2.Today.ActionID)
 
-	// Closed package for the customer area (BV-119, AP-17 §2): only when a
-	// kit is present on this computer and a graph was built. The package name
-	// is set on the report before the HTML is written, so the «Your space»
-	// section names the file this run writes; without a kit nothing is
-	// written and the report is identical to before.
+	// Closed package for the connected space (BV-119/BV-137 points 6–7):
+	// sealed only when a kit is present and a graph was built, then sent if
+	// this computer is connected. Both happen before the report is written, so
+	// the «Your space» section reflects this run (sent today, or pending).
 	pkgNow := time.Now()
 	stored, kitErr := loadKitIfPresent()
 	if kitErr != nil {
 		slog.Warn("results package skipped: kit could not be read", "err", kitErr)
 	}
+	var currentPkg string
 	if stored != nil && built != nil {
-		v2.SpacePackageFile = report.ResultsFileName(pkgNow, built.Provenance.HostID)
+		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
+			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
+		if err != nil {
+			return "", fmt.Errorf("results package: %w", err)
+		}
+		if pkgPath != "" {
+			currentPkg = pkgPath
+			slog.Info("results package written", "path", pkgPath)
+		}
+	}
+
+	// Send to the connected space (point 6): pending first, then this run's
+	// package. Never fails the run — offline leaves it for next time, a 401
+	// forgets the space. Then set the «Your space» section (point 7).
+	if storePath, perr := kit.StorePath(); perr == nil {
+		sp := spacePaths{store: storePath, state: stPath, reports: reportDir}
+		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
+		spaceSend(sendCtx, sp, currentPkg, pkgNow)
+		cancelSend()
+	} else {
+		slog.Warn("space send skipped: kit path", "err", perr)
+	}
+	if stAfter, err := state.LoadState(stPath); err == nil && stAfter.SpacePermission {
+		v2.SpaceConnected = true
+		v2.SpaceSentDate = lastSentDate(reportDir, time.Local)
 	}
 
 	// Write report files.
@@ -697,19 +721,6 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
-
-	// Seal and write the closed package now the report is written (its name
-	// was reserved above for the «Your space» section).
-	if stored != nil {
-		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
-			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
-		if err != nil {
-			return "", fmt.Errorf("results package: %w", err)
-		}
-		if pkgPath != "" {
-			slog.Info("results package written", "path", pkgPath)
-		}
-	}
 
 	// Update state with the run's status (the highest of v1 and v2).
 	st.LastRun = r.GeneratedAt
@@ -902,6 +913,11 @@ func loadKitIfPresent() (*kit.Stored, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadKitFrom(path)
+}
+
+// loadKitFrom reads the kit at an explicit path; a missing file is (nil, nil).
+func loadKitFrom(path string) (*kit.Stored, error) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

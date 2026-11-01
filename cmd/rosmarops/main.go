@@ -61,13 +61,15 @@ func newRootCmd() *cli.Command {
 	return &cli.Command{
 		Name: "rosmarops",
 		Subs: []*cli.Command{
-			newInitCmd(),     // cmd_init.go   — skips integrity check
-			newRunCmd(),      // cmd_run.go
-			newBaselineCmd(), // cmd_baseline.go — skips integrity check
-			newStatusCmd(),   // cmd_status.go
-			newAllowCmd(),    // stub → M4
-			newScheduleCmd(), // stub → M8
-			newKitCmd(),      // cmd_kit.go
+			newInitCmd(),       // cmd_init.go   — skips integrity check
+			newRunCmd(),        // cmd_run.go
+			newBaselineCmd(),   // cmd_baseline.go — skips integrity check
+			newStatusCmd(),     // cmd_status.go
+			newAllowCmd(),      // stub → M4
+			newScheduleCmd(),   // stub → M8
+			newKitCmd(),        // cmd_kit.go
+			newConnectCmd(),    // cmd_space.go
+			newDisconnectCmd(), // cmd_space.go
 		},
 	}
 }

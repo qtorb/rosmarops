@@ -19,10 +19,11 @@ func TestNoExternalInHTML(t *testing.T) {
 	home, repo := "/home/alice", "/home/alice/projects/app"
 	v := scenarioV2(t, []byte("0123456789abcdef0123456789abcdef"), home, repo,
 		[]platform.CredentialEntry{credEntry(repo+"/.env", 1, "GITHUB_TOKEN", fakeGitHubPAT)}, day)
-	// BV-119 (AP-17 §2): a kit wrote a closed package, so the «Your space»
-	// section shows its button. Without this the exact-URL exception below
-	// would not be exercised.
-	v.SpacePackageFile = "rosmarops-results-2026-10-24-0123456789ab.locked.json"
+	// BV-137 point 7: this computer is connected, so the «Your space» section
+	// shows its button. Without this the exact-URL exception below would not be
+	// exercised.
+	v.SpaceConnected = true
+	v.SpaceSentDate = "2026-10-24"
 	for _, lang := range []string{"en", "es"} {
 		cat, err := catalog.Load(lang)
 		if err != nil {
@@ -41,12 +42,12 @@ func TestNoExternalInHTML(t *testing.T) {
 		}
 		page = strings.Replace(page, root, "", 1)
 
-		// The second exception (BV-119, AP-17 §2, signed): the exact
-		// href="https://app.rosmarops.com/upload" of the «Your space» button,
+		// The second exception (BV-137 point 7, signed): the exact
+		// href="https://app.rosmarops.com/space" of the «Your space» button,
 		// at most once and only inside that section; removed before the
 		// search, like the SVG attribute. Any other URL, and any other
 		// app.rosmarops.com URL, still fails.
-		const spaceHref = `href="https://app.rosmarops.com/upload"`
+		const spaceHref = `href="https://app.rosmarops.com/space"`
 		spaceStart := strings.Index(page, `<section class="space">`)
 		spaceEnd := -1
 		if spaceStart >= 0 {

@@ -449,23 +449,23 @@ func (c htmlCtx) stepHead(n int, tag, id, title, hint string, arrow bool) {
 	c.w(`</div>`)
 }
 
-// renderYourSpace is the «Your space» section (BV-119, AP-17 §2): the link
-// to the customer area and the name of the closed package to send, when a
-// kit wrote one this run; otherwise how to create the key. Its only external
-// URL is the exact https://app.rosmarops.com/upload, the one the trust test
-// allows.
+// renderYourSpace is the «Your space» section (BV-137 point 7): shown only when
+// this computer is connected to the online space. It says whether the results
+// were sent or are still pending, and links to the space. Its only external URL
+// is the exact https://app.rosmarops.com/space, the one the trust test allows.
 func (c htmlCtx) renderYourSpace() {
-	// BV-132: only on a computer that already uses the online space — i.e.
-	// when this run wrote a closed package (SpacePackageFile set). Without a
-	// key the section is not shown and the report is as it was before (the
-	// online space is a private beta, by invitation; v0.6.2).
-	if c.v.SpacePackageFile == "" {
+	// Only on a connected computer; otherwise the section is not shown and the
+	// report is as it was before.
+	if !c.v.SpaceConnected {
 		return
 	}
+	line := c.t("report.space_pending", nil)
+	if c.v.SpaceSentDate != "" {
+		line = c.t("report.space_sent", map[string]string{"date": c.v.SpaceSentDate})
+	}
 	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
-	c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/upload">%s</a>`,
-		c.t("report.space_p", map[string]string{"file": c.v.SpacePackageFile}),
-		c.t("report.space_button", nil))
+	c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/space">%s</a>`,
+		line, c.t("report.space_button", nil))
 	c.w(`</section>`)
 }
 
@@ -1355,7 +1355,7 @@ func HTMLKeys() []string {
 	keys = append(keys, "report.services_h", "report.services_none")
 	// BV-119: the «Your space» section (AP-17 §2); BV-132: shown only with a
 	// key, so report.space_no_kit is gone.
-	keys = append(keys, "report.space_h2", "report.space_p", "report.space_button")
+	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_button")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {

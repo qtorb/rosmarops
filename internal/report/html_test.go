@@ -255,19 +255,28 @@ func TestRenderHTML_TitleOthers(t *testing.T) {
 // TestRenderHTML_YourSpaceOnlyWithKey (BV-132): the «Your space» section and
 // its app.rosmarops.com URL appear only when this run wrote a closed package
 // (a key on this computer); without a key neither is in the HTML, in en and es.
-func TestRenderHTML_YourSpaceOnlyWithKey(t *testing.T) {
+func TestRenderHTML_YourSpaceOnlyWhenConnected(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
-		noKit := renderHTML(t, lang, v)
-		if strings.Contains(noKit, `class="space"`) || strings.Contains(noKit, "app.rosmarops.com") {
-			t.Errorf("%s: no key, but the HTML has the «Your space» section or URL", lang)
+		notConnected := renderHTML(t, lang, v)
+		if strings.Contains(notConnected, `class="space"`) || strings.Contains(notConnected, "app.rosmarops.com") {
+			t.Errorf("%s: not connected, but the HTML has the «Your space» section or URL", lang)
 		}
-		v.SpacePackageFile = "rosmarops-results-2026-10-25-0123456789ab.locked.json"
-		withKit := renderHTML(t, lang, v)
-		v.SpacePackageFile = ""
-		if !strings.Contains(withKit, `class="space"`) || !strings.Contains(withKit, `href="https://app.rosmarops.com/upload"`) {
-			t.Errorf("%s: with a key, the HTML lacks the «Your space» section or its button URL", lang)
+		// Connected but nothing sent yet: the pending line, no date.
+		v.SpaceConnected = true
+		v.SpaceSentDate = ""
+		pending := renderHTML(t, lang, v)
+		if !strings.Contains(pending, `class="space"`) || !strings.Contains(pending, `href="https://app.rosmarops.com/space"`) {
+			t.Errorf("%s: connected, but the HTML lacks the «Your space» section or its button URL", lang)
 		}
+		// Connected and sent: the sent line carries the date.
+		v.SpaceSentDate = "2026-10-25"
+		sent := renderHTML(t, lang, v)
+		if !strings.Contains(sent, "2026-10-25") {
+			t.Errorf("%s: the sent line does not carry the date", lang)
+		}
+		v.SpaceConnected = false
+		v.SpaceSentDate = ""
 	}
 }

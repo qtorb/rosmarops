@@ -62,6 +62,11 @@ var staticKeys = []string{
 	"notify.aborted",
 	// BV-93, B3: a scheduled review that could not finish
 	"notify.run_failed",
+	// BV-137: the connect window / `rosmarops connect` console texts (4 states)
+	// and the `rosmarops disconnect` confirmation.
+	"connect.q", "connect.text", "connect.yes", "connect.no", "connect.number",
+	"connect.wait", "connect.done", "connect.expired", "connect.failed",
+	"disconnect.done",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
