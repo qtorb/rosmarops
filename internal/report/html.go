@@ -314,20 +314,19 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	// §1.1 Header.
 	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t("html.header", map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
 
-	// §2 The flow: 1 → 2 → 3.
+	// §2 The flow: 1 → 2 → 3, all three as direct children of a single
+	// `.flow` grid, so the three columns start at the same height (BV-141;
+	// as in v0.6.0, before BV-132 split the grid in two).
 	today, hasToday := c.todayFinding()
 	c.w(`<div class="flow">`)
 	c.renderStep1()
-	c.w(`</div>`)
-
-	// «Your space» (BV-119, AP-17 §2): after the summary (step 1) and before
-	// the findings (steps 2 and 3).
-	c.renderYourSpace()
-
-	c.w(`<div class="flow">`)
 	c.renderStep2(today, hasToday)
 	c.renderStep3(today.ID)
 	c.w(`</div>`)
+
+	// «Your space» (BV-119, AP-17 §2; placement BV-141): full width, right
+	// after the flow and before «How your agents work». Only when connected.
+	c.renderYourSpace()
 
 	// §11 How your agents work: right after the steps.
 	c.renderOverview()
@@ -657,12 +656,18 @@ var adjustActions = map[string]bool{
 }
 
 // renderStep2 is v3 §4: what you do today.
-func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
-	if ok {
-		// BV-121: an anchor so agents_overview.services can link to the today
-		// finding (it is not among step 3's rows).
-		c.w(`<span class="fa" id="%s"></span>`, html.EscapeString(f.ID))
+// todayFA is the invisible jump anchor agents_overview.services links to
+// (BV-121). It lives inside section.now, not before it, so it is never a
+// stray child of the `.flow` grid (BV-141). Empty when there is no today
+// finding.
+func (c htmlCtx) todayFA(f rules.Finding, ok bool) string {
+	if !ok {
+		return ""
 	}
+	return fmt.Sprintf(`<span class="fa" id="%s"></span>`, html.EscapeString(f.ID))
+}
+
+func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	var a rules.Action
 	found := false
 	if ok {
@@ -673,28 +678,28 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		}
 	}
 	if ok && f.Rule == rules.RulePackageKnownMalicious { // BV-100: no auto-action; bespoke hero
-		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
 		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
 			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
 		return
 	}
 	if ok && f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107: no auto-action; bespoke hero
-		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
 		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
 			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
 		return
 	}
 	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124: why below the title, then the action
-		c.w(`<section class="now" aria-labelledby="today-title">`)
+		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
 		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
 			c.title(f), c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
 		return
 	}
 	if !found {
-		c.w(`<section class="now" aria-labelledby="step2">`)
+		c.w(`<section class="now" aria-labelledby="step2">%s`, c.todayFA(f, ok))
 		c.stepHead(2, "p", "step2", c.t("html.step.2", nil), "", true)
 		none := "html.none"
 		if !c.v.Coverage.GraphBuilt {
@@ -708,7 +713,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	if adjustActions[a.Code] {
 		hint = c.t("html.step.2.hint", nil)
 	}
-	c.w(`<section class="now" aria-labelledby="today-title">`)
+	c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 	c.stepHead(2, "p", "", c.t("html.step.2", nil), hint, true)
 	c.w(`<div class="tbox"><h2 id="today-title">%s</h2><div class="lbl">%s</div><p class="tf">%s%s%s</p><p class="imp">%s`,
 		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.rowTitle(f), c.masterHelp(f), c.others(f), c.impact(f))
