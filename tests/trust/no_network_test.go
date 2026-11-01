@@ -1,22 +1,24 @@
 package trust_test
 
-// Trust test (CLAUDE.md invariant 1): RosmarOps opens no network connection.
+// Trust test (CLAUDE.md invariant 1, BV-137 / CTO-13 §3, option B — one
+// program): the network lives only in internal/spacenet, only with the
+// person's permission.
 //
-// Static part, never skipped (decision 2026-10-25, sustituir gojsonschema,
-// §4): no package of the module imports a network package directly; the
-// binary's dependency graph, for Windows and for Linux, holds no net, net/*
-// or crypto/tls package (and for macOS, decision 2026-10-28, M1a: darwin
-// amd64 and arm64); the binary itself, built here, has no symbol of
-// those packages nor syscall.Socket, syscall.Connect or syscall.Sendto; and
-// no code of the module refers to a socket call of syscall or
-// golang.org/x/sys. Test imports do not count: gojsonschema, the oracle of
-// the schema validator's differential test, exists in test binaries only.
+// Static part, never skipped: of every package in the module, only
+// internal/spacenet imports net, any net/*, or crypto/tls — directly or in its
+// own test files. The single binary does link those packages through
+// internal/spacenet, so option B drops the former "no net in the binary graph
+// or symbols" checks; the direct-import check and the runtime check below are
+// what prove the invariant now. No module code refers to a raw socket call of
+// syscall or golang.org/x/sys (net opens its own sockets; our code only ever
+// goes through net).
 //
 // Runtime part (Linux, needs strace): init, baseline and run in the sandbox of
-// no_writes_out_of_scope_test.go, with every child process traced; any
-// AF_INET or AF_INET6 connect/sendto/sendmsg fails the test. It runs on
-// Linux only: on Windows and on macOS (no strace; decision 2026-10-28,
-// macOS, M1a) only the static part runs, declared as a limit.
+// no_writes_out_of_scope_test.go, with every child process traced; without the
+// permission in the state (the sandbox records none) any AF_INET or AF_INET6
+// connect/sendto/sendmsg fails the test. It runs on Linux only: on Windows and
+// on macOS (no strace; decision 2026-10-28, macOS, M1a) only the static part
+// runs, declared as a limit.
 
 import (
 	"bufio"
@@ -33,125 +35,49 @@ import (
 	"testing"
 )
 
-// networkPackages are the standard-library packages that open sockets.
-// Subpackages of net/http count as net/http.
-var networkPackages = map[string]bool{
-	"net":        true,
-	"net/http":   true,
-	"crypto/tls": true,
-	"net/rpc":    true,
-	"net/smtp":   true,
-}
+// spacenetPkg is the one package allowed to import the network (invariant 1).
+const spacenetPkg = "github.com/qtorb/rosmarops/internal/spacenet"
 
-func isNetworkPackage(path string) bool {
-	return networkPackages[path] || strings.HasPrefix(path, "net/http/")
-}
-
-// inBinaryGraph reports a package the binary's dependency graph must not
-// hold (§4 check 1): net, any net/*, crypto/tls.
-func inBinaryGraph(path string) bool {
+// isNet reports a package the invariant confines to internal/spacenet: net,
+// any net/* (net/http, net/url, net/netip, …), and crypto/tls.
+func isNet(path string) bool {
 	return path == "net" || strings.HasPrefix(path, "net/") || path == "crypto/tls"
 }
 
-// forbiddenSymbol reports a symbol the binary must not have (§4 check 2,
-// calibrated on the first clean binary of BV-49): any symbol of net, net/*
-// or crypto/tls, and the socket calls of syscall. The Winsock symbols of
-// internal/poll and internal/syscall/windows that os links on Windows are
-// not forbidden: no socket is created through them unless net asks.
-func forbiddenSymbol(name string) bool {
-	switch {
-	case strings.HasPrefix(name, "net."), strings.HasPrefix(name, "net/"), strings.HasPrefix(name, "crypto/tls."):
-		return true
-	}
-	for _, s := range []string{"syscall.Socket", "syscall.Connect", "syscall.Sendto"} {
-		if name == s || strings.HasPrefix(name, s+".") {
-			return true
-		}
-	}
-	return false
-}
-
-// socketCalls are the socket functions module code must not refer to (§4
-// check 3), by import path.
+// socketCalls are the socket functions module code must not refer to, by
+// import path, whatever name it imports them under.
 var socketCalls = map[string]map[string]bool{
 	"syscall":                  {"Socket": true, "Connect": true, "Sendto": true, "Sendmsg": true, "SendmsgN": true, "WSASocket": true, "WSAConnect": true, "WSASendto": true},
 	"golang.org/x/sys/unix":    {"Socket": true, "Connect": true, "Sendto": true, "Sendmsg": true, "SendmsgN": true},
 	"golang.org/x/sys/windows": {"Socket": true, "Connect": true, "Sendto": true, "WSASocket": true, "WSAConnect": true, "WSASendto": true, "WSASendTo": true},
 }
 
-func TestNoNetwork_ModuleImportsNoNetworkPackage(t *testing.T) {
+// TestNoNetwork_OnlySpacenetImportsNetwork is the option-B static proof: over
+// every package of the module (its imports and its test imports), only
+// internal/spacenet imports net, net/* or crypto/tls.
+func TestNoNetwork_OnlySpacenetImportsNetwork(t *testing.T) {
 	out := goList(t, "-f", `{{.ImportPath}}|{{join .Imports ","}},{{join .TestImports ","}},{{join .XTestImports ","}}`, "./...")
+	sawSpacenet := false
 	for _, line := range out {
 		pkg, imports, _ := strings.Cut(line, "|")
+		if pkg == spacenetPkg {
+			sawSpacenet = true
+			continue // the one package allowed network imports
+		}
 		for _, imp := range strings.Split(imports, ",") {
-			if isNetworkPackage(imp) {
-				t.Errorf("module package %s imports %s", pkg, imp)
+			if isNet(imp) {
+				t.Errorf("package %s imports network package %s (only %s may)", pkg, imp, spacenetPkg)
 			}
 		}
 	}
-}
-
-// staticTargets are the GOOS/GOARCH pairs the static checks build: the
-// release's Windows and Linux, and macOS's (M1a).
-var staticTargets = []struct{ goos, goarch string }{
-	{"windows", "amd64"}, {"linux", "amd64"}, {"darwin", "amd64"}, {"darwin", "arm64"},
-}
-
-// §4 check 1: the binary's dependency graph, for every platform.
-func TestNoNetwork_BinaryDependencyGraph(t *testing.T) {
-	for _, tg := range staticTargets {
-		goos := tg.goos + "/" + tg.goarch
-		cmd := exec.Command("go", "list", "-deps", "./cmd/rosmarops")
-		cmd.Dir = repoRoot(t)
-		cmd.Env = append(os.Environ(), "GOOS="+tg.goos, "GOARCH="+tg.goarch)
-		out, err := cmd.Output()
-		if err != nil {
-			t.Fatalf("go list -deps (%s): %v", goos, err)
-		}
-		n := 0
-		for _, pkg := range strings.Fields(string(out)) {
-			n++
-			if inBinaryGraph(pkg) {
-				t.Errorf("GOOS=%s: the binary depends on %s", goos, pkg)
-			}
-		}
-		if n < 10 {
-			t.Fatalf("GOOS=%s: go list -deps listed %d packages", goos, n)
-		}
+	if !sawSpacenet {
+		t.Fatalf("internal/spacenet not found in go list; the allowance check is miscalibrated")
 	}
 }
 
-// §4 check 2: the symbols of the binary, built here for Windows and for
-// Linux as the release builds it, and for macOS.
-func TestNoNetwork_BinarySymbols(t *testing.T) {
-	for _, tg := range staticTargets {
-		goos := tg.goos + "/" + tg.goarch
-		bin := filepath.Join(t.TempDir(), "rosmarops-"+tg.goos+"-"+tg.goarch)
-		build := exec.Command("go", "build", "-trimpath", "-o", bin, "./cmd/rosmarops")
-		build.Dir = repoRoot(t)
-		build.Env = append(os.Environ(), "GOOS="+tg.goos, "GOARCH="+tg.goarch, "CGO_ENABLED=0")
-		if out, err := build.CombinedOutput(); err != nil {
-			t.Fatalf("build (%s): %v\n%s", goos, err, out)
-		}
-		out, err := exec.Command("go", "tool", "nm", bin).Output()
-		if err != nil {
-			t.Fatalf("go tool nm (%s): %v", goos, err)
-		}
-		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-		if len(lines) < 1000 {
-			t.Fatalf("GOOS=%s: nm listed %d symbols", goos, len(lines))
-		}
-		for _, l := range lines {
-			f := strings.Fields(l)
-			if len(f) >= 3 && forbiddenSymbol(f[len(f)-1]) {
-				t.Errorf("GOOS=%s: the binary has %s", goos, f[len(f)-1])
-			}
-		}
-	}
-}
-
-// §4 check 3: no code of the module refers to a socket call of syscall or
-// golang.org/x/sys, whatever name it imports them under.
+// TestNoNetwork_NoDirectSocketCalls: no code of the module refers to a socket
+// call of syscall or golang.org/x/sys directly (internal/spacenet reaches the
+// network only through net, which opens its own sockets).
 func TestNoNetwork_NoDirectSocketCalls(t *testing.T) {
 	root := repoRoot(t)
 	files := 0
@@ -208,21 +134,16 @@ func TestNoNetwork_NoDirectSocketCalls(t *testing.T) {
 	}
 }
 
-// The checks above catch what they are meant to.
+// The helpers catch what they are meant to.
 func TestNoNetwork_ChecksCatch(t *testing.T) {
-	for _, s := range []string{"net.Dial", "net/http.Get", "net/netip.ParseAddr", "crypto/tls.Client", "syscall.Socket", "syscall.Connect", "syscall.Sendto"} {
-		if !forbiddenSymbol(s) {
-			t.Errorf("%s not forbidden", s)
+	for _, p := range []string{"net", "net/http", "net/http/httptest", "net/url", "net/netip", "crypto/tls"} {
+		if !isNet(p) {
+			t.Errorf("isNet(%q) = false, want true", p)
 		}
 	}
-	for _, s := range []string{"internal/poll.InitWSA", "syscall.WSAStartup", "netbuf.x", "os.Open", "syscall.Socketpair"} {
-		if forbiddenSymbol(s) {
-			t.Errorf("%s forbidden", s)
-		}
-	}
-	for _, p := range []string{"net", "net/url", "net/netip", "crypto/tls"} {
-		if !inBinaryGraph(p) {
-			t.Errorf("%s allowed in the graph", p)
+	for _, p := range []string{"crypto/rand", "os", "internal/spacenet", "encoding/json", "nettest"} {
+		if isNet(p) {
+			t.Errorf("isNet(%q) = true, want false", p)
 		}
 	}
 }
