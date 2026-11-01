@@ -32,7 +32,8 @@ The owner uses Claude Code to build this project. Claude Code itself is therefor
 
 These cannot be violated by any code you write. They are the product.
 
-1. **No outbound network.** Do not import `net/http` client packages, `net.Dial`, `net.Listen` (except localhost-only in v0.4+, which is out of scope now), or anything that opens a socket. If a check seems to require network, stop and ask the human owner.
+<!-- Albert signed the connected-space change (CTO-13, the nine points, one program) on 2026-11-01 at 11:51; this replaces the former "no outbound network" invariant. -->
+1. **Network only in `internal/spacenet`, only with permission.** No package except `internal/spacenet` imports `net`, `net/*` or `crypto/tls`, or opens a socket. `internal/spacenet` may only use HTTPS to the fixed host `app.rosmarops.com` (port 443, standard TLS verification, no redirects, no other host except an `HTTPS_PROXY` tunnel to that host); only after the person's permission is recorded in the state; only to connect this computer, send locked results packages of this computer, and disconnect; never anything in clear. Any other network use: stop and ask the human owner.
 
 2. **No writes outside scope.** Only three write targets allowed:
    - `~/.rosmarops/state.json`

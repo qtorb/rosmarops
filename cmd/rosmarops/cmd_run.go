@@ -92,10 +92,6 @@ type runMode struct {
 	unattended bool
 	window     bool
 	log        *deferredLog
-	// onPackage, when set, is called with the closed package's path once this
-	// run has written it (BV-131, H4: the double click then opens Explorer with
-	// that file selected). It is not called when no package was written.
-	onPackage func(path string)
 }
 
 // runWith is a run; it returns report.html's path.
@@ -200,6 +196,17 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	reportDir := cfg.ReportDirectory
 	if reportDir == "" {
 		reportDir = defaultDir
+	}
+
+	// The connect window (CTO-15 PR5, invariant 8): only on the double click,
+	// and only AFTER the integrity check above — never before a connection. On
+	// Windows, when this computer is not connected, it offers to connect so a
+	// fresh connection sends this run's results. A no-op off Windows and for
+	// the `run` command (m.window is false there).
+	if m.window {
+		if storePath, perr := kit.StorePath(); perr == nil {
+			connectWindowHook(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat)
+		}
 	}
 	// Invariant §6: every scanner and subprocess runs under the global cap,
 	// which counts from after the integrity questions: the time a person
@@ -664,18 +671,46 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	slog.Info("report: launcher rules counted as unrestricted shell", "count", len(launcherRules), "rules", launcherRules)
 	slog.Info("report: v2", "status", v2.Status, "findings", len(v2.Findings), "today", v2.Today.FindingID, "action", v2.Today.ActionID)
 
-	// Closed package for the customer area (BV-119, AP-17 §2): only when a
-	// kit is present on this computer and a graph was built. The package name
-	// is set on the report before the HTML is written, so the «Your space»
-	// section names the file this run writes; without a kit nothing is
-	// written and the report is identical to before.
+	// Closed package for the connected space (BV-119/BV-137 points 6–7):
+	// sealed only when a kit is present and a graph was built, then sent if
+	// this computer is connected. Both happen before the report is written, so
+	// the «Your space» section reflects this run (sent today, or pending).
 	pkgNow := time.Now()
 	stored, kitErr := loadKitIfPresent()
 	if kitErr != nil {
 		slog.Warn("results package skipped: kit could not be read", "err", kitErr)
 	}
+	var currentPkg string
 	if stored != nil && built != nil {
-		v2.SpacePackageFile = report.ResultsFileName(pkgNow, built.Provenance.HostID)
+		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
+			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
+		if err != nil {
+			return "", fmt.Errorf("results package: %w", err)
+		}
+		if pkgPath != "" {
+			currentPkg = pkgPath
+			slog.Info("results package written", "path", pkgPath)
+		}
+	}
+
+	// Send to the connected space (point 6): pending first, then this run's
+	// package. Never fails the run — offline leaves it for next time, a 401
+	// forgets the space. Then set the «Your space» section (point 7).
+	if storePath, perr := kit.StorePath(); perr == nil {
+		sp := spacePaths{store: storePath, state: stPath, reports: reportDir}
+		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
+		spaceSend(sendCtx, sp, currentPkg, pkgNow)
+		cancelSend()
+		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401
+		// during the send forgets both, and then the section is not shown.
+		if isSpaceConnected(sp) {
+			v2.SpaceConnected = true
+			// This run's package: sent (with this send's date), refused, or
+			// still pending (CTO-15 PR5).
+			v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
+		}
+	} else {
+		slog.Warn("space send skipped: kit path", "err", perr)
 	}
 
 	// Write report files.
@@ -702,20 +737,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
 
-	// Seal and write the closed package now the report is written (its name
-	// was reserved above for the «Your space» section).
-	if stored != nil {
-		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
-			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
-		if err != nil {
-			return "", fmt.Errorf("results package: %w", err)
-		}
-		if pkgPath != "" {
-			slog.Info("results package written", "path", pkgPath)
-			if m.onPackage != nil {
-				m.onPackage(pkgPath)
-			}
-		}
+	// Re-read the space permission from disk before saving the run's own
+	// fields (CTO-15 PR2): spaceSend's 401 wipe, or a reverted connect, may
+	// have changed it while this run held an older copy. runWith owns the
+	// status and the baselines; the permission belongs to the space paths, so
+	// take its latest value — a 401 during the run must end "not connected".
+	if cur, curErr := state.LoadState(stPath); curErr == nil {
+		st.SpacePermission = cur.SpacePermission
 	}
 
 	// Update state with the run's status (the highest of v1 and v2).
@@ -909,6 +937,11 @@ func loadKitIfPresent() (*kit.Stored, error) {
 	if err != nil {
 		return nil, err
 	}
+	return loadKitFrom(path)
+}
+
+// loadKitFrom reads the kit at an explicit path; a missing file is (nil, nil).
+func loadKitFrom(path string) (*kit.Stored, error) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

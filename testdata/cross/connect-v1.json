@@ -1,0 +1,22 @@
+{
+  "description": "RosmarOps connect protocol v1 shared test vector (CTO-14 E1). The program (Go) and the area (rosmarops-app) each reproduce it and must agree. Test values only; no worth outside the tests.",
+  "v": 1,
+  "e_p_private": "o0zBEGo_gb33Kcw3lnpghLKcioOWjWICSB-6FHgqt98",
+  "e_p_public": "LBd9WH2nGYcEOai8mTkKpJCUBfNuRugRzK_uot3TtVo",
+  "e_b_private": "CRxMaVH1Da1JvuXNv_QKoOeWxI9Yw4zI1GkaxcEO2P0",
+  "e_b_public": "cxUnlHuj0GiQjg6gOALtW_wJaHPK0OBz-FJ6baI_Tgs",
+  "pickup_secret": "y7HwJpZUC5bwiWNNUqPpYYUJY-qG8WpNbP9jWysL4Ko",
+  "connect_id": "a000455d4b6b222ed08483f24929a9af",
+  "host_id": "host_7cef3935999134e5",
+  "key": "XT2uWYQD6qEoaf3a0TlKQ911wGwT2qzsV1DKs5Qm8zo",
+  "salt": "yTPka1ltguFTsXuYJLQOxD_fjVMgOeu5OUyVvIne9RY",
+  "kit_id": "17e5185208057a93a3018c1f9482dfbc",
+  "key_id": "6f5d026ed1c5a9489483026b9287a738",
+  "number": 58,
+  "n_sealed_nonce": "NF2AOOTIgxPt15Y2",
+  "n_sealed": "NF2AOOTIgxPt15Y2_v9an_EnIfTiGFSX-S5Ec6s",
+  "result_nonce": "PlBoQ-Yl1WS9uwZ3",
+  "device_credential": "eYeiHjSn4NhikxIflIDxMUWnJVQtZK0GJJw_kKYyj1g",
+  "additional_data": "rosmarops-connect-v1|a000455d4b6b222ed08483f24929a9af|LBd9WH2nGYcEOai8mTkKpJCUBfNuRugRzK_uot3TtVo|cxUnlHuj0GiQjg6gOALtW_wJaHPK0OBz-FJ6baI_Tgs|host_7cef3935999134e5",
+  "ciphertext": "hMcar8fBDQpCnjmxAJPyVCTpgNsHet2rMqm6DRsC_dRNUM-MgxGeJTYyIJ9MhcS-AiqNlbBIYCx7LNo07hF_7aamStBTLtcIllszvO4nLDNmV1NCT90S2AKJd1XmtdOvrZyiBc5PD2rB_YieXHi3IZA"
+}
