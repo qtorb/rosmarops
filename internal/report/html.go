@@ -311,8 +311,15 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><style>%s</style></head><body><main>`,
 		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS())
 
-	// §1.1 Header.
-	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t("html.header", map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
+	// §1.1 Header. On a run that actually sent this review's package (and any
+	// pending one), the promise line says so; otherwise — no permission, or a
+	// pending or rejected send — it keeps the «sent nothing» line (BV-142). The
+	// text follows the real send result, not the permission.
+	headerKey := "html.header"
+	if c.v.SpaceSentDate != "" {
+		headerKey = "html.header_sent"
+	}
+	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t(headerKey, map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
 
 	// §2 The flow: 1 → 2 → 3, all three as direct children of a single
 	// `.flow` grid, so the three columns start at the same height (BV-141;
@@ -1303,7 +1310,7 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 // the unknown.* of the technical details and the memory's codes.
 func HTMLKeys() []string {
 	keys := []string{
-		"html.doc_title", "html.header", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
+		"html.doc_title", "html.header", "html.header_sent", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.delta", "html.index.not_comparable.rules",
 		"html.index.not_comparable.scope", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",

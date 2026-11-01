@@ -23,7 +23,7 @@ import (
 // messages/en.json both ways.
 var staticKeys = []string{
 	"report.status.green", "report.status.yellow", "report.status.red",
-	"report.scope", "report.coverage_gap",
+	"report.scope", "report.scope_sent", "report.coverage_gap",
 	"section.today", "section.findings", "section.posture", "section.coverage", "section.legacy",
 	"today.nothing_urgent", "today.why_this", "today.what_remains", "today.verify",
 	"radius.any_project", "radius.same_project",
@@ -168,7 +168,14 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		gaps++
 	}
 	w("%s %s\n\n", statusEmoji(v.Status), t("report.status."+v.Status, nil))
-	scope := t("report.scope", map[string]string{
+	// The scope line's promise follows the real send result of this run
+	// (BV-142): «sent only your encrypted results» when this review's package
+	// (and any pending one) was sent; otherwise the «sent nothing» line.
+	scopeKey := "report.scope"
+	if v.SpaceSentDate != "" {
+		scopeKey = "report.scope_sent"
+	}
+	scope := t(scopeKey, map[string]string{
 		"time":    local.Format("2006-01-02 15:04 MST"),
 		"sources": strconv.Itoa(v.Coverage.SourcesRead),
 		"repos":   strconv.Itoa(v.repos),
