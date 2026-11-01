@@ -57,7 +57,9 @@ jobs:
       - name: go test (trust tests included)
         run: go test -count=1 ./...
       - name: go test -race (schemaval differential oracle, BV-133)
-        run: go test -race -count=1 ./internal/schemaval/
+        # The exhaustive BrokenFixtures pass under -race runs ~10 min, past go
+        # test's default 10m timeout, so give the race gate room to finish.
+        run: go test -race -count=1 -timeout 30m ./internal/schemaval/
 
   verify-windows:
     runs-on: windows-latest
