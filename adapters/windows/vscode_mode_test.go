@@ -26,7 +26,9 @@ func TestListClaudeSettings_VSCodeInitialPermissionMode(t *testing.T) {
 	}{
 		{"set", `{"editor.fontSize": 14, "claudeCode.initialPermissionMode": "bypassPermissions"}`, "bypassPermissions", false},
 		{"unset", `{"editor.fontSize": 14}`, "", false},
-		{"comments", "{\n  // VS Code allows comments\n  \"claudeCode.initialPermissionMode\": \"acceptEdits\"\n}", "", true},
+		// BV-140 (CTO-16): VS Code's settings.json is read as JSONC, so a file
+		// with comments is read, not sent to coverage as parse_error.
+		{"comments", "{\n  // VS Code allows comments\n  \"claudeCode.initialPermissionMode\": \"acceptEdits\",\n}", "acceptEdits", false},
 	}
 	for _, c := range cases {
 		writeFile(t, settings, c.content)

@@ -87,6 +87,27 @@ func TestReadMCPFile_ServersUnchangedForV1(t *testing.T) {
 	}
 }
 
+// BV-140 (CTO-16): a server with "disabled": true is not loaded, so it never
+// becomes a server node. Before, a disabled Antigravity server counted as
+// loaded, claiming more than is true. (Antigravity case C.)
+func TestReadMCPFile_SkipsDisabled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp_config.json")
+	writeFile(t, path, `{"mcpServers": {
+  "api": {"serverUrl": "https://api.example.com/mcp/", "headers": {"Authorization": "Bearer abcd1234efgh5678"}},
+  "off": {"command": "node", "args": ["x.js"], "disabled": true}
+}}`)
+	servers, src := windows.ReadMCPFile(path, "antigravity", true)
+	if src.Status != platform.MCPSourceRead {
+		t.Fatalf("status: got %q", src.Status)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("got %d servers, want 1 (the disabled one is skipped)", len(servers))
+	}
+	if servers[0].Name != "api" {
+		t.Errorf("remaining server: got %q, want api", servers[0].Name)
+	}
+}
+
 func TestListMCPServers_ReportsEverySource(t *testing.T) {
 	home := t.TempDir()
 	repo := t.TempDir()
