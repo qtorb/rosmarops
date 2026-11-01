@@ -455,14 +455,17 @@ func (c htmlCtx) stepHead(n int, tag, id, title, hint string, arrow bool) {
 // URL is the exact https://app.rosmarops.com/upload, the one the trust test
 // allows.
 func (c htmlCtx) renderYourSpace() {
-	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
+	// BV-132: only on a computer that already uses the online space — i.e.
+	// when this run wrote a closed package (SpacePackageFile set). Without a
+	// key the section is not shown and the report is as it was before (the
+	// online space is a private beta, by invitation; v0.6.2).
 	if c.v.SpacePackageFile == "" {
-		c.w(`<p>%s</p>`, c.t("report.space_no_kit", nil))
-	} else {
-		c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/upload">%s</a>`,
-			c.t("report.space_p", map[string]string{"file": c.v.SpacePackageFile}),
-			c.t("report.space_button", nil))
+		return
 	}
+	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
+	c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/upload">%s</a>`,
+		c.t("report.space_p", map[string]string{"file": c.v.SpacePackageFile}),
+		c.t("report.space_button", nil))
 	c.w(`</section>`)
 }
 
@@ -1350,8 +1353,9 @@ func HTMLKeys() []string {
 	keys = append(keys, overviewKeys()...)
 	// BV-121: the agents_overview services list (§11).
 	keys = append(keys, "report.services_h", "report.services_none")
-	// BV-119: the «Your space» section (AP-17 §2).
-	keys = append(keys, "report.space_h2", "report.space_p", "report.space_button", "report.space_no_kit")
+	// BV-119: the «Your space» section (AP-17 §2); BV-132: shown only with a
+	// key, so report.space_no_kit is gone.
+	keys = append(keys, "report.space_h2", "report.space_p", "report.space_button")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {

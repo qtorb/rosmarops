@@ -436,7 +436,6 @@
   "report.services_none": "No hay servicios conectados que puedan actuar por ti.",
   "report.space_button": "Abrir tu espacio",
   "report.space_h2": "Tu espacio",
-  "report.space_no_kit": "Para ver todos tus ordenadores juntos, crea primero tu clave: ejecuta «rosmarops kit create» en un terminal.",
   "report.space_p": "Arrastra este fichero a tu espacio: {file}. Está cerrado con tu clave: nosotros no podemos leerlo.",
   "space.change_fixed": "Se arregló un problema desde la revisión anterior.",
   "category.money": "Pagos",
