@@ -28,9 +28,16 @@ type State struct {
 	// fingerprints and host_id and must never leave the device.
 	LocalSalt string `json:"local_salt"`
 
-	ConsecutiveGreen int       `json:"consecutive_green"`
-	Integrity        Integrity `json:"integrity"`
-	Baselines        Baselines `json:"baselines"`
+	ConsecutiveGreen int `json:"consecutive_green"`
+
+	// SpacePermission records that the person approved connecting this
+	// computer to their online space (BV-137). It is the only thing the state
+	// keeps about the space: the key and the send credential live in the kit
+	// DPAPI blob, never here. No connection happens unless this is true.
+	SpacePermission bool `json:"space_permission,omitempty"`
+
+	Integrity Integrity `json:"integrity"`
+	Baselines Baselines `json:"baselines"`
 }
 
 // Integrity holds hashes used for the self-integrity check on startup.

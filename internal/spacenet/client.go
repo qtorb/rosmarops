@@ -35,8 +35,14 @@ const RequestTimeout = 30 * time.Second
 // fixed host (or, under a proxy, that proxy).
 var ErrDisallowedHost = errors.New("spacenet: only HTTPS to " + Host + " is allowed")
 
+// baseURL is the scheme+host the requests are built against. In production it
+// is https://app.rosmarops.com (the fixed host); tests point it at a local
+// server. It never changes what Client()'s dialer allows, so production is
+// unaffected.
+var baseURL = "https://" + Host
+
 // URL is the absolute URL of path (which starts with "/") on the fixed host.
-func URL(path string) string { return "https://" + Host + path }
+func URL(path string) string { return baseURL + path }
 
 // fixedURL resolves the environment proxy for requests to the fixed host.
 var fixedURL = &url.URL{Scheme: "https", Host: Host}

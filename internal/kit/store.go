@@ -16,15 +16,22 @@ type Stored struct {
 	KitID  string
 	Secret Secret
 	Code   Envelope
+	// SpaceCredential is this computer's send credential for the connected
+	// space (BV-137): kept in the same DPAPI blob as the key, never in the
+	// clear and never in the state. Empty when the computer is not connected
+	// or the kit came from a plain `rosmarops kit import`.
+	SpaceCredential []byte
 }
 
-// record is Stored as JSON, before the platform protection.
+// record is Stored as JSON, before the platform protection. Version 2 adds
+// space_credential (BV-137); a version-1 file (no credential) still loads.
 type record struct {
-	Version int      `json:"version"`
-	KitID   string   `json:"kit_id"`
-	Key     string   `json:"key"`
-	Salt    string   `json:"salt"`
-	Code    Envelope `json:"recovery_code_envelope"`
+	Version         int      `json:"version"`
+	KitID           string   `json:"kit_id"`
+	Key             string   `json:"key"`
+	Salt            string   `json:"salt"`
+	Code            Envelope `json:"recovery_code_envelope"`
+	SpaceCredential string   `json:"space_credential,omitempty"`
 }
 
 // StorePath is the kit key file: ~/.rosmarops/kit.dpapi on Windows,
@@ -68,7 +75,11 @@ func FromFile(f File, sec Secret) (Stored, error) {
 // file in the same folder, fsync, rename.
 func Save(path string, s Stored) error {
 	b64 := base64.StdEncoding.EncodeToString
-	plain, err := json.Marshal(record{Version: 1, KitID: s.KitID, Key: b64(s.Secret.Key), Salt: b64(s.Secret.Salt), Code: s.Code})
+	rec := record{Version: 2, KitID: s.KitID, Key: b64(s.Secret.Key), Salt: b64(s.Secret.Salt), Code: s.Code}
+	if len(s.SpaceCredential) > 0 {
+		rec.SpaceCredential = b64(s.SpaceCredential)
+	}
+	plain, err := json.Marshal(rec)
 	if err != nil {
 		return fmt.Errorf("encode kit key file: %w", err)
 	}
@@ -120,8 +131,8 @@ func Load(path string) (Stored, error) {
 		return Stored{}, fmt.Errorf("unprotect kit key file: %w", err)
 	}
 	var r record
-	if err := json.Unmarshal(plain, &r); err != nil || r.Version != 1 {
-		return Stored{}, fmt.Errorf("kit key file %s is not a version 1 record", path)
+	if err := json.Unmarshal(plain, &r); err != nil || (r.Version != 1 && r.Version != 2) {
+		return Stored{}, fmt.Errorf("kit key file %s is not a version 1 or 2 record", path)
 	}
 	dec := base64.StdEncoding.DecodeString
 	key, err1 := dec(r.Key)
@@ -129,5 +140,13 @@ func Load(path string) (Stored, error) {
 	if err1 != nil || err2 != nil || len(key) != KeySize || len(salt) != SaltSize || len(r.KitID) != 32 {
 		return Stored{}, fmt.Errorf("kit key file %s is malformed", path)
 	}
-	return Stored{KitID: r.KitID, Secret: Secret{Key: key, Salt: salt}, Code: r.Code}, nil
+	st := Stored{KitID: r.KitID, Secret: Secret{Key: key, Salt: salt}, Code: r.Code}
+	if r.SpaceCredential != "" {
+		cred, err := dec(r.SpaceCredential)
+		if err != nil {
+			return Stored{}, fmt.Errorf("kit key file %s has a malformed space credential", path)
+		}
+		st.SpaceCredential = cred
+	}
+	return st, nil
 }
