@@ -24,6 +24,56 @@ func withProxy(t *testing.T, proxyURL string) {
 	}
 }
 
+// recordRT is a base RoundTripper that only records whether it was reached.
+type recordRT struct{ reached bool }
+
+func (rt *recordRT) RoundTrip(*http.Request) (*http.Response, error) {
+	rt.reached = true
+	return &http.Response{StatusCode: 200, Body: http.NoBody}, nil
+}
+
+// The host-pinning RoundTripper (CTO-14 P4) lets only HTTPS to the exact Host
+// through to the base transport; everything else is refused before any dial,
+// which closes the proxy-CONNECT hole a repointed baseURL would otherwise open.
+func TestFixedHostRoundTripper(t *testing.T) {
+	for _, raw := range []string{
+		"http://app.rosmarops.com/api/v1/connect/start", // not https
+		"https://evil.example/api/v1/connect/start",     // wrong host
+		"https://app.rosmarops.com.evil.example/x",      // suffix trick
+		"https://127.0.0.1:8443/x",                      // a repointed baseURL target
+	} {
+		base := &recordRT{}
+		rt := fixedHostRoundTripper{base: base}
+		req, err := http.NewRequest(http.MethodGet, raw, nil)
+		if err != nil {
+			t.Fatalf("new request %q: %v", raw, err)
+		}
+		if _, err := rt.RoundTrip(req); err == nil {
+			t.Errorf("RoundTrip(%q) = nil error, want refusal", raw)
+		}
+		if base.reached {
+			t.Errorf("RoundTrip(%q) reached the base transport, must be refused first", raw)
+		}
+	}
+	base := &recordRT{}
+	rt := fixedHostRoundTripper{base: base}
+	req, _ := http.NewRequest(http.MethodGet, "https://app.rosmarops.com/api/v1/connect/start", nil)
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip(fixed host) = %v, want nil", err)
+	}
+	if !base.reached {
+		t.Error("a request to the fixed host must reach the base transport")
+	}
+}
+
+// The production base URL is the fixed host and is a compile-time constant
+// (CTO-14 P4): the var only exists as a test seam.
+func TestProdBaseURLConstant(t *testing.T) {
+	if prodBaseURL != "https://app.rosmarops.com" {
+		t.Errorf("prodBaseURL = %q", prodBaseURL)
+	}
+}
+
 func TestFixedHostConstants(t *testing.T) {
 	if Host != "app.rosmarops.com" {
 		t.Errorf("Host = %q", Host)
@@ -44,9 +94,13 @@ func TestClientHardening(t *testing.T) {
 	if c.CheckRedirect == nil || c.CheckRedirect(nil, nil) == nil {
 		t.Error("redirects must be refused")
 	}
-	tr, ok := c.Transport.(*http.Transport)
+	wrapped, ok := c.Transport.(fixedHostRoundTripper)
 	if !ok {
-		t.Fatalf("transport is %T", c.Transport)
+		t.Fatalf("transport is %T, want fixedHostRoundTripper", c.Transport)
+	}
+	tr, ok := wrapped.base.(*http.Transport)
+	if !ok {
+		t.Fatalf("wrapped transport is %T", wrapped.base)
 	}
 	if tr.TLSClientConfig == nil || tr.TLSClientConfig.MinVersion != tls.VersionTLS12 {
 		t.Error("TLS minimum must be 1.2")

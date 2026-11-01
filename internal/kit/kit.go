@@ -68,6 +68,7 @@ var MessageKeys = []string{
 	"kit.import_prompt", "kit.import_wrong", "kit.imported", "kit.new_phrase_done", "kit.new_phrase_intro", "kit.no_kit",
 	"kit.phrase_again", "kit.phrase_generated", "kit.phrase_mismatch", "kit.phrase_prompt", "kit.phrase_too_short",
 	"kit.recovery_check", "kit.recovery_check_failed", "kit.recovery_code", "kit.saved",
+	"kit.space_connected",
 }
 
 // ErrWrongSecret is the phrase or code that does not open a kit file.

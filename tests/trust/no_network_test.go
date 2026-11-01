@@ -22,6 +22,8 @@ package trust_test
 
 import (
 	"bufio"
+	cryptorand "crypto/rand"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -33,10 +35,23 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/kit"
 )
 
 // spacenetPkg is the one package allowed to import the network (invariant 1).
 const spacenetPkg = "github.com/qtorb/rosmarops/internal/spacenet"
+
+// staticTargets are the systems the static checks run for (CTO-14 P1): Windows
+// is the main target, so a windows-only file that imports the network must not
+// slip past a host-only (linux) check. go list reads imports per GOOS/GOARCH
+// without compiling.
+var staticTargets = []struct{ goos, goarch string }{
+	{"windows", "amd64"},
+	{"darwin", "arm64"},
+	{"darwin", "amd64"},
+	{"linux", "amd64"},
+}
 
 // isNet reports a package the invariant confines to internal/spacenet: net,
 // any net/* (net/http, net/url, net/netip, …), and crypto/tls.
@@ -52,26 +67,65 @@ var socketCalls = map[string]map[string]bool{
 	"golang.org/x/sys/windows": {"Socket": true, "Connect": true, "Sendto": true, "WSASocket": true, "WSAConnect": true, "WSASendto": true, "WSASendTo": true},
 }
 
-// TestNoNetwork_OnlySpacenetImportsNetwork is the option-B static proof: over
-// every package of the module (its imports and its test imports), only
-// internal/spacenet imports net, net/* or crypto/tls.
+// TestNoNetwork_OnlySpacenetImportsNetwork is the option-B static proof, run
+// for every static target (CTO-14 P1): over every package of the module (its
+// imports and its test imports), only internal/spacenet imports net, net/* or
+// crypto/tls.
 func TestNoNetwork_OnlySpacenetImportsNetwork(t *testing.T) {
-	out := goList(t, "-f", `{{.ImportPath}}|{{join .Imports ","}},{{join .TestImports ","}},{{join .XTestImports ","}}`, "./...")
-	sawSpacenet := false
-	for _, line := range out {
-		pkg, imports, _ := strings.Cut(line, "|")
-		if pkg == spacenetPkg {
-			sawSpacenet = true
-			continue // the one package allowed network imports
-		}
-		for _, imp := range strings.Split(imports, ",") {
-			if isNet(imp) {
-				t.Errorf("package %s imports network package %s (only %s may)", pkg, imp, spacenetPkg)
+	for _, tgt := range staticTargets {
+		t.Run(tgt.goos+"/"+tgt.goarch, func(t *testing.T) {
+			out := goListFor(t, tgt.goos, tgt.goarch, "-f", `{{.ImportPath}}|{{join .Imports ","}},{{join .TestImports ","}},{{join .XTestImports ","}}`, "./...")
+			sawSpacenet := false
+			for _, line := range out {
+				pkg, imports, _ := strings.Cut(line, "|")
+				if pkg == spacenetPkg {
+					sawSpacenet = true
+					continue // the one package allowed network imports
+				}
+				for _, imp := range strings.Split(imports, ",") {
+					if isNet(imp) {
+						t.Errorf("package %s imports network package %s (only %s may)", pkg, imp, spacenetPkg)
+					}
+				}
 			}
-		}
+			if !sawSpacenet {
+				t.Fatalf("internal/spacenet not found in go list; the allowance check is miscalibrated")
+			}
+		})
 	}
-	if !sawSpacenet {
-		t.Fatalf("internal/spacenet not found in go list; the allowance check is miscalibrated")
+}
+
+// TestNoNetwork_NetworkPackagesOnlyViaSpacenet is the recovered dependency-graph
+// proof (CTO-14 P2): for every static target, any package in the binary's full
+// dependency closure (go list -deps ./cmd/rosmarops) that imports net, net/* or
+// crypto/tls must also be in internal/spacenet's closure. So the network can
+// enter the binary only through spacenet — directly (P1) or through an indirect
+// dependency, standard (log/syslog) or external, that would otherwise go
+// unseen.
+func TestNoNetwork_NetworkPackagesOnlyViaSpacenet(t *testing.T) {
+	for _, tgt := range staticTargets {
+		t.Run(tgt.goos+"/"+tgt.goarch, func(t *testing.T) {
+			spacenetClosure := map[string]bool{}
+			for _, line := range goListFor(t, tgt.goos, tgt.goarch, "-deps", "-f", `{{.ImportPath}}`, "./internal/spacenet") {
+				spacenetClosure[line] = true
+			}
+			if !spacenetClosure[spacenetPkg] {
+				t.Fatalf("internal/spacenet not in its own -deps closure; the check is miscalibrated")
+			}
+			for _, line := range goListFor(t, tgt.goos, tgt.goarch, "-deps", "-f", `{{.ImportPath}}|{{join .Imports ","}}`, "./cmd/rosmarops") {
+				pkg, imports, _ := strings.Cut(line, "|")
+				importsNet := false
+				for _, imp := range strings.Split(imports, ",") {
+					if isNet(imp) {
+						importsNet = true
+						break
+					}
+				}
+				if importsNet && !spacenetClosure[pkg] {
+					t.Errorf("package %s is in the binary and imports the network but is not in internal/spacenet's closure (the network must enter only through %s)", pkg, spacenetPkg)
+				}
+			}
+		})
 	}
 }
 
@@ -196,14 +250,131 @@ func TestNoNetwork_RuntimeNoInetSockets(t *testing.T) {
 	}
 }
 
-// goList runs `go list` at the repository root and returns its output lines.
-func goList(t *testing.T, args ...string) []string {
+// TestNoNetwork_RuntimeNoInetSockets_ConnectedKit is the CTO-14 P3 strace
+// variant: with a kit and a send credential present on this computer but the
+// permission in the state set to false, the run still opens no inet socket.
+// spacenet refuses without a Permission from a state whose SpacePermission is
+// true, so no caller — now or once sending is wired — can reach the network
+// while the person has not approved it. It runs on Linux with strace only.
+func TestNoNetwork_RuntimeNoInetSockets_ConnectedKit(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("runtime network check is implemented for Linux")
+	}
+	strace, err := exec.LookPath("strace")
+	if err != nil {
+		t.Skip("strace not available: runtime network check not executed")
+	}
+	s := newSandbox(t)
+	// A full first run creates the config and state; the permission stays
+	// false (DefaultState never sets it).
+	s.runAll(t, nil)
+
+	// Seed a kit with a 32-byte send credential, as a connected computer
+	// would hold it — but leave the permission false.
+	salt := make([]byte, kit.SaltSize)
+	cryptoRead(t, salt)
+	sec, err := kit.NewSecret(salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kitID, err := kit.NewKitID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cred := make([]byte, 32)
+	cryptoRead(t, cred)
+	storePath := filepath.Join(s.home, ".rosmarops", "kit.key")
+	if err := kit.Save(storePath, kit.Stored{KitID: kitID, Secret: sec, SpaceCredential: cred}); err != nil {
+		t.Fatalf("seed kit with credential: %v", err)
+	}
+	assertStatePermissionFalse(t, filepath.Join(s.home, ".rosmarops", "state.json"))
+
+	// Run again, now with the credential present, under strace.
+	traceDir := t.TempDir()
+	traces := map[string]string{}
+	for _, step := range []string{"run", "unattended"} {
+		out := filepath.Join(traceDir, step+".strace")
+		args := []string{"run"}
+		if step == "unattended" {
+			args = []string{"run", "--unattended"}
+		}
+		argv := append([]string{strace, "-f", "-qq", "-Y", "-e", "trace=connect,sendto,sendmsg", "-o", out}, append([]string{s.binary}, args...)...)
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Dir = s.work
+		cmd.Env = s.env
+		_, _ = cmd.CombinedOutput() // a yellow/red run exits non-zero; the trace is what matters
+		traces[step] = out
+	}
+	assertNoInet(t, traces)
+}
+
+// assertStatePermissionFalse fails if the state file records space_permission
+// true (it must be false/absent for the P3 scenario to be meaningful).
+func assertStatePermissionFalse(t *testing.T, statePath string) {
+	t.Helper()
+	raw, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if strings.Contains(string(raw), `"space_permission": true`) {
+		t.Fatalf("state already has space_permission true; the P3 scenario needs it false:\n%s", raw)
+	}
+}
+
+// assertNoInet fails on any AF_INET/AF_INET6 socket call in the traces, and
+// logs AF_UNIX ones (as the main runtime test does).
+func assertNoInet(t *testing.T, traces map[string]string) {
+	t.Helper()
+	steps := make([]string, 0, len(traces))
+	for step := range traces {
+		steps = append(steps, step)
+	}
+	sort.Strings(steps)
+	for _, step := range steps {
+		f, err := os.Open(traces[step])
+		if err != nil {
+			t.Fatalf("open trace for %s: %v", step, err)
+		}
+		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 64*1024), 1024*1024)
+		for sc.Scan() {
+			line := sc.Text()
+			switch {
+			case strings.Contains(line, "AF_INET"):
+				t.Errorf("rosmarops %s (connected kit, no permission): inet socket call: %s", step, line)
+			case strings.Contains(line, "AF_UNIX"):
+				t.Logf("rosmarops %s: unix socket call: %s", step, line)
+			}
+		}
+		if err := sc.Err(); err != nil {
+			t.Fatalf("read trace for %s: %v", step, err)
+		}
+		_ = f.Close()
+	}
+}
+
+// cryptoRead fills b with random bytes or fails the test.
+func cryptoRead(t *testing.T, b []byte) {
+	t.Helper()
+	if _, err := cryptorand.Read(b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// goListFor runs `go list` at the repository root for the given GOOS/GOARCH and
+// returns its output lines.
+func goListFor(t *testing.T, goos, goarch string, args ...string) []string {
 	t.Helper()
 	cmd := exec.Command("go", append([]string{"list"}, args...)...)
 	cmd.Dir = repoRoot(t)
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch)
 	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("go list %v: %v", args, err)
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			t.Fatalf("go list (GOOS=%s GOARCH=%s) %v: %v\n%s", goos, goarch, args, err, ee.Stderr)
+		}
+		t.Fatalf("go list (GOOS=%s GOARCH=%s) %v: %v", goos, goarch, args, err)
 	}
 	var lines []string
 	for _, l := range strings.Split(strings.TrimSpace(string(out)), "\n") {

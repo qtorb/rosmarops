@@ -16,9 +16,19 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/state"
 )
+
+// testExpiry is a future expires_at for the test servers, always ahead of the
+// program's 10-minute poll cap so pollDeadline never trips on wall-clock time.
+func testExpiry() string { return time.Now().Add(15 * time.Minute).UTC().Format(time.RFC3339) }
+
+// grantedPermission is the non-exported test hook (CTO-14 P3): in-package tests
+// build a usable Permission pointed at the local server, without a real state.
+func grantedPermission(c *http.Client) Permission { return Permission{client: c} }
 
 func TestNumberRange(t *testing.T) {
 	for i := 0; i < 2000; i++ {
@@ -97,7 +107,7 @@ func (s *connectServer) handler() http.Handler {
 		s.ep, s.hostID, s.connectID, s.polls = ep, req.HostID, hex.EncodeToString(cid), 0
 		s.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(startResponse{ConnectID: s.connectID, ExpiresAt: "2026-11-01T13:00:00Z"})
+		json.NewEncoder(w).Encode(startResponse{ConnectID: s.connectID, ExpiresAt: testExpiry()})
 	})
 	mux.HandleFunc("GET /api/v1/connect/{id}/result", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" {
@@ -191,11 +201,16 @@ func TestConnectProtocol(t *testing.T) {
 	const hostID = "host_0123456789abcdef"
 	var shownNumber int
 	var openedURL string
-	m, err := Connect(context.Background(), ts.Client(), hostID,
+	m, ack, err := Connect(context.Background(), grantedPermission(ts.Client()), hostID,
 		func(n int) { shownNumber = n },
 		func(u string) error { openedURL = u; return nil })
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
+	}
+	// P5: the material is returned before the ack. The caller stores it, then
+	// acks; the server must not have been acked until we call ack here.
+	if srv.acked {
+		t.Error("server was acked before the caller stored the material")
 	}
 	if shownNumber < 10 || shownNumber > 99 {
 		t.Errorf("shown number %d", shownNumber)
@@ -212,8 +227,11 @@ func TestConnectProtocol(t *testing.T) {
 	if !hmac.Equal(m.Credential, cred) {
 		t.Error("credential differs")
 	}
+	if err := ack(context.Background()); err != nil {
+		t.Fatalf("ack: %v", err)
+	}
 	if !srv.acked {
-		t.Error("program did not ack")
+		t.Error("program did not ack after the caller stored the material")
 	}
 	if srv.polls < 2 {
 		t.Errorf("expected the program to poll at least twice (one pending), got %d", srv.polls)
@@ -229,7 +247,7 @@ func TestConnectCancelled(t *testing.T) {
 		rand.Read(b)
 		cid = hex.EncodeToString(b)
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(startResponse{ConnectID: cid, ExpiresAt: "2026-11-01T13:00:00Z"})
+		json.NewEncoder(w).Encode(startResponse{ConnectID: cid, ExpiresAt: testExpiry()})
 	})
 	mux.HandleFunc("GET /api/v1/connect/{id}/result", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"cancelled"}`, http.StatusGone)
@@ -239,9 +257,25 @@ func TestConnectCancelled(t *testing.T) {
 	origBase := baseURL
 	baseURL = ts.URL
 	t.Cleanup(func() { baseURL = origBase })
-	_, err := Connect(context.Background(), ts.Client(), "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
+	_, _, err := Connect(context.Background(), grantedPermission(ts.Client()), "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
 	if err != ErrConnectCancelled {
 		t.Fatalf("err = %v, want ErrConnectCancelled", err)
+	}
+}
+
+// Without the person's permission, Connect refuses before any network: the
+// zero Permission (and FromState of a state with SpacePermission false) is
+// unusable (CTO-14 P3).
+func TestConnectRequiresPermission(t *testing.T) {
+	_, _, err := Connect(context.Background(), Permission{}, "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
+	if err != ErrNoPermission {
+		t.Fatalf("zero Permission: err = %v, want ErrNoPermission", err)
+	}
+	if _, err := FromState(state.State{SpacePermission: false}); err != ErrNoPermission {
+		t.Fatalf("FromState(false): err = %v, want ErrNoPermission", err)
+	}
+	if _, err := FromState(state.State{SpacePermission: true}); err != nil {
+		t.Fatalf("FromState(true): err = %v, want nil", err)
 	}
 }
 

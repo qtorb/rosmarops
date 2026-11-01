@@ -106,6 +106,22 @@ func (c *console) say(key string, params map[string]string) {
 	fmt.Fprintln(c.out, c.cat.Text(key, params))
 }
 
+// errSpaceConnected is returned (after the notice is printed) when a kit
+// command is refused because this computer is connected to a space (CTO-14 P6).
+var errSpaceConnected = errors.New("this computer is connected to a space; disconnect it first")
+
+// refuseIfConnected prints the connected notice and reports true when this
+// computer is connected to a space: kit create and import would drop the send
+// credential (and a new key would stop matching the account), so they are
+// refused until the person runs `rosmarops disconnect`.
+func (c *console) refuseIfConnected(st state.State) bool {
+	if st.SpacePermission {
+		c.say("kit.space_connected", nil)
+		return true
+	}
+	return false
+}
+
 // ask writes the text of key and reads one line, without its line ending. An
 // input that ends before a line is an error: nobody is there to answer.
 func (c *console) ask(key string) (string, error) {
@@ -219,12 +235,19 @@ func runKitCreate(inv cli.Invocation) error {
 }
 
 func kitCreate(c *console, paths kitPaths) error {
-	if _, err := os.Stat(paths.store); err == nil {
-		return fmt.Errorf("this computer already has a kit key: %s", paths.store)
-	}
 	st, err := state.LoadState(paths.state)
 	if err != nil {
 		return fmt.Errorf("load state (run rosmarops init first): %w", err)
+	}
+	// A connected computer would lose its send credential, and a new key
+	// would stop matching the account (CTO-14 P6): refuse until the person
+	// disconnects. Checked before the store-exists check so the person sees
+	// the connected notice, not "already has a kit key".
+	if c.refuseIfConnected(st) {
+		return errSpaceConnected
+	}
+	if _, err := os.Stat(paths.store); err == nil {
+		return fmt.Errorf("this computer already has a kit key: %s", paths.store)
 	}
 	salt, err := st.Salt()
 	if err != nil {
@@ -292,6 +315,11 @@ func kitImport(c *console, paths kitPaths, file string) error {
 	st, err := state.LoadState(paths.state)
 	if err != nil {
 		return fmt.Errorf("load state (run rosmarops init first): %w", err)
+	}
+	// A connected computer would lose its send credential on import (CTO-14
+	// P6): refuse until the person disconnects.
+	if c.refuseIfConnected(st) {
+		return errSpaceConnected
 	}
 	var sec kit.Secret
 	for {

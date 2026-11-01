@@ -53,6 +53,7 @@
   "kit.new_phrase_intro": "Set a new secret phrase. Your key doesn't change, so you keep all your history.",
   "kit.new_phrase_done": "New phrase set. Your old copies still open with your old phrase. Next, open your space from the report to get a new copy by email.",
   "kit.no_kit": "This computer has no key yet. Run: rosmarops kit create",
+  "kit.space_connected": "This computer is connected to your space. Disconnect it first with «rosmarops disconnect».",
   "completeness.full": "removes this exposure",
   "completeness.partial": "reduces this exposure; other ways remain",
   "completeness.radius_only": "narrows where it can be reached from; does not remove it",

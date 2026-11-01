@@ -406,6 +406,7 @@
   "html.weekly.pitch": "Programa una revisión cada viernes a las 09:00. Al terminar, Windows te avisa con una notificación; si las tienes desactivadas, se abre el informe en tu navegador.",
   "html.weekly.prompt": "Ejecuta exactamente este comando de PowerShell, sin cambiarlo y sin permisos de administrador. Si falla, para y enséñame el error.",
   "html.weekly.title": "Revisión semanal",
+  "kit.space_connected": "Este ordenador está conectado a tu espacio. Desconéctalo primero con «rosmarops disconnect».",
   "md.silenced.config": "Ocultos por tu configuración",
   "memory.counts": "Avisos desde la ejecución anterior — Nuevos: {new} · Siguen: {still} · Ya no se observan: {gone} · Vuelven a aparecer: {again}",
   "memory.mcp_changed": "El servidor MCP {name} ({agent}) apunta a otro sitio desde la ejecución anterior: ahora {destination}. Si no lo has cambiado tú, comprueba quién lo hizo.",
