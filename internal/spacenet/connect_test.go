@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -26,9 +27,12 @@ import (
 // program's 10-minute poll cap so pollDeadline never trips on wall-clock time.
 func testExpiry() string { return time.Now().Add(15 * time.Minute).UTC().Format(time.RFC3339) }
 
-// grantedPermission is the non-exported test hook (CTO-14 P3): in-package tests
-// build a usable Permission pointed at the local server, without a real state.
-func grantedPermission(c *http.Client) Permission { return Permission{client: c} }
+// grantedPermission is the non-exported test hook (CTO-14 P3, CTO-15 PR3):
+// in-package tests build a usable Permission pointed at a local server (client
+// and base), without a real state and without any package-level destination.
+func grantedPermission(c *http.Client, base string) Permission {
+	return Permission{client: c, base: base}
+}
 
 func TestNumberRange(t *testing.T) {
 	for i := 0; i < 2000; i++ {
@@ -194,14 +198,10 @@ func TestConnectProtocol(t *testing.T) {
 	ts := httptest.NewServer(srv.handler())
 	defer ts.Close()
 
-	origBase := baseURL
-	baseURL = ts.URL
-	t.Cleanup(func() { baseURL = origBase })
-
 	const hostID = "host_0123456789abcdef"
 	var shownNumber int
 	var openedURL string
-	m, ack, err := Connect(context.Background(), grantedPermission(ts.Client()), hostID,
+	m, ack, err := Connect(context.Background(), grantedPermission(ts.Client(), ts.URL), hostID,
 		func(n int) { shownNumber = n },
 		func(u string) error { openedURL = u; return nil })
 	if err != nil {
@@ -254,10 +254,7 @@ func TestConnectCancelled(t *testing.T) {
 	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
-	origBase := baseURL
-	baseURL = ts.URL
-	t.Cleanup(func() { baseURL = origBase })
-	_, _, err := Connect(context.Background(), grantedPermission(ts.Client()), "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
+	_, _, err := Connect(context.Background(), grantedPermission(ts.Client(), ts.URL), "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
 	if err != ErrConnectCancelled {
 		t.Fatalf("err = %v, want ErrConnectCancelled", err)
 	}
@@ -271,10 +268,24 @@ func TestConnectRequiresPermission(t *testing.T) {
 	if err != ErrNoPermission {
 		t.Fatalf("zero Permission: err = %v, want ErrNoPermission", err)
 	}
-	if _, err := FromState(state.State{SpacePermission: false}); err != ErrNoPermission {
+	// FromState loads the state from a path (CTO-15 PR3): a state with the
+	// permission false is unusable; one with it true yields a Permission.
+	write := func(perm bool) string {
+		st, err := state.DefaultState("1.0.0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.SpacePermission = perm
+		p := filepath.Join(t.TempDir(), "state.json")
+		if err := state.SaveState(p, st); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if _, err := FromState(write(false)); err != ErrNoPermission {
 		t.Fatalf("FromState(false): err = %v, want ErrNoPermission", err)
 	}
-	if _, err := FromState(state.State{SpacePermission: true}); err != nil {
+	if _, err := FromState(write(true)); err != nil {
 		t.Fatalf("FromState(true): err = %v, want nil", err)
 	}
 }

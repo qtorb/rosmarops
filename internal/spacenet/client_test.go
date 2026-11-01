@@ -81,8 +81,8 @@ func TestFixedHostConstants(t *testing.T) {
 	if Addr != "app.rosmarops.com:443" {
 		t.Errorf("Addr = %q", Addr)
 	}
-	if got := URL("/api/v1/connect/start"); got != "https://app.rosmarops.com/api/v1/connect/start" {
-		t.Errorf("URL = %q", got)
+	if got := (Permission{base: prodBaseURL}).url("/api/v1/connect/start"); got != "https://app.rosmarops.com/api/v1/connect/start" {
+		t.Errorf("url = %q", got)
 	}
 }
 

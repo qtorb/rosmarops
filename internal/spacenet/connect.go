@@ -130,7 +130,7 @@ type resultResponse struct {
 
 // start performs POST /api/v1/connect/start and returns the connect_id and the
 // server's expiry (zero when it gave none or an unparseable one).
-func start(ctx context.Context, c *http.Client, ep ecdhPub, hostID string, pickup []byte) (string, time.Time, error) {
+func start(ctx context.Context, c *http.Client, base string, ep ecdhPub, hostID string, pickup []byte) (string, time.Time, error) {
 	nSealed, err := sealNumber(pickup, hostID)
 	if err != nil {
 		return "", time.Time{}, err
@@ -143,7 +143,7 @@ func start(ctx context.Context, c *http.Client, ep ecdhPub, hostID string, picku
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	resp, err := do(ctx, c, http.MethodPost, URL("/api/v1/connect/start"), "", body)
+	resp, err := do(ctx, c, http.MethodPost, base+"/api/v1/connect/start", "", body)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -200,7 +200,7 @@ func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(
 	// The bearer below is a string copy of pickup; the ack closure uses that,
 	// so the pickup bytes can be wiped as soon as Connect returns (CTO-14 P8).
 	defer zero(pickup)
-	connectID, expiresAt, err := start(ctx, c, ep, hostID, pickup)
+	connectID, expiresAt, err := start(ctx, c, perm.base, ep, hostID, pickup)
 	if err != nil {
 		return Material{}, nil, err
 	}
@@ -208,21 +208,22 @@ func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(
 		onNumber(Number(pickup))
 	}
 	if onOpen != nil {
-		u := URL("/connect#v1." + connectID + "." + b64.EncodeToString(ep))
+		u := perm.url("/connect#v1." + connectID + "." + b64.EncodeToString(ep))
 		if err := onOpen(u); err != nil {
 			return Material{}, nil, fmt.Errorf("spacenet: open browser: %w", err)
 		}
 	}
 	bearer := b64.EncodeToString(pickup)
 	deadline := pollDeadline(time.Now(), expiresAt)
-	resultURL := URL("/api/v1/connect/" + connectID + "/result")
+	resultURL := perm.url("/api/v1/connect/" + connectID + "/result")
 	for {
 		m, done, err := poll(ctx, c, resultURL, bearer, priv, connectID, ep, hostID)
 		if err != nil {
 			return Material{}, nil, err
 		}
 		if done {
-			ack := func(ctx context.Context) error { return ackConnect(ctx, c, connectID, bearer) }
+			base := perm.base
+			ack := func(ctx context.Context) error { return ackConnect(ctx, c, base, connectID, bearer) }
 			return m, ack, nil
 		}
 		if !time.Now().Before(deadline) {
@@ -349,8 +350,8 @@ func openResult(priv *ecdh.PrivateKey, connectID string, ep ecdhPub, hostID stri
 	return Material{Secret: sec, KitID: hex.EncodeToString(kitIDRaw), Credential: cred}, nil
 }
 
-func ackConnect(ctx context.Context, c *http.Client, connectID, bearer string) error {
-	resp, err := do(ctx, c, http.MethodPost, URL("/api/v1/connect/"+connectID+"/ack"), bearer, nil)
+func ackConnect(ctx context.Context, c *http.Client, base, connectID, bearer string) error {
+	resp, err := do(ctx, c, http.MethodPost, base+"/api/v1/connect/"+connectID+"/ack", bearer, nil)
 	if err != nil {
 		return err
 	}

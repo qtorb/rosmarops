@@ -36,21 +36,13 @@ const RequestTimeout = 30 * time.Second
 var ErrDisallowedHost = errors.New("spacenet: only HTTPS to " + Host + " is allowed")
 
 // prodBaseURL is the production scheme+host: a compile-time constant, so
-// -ldflags -X cannot repoint it (CTO-14 P4). The host guarantee does not rest
-// on it in any case: the dialer (dialAllowed) and the RoundTripper
-// (fixedHostRoundTripper) both pin the destination to the Host constant, so even
-// a repointed baseURL cannot make a production client reach another host — the
-// dialer would refuse the dial and the RoundTripper would refuse the request.
+// -ldflags -X cannot repoint it (CTO-14 P4, CTO-15 PR3). There is no
+// package-level destination variable at all: production's base is this
+// constant (carried on the Permission), and tests carry a local base on their
+// own Permission. The host guarantee does not rest on the base in any case —
+// the dialer (dialAllowed) and the RoundTripper (fixedHostRoundTripper) both
+// pin the destination to the Host constant and port 443.
 const prodBaseURL = "https://" + Host
-
-// baseURL is the scheme+host the requests are built against. In production it is
-// prodBaseURL (the fixed host); tests point it at a local server. It never
-// changes what a production Client() reaches (see prodBaseURL), so production is
-// unaffected.
-var baseURL = prodBaseURL
-
-// URL is the absolute URL of path (which starts with "/") on the fixed host.
-func URL(path string) string { return baseURL + path }
 
 // fixedURL resolves the environment proxy for requests to the fixed host.
 var fixedURL = &url.URL{Scheme: "https", Host: Host}
@@ -112,7 +104,10 @@ func dialAllowed(address string) error {
 type fixedHostRoundTripper struct{ base http.RoundTripper }
 
 func (rt fixedHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL == nil || req.URL.Scheme != "https" || req.URL.Hostname() != Host {
+	// HTTPS, the exact host, and port 443 only — an empty port means the https
+	// default, 443 (CTO-15 PR3). Anything else is refused before any dial.
+	if req.URL == nil || req.URL.Scheme != "https" || req.URL.Hostname() != Host ||
+		(req.URL.Port() != "" && req.URL.Port() != "443") {
 		scheme, host := "", ""
 		if req.URL != nil {
 			scheme, host = req.URL.Scheme, req.URL.Host

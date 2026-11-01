@@ -362,23 +362,24 @@ func cryptoRead(t *testing.T, b []byte) {
 	}
 }
 
-// TestNoNetwork_BinaryPinsHostAgainstLdflags is CTO-13 §3 test 5 over the
-// binary (CTO-14 P4): building with a hostile -ldflags -X on
-// internal/spacenet.baseURL cannot move the destination, because the dialer and
-// the RoundTripper pin it to the Host constant, not to baseURL. The built
-// binary still embeds the fixed host and never the injected one.
+// TestNoNetwork_BinaryPinsHostAgainstLdflags is CTO-13 §3 test 5, strengthened
+// (CTO-15 PR3): there is no destination variable that -ldflags -X can change.
+// -X only sets package-level string *variables*; the destination (Host,
+// prodBaseURL) is a compile-time constant, and the former baseURL variable is
+// gone (the base is carried on the Permission). The check is over the built
+// binary: the fixed host is embedded, and `go tool nm` shows no data symbol
+// under internal/spacenet that names a destination a linker flag could repoint.
+// (Grepping the binary for an injected value is not enough: Go records the
+// -ldflags string in the build info whether or not the target was set.)
 func TestNoNetwork_BinaryPinsHostAgainstLdflags(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "rosmarops-x")
 	if runtime.GOOS == "windows" {
 		bin += ".exe"
 	}
-	const inject = "https://evil.invalid"
-	build := exec.Command("go", "build",
-		"-ldflags", "-X github.com/qtorb/rosmarops/internal/spacenet.baseURL="+inject,
-		"-o", bin, "./cmd/rosmarops")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/rosmarops")
 	build.Dir = repoRoot(t)
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build with hostile -X: %v\n%s", err, out)
+		t.Fatalf("build: %v\n%s", err, out)
 	}
 	data, err := os.ReadFile(bin)
 	if err != nil {
@@ -387,10 +388,26 @@ func TestNoNetwork_BinaryPinsHostAgainstLdflags(t *testing.T) {
 	if !bytes.Contains(data, []byte("app.rosmarops.com")) {
 		t.Error("the binary does not embed the fixed host app.rosmarops.com")
 	}
-	// The injected host may appear in baseURL, but it can never be the dial or
-	// request target (proven by the spacenet unit tests); what matters here is
-	// that the fixed host, on which the dialer and RoundTripper pin, survives.
-	_ = inject
+
+	nm := exec.Command("go", "tool", "nm", bin)
+	nm.Dir = repoRoot(t)
+	out, err := nm.Output()
+	if err != nil {
+		t.Skipf("go tool nm not available: %v", err)
+	}
+	// A data symbol under internal/spacenet whose name suggests a destination
+	// would be a string variable a -X flag could repoint. There must be none.
+	for _, line := range strings.Split(string(out), "\n") {
+		low := strings.ToLower(line)
+		if !strings.Contains(low, "internal/spacenet.") {
+			continue
+		}
+		for _, bad := range []string{"baseurl", ".host", ".addr", "endpoint", "destination", ".url", "target", "server"} {
+			if strings.Contains(low, bad) {
+				t.Errorf("internal/spacenet exposes a symbol a -X flag could repoint: %s", strings.TrimSpace(line))
+			}
+		}
+	}
 }
 
 // goListFor runs `go list` at the repository root for the given GOOS/GOARCH and

@@ -20,7 +20,7 @@ func Send(ctx context.Context, perm Permission, hostID string, credential, body 
 	if err != nil {
 		return 0, err
 	}
-	resp, err := do(ctx, c, http.MethodPost, URL("/api/v1/devices/"+hostID+"/packages"), b64.EncodeToString(credential), body)
+	resp, err := do(ctx, c, http.MethodPost, perm.url("/api/v1/devices/"+hostID+"/packages"), b64.EncodeToString(credential), body)
 	if err != nil {
 		return 0, err
 	}
@@ -38,7 +38,7 @@ func Disconnect(ctx context.Context, perm Permission, credential []byte) (int, e
 	if err != nil {
 		return 0, err
 	}
-	resp, err := do(ctx, c, http.MethodDelete, URL("/api/v1/devices/self"), b64.EncodeToString(credential), nil)
+	resp, err := do(ctx, c, http.MethodDelete, perm.url("/api/v1/devices/self"), b64.EncodeToString(credential), nil)
 	if err != nil {
 		return 0, err
 	}

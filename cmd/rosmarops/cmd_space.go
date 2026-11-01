@@ -92,7 +92,7 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 			return err
 		}
 	}
-	perm, err := spacenet.FromState(st)
+	perm, err := spacenet.FromState(paths.state)
 	if err != nil {
 		revertSpacePermission(paths.state)
 		return err
@@ -160,7 +160,7 @@ func spaceDisconnect(ctx context.Context, paths spacePaths) {
 	st, err := state.LoadState(paths.state)
 	stored, _ := loadKitFrom(paths.store)
 	if err == nil && st.SpacePermission && stored != nil && len(stored.SpaceCredential) > 0 {
-		if perm, perr := spacenet.FromState(st); perr == nil {
+		if perm, perr := spacenet.FromState(paths.state); perr == nil {
 			if status, derr := spacenet.Disconnect(ctx, perm, stored.SpaceCredential); derr != nil {
 				slog.Warn("disconnect: the area could not be reached; forgetting locally anyway", "err", derr)
 			} else {
@@ -192,7 +192,7 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 	if !st.SpacePermission {
 		return // not connected: nothing to do, and no network
 	}
-	perm, err := spacenet.FromState(st)
+	perm, err := spacenet.FromState(paths.state)
 	if err != nil {
 		return
 	}
