@@ -10,13 +10,16 @@ name: diagnostic-windows
 
 on:
   workflow_dispatch:
-  # BV-146: run ONLY the connect-window job on a pull request that touches the
-  # window script or this workflow, so the real Windows GUI check (which cannot
-  # run on Linux) gates those changes. The oracle loop below stays manual — it is
-  # the ~1h job BV-136 moved out of ci.yml, and its own `if` keeps it off PRs.
+  # Run the Windows-only checks (connect-window, BV-146; windows-exe-resources,
+  # BV-149) on a pull request that touches what they cover, so the real-Windows
+  # checks (which cannot run on Linux) gate those changes. The oracle loop below
+  # stays manual — it is the ~1h job BV-136 moved out of ci.yml, and its own `if`
+  # keeps it off PRs.
   pull_request:
     paths:
       - "cmd/rosmarops/connectwindow*.go"
+      - "tools/winres/**"
+      - "assets/windows/**"
       - ".github/workflows/diagnostic-windows.yml"
 
 permissions:
@@ -72,3 +75,51 @@ jobs:
         env:
           ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN: "1"
         run: go test ./cmd/rosmarops -run '^TestConnectWindowSelfTest$' -count=1 -v
+
+  # BV-149: on a real Windows build, the .exe must show the rosemary icon and a
+  # Properties version. Generate the resource object, build rosmarops.exe, then
+  # read its VersionInfo and extract its icon with PowerShell. Runs by hand and,
+  # via the pull_request trigger above, on any PR that touches tools/winres,
+  # assets/windows or this workflow.
+  windows-exe-resources:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      VER: "0.7.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Build rosmarops.exe with icon and version
+        run: |
+          go run ./tools/winres -version $env:VER
+          go build -trimpath -ldflags="-X main.version=$env:VER" -o rosmarops.exe ./cmd/rosmarops
+      - name: Check version info and icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Resolve-Path .\rosmarops.exe
+          $vi = (Get-Item $exe).VersionInfo
+          if ($vi.ProductName -ne 'RosmarOps') { throw "ProductName = '$($vi.ProductName)'" }
+          if ($vi.ProductVersion -ne $env:VER) { throw "ProductVersion = '$($vi.ProductVersion)'" }
+          if ($vi.OriginalFilename -ne 'rosmarops.exe') { throw "OriginalFilename = '$($vi.OriginalFilename)'" }
+          $copyright = [char]0x00A9 + ' 2026 Albert Garcia Pujadas. AGPL-3.0'
+          if ($vi.LegalCopyright -ne $copyright) { throw "LegalCopyright = '$($vi.LegalCopyright)'" }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          $bmp = $icon.ToBitmap()
+          if ($bmp.Width -ne 32 -or $bmp.Height -ne 32) { throw "icon is $($bmp.Width)x$($bmp.Height), not 32x32 (generic icon?)" }
+          $found = $false
+          for ($y = 0; $y -lt $bmp.Height -and -not $found; $y++) {
+            for ($x = 0; $x -lt $bmp.Width -and -not $found; $x++) {
+              $p = $bmp.GetPixel($x, $y)
+              if (([math]::Abs($p.R - 111) -le 8) -and ([math]::Abs($p.G - 143) -le 8) -and ([math]::Abs($p.B - 120) -le 8)) { $found = $true }
+            }
+          }
+          if (-not $found) { throw 'no rosemary-green (#6F8F78 +/-8) pixel in the icon' }
+          Write-Host "version info and icon OK"

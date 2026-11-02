@@ -148,6 +148,10 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p dist/pkg
+          # Write the Windows icon and version resource (.syso) first, with the
+          # host toolchain so the generator runs on the Linux runner; the build
+          # below picks it up for windows/amd64 (BV-149).
+          GOOS=linux GOARCH=amd64 go run ./tools/winres -version "${TAG#v}"
           go build -trimpath -ldflags="-X main.version=${TAG#v}" -o dist/pkg/rosmarops.exe ./cmd/rosmarops
       - name: Build rosmarops-macos-apple-silicon and rosmarops-macos-intel
         env:
