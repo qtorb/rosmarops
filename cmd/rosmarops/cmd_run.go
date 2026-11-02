@@ -48,6 +48,10 @@ import (
 // primer uso con un solo .exe, U7).
 var runLangs = map[string]bool{"en": true, "es": true}
 
+// writeResultsPkg builds and seals this run's results package. A package-level
+// var so a test can make it fail and check the review still finishes (BV-152).
+var writeResultsPkg = report.WriteResultsPackage
+
 func newRunCmd() *cli.Command {
 	return &cli.Command{
 		Name: "run", Short: "cli.cmd.run.short", Long: "cli.cmd.run.long", Args: cli.AnyArgs,
@@ -677,17 +681,28 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// the «Your space» section reflects this run (sent today, or pending).
 	pkgNow := time.Now()
 	stored, kitErr := loadKitIfPresent()
+	// A failure to build, seal or read the kit for this run's package never
+	// stops the review (BV-152 point 1): the local review is done and its report
+	// is always written. pkgFailed only changes what the «Your space» section
+	// says — «this check couldn't be sent» instead of «pending».
+	pkgFailed := false
 	if kitErr != nil {
 		slog.Warn("results package skipped: kit could not be read", "err", kitErr)
+		pkgFailed = true
 	}
 	var currentPkg string
 	if stored != nil && built != nil {
-		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
+		pkgPath, err := writeResultsPkg(v2, built, homeDir, version,
 			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
-		if err != nil {
-			return "", fmt.Errorf("results package: %w", err)
-		}
-		if pkgPath != "" {
+		switch {
+		case err != nil:
+			// Building or sealing the package failed (for example the space view
+			// does not fit its schema). The error carries only field paths, no
+			// values (tested in TestResultsPackageErrorHasNoValues), so logging
+			// it is safe.
+			slog.Warn("results package skipped", "err", err)
+			pkgFailed = true
+		case pkgPath != "":
 			currentPkg = pkgPath
 			slog.Info("results package written", "path", pkgPath)
 		}
@@ -708,6 +723,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			// This run's package: sent (with this send's date), refused, or
 			// still pending (CTO-15 PR5).
 			v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
+			// If this run had no package to send because it could not be built
+			// or sealed, say so (BV-152 point 1): «rejected», not «pending».
+			if pkgFailed {
+				v2.SpaceSentDate, v2.SpaceRejected = "", true
+			}
 		}
 	} else {
 		slog.Warn("space send skipped: kit path", "err", perr)
