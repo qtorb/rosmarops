@@ -10,12 +10,21 @@ name: diagnostic-windows
 
 on:
   workflow_dispatch:
+  # BV-146: run ONLY the connect-window job on a pull request that touches the
+  # window script or this workflow, so the real Windows GUI check (which cannot
+  # run on Linux) gates those changes. The oracle loop below stays manual — it is
+  # the ~1h job BV-136 moved out of ci.yml, and its own `if` keeps it off PRs.
+  pull_request:
+    paths:
+      - "cmd/rosmarops/connectwindow*.go"
+      - ".github/workflows/diagnostic-windows.yml"
 
 permissions:
   contents: read
 
 jobs:
   verify-windows-go-latest:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     continue-on-error: true
     permissions:
@@ -38,3 +47,28 @@ jobs:
         env:
           ROSMAROPS_SCHEMAVAL_ORACLE: "1"
         run: go test ./internal/schemaval/ -count=20 -timeout 90m
+
+  # BV-145/BV-146: the connect window on a real Windows desktop. The self-test
+  # drives the window without a click and proves the fixed StreamReader reader
+  # keeps the interface thread alive (the UI Timer keeps ticking while no line is
+  # sent), then shows the number and result; two further subtests prove the old
+  # BackgroundWorker and [Console]::In.ReadLineAsync() freeze that thread. Gated
+  # behind ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN so the normal verify-windows job
+  # never launches a GUI; runs by hand and, via the pull_request trigger above,
+  # on any PR that touches connectwindow*.go or this workflow.
+  connect-window:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Connect window self-test
+        env:
+          ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN: "1"
+        run: go test ./cmd/rosmarops -run '^TestConnectWindowSelfTest$' -count=1 -v
