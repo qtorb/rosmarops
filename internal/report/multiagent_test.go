@@ -164,7 +164,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // BV-69 with the plan B pitch and the agent note's style (checked), at
 // BV-75 with the header's link to the other language (v3 §19, checked), at
 // BV-94 with ai.untrusted_data and the export's ```text location blocks
-// (blindaje B7, checked: nothing else changes);
+// (blindaje B7, checked: nothing else changes), at BV-148 with the knowledge
+// review date line in step 1's meta (checked: the one added line);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

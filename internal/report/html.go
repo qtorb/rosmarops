@@ -222,6 +222,7 @@ type htmlCtx struct {
 	gloss  *int                         // the last help id, g1, g2…
 	exists func(name string) bool       // a file of the reports directory exists
 	rows   map[string]*credRow          // finding id → its row (v3 §12.2)
+	local  time.Time                    // the run's time in the report's timezone (BV-148)
 }
 
 // help is the «i» of term (§4): the button and, right after it, its hidden
@@ -304,7 +305,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	}
 	local := at.In(loc)
 	var sb strings.Builder
-	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists, rows: credRows(v)}
+	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists, rows: credRows(v), local: local}
 	for i := range v.Index.Agents {
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
@@ -556,6 +557,8 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
 	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
+	// When the agent knowledge base was last reviewed (BV-148).
+	c.w(`<br>%s`, c.t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
 	// Which agents are evaluated, and which detected but not yet (v3 §13.1).
 	if ev := v.Index.Scope.Evaluated; len(ev) > 0 {
 		if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 {
@@ -599,7 +602,27 @@ func (c htmlCtx) renderStep1() {
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
 		c.w(`<p class="meta warn">%s</p>`, c.t("html.integrity.not_checked", nil))
 	}
+	// BV-148: the program's knowledge is more than 14 days older than its last
+	// review — it may miss newer agent behaviour. Compared offline, against the
+	// run's own local date; no URL (the report carries none).
+	if knowledgeOld(c.local, knowledge.ReviewedOn) {
+		c.w(`<p class="meta warn">%s</p>`, c.t("html.knowledge.old", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
+	}
 	c.w(`</section>`)
+}
+
+// knowledgeOld reports whether the run's local date is more than 14 days after
+// reviewedOn (BV-148): 14 days exactly is not old, 15 is. Dates are compared as
+// calendar days, so the time of day and the timezone offset do not matter.
+func knowledgeOld(local time.Time, reviewedOn string) bool {
+	r, err := time.Parse("2006-01-02", reviewedOn)
+	if err != nil {
+		return false
+	}
+	day := func(t time.Time) time.Time {
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	return day(local).Sub(day(r)) > 14*24*time.Hour
 }
 
 // gitEnvHelp is the «i» env after cred_in_git's impact, only when the key
@@ -1316,6 +1339,7 @@ func HTMLKeys() []string {
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
 		"html.card.button", "html.card.counts", "html.card.method",
 		"html.count.repos", "html.none",
+		"html.knowledge.reviewed", "html.knowledge.old", // BV-148
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",

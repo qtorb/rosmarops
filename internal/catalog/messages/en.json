@@ -262,6 +262,8 @@
   "html.console.open": "Opening the report.",
   "html.count.red": "urgent",
   "html.count.repos": "projects checked",
+  "html.knowledge.reviewed": "Agent knowledge reviewed on {date}",
+  "html.knowledge.old": "This program's agent knowledge was last reviewed on {date}. Your agents may have changed since: download the latest version from rosmarops.com.",
   "html.count.yellow": "to review",
   "html.counts.label": "Finding counts",
   "html.coverage.body": "These were not checked, so they are not reported as clean:",
