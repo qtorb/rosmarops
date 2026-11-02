@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 // icoPath / gitignorePath are relative to this package (tools/winres).
@@ -114,5 +115,99 @@ func TestSysoIgnored(t *testing.T) {
 	}
 	if !found {
 		t.Errorf(".gitignore does not ignore %q", sysoRelPath)
+	}
+}
+
+// walkVS parses a VS_VERSIONINFO block the way VerQueryValue does and returns
+// the StringFileInfo strings — so a layout bug that makes Windows read empty
+// values (as it did for ProductName) fails here on any OS. The returned map is
+// key -> value for every String under StringFileInfo/StringTable.
+func walkVS(t *testing.T, data []byte) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	var walk func(d []byte, path string)
+	walk = func(d []byte, path string) {
+		for off := 0; off+6 <= len(d); {
+			wLength := int(d[off]) | int(d[off+1])<<8
+			if wLength < 6 || off+wLength > len(d) {
+				return
+			}
+			block := d[off : off+wLength]
+			wValueLen := int(block[2]) | int(block[3])<<8
+			wType := int(block[4]) | int(block[5])<<8
+			// Key: UTF-16 until a NUL word, from offset 6.
+			k := 6
+			for k+1 < len(block) && !(block[k] == 0 && block[k+1] == 0) {
+				k += 2
+			}
+			key := decodeUTF16(block[6:k])
+			p := align4(k + 2) // past the key NUL, aligned
+			valBytes := wValueLen
+			if wType == 1 {
+				valBytes *= 2 // text value length is in WCHARs
+			}
+			var value []byte
+			if p+valBytes <= len(block) {
+				value = block[p : p+valBytes]
+			}
+			childStart := align4(p + valBytes)
+
+			switch {
+			case key == "StringFileInfo", path == "StringFileInfo": // StringTable(s) / its strings
+				if childStart < len(block) {
+					walk(block[childStart:], key)
+				}
+			default:
+				if key != "" && path != "" && path != "StringFileInfo" && wType == 1 && len(value) > 0 {
+					out[key] = decodeUTF16(value)
+				}
+				if childStart < len(block) {
+					walk(block[childStart:], key)
+				}
+			}
+			off += align4(wLength)
+		}
+	}
+	walk(data, "")
+	return out
+}
+
+func decodeUTF16(b []byte) string {
+	var u []uint16
+	for i := 0; i+1 < len(b); i += 2 {
+		c := uint16(b[i]) | uint16(b[i+1])<<8
+		if c == 0 {
+			break
+		}
+		u = append(u, c)
+	}
+	return string(utf16.Decode(u))
+}
+
+func align4(n int) int { return (n + 3) &^ 3 }
+
+// BV-149: the version resource parses the way Windows will read it — the strings
+// come back non-empty (this is the ProductName=” failure caught off Windows).
+func TestVersionInfoParses(t *testing.T) {
+	data, err := versionInfo("0.7.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := walkVS(t, data)
+	want := map[string]string{
+		"ProductName":      "RosmarOps",
+		"FileDescription":  "RosmarOps",
+		"LegalCopyright":   "© 2026 Albert Garcia Pujadas. AGPL-3.0",
+		"OriginalFilename": "rosmarops.exe",
+		"ProductVersion":   "0.7.2",
+		"FileVersion":      "0.7.2",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("got %d strings %v, want %d", len(got), got, len(want))
 	}
 }

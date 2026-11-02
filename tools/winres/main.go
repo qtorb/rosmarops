@@ -169,10 +169,13 @@ func (b *vBlock) marshal() []byte {
 	pad4(&buf)
 	if b.valueBytes != nil {
 		buf.Write(b.valueBytes)
-		pad4(&buf)
 	}
+	// wLength covers the header, key, value and children, but NOT any padding
+	// after the last of them: the next sibling's 32-bit alignment is added by the
+	// parent (below, before each child). Counting a trailing pad here would
+	// overstate wLength and VerQueryValue could not walk the tree.
 	for _, c := range b.children {
-		pad4(&buf) // each child starts on a 32-bit boundary
+		pad4(&buf) // align this child on a 32-bit boundary
 		buf.Write(c.marshal())
 	}
 	out := buf.Bytes()
