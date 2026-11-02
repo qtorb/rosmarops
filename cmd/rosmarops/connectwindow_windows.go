@@ -96,6 +96,7 @@ if ($useStream) {
   $cfgLine = [Console]::In.ReadLine()
 }
 $cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cfgLine.Trim())) | ConvertFrom-Json
+if ($selftest) { [Console]::Out.WriteLine('CFGREAD'); [Console]::Out.Flush() }
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $cfg.title
 $form.TopMost = $true

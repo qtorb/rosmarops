@@ -50,7 +50,9 @@ func testWindowAlive(t *testing.T) {
 	if !waitFor(lines, 10*time.Second, func(l string) bool { return l == "SHOWN" }) {
 		t.Fatal("no SHOWN: the window did not paint")
 	}
-	if ticks := countLines(lines, 2*time.Second, "TICK"); ticks < 5 {
+	ticks := countLines(lines, 2*time.Second, "TICK")
+	t.Logf("streamreader: %d TICK in 2 s with no input", ticks)
+	if ticks < 5 {
 		t.Fatalf("only %d TICK in 2 s with no input: the interface thread is not looping", ticks)
 	}
 	if err := send("number 42\n"); err != nil {
@@ -80,8 +82,10 @@ func testWindowFreezes(t *testing.T, readmode string) {
 	}
 	// SHOWN is emitted before Start-Reading blocks, so it should still arrive; if
 	// it does not, the window froze even earlier, which is also a freeze.
-	waitFor(lines, 10*time.Second, func(l string) bool { return l == "SHOWN" })
-	if ticks := countLines(lines, 2*time.Second, "TICK"); ticks >= 5 {
+	sawShown := waitFor(lines, 10*time.Second, func(l string) bool { return l == "SHOWN" })
+	ticks := countLines(lines, 2*time.Second, "TICK")
+	t.Logf("%s: shown=%v, %d TICK in 2 s with no input", readmode, sawShown, ticks)
+	if ticks >= 5 {
 		t.Fatalf("%s: %d TICK in 2 s — the interface thread did not freeze, so this broken reader would pass the self-test", readmode, ticks)
 	}
 }
@@ -105,6 +109,9 @@ func runSelfWindow(t *testing.T, readmode string) (<-chan string, func(string) e
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Surface any PowerShell error (the window script runs with -Stop) in the CI
+	// log, so a blocked or failed run is diagnosable without another round.
+	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +119,11 @@ func runSelfWindow(t *testing.T, readmode string) (<-chan string, func(string) e
 	go func() {
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
-			lines <- strings.TrimSpace(sc.Text())
+			l := strings.TrimSpace(sc.Text())
+			if l != "TICK" { // TICK is frequent; log the rest as a transcript.
+				t.Logf("window[%q] stdout: %s", readmode, l)
+			}
+			lines <- l
 		}
 		close(lines)
 	}()
