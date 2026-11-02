@@ -59,44 +59,37 @@ func connectWindowArgs() []string {
 }
 
 // connectWindowScript shows the window with System.Windows.Forms and talks to
-// the program over the standard streams. One StreamReader over standard input
-// owns every read (BV-146): the first line is the base64 JSON config, then the
-// state lines. The window shows the question; on «Connect» it writes "connect",
-// hides the buttons and, from a UI Timer, polls that reader's async read of the
-// program's state lines ("number <N>", then "done", "expired" or "failed") and
-// updates the view — never blocking the interface thread (BV-145, BV-146) — and
-// the final state shows an OK button that, clicked, writes "ok" and closes. «Not
-// now» or closing before connecting writes "no" and ends. Under Constrained
-// Language Mode Add-Type fails and PowerShell exits, which the caller treats as
-// «Not now» (fail closed). With ROSMAROPS_CONNECT_WINDOW_SELFTEST set the window
-// drives itself, echoes its label values and writes TICK on every Timer tick,
-// for the Windows CI self-test only; ROSMAROPS_CONNECT_WINDOW_READMODE selects a
-// broken reader so that self-test can prove each one freezes (test only, never
-// set in production).
+// the program over the standard streams. The first stdin line is the base64 JSON
+// config, read with [Console]::In.ReadLine() before the window shows (as v0.7.0
+// did). The window shows the question; on «Connect» it writes "connect", hides
+// the buttons and starts a dedicated runspace that reads the program's state
+// lines ("number <N>", then "done", "expired" or "failed") from [Console]::In on
+// its own thread into a concurrent queue, which a UI Timer drains — so the
+// interface thread is never blocked on a read (BV-145, BV-146, BV-147). The final
+// state shows an OK button that, clicked, writes "ok" and closes; closing stops
+// the reader runspace. «Not now» or closing before connecting writes "no" and
+// ends. Under Constrained Language Mode Add-Type fails and PowerShell exits, which
+// the caller treats as «Not now» (fail closed). With
+// ROSMAROPS_CONNECT_WINDOW_SELFTEST set the window drives itself, echoes its label
+// values and writes TICK on every Timer tick, for the Windows CI self-test only;
+// ROSMAROPS_CONNECT_WINDOW_READMODE selects a broken reader (BV-145's
+// consolein_async or v0.7.0's backgroundworker) so that self-test can prove each
+// one fails (test only, never set in production).
 const connectWindowScript = `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 $selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_CONNECT_WINDOW_SELFTEST)
-# ROSMAROPS_CONNECT_WINDOW_READMODE selects the stdin reader. Default (empty or
-# 'streamreader') is the fix; 'consolein_async' and 'backgroundworker' are the
-# two broken readers kept only so the Windows self-test can prove each freezes
-# the interface thread (BV-146). Never set in production.
+# ROSMAROPS_CONNECT_WINDOW_READMODE selects the reader for the state lines.
+# Default (empty) is the fix: a dedicated runspace (below). 'consolein_async' is
+# BV-145's reader and 'backgroundworker' is v0.7.0's, kept only so the Windows
+# self-test can prove each fails. Never set in production.
 $readmode = $env:ROSMAROPS_CONNECT_WINDOW_READMODE
-$useStream = ($readmode -ne 'consolein_async') -and ($readmode -ne 'backgroundworker')
-# One reader owns all of stdin (BV-146): a StreamReader over the standard input
-# handle, whose ReadLineAsync is a genuine async override (it reads the stream
-# off the interface thread), so the UI Timer can poll it without ever blocking
-# that thread. [Console]::In must not be read for this: it is a
-# TextReader.SyncTextReader whose ReadLineAsync body is Task.FromResult(ReadLine()),
-# i.e. a blocking ReadLine on the calling (UI) thread — the BV-145 freeze.
-if ($useStream) {
-  $stdin = New-Object System.IO.StreamReader([Console]::OpenStandardInput(), (New-Object System.Text.UTF8Encoding $false))
-  $cfgLine = $stdin.ReadLine()
-} else {
-  $cfgLine = [Console]::In.ReadLine()
-}
-$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($cfgLine.Trim())) | ConvertFrom-Json
-if ($selftest) { [Console]::Out.WriteLine('CFGREAD'); [Console]::Out.Flush() }
+# The config line is read on this thread, before the window shows, exactly as
+# v0.7.0 did (this always worked). Everything after it is read by the reader
+# runspace, so the interface thread never touches [Console]::In again (BV-147):
+# mixing a second reader over the same input is not reliable (its buffer and the
+# host's would split the stream).
+$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadLine().Trim())) | ConvertFrom-Json
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $cfg.title
 $form.TopMost = $true
@@ -139,11 +132,16 @@ $form.Controls.Add($yes); $form.Controls.Add($no); $form.Controls.Add($ok)
 $form.AcceptButton = $yes
 $form.CancelButton = $no
 # Read the program's state lines without blocking the interface thread (BV-145,
-# BV-146). The reader is the StreamReader over standard input built above; the UI
-# Timer polls its async read and, when a line has arrived, handles it ("number
-# <N>", "done", "expired", "failed") and starts the next read. A null line stops
-# reading. The message loop stays free to paint throughout.
+# BV-146, BV-147). A dedicated runspace reads [Console]::In line by line on its
+# own thread into $q; the UI Timer drains $q and handles each line ("number <N>",
+# "done", "expired", "failed"), stopping on the end marker. The message loop stays
+# free to paint throughout, and the interface thread never reads [Console]::In
+# after the config line.
+$script:q = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
+$script:eof = [char]0 + 'eof'
 $script:reader = $null
+$script:rsps = $null
+$script:rs = $null
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 200
 function Show-Result($text) {
@@ -168,44 +166,63 @@ function Handle-Line($line) {
     'failed'  { Show-Result $cfg.failed }
   }
 }
-function Start-Read {
-  # 'consolein_async' is BV-145's broken reader: [Console]::In is a SyncTextReader
-  # whose ReadLineAsync is Task.FromResult(ReadLine()), so this blocks the UI
-  # thread. The default reads from our own StreamReader, a true async read.
-  if ($readmode -eq 'consolein_async') { return [Console]::In.ReadLineAsync() }
-  return $stdin.ReadLineAsync()
-}
-# Broken reader, test only (BV-146): the pre-BV-145 BackgroundWorker. Its DoWork
-# scriptblock, used as a delegate, runs on the runspace thread in Windows
-# PowerShell 5.1 — the thread running ShowDialog — so the blocking
-# [Console]::In.ReadLine() stops the message loop and the Timer never ticks.
-$worker = $null
-if ($readmode -eq 'backgroundworker') {
-  $worker = New-Object System.ComponentModel.BackgroundWorker
-  $worker.WorkerReportsProgress = $true
-  $worker.Add_DoWork({
-    while ($true) {
-      $line = [Console]::In.ReadLine()
-      if ($line -eq $null) { break }
-      $worker.ReportProgress(0, $line)
-    }
-  })
-  $worker.Add_ProgressChanged({ Handle-Line $_.UserState })
-}
 function Start-Reading {
   $ql.Visible = $false; $tl.Visible = $false
   $yes.Visible = $false; $no.Visible = $false
   $timer.Start()
-  if ($readmode -eq 'backgroundworker') { $worker.RunWorkerAsync() } else { $script:reader = Start-Read }
+  if ($readmode -eq 'consolein_async') {
+    # BV-145's reader: [Console]::In is a SyncTextReader whose ReadLineAsync is
+    # Task.FromResult(ReadLine()), so this first poll blocks the interface thread.
+    $script:reader = [Console]::In.ReadLineAsync()
+    return
+  }
+  if ($readmode -eq 'backgroundworker') {
+    # v0.7.0's reader: the DoWork scriptblock runs on a thread-pool thread with no
+    # runspace, so it fails ("There is no Runspace available...") and the worker
+    # ends in error; ProgressChanged never fires and the window stays blank.
+    $worker = New-Object System.ComponentModel.BackgroundWorker
+    $worker.WorkerReportsProgress = $true
+    $worker.Add_DoWork({
+      while ($true) {
+        $line = [Console]::In.ReadLine()
+        if ($line -eq $null) { break }
+        $worker.ReportProgress(0, $line)
+      }
+    })
+    $worker.Add_ProgressChanged({ Handle-Line $_.UserState })
+    $worker.Add_RunWorkerCompleted({
+      if ($selftest -and $_.Error -ne $null) { [Console]::Out.WriteLine('WORKERERROR=' + $_.Error.GetType().Name); [Console]::Out.Flush() }
+    })
+    $worker.RunWorkerAsync()
+    return
+  }
+  # The fix: a dedicated runspace reads [Console]::In on its own thread into $q,
+  # ending with the marker. The interface thread only drains $q (from the Timer).
+  $script:rs = [runspacefactory]::CreateRunspace()
+  $script:rs.Open()
+  $script:rs.SessionStateProxy.SetVariable('q', $script:q)
+  $script:rs.SessionStateProxy.SetVariable('eofmarker', $script:eof)
+  $script:rsps = [powershell]::Create()
+  $script:rsps.Runspace = $script:rs
+  [void]$script:rsps.AddScript('while ($null -ne ($l = [Console]::In.ReadLine())) { $q.Enqueue($l) }; $q.Enqueue($eofmarker)')
+  [void]$script:rsps.BeginInvoke()
 }
 $timer.Add_Tick({
   if ($selftest) { [Console]::Out.WriteLine('TICK'); [Console]::Out.Flush() }
   if ($readmode -eq 'backgroundworker') { return }
-  if ($script:reader -ne $null -and $script:reader.IsCompleted) {
-    $line = $script:reader.Result
-    if ($line -eq $null) { $timer.Stop(); $script:reader = $null; return }
+  if ($readmode -eq 'consolein_async') {
+    if ($script:reader -ne $null -and $script:reader.IsCompleted) {
+      $line = $script:reader.Result
+      if ($line -eq $null) { $timer.Stop(); $script:reader = $null; return }
+      Handle-Line $line
+      if ($script:reader -ne $null) { $script:reader = [Console]::In.ReadLineAsync() }
+    }
+    return
+  }
+  $line = $null
+  while ($script:q.TryDequeue([ref]$line)) {
+    if ($line -eq $script:eof) { $timer.Stop(); return }
     Handle-Line $line
-    if ($script:reader -ne $null) { $script:reader = Start-Read }
   }
 })
 $yes.Add_Click({
@@ -228,6 +245,12 @@ if ($selftest) {
   })
 }
 [void]$form.ShowDialog()
+# Stop the reader runspace on close; closing stdin (the caller does) ends its
+# ReadLine, so Stop returns without hanging. Guarded so close never fails.
+try {
+  if ($script:rsps -ne $null) { $script:rsps.Stop() }
+  if ($script:rs -ne $null) { $script:rs.Dispose() }
+} catch { }
 if (-not $script:answered) { [Console]::Out.WriteLine('no'); [Console]::Out.Flush() }`
 
 // maybeConnectWindow shows the connect window on a Windows double click when

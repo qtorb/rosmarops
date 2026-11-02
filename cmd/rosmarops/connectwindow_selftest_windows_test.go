@@ -13,28 +13,35 @@ import (
 	"time"
 )
 
+// shownTimeout is generous: the first WinForms launch on a cold CI runner can
+// take many seconds to JIT and paint (an earlier run missed a 10 s deadline).
+const shownTimeout = 30 * time.Second
+
 // TestConnectWindowSelfTest runs the real WinForms window on windows-latest and
-// proves the BV-146 reader. It is gated on ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN
+// proves the BV-147 reader. It is gated on ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN
 // so the normal `go test ./...` on the verify-windows job never launches a GUI;
 // the diagnostic-windows.yml connect-window job (manual, and on a pull request
 // that touches connectwindow*.go) sets it.
 //
 // Three subtests, all passing:
-//   - "streamreader alive": the fix. With no state line sent, the UI Timer keeps
-//     ticking (the interface thread is alive); the number and the result then
-//     show promptly.
-//   - "consolein_async freezes" and "backgroundworker freezes": the two broken
-//     readers BV-146 replaces. Each blocks the interface thread, so the self-test
-//     sees almost no ticks — i.e. the alive check above would FAIL on them. This
-//     is how we prove, on Windows (the only place it is observable), that the old
-//     BackgroundWorker and BV-145's [Console]::In.ReadLineAsync() do freeze.
+//   - "runspace alive": the fix. With no state line sent, the UI Timer keeps
+//     ticking (the interface thread is alive, the reader runs in its own
+//     runspace); the number and the result then show promptly.
+//   - "consolein_async freezes": BV-145's reader. It blocks the interface thread,
+//     so almost no ticks appear — the alive check above would FAIL on it.
+//   - "backgroundworker no number": v0.7.0's reader. Its worker fails off-runspace
+//     and reports an error, so the number never reaches the window (the blank
+//     window Albert saw) — the alive check's NUMLABEL step would FAIL on it.
+//
+// Together these prove, on Windows (the only place it is observable), that both
+// broken readers fail the self-test and the fix passes it.
 func TestConnectWindowSelfTest(t *testing.T) {
 	if os.Getenv("ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN") == "" {
 		t.Skip("set ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN=1 on a Windows runner with a desktop session")
 	}
-	t.Run("streamreader alive", testWindowAlive)
+	t.Run("runspace alive", testWindowAlive)
 	t.Run("consolein_async freezes", func(t *testing.T) { testWindowFreezes(t, "consolein_async") })
-	t.Run("backgroundworker freezes", func(t *testing.T) { testWindowFreezes(t, "backgroundworker") })
+	t.Run("backgroundworker no number", func(t *testing.T) { testWindowNoNumber(t, "backgroundworker") })
 }
 
 // testWindowAlive is the real proof of the fix: SHOWN, then at least 5 Timer
@@ -47,46 +54,90 @@ func testWindowAlive(t *testing.T) {
 	if err := send(selfConfig()); err != nil {
 		t.Fatal(err)
 	}
-	if !waitFor(lines, 10*time.Second, func(l string) bool { return l == "SHOWN" }) {
+	if !waitFor(lines, shownTimeout, func(l string) bool { return l == "SHOWN" }) {
 		t.Fatal("no SHOWN: the window did not paint")
 	}
 	ticks := countLines(lines, 2*time.Second, "TICK")
-	t.Logf("streamreader: %d TICK in 2 s with no input", ticks)
+	t.Logf("runspace: %d TICK in 2 s with no input", ticks)
 	if ticks < 5 {
 		t.Fatalf("only %d TICK in 2 s with no input: the interface thread is not looping", ticks)
 	}
 	if err := send("number 42\n"); err != nil {
 		t.Fatal(err)
 	}
-	if !waitFor(lines, time.Second, func(l string) bool { return l == "NUMLABEL=42" }) {
-		t.Fatal("NUMLABEL=42 not shown within 1 s of sending the number")
+	if !waitFor(lines, 2*time.Second, func(l string) bool { return l == "NUMLABEL=42" }) {
+		t.Fatal("NUMLABEL=42 not shown within 2 s of sending the number")
 	}
 	if err := send("done\n"); err != nil {
 		t.Fatal(err)
 	}
-	if !waitFor(lines, time.Second, func(l string) bool { return l == "RESULT=DONE_OK" }) {
-		t.Fatal("RESULT=DONE_OK not shown within 1 s of sending done")
+	if !waitFor(lines, 2*time.Second, func(l string) bool { return l == "RESULT=DONE_OK" }) {
+		t.Fatal("RESULT=DONE_OK not shown within 2 s of sending done")
 	}
 }
 
-// testWindowFreezes proves a broken reader blocks the interface thread: SHOWN
-// still arrives (it is emitted before the blocking read starts), but with no
-// input sent the Timer cannot tick, so fewer than 5 TICK appear in 2 s — which
-// is exactly the alive check testWindowAlive would fail on. If a reader did NOT
-// freeze here it would wrongly pass the self-test, so this subtest fails loudly.
+// testWindowFreezes proves a reader that blocks the interface thread fails the
+// self-test: SHOWN still arrives (it is emitted before the blocking read starts),
+// but with no input sent the Timer cannot tick, so fewer than 5 TICK appear in
+// 2 s — exactly the alive check testWindowAlive would fail on. Used for
+// consolein_async. If it did NOT freeze it would wrongly pass, so this fails loud.
 func testWindowFreezes(t *testing.T, readmode string) {
 	lines, send, stop := runSelfWindow(t, readmode)
 	defer stop()
 	if err := send(selfConfig()); err != nil {
 		t.Fatal(err)
 	}
-	// SHOWN is emitted before Start-Reading blocks, so it should still arrive; if
-	// it does not, the window froze even earlier, which is also a freeze.
-	sawShown := waitFor(lines, 10*time.Second, func(l string) bool { return l == "SHOWN" })
+	sawShown := waitFor(lines, shownTimeout, func(l string) bool { return l == "SHOWN" })
 	ticks := countLines(lines, 2*time.Second, "TICK")
 	t.Logf("%s: shown=%v, %d TICK in 2 s with no input", readmode, sawShown, ticks)
 	if ticks >= 5 {
 		t.Fatalf("%s: %d TICK in 2 s — the interface thread did not freeze, so this broken reader would pass the self-test", readmode, ticks)
+	}
+}
+
+// testWindowNoNumber proves the v0.7.0 BackgroundWorker reader fails the
+// self-test differently: the interface thread stays alive (it ticks), but the
+// worker's DoWork runs on a thread-pool thread with no runspace, fails, and
+// reports the error via RunWorkerCompleted, so the number never reaches the
+// window. We send the number and require that NUMLABEL never appears and that the
+// worker error is surfaced (WORKERERROR=...). A working reader would show NUMLABEL.
+func testWindowNoNumber(t *testing.T, readmode string) {
+	lines, send, stop := runSelfWindow(t, readmode)
+	defer stop()
+	if err := send(selfConfig()); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(lines, shownTimeout, func(l string) bool { return l == "SHOWN" }) {
+		t.Fatal("no SHOWN: the window did not paint")
+	}
+	if err := send("number 42\n"); err != nil {
+		t.Fatal(err)
+	}
+	var sawNum, sawErr bool
+	deadline := time.After(3 * time.Second)
+loop:
+	for {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				break loop
+			}
+			switch {
+			case l == "NUMLABEL=42":
+				sawNum = true
+			case strings.HasPrefix(l, "WORKERERROR="):
+				sawErr = true
+			}
+		case <-deadline:
+			break loop
+		}
+	}
+	t.Logf("%s: sawNumber=%v sawWorkerError=%v", readmode, sawNum, sawErr)
+	if sawNum {
+		t.Fatalf("%s: NUMLABEL=42 appeared — the number reached the window, so this broken reader would pass the self-test", readmode)
+	}
+	if !sawErr {
+		t.Fatalf("%s: no WORKERERROR surfaced: v0.7.0's silent worker failure was not reproduced", readmode)
 	}
 }
 
