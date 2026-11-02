@@ -2,10 +2,12 @@ package main
 
 import (
 	"crypto/sha256"
+	"debug/pe"
 	"encoding/hex"
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -209,5 +211,88 @@ func TestVersionInfoParses(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Errorf("got %d strings %v, want %d", len(got), got, len(want))
+	}
+}
+
+// findRTVersion returns the bytes of the first RT_VERSION (type 16) resource in
+// a .rsrc section, resolving the data entry's RVA against the section's RVA.
+func findRTVersion(t *testing.T, rsrc []byte, sectionRVA uint32) []byte {
+	t.Helper()
+	le16 := func(b []byte) int { return int(b[0]) | int(b[1])<<8 }
+	le32 := func(b []byte) uint32 { return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24 }
+	n := le16(rsrc[12:]) + le16(rsrc[14:])
+	for i, off := 0, 16; i < n; i, off = i+1, off+8 {
+		id := le32(rsrc[off:])
+		sub := le32(rsrc[off+4:])
+		if id != 16 || sub&0x80000000 == 0 {
+			continue
+		}
+		l2 := int(sub & 0x7fffffff)  // RT_VERSION type dir
+		sub2 := le32(rsrc[l2+16+4:]) // first id entry -> id subdir
+		l3 := int(sub2 & 0x7fffffff) // id (language) dir
+		sub3 := le32(rsrc[l3+16+4:]) // first language entry -> data entry
+		de := int(sub3 & 0x7fffffff) // data entry (high bit clear)
+		rva := le32(rsrc[de:])       // OffsetToData (already an RVA after linking)
+		size := le32(rsrc[de+4:])
+		start := rva - sectionRVA
+		return rsrc[start : start+size]
+	}
+	t.Fatal("no RT_VERSION resource in .rsrc")
+	return nil
+}
+
+// BV-149: the resource must survive the linker. A tiny program is cross-built
+// for windows/amd64 with the generated .syso; the RT_VERSION resource is read
+// back from the linked PE and its strings must be non-empty. This catches
+// linker-level mistakes (a bad relocation points the resource at the wrong
+// bytes) that a check of the generator's output alone would miss.
+func TestLinksIntoExe(t *testing.T) {
+	if testing.Short() {
+		t.Skip("cross-builds an exe")
+	}
+	syso, err := buildSyso(readICO(t), "0.7.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(dir+"/"+name, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(dir+"/rsrc_windows_amd64.syso", syso, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	write("go.mod", "module winrestest\n\ngo 1.24\n")
+	write("main.go", "package main\n\nfunc main() {}\n")
+	exe := dir + "/out.exe"
+	cmd := exec.Command("go", "build", "-o", exe, ".")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("cross build failed: %v\n%s", err, out)
+	}
+	f, err := pe.Open(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var rsrc *pe.Section
+	for _, s := range f.Sections {
+		if s.Name == ".rsrc" {
+			rsrc = s
+		}
+	}
+	if rsrc == nil {
+		t.Fatal("no .rsrc section in the linked exe")
+	}
+	data, err := rsrc.Data()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ver := findRTVersion(t, data, rsrc.VirtualAddress)
+	got := walkVS(t, ver)
+	if got["ProductName"] != "RosmarOps" || got["ProductVersion"] != "0.7.2" || got["OriginalFilename"] != "rosmarops.exe" {
+		t.Errorf("linked RT_VERSION strings = %v", got)
 	}
 }

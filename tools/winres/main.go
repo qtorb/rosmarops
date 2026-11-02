@@ -369,12 +369,16 @@ func buildRsrc(res []resource) (section []byte, relocs []reloc, symbolOffsets []
 			leafOrder++
 		}
 	}
-	// Data entries. OffsetToData is 0 here and fixed up by a relocation.
+	// Data entries. OffsetToData holds the blob's offset within the section; a
+	// relocation against the section adds the section's RVA at link time, so the
+	// final value is the blob's RVA. (The linker uses the field as the addend and
+	// the symbol only to name the section, so the offset goes in the field here,
+	// not in the symbol's value.)
 	for i := 0; i < nLeaves; i++ {
 		fieldVA := uint32(dataEntriesOff + i*dataEntSize)
 		relocs = append(relocs, reloc{virtualAddress: fieldVA, symbolIndex: uint32(i)})
 		symbolOffsets = append(symbolOffsets, leafBlobOff[i])
-		putU32(&buf, 0)                        // OffsetToData (relocated)
+		putU32(&buf, leafBlobOff[i])           // OffsetToData (addend; RVA added by reloc)
 		putU32(&buf, uint32(len(res[i].data))) // Size
 		putU32(&buf, 0)                        // CodePage
 		putU32(&buf, 0)                        // Reserved
@@ -460,15 +464,17 @@ func assembleCOFF(rsrc []byte, relocs []reloc, symbolOffsets []uint32) []byte {
 		putU16(&buf, relAMD64ADDR32NB)
 	}
 
-	// Symbol table: one static symbol per data entry, named $R%06d, whose value
-	// is the within-section offset of the blob the relocation targets.
-	for i, off := range symbolOffsets {
+	// Symbol table: one static symbol per data entry, named $R%06d, pointing at
+	// the section base (Value 0). The relocation adds this symbol's RVA (the
+	// section RVA) to the OffsetToData field, which already holds the blob's
+	// offset within the section.
+	for i := range symbolOffsets {
 		var sn [8]byte
 		copy(sn[:], fmt.Sprintf("$R%06d", i))
 		buf.Write(sn[:])
-		putU32(&buf, off) // Value
-		putU16(&buf, 1)   // SectionNumber (.rsrc)
-		putU16(&buf, 0)   // Type
+		putU32(&buf, 0) // Value (section base)
+		putU16(&buf, 1) // SectionNumber (.rsrc)
+		putU16(&buf, 0) // Type
 		buf.WriteByte(symClassStatic)
 		buf.WriteByte(0) // NumberOfAuxSymbols
 	}
