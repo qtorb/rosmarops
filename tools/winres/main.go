@@ -8,7 +8,7 @@
 // byte-for-byte deterministic: nothing in it depends on the time or the
 // machine. Usage, from the repository root:
 //
-//	go run ./tools/winres -version 0.7.2
+//	go run ./tools/winres -version 0.7.3
 //
 // The .syso it writes is a build input picked up automatically by
 // `GOOS=windows GOARCH=amd64 go build ./cmd/rosmarops`; it is git-ignored.
@@ -31,12 +31,12 @@ const (
 )
 
 func main() {
-	version := flag.String("version", "", "program version without the leading v, e.g. 0.7.2 (required)")
+	version := flag.String("version", "", "program version without the leading v, e.g. 0.7.3 (required)")
 	icoPath := flag.String("ico", defaultICO, "path to the .ico file")
 	outPath := flag.String("out", defaultOut, "path to write the .syso object")
 	flag.Parse()
 	if *version == "" {
-		fmt.Fprintln(os.Stderr, "winres: -version is required (e.g. -version 0.7.2)")
+		fmt.Fprintln(os.Stderr, "winres: -version is required (e.g. -version 0.7.3)")
 		os.Exit(2)
 	}
 	ico, err := os.ReadFile(*icoPath)
