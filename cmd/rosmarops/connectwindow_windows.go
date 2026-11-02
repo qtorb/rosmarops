@@ -61,13 +61,14 @@ func connectWindowArgs() []string {
 // connectWindowScript shows the window with System.Windows.Forms and talks to
 // the program over the standard streams. The first stdin line is the base64
 // JSON config. The window shows the question; on «Connect» it writes
-// "connect", hides the buttons and shows the number/wait view, then a
-// BackgroundWorker reads the program's state lines ("number <N>", then "done",
-// "expired" or "failed") and updates the view on the UI thread; the final state
-// shows an OK button that, clicked, writes "ok" and closes. «Not now» or
-// closing before connecting writes "no" and ends. Under Constrained Language
-// Mode Add-Type fails and PowerShell exits, which the caller treats as «Not
-// now» (fail closed).
+// "connect", hides the buttons and, from a UI Timer, polls an async read of the
+// program's state lines ("number <N>", then "done", "expired" or "failed") and
+// updates the view — never blocking the interface thread (BV-145) — and the
+// final state shows an OK button that, clicked, writes "ok" and closes. «Not
+// now» or closing before connecting writes "no" and ends. Under Constrained
+// Language Mode Add-Type fails and PowerShell exits, which the caller treats as
+// «Not now» (fail closed). With ROSMAROPS_CONNECT_WINDOW_SELFTEST set the window
+// drives itself and echoes its label values, for the Windows CI self-test only.
 const connectWindowScript = `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -113,39 +114,70 @@ $ok.Visible = $false
 $form.Controls.Add($yes); $form.Controls.Add($no); $form.Controls.Add($ok)
 $form.AcceptButton = $yes
 $form.CancelButton = $no
-$worker = New-Object System.ComponentModel.BackgroundWorker
-$worker.WorkerReportsProgress = $true
-$worker.Add_DoWork({
-  while ($true) {
-    $line = [Console]::In.ReadLine()
-    if ($line -eq $null) { break }
-    $worker.ReportProgress(0, $line)
-  }
-})
-$worker.Add_ProgressChanged({
-  $parts = ([string]$_.UserState).Split(' ', 2)
+# Read the program's state lines without blocking the interface thread (BV-145).
+# In Windows PowerShell 5.1 a BackgroundWorker's DoWork scriptblock runs on the
+# runspace thread, which is the thread running ShowDialog, so a blocking
+# [Console]::In.ReadLine() there froze the window and it never repainted (blank,
+# no number). Instead poll an async read from a UI Timer, which leaves the
+# message loop free to paint.
+$selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_CONNECT_WINDOW_SELFTEST)
+$script:reader = $null
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 200
+function Show-Result($text) {
+  $waitl.Visible = $false
+  $resultl.Text = $text
+  $resultl.Visible = $true
+  $ok.Visible = $true
+  if ($selftest) { [Console]::Out.WriteLine('RESULT=' + $text); [Console]::Out.Flush(); $form.Close() }
+}
+function Handle-Line($line) {
+  $parts = ([string]$line).Split(' ', 2)
   switch ($parts[0]) {
     'number' {
       $numCaption.Visible = $true
       $numValue.Text = $parts[1]
       $numValue.Visible = $true
       $waitl.Visible = $true
+      if ($selftest) { [Console]::Out.WriteLine('NUMLABEL=' + $numValue.Text); [Console]::Out.Flush() }
     }
-    'done'    { $waitl.Visible = $false; $resultl.Text = $cfg.done;    $resultl.Visible = $true; $ok.Visible = $true }
-    'expired' { $waitl.Visible = $false; $resultl.Text = $cfg.expired; $resultl.Visible = $true; $ok.Visible = $true }
-    'failed'  { $waitl.Visible = $false; $resultl.Text = $cfg.failed;  $resultl.Visible = $true; $ok.Visible = $true }
+    'done'    { Show-Result $cfg.done }
+    'expired' { Show-Result $cfg.expired }
+    'failed'  { Show-Result $cfg.failed }
+  }
+}
+function Start-Reading {
+  $ql.Visible = $false; $tl.Visible = $false
+  $yes.Visible = $false; $no.Visible = $false
+  $script:reader = [Console]::In.ReadLineAsync()
+  $timer.Start()
+}
+$timer.Add_Tick({
+  if ($script:reader -ne $null -and $script:reader.IsCompleted) {
+    $line = $script:reader.Result
+    if ($line -eq $null) { $timer.Stop(); $script:reader = $null; return }
+    Handle-Line $line
+    if ($script:reader -ne $null) { $script:reader = [Console]::In.ReadLineAsync() }
   }
 })
 $yes.Add_Click({
   $script:answered = $true
   [Console]::Out.WriteLine('connect')
   [Console]::Out.Flush()
-  $ql.Visible = $false; $tl.Visible = $false
-  $yes.Visible = $false; $no.Visible = $false
-  $worker.RunWorkerAsync()
+  Start-Reading
 })
 $no.Add_Click({ $form.Close() })
 $ok.Add_Click({ [Console]::Out.WriteLine('ok'); [Console]::Out.Flush(); $form.Close() })
+if ($selftest) {
+  # Drive the window without a click: prove it painted (Shown) and then read, so
+  # a headless CI run can check the number appears. Test only.
+  $form.Add_Shown({
+    [Console]::Out.WriteLine('SHOWN')
+    [Console]::Out.Flush()
+    $script:answered = $true
+    Start-Reading
+  })
+}
 [void]$form.ShowDialog()
 if (-not $script:answered) { [Console]::Out.WriteLine('no'); [Console]::Out.Flush() }`
 
