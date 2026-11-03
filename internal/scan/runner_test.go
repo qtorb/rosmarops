@@ -19,9 +19,31 @@ func recorder(name string, ran *[]string) func(context.Context) func() {
 	}
 }
 
-func TestGlobalTimeoutValue(t *testing.T) {
-	if GlobalTimeout != 300*time.Second {
-		t.Fatalf("GlobalTimeout = %s, invariant §6 requires 300s", GlobalTimeout)
+// BV-155: the global limit is 15 s per project, clamped to [300, 1200] s,
+// and the minutes shown are the limit rounded up (invariant §6).
+func TestGlobalTimeoutFor(t *testing.T) {
+	cases := []struct {
+		projects int
+		wantSec  int
+		wantMin  int
+	}{
+		{0, 300, 5},
+		{10, 300, 5},
+		{20, 300, 5},
+		{21, 315, 6},
+		{48, 720, 12},
+		{80, 1200, 20},
+		{500, 1200, 20},
+		{-1, 300, 5}, // a count that could not be established falls back to the minimum
+	}
+	for _, c := range cases {
+		got := GlobalTimeoutFor(c.projects)
+		if got != time.Duration(c.wantSec)*time.Second {
+			t.Errorf("GlobalTimeoutFor(%d) = %s, want %ds", c.projects, got, c.wantSec)
+		}
+		if m := LimitMinutes(got); m != c.wantMin {
+			t.Errorf("LimitMinutes for %d projects = %d, want %d", c.projects, m, c.wantMin)
+		}
 	}
 }
 

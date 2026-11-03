@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -72,8 +73,8 @@ func newRunCmd() *cli.Command {
 var (
 	runInput       io.Reader = os.Stdin
 	runCanAsk                = func() bool { return canAsk(os.Stdin, os.Stdout) }
-	newScanContext           = func() (context.Context, context.CancelFunc) {
-		return context.WithTimeout(context.Background(), scan.GlobalTimeout)
+	newScanContext           = func(projects int) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), scan.GlobalTimeoutFor(projects))
 	}
 )
 
@@ -212,10 +213,21 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			connectWindowHook(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat)
 		}
 	}
-	// Invariant §6: every scanner and subprocess runs under the global cap,
-	// which counts from after the integrity questions: the time a person
-	// takes to answer is not the scan's (J13).
-	ctx, cancel := newScanContext()
+	// Invariant §6 (BV-155): the global limit is 15 s per project to check, at
+	// least 300 and at most 1200 s, computed once now that the projects are
+	// known and before they are checked. The time already spent (agents,
+	// discovery) counts within the same limit: every scanner runs under this
+	// one context, which counts from after the integrity questions — the time a
+	// person takes to answer is not the scan's (J13).
+	projects := len(cfg.RepoRoots)
+	limit := scan.GlobalTimeoutFor(projects)
+	limitMinutes := scan.LimitMinutes(limit)
+	// The console line, once the number of projects is known (BV-155 point 2);
+	// never on a scheduled review (no console) or when output is discarded.
+	if !unattended {
+		fmt.Fprintln(os.Stdout, checkingLine(cat, projects, limitMinutes))
+	}
+	ctx, cancel := newScanContext(projects)
 	defer cancel()
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
 
@@ -315,6 +327,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	)
 	salt, saltErr := st.Salt()
 	graphDone := false
+	// How many projects the global limit left unreviewed (BV-155): -1 until the
+	// repos step runs and reports it; the limit-reached note reads it, falling
+	// back to every project when the repos step never ran.
+	reposNotReviewed := -1
 	steps := []scan.Step{
 		// --- VS Code extensions scanner (M4). The reference is updated on
 		// every run, as the other collectors' (decision 2026-10-26, agentes
@@ -580,6 +596,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					repoHits = append(repoHits, h)
 				},
 				OnProgress: progress.repos,
+				OnCoverage: func(notReviewed int) { reposNotReviewed = notReviewed },
 			}
 			if saltErr == nil {
 				// Committed secrets become salted references in the scan;
@@ -614,6 +631,24 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if !graphDone {
 		if rmErr := graph.RemoveStale(reportDir); rmErr != nil {
 			scanErrors = append(scanErrors, finding.ScanError{Scope: "graph", Message: rmErr.Error()})
+		}
+	}
+
+	// The global time limit (BV-155): whether it expired this run, and how many
+	// projects it left unreviewed (every project when the repos step never ran).
+	limitReached := false
+	for _, se := range scanErrors {
+		if se.Scope == scan.GlobalTimeoutScope {
+			limitReached = true
+			break
+		}
+	}
+	projectsNotReviewed := 0
+	if limitReached {
+		if reposNotReviewed >= 0 {
+			projectsNotReviewed = reposNotReviewed
+		} else {
+			projectsNotReviewed = projects
 		}
 	}
 
@@ -667,6 +702,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
+		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -790,6 +826,20 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	fmt.Print("\n" + report.ConsoleSummary(v2, cat, mdPath))
 
 	return htmlPath, nil
+}
+
+// checkingLine is the console's «checking this computer» line (BV-155),
+// chosen by the number of projects: none (agents only), one, or several, with
+// the time limit in minutes.
+func checkingLine(cat catalog.Catalog, projects, minutes int) string {
+	switch {
+	case projects == 0:
+		return cat.Text("console.checking.agents_only", nil)
+	case projects == 1:
+		return cat.Text("console.checking.one", map[string]string{"minutes": strconv.Itoa(minutes)})
+	default:
+		return cat.Text("console.checking.other", map[string]string{"projects": strconv.Itoa(projects), "minutes": strconv.Itoa(minutes)})
+	}
 }
 
 // compileExtraPattern compiles a single user-defined secret pattern from config.

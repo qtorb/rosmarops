@@ -66,6 +66,9 @@ type V2 struct {
 	NewMCP         []MCPServerLine  `json:"-"`
 	MCPChanged     []MCPServerLine  `json:"-"`
 	repos          int              // configured repositories
+	limitMinutes   int              // BV-155: the run's time limit, in minutes (rounded up)
+	limitReached   bool             // BV-155: the global time limit expired this run
+	notReviewed    int              // BV-155: projects left unreviewed when the limit expired
 	nextMemory     memory.File      // findings-memory.json after this run
 	memoryPrev     bool             // an earlier findings-memory.json was read
 	memoryLost     bool             // B8: prior runs, but no memory to compare with
@@ -306,6 +309,13 @@ type V2Input struct {
 	// this system, by code (NotCheckedCodes); unknown codes are dropped
 	// and the rest shown in NotCheckedCodes' order, on macOS only.
 	NotChecked []string
+
+	// LimitMinutes is the run's global time limit in minutes, rounded up
+	// (BV-155), shown in the report. LimitReached is whether the limit expired
+	// this run; ProjectsNotReviewed is how many projects it left unreviewed.
+	LimitMinutes        int
+	LimitReached        bool
+	ProjectsNotReviewed int
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -344,6 +354,9 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Posture:       []rules.Posture{},
 		repos:         len(in.RepoRoots),
 		repoRoots:     in.RepoRoots,
+		limitMinutes:  in.LimitMinutes,
+		limitReached:  in.LimitReached,
+		notReviewed:   in.ProjectsNotReviewed,
 
 		integrityNotChecked: in.IntegrityNotChecked,
 		exePath:             in.ExePath,

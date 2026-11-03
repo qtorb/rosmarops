@@ -87,7 +87,8 @@ func runNoArgs() int {
 		}
 	}
 
-	fmt.Println(cat.Text("console.checking", nil))
+	// The «checking this computer» line is printed by runWith once the number
+	// of projects, and so the time limit, is known (BV-155).
 	htmlPath, err := runWith(lang, runMode{window: true, log: log})
 	if err != nil {
 		// B3 (BV-93): a double click never fails in silence — the red

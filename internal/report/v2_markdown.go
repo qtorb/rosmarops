@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
@@ -55,7 +56,8 @@ var staticKeys = []string{
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification
 	"console.first_run.detecting", "console.first_run.found", "console.first_run.none", "console.first_run.picker_title",
-	"console.first_run.agents_only", "console.checking", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	"console.first_run.agents_only", "console.checking.one", "console.checking.other", "console.checking.agents_only", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	"html.limit.one", "html.limit.other", "html.limit.reached",
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",
@@ -162,8 +164,16 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	local := at.In(loc)
 	w("# %s\n\n", t("report.title", map[string]string{"date": local.Format("2006-01-02")}))
 
-	// 1. Status and scope.
-	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(v.Coverage.ScanErrors)
+	// 1. Status and scope. The global time limit is not a coverage code
+	// (BV-155): it is left out of the gaps and the coverage list, and has its
+	// own line below.
+	scanErrs := make([]string, 0, len(v.Coverage.ScanErrors))
+	for _, s := range v.Coverage.ScanErrors {
+		if s != scan.GlobalTimeoutScope {
+			scanErrs = append(scanErrs, s)
+		}
+	}
+	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs)
 	if !v.Coverage.GraphBuilt {
 		gaps++
 	}
@@ -189,6 +199,14 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	w("%s\n\n", t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
 	if knowledgeOld(local, knowledge.ReviewedOn) {
 		w("%s\n\n", t("html.knowledge.old", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
+	}
+
+	// The run's time limit, and whether it expired (BV-155, points 3-5).
+	if v.limitMinutes > 0 {
+		w("%s\n\n", cat.Plural("html.limit", v.repos, map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)}))
+	}
+	if v.limitReached {
+		w("%s\n\n", t("html.limit.reached", map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)}))
 	}
 
 	byID := map[string]rules.Finding{}
@@ -491,7 +509,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	for _, a := range v.Coverage.AgentsUnsupported {
 		w("- `%s` — `%s`\n", untrusted.PlainText(a.Platform), untrusted.PlainText(a.ConfigPath))
 	}
-	for _, s := range v.Coverage.ScanErrors {
+	for _, s := range scanErrs {
 		w("- `%s`\n", untrusted.PlainText(s))
 	}
 	if !v.Coverage.GraphBuilt {

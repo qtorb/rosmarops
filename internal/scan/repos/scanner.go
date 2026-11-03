@@ -98,6 +98,13 @@ type ScanConfig struct {
 	// roots in repoRoots order) once they are known, on the calling
 	// goroutine. The v2 report groups its members by family.
 	OnFamilies func(families [][]string)
+
+	// OnCoverage, when set, is called once at the end with how many
+	// repositories were not reviewed because the global time limit expired:
+	// those never started plus the one interrupted mid-scan (BV-155). A
+	// per-repo timeout is not counted here — that repository was reviewed and
+	// has its own scan_timeout finding.
+	OnCoverage func(notReviewed int)
 }
 
 // perRepoTimeout is the per-repo deadline ScanAllRepos applies. Always
@@ -270,6 +277,11 @@ func ScanAllRepos(
 	}
 	slog.Info("repos: scan finished", "configured", len(repoRoots), "scanned", scanned,
 		"timed_out", timedOut, "interrupted", interrupted, "not_scanned", notScanned)
+	if cfg.OnCoverage != nil {
+		// Not reviewed = never started + interrupted mid-scan by the global
+		// deadline (BV-155). A per-repo timeout was reviewed, so it is excluded.
+		cfg.OnCoverage(notScanned + interrupted)
+	}
 	return allFindings, newBaselines, scanErrors
 }
 
