@@ -65,9 +65,15 @@ $reports = Join-Path $HomeDir '.rosmarops\reports'
 $log = Join-Path $HomeDir '.rosmarops\e2e.log'
 $summary = [System.Collections.Generic.List[string]]::new()
 $failures = [System.Collections.Generic.List[string]]::new()
+# $detail describes the failure and is shown only when the check fails, so a
+# PASS line never carries failure-phrased text.
 function Check([string]$name, [bool]$ok, [string]$detail = '') {
-    $summary.Add(("{0}  {1}{2}" -f ($(if ($ok) { 'PASS' } else { 'FAIL' })), $name, $(if ($detail) { " — $detail" } else { '' })))
-    if (-not $ok) { $failures.Add("$name$(if ($detail) { " — $detail" })") }
+    if ($ok) {
+        $summary.Add("PASS  $name")
+    } else {
+        $summary.Add("FAIL  $name$(if ($detail) { " — $detail" })")
+        $failures.Add("$name$(if ($detail) { " — $detail" })")
+    }
 }
 
 # --- Running the exe while watching for any outbound connection -------------
@@ -247,6 +253,7 @@ if ($pkgs.Count -ge 1) {
         $open = & go run ./tests/e2e/openpkg $pkgs[0].FullName 2>&1
     }
     Check 'space package opens with the kit key' ($LASTEXITCODE -eq 0) ("$open")
+    $summary.Add("INFO  openpkg: $open")
 }
 
 # --- No full fake secret in any output or in the log ------------------------
