@@ -153,7 +153,7 @@
       "properties": {
         "state": { "enum": ["own", "other", "none"] },
         "day": { "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun", null] },
-        "time": { "type": ["string", "null"], "pattern": "^[0-9]{2}:[0-9]{2}$" }
+        "time": { "type": ["string", "null"], "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$" }
       }
     },
     "overview": {
@@ -165,10 +165,10 @@
         "required": ["agent_id", "nobody", "model", "you", "blocked"],
         "properties": {
           "agent_id": { "type": "string", "maxLength": 64 },
-          "nobody": { "$ref": "#/$defs/verb_list" },
-          "model": { "$ref": "#/$defs/verb_list" },
-          "you": { "$ref": "#/$defs/verb_list" },
-          "blocked": { "$ref": "#/$defs/verb_list" }
+          "nobody": { "$ref": "#/$defs/verbs" },
+          "model": { "$ref": "#/$defs/verbs" },
+          "you": { "$ref": "#/$defs/verbs" },
+          "blocked": { "$ref": "#/$defs/verbs" }
         }
       }
     },
@@ -186,7 +186,7 @@
     "card_svg": { "type": ["string", "null"], "maxLength": 40000 }
   },
   "$defs": {
-    "verb_list": {
+    "verbs": {
       "type": "array",
       "items": { "enum": ["reads_files", "writes_files", "runs_commands", "sends_out", "changes_other_agents"] }
     },

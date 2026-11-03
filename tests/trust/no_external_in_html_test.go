@@ -19,11 +19,10 @@ func TestNoExternalInHTML(t *testing.T) {
 	home, repo := "/home/alice", "/home/alice/projects/app"
 	v := scenarioV2(t, []byte("0123456789abcdef0123456789abcdef"), home, repo,
 		[]platform.CredentialEntry{credEntry(repo+"/.env", 1, "GITHUB_TOKEN", fakeGitHubPAT)}, day)
-	// BV-137 point 7: this computer is connected, so the «Your space» section
-	// shows its button. Without this the exact-URL exception below would not be
-	// exercised.
-	v.SpaceConnected = true
-	v.SpaceSentDate = "2026-10-24"
+	// BV-158: not connected, the «Your space» section shows the «Create your
+	// space» button (the exact-URL exception below), and the card is in the
+	// folded «More information» (the SVG-namespace exception). Both exceptions
+	// are exercised on one unconnected page; connected, neither is in the report.
 	for _, lang := range []string{"en", "es"} {
 		cat, err := catalog.Load(lang)
 		if err != nil {

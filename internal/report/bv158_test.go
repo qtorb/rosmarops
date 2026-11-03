@@ -119,4 +119,55 @@ func TestSpaceViewSchemaOptionalAndStrict(t *testing.T) {
 	if valid(extra) {
 		t.Error("an extra root property should be rejected")
 	}
+	// weekly.time is a strict 24-hour HH:MM (BV-158, aligned with production).
+	withTime := func(tm string) map[string]any {
+		d := base()
+		d["weekly"] = map[string]any{"state": "own", "day": "fri", "time": tm}
+		return d
+	}
+	if !valid(withTime("23:59")) {
+		t.Error("weekly.time 23:59 should validate")
+	}
+	if valid(withTime("24:00")) {
+		t.Error("weekly.time 24:00 should be rejected")
+	}
+	if valid(withTime("9:00")) {
+		t.Error("weekly.time 9:00 (no leading zero) should be rejected")
+	}
+}
+
+// TestBV158_ReportStructure: not connected, the report has a folded «More
+// information» and «How to fix it», and step 1's meta is just two lines;
+// connected, «More information» and the overview/assumptions dialogs are gone
+// (they live in the space), but «Your space» stays.
+func TestBV158_ReportStructure(t *testing.T) {
+	g := v2Graph(t)
+	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+
+	un := renderHTML(t, "en", v)
+	if !strings.Contains(un, `<details class="moreinfo">`) {
+		t.Error("not connected: no «More information»")
+	}
+	if !strings.Contains(un, "How to fix it") {
+		t.Error("the agent-fix block is not retitled «How to fix it»")
+	}
+	meta := un[strings.Index(un, `<p class="meta">`):]
+	meta = meta[:strings.Index(meta, "</p>")]
+	if n := strings.Count(meta, "<br>"); n != 1 {
+		t.Errorf("step 1 meta has %d <br>, want 1 (counts + projects line):\n%s", n, meta)
+	}
+	if !strings.Contains(meta, "projects checked") {
+		t.Errorf("step 1 meta lacks the projects line:\n%s", meta)
+	}
+
+	v.SpaceConnected = true
+	con := renderHTML(t, "en", v)
+	for _, s := range []string{`class="moreinfo"`, `id="ov-dialog"`, `id="as-dialog"`} {
+		if strings.Contains(con, s) {
+			t.Errorf("connected: the report still has %q", s)
+		}
+	}
+	if !strings.Contains(con, `class="space"`) {
+		t.Error("connected: no «Your space» section")
+	}
 }

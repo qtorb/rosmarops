@@ -70,11 +70,11 @@ func TestRulesVersion2_NotComparable(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, run2)
+		// BV-158: the not-comparable line left step 1's meta; it is now in «Since
+		// the last check» (renderSince → memory.not_comparable, checked below).
+		// Step 1's meta is just the counts and the projects line, with no arrow.
 		meta := page[strings.Index(page, `<p class="meta">`):]
 		meta = meta[:strings.Index(meta, "</p>")]
-		if !strings.Contains(meta, htmlEscape(cat.Text("html.index.not_comparable.rules", nil))) {
-			t.Errorf("%s: no not-comparable line in %s", lang, meta)
-		}
 		if strings.Contains(meta, " → ") {
 			t.Errorf("%s: an arrow in %s", lang, meta)
 		}

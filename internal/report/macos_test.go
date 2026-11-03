@@ -90,11 +90,10 @@ func TestRenderHTML_MacOS(t *testing.T) {
 				t.Errorf("%s: the weekly command (%s) on macOS", lang, cmd)
 			}
 		}
-		if !strings.Contains(page, `<div class="more two">`) || strings.Count(page[strings.Index(page, `<div class="more two">`):], `<h3>`) != 2 {
-			t.Errorf("%s: the strip is not two columns", lang)
-		}
-		if !strings.Contains(page, ".more.two{grid-template-columns:repeat(2,minmax(0,1fr))}") {
-			t.Errorf("%s: no two-column style", lang)
+		// BV-158: «More information» (not connected) on macOS has no weekly cell
+		// (checked above: no html.weekly.title), the rest of the grid as usual.
+		if !strings.Contains(page, `<details class="moreinfo">`) {
+			t.Errorf("%s: no «More information» on macOS", lang)
 		}
 		if strings.Contains(page, "%USERPROFILE%") || !strings.Contains(page, "~/.claude/settings.json") {
 			t.Errorf("%s: the agent prompt does not name the folder with ~", lang)
@@ -123,7 +122,7 @@ func TestRenderHTML_WindowsUnchangedByMacOS(t *testing.T) {
 	if !strings.HasSuffix(dlg, `<li>`+htmlEscape(cat.Text("html.assume.scope", nil))+`</li></ul>`) || strings.Contains(page, "not-checked") {
 		t.Errorf("the window changed on Windows:\n%s", dlg)
 	}
-	for _, want := range []string{htmlEscape(cat.Text("html.weekly.title", nil)), "Register-ScheduledTask", "%USERPROFILE%/.claude/settings.json", "Notepad", `<div class="more">`} {
+	for _, want := range []string{htmlEscape(cat.Text("html.weekly.title", nil)), "Register-ScheduledTask", "%USERPROFILE%/.claude/settings.json", "Notepad", `<details class="moreinfo">`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("missing on Windows: %s", want)
 		}
