@@ -275,6 +275,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	sort.Strings(langs)
 	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs}
 	weekly := scheduledtasks.Weekly{State: scheduledtasks.WeeklyNone}
+	weeklyNoSystemd := false
 	// The checks that do not apply on this system yet (ErrNotApplicable),
 	// by report.NotCheckedCodes' code: the macOS report lists them
 	// (decision 2026-10-29, macOS vista previa, point 3).
@@ -522,6 +523,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				if errors.Is(tasksErr, platform.ErrNotApplicable) {
 					slog.Info("scheduledtasks", "err", tasksErr)
+					// BV-165: on Linux the weekly review is a systemd user timer,
+					// read directly (not Windows Task Scheduler), so weekly IS
+					// checked here. Elsewhere (macOS) there is no weekly review yet.
+					if runtimeGOOS == "linux" {
+						weekly, weeklyNoSystemd = linuxWeekly(exePath)
+						return
+					}
 					// No task list: no weekly review either (point 4).
 					notChecked = append(notChecked, "scheduledtasks", "weekly")
 					return
@@ -713,7 +721,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan,
 		IntegrityNotChecked: integrityNotChecked,
-		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code, NotChecked: notChecked,
+		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 	})

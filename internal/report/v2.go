@@ -91,6 +91,7 @@ type V2 struct {
 	integrityNotChecked bool
 	exePath             string
 	weekly              scheduledtasks.Weekly
+	weeklyNoSystemd     bool // BV-165: Linux has no user systemd; the weekly section says so
 	// OS is the operating system of the run, from the v1 report's platform
 	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
 	// sections (decision 2026-10-29, macOS vista previa).
@@ -119,6 +120,15 @@ var NotCheckedCodes = []string{"scheduledtasks", "avexclusions", "shellprofile",
 // macOS reports a run on macOS.
 func (v V2) macOS() bool { return v.OS == "macos" }
 
+func (v V2) linux() bool { return v.OS == "linux" }
+
+// osLinuxVariant are the keys that have a «.linux» text (BV-165). Only these
+// get the «.linux» suffix on Linux; every other key keeps its base text.
+var osLinuxVariant = map[string]bool{
+	"ai.limits":         true,
+	"html.assume.scope": true,
+}
+
 // homePrefix is how the agent prompt names the user's folder: "~" on
 // macOS, "%USERPROFILE%" elsewhere (decision 2026-10-29, point 6).
 func (v V2) homePrefix() string {
@@ -133,6 +143,9 @@ func (v V2) homePrefix() string {
 func (v V2) osKey(key string) string {
 	if v.macOS() {
 		return key + ".macos"
+	}
+	if v.linux() && osLinuxVariant[key] {
+		return key + ".linux"
 	}
 	return key
 }
@@ -295,8 +308,11 @@ type V2Input struct {
 	// and Weekly what the scheduled tasks say about its weekly review (J4,
 	// J5; v3 §17.3). NotificationUnavailable is the reason a scheduled
 	// review's notification will not show (J7), empty otherwise.
-	ExePath                 string
-	Weekly                  scheduledtasks.Weekly
+	ExePath string
+	Weekly  scheduledtasks.Weekly
+	// WeeklyNoSystemd marks a Linux host with no user systemd (BV-165): the
+	// weekly section shows html.weekly.no_systemd instead of the pitch.
+	WeeklyNoSystemd         bool
 	NotificationUnavailable string
 
 	// IntelVersion and IntelPublishedAt are the embedded threat-data snapshot
@@ -361,6 +377,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		integrityNotChecked: in.IntegrityNotChecked,
 		exePath:             in.ExePath,
 		weekly:              in.Weekly,
+		weeklyNoSystemd:     in.WeeklyNoSystemd,
 		OS:                  in.V1.Platform.OS,
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
