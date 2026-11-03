@@ -24,7 +24,7 @@ Want to see the report before you run it? Open the [sample report](https://rosma
 1. Download `rosmarops.exe` from the [latest release](https://github.com/qtorb/rosmarops/releases/latest).
 2. Optional, recommended: check it (see [Check the download](#check-the-download)).
 3. Double-click `rosmarops.exe`. It finds your projects on its own; if it finds none, it asks you to choose the folder where you keep them.
-4. The report opens in your browser when it finishes (up to 5 minutes), in your Windows language, with a link to the other language.
+4. The report opens in your browser when it finishes (usually within 5 minutes; with many projects, up to 20), in your Windows language, with a link to the other language.
 
 Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, which agents or MCP servers are new, and which MCP servers now point somewhere else.
 

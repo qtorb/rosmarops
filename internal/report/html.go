@@ -19,6 +19,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
@@ -338,9 +339,17 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	// §11 How your agents work: right after the steps.
 	c.renderOverview()
 
-	// §6.1 What we could not read, only with coverage gaps.
+	// §6.1 What we could not read, only with coverage gaps. The global time
+	// limit is not a code here (BV-155): it has its own note in step 1, so it
+	// is left out, and the block does not appear when nothing else remains.
 	cov := v.Coverage
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(cov.ScanErrors) > 0 || !cov.GraphBuilt {
+	scanErrs := make([]string, 0, len(cov.ScanErrors))
+	for _, s := range cov.ScanErrors {
+		if s != scan.GlobalTimeoutScope {
+			scanErrs = append(scanErrs, s)
+		}
+	}
+	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) > 0 || !cov.GraphBuilt {
 		c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
 		for _, f := range cov.SourcesFailed {
 			code, _, _ := strings.Cut(f.Reason, ": ")
@@ -349,7 +358,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		for _, a := range cov.AgentsUnsupported {
 			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(a.ConfigPath)), html.EscapeString(untrusted.PlainText(a.Platform)))
 		}
-		for _, s := range cov.ScanErrors {
+		for _, s := range scanErrs {
 			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(s)))
 		}
 		if !cov.GraphBuilt {
@@ -556,6 +565,12 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
 	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
+	// The run's time limit (BV-155), proportional to the number of projects.
+	// Omitted only when it is not known (a fixture that did not set it).
+	if v.limitMinutes > 0 {
+		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.limit", v.repos,
+			map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})))
+	}
 	// Which agents are evaluated, and which detected but not yet (v3 §13.1).
 	if ev := v.Index.Scope.Evaluated; len(ev) > 0 {
 		if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 {
@@ -596,6 +611,10 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<br>%s`, c.t("html.history.missing", nil))
 	}
 	c.w(`</p>`)
+	if v.limitReached { // BV-155: the global time limit expired before every project was checked
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Text("html.limit.reached",
+			map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)})))
+	}
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
 		c.w(`<p class="meta warn">%s</p>`, c.t("html.integrity.not_checked", nil))
 	}
@@ -1316,6 +1335,7 @@ func HTMLKeys() []string {
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
 		"html.card.button", "html.card.counts", "html.card.method",
 		"html.count.repos", "html.none",
+		"html.limit.one", "html.limit.other", "html.limit.reached",
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",

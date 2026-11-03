@@ -87,7 +87,7 @@ func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
 	prevIn, prevAsk, prevCtx := runInput, runCanAsk, newScanContext
 	t.Cleanup(func() { runInput, runCanAsk, newScanContext = prevIn, prevAsk, prevCtx })
 	runInput, runCanAsk = answer, func() bool { return true }
-	newScanContext = func() (context.Context, context.CancelFunc) {
+	newScanContext = func(int) (context.Context, context.CancelFunc) {
 		created = time.Now()
 		return context.WithTimeout(context.Background(), budget)
 	}
