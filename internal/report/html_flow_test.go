@@ -89,19 +89,18 @@ func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
 				t.Fatalf("%s: test is vacuous — no today anchor to place", lang)
 			}
 
-			// «Your space» placement: present only when connected, and then
-			// after the flow and before section.ov, outside the flow.
-			hasSpace := strings.Contains(page, `<section class="space"`)
-			if hasSpace != withSpace {
-				t.Errorf("%s (space=%v): section.space present=%v", lang, withSpace, hasSpace)
+			// «Your space» placement (BV-158): always painted, after the flow
+			// (and after «How to fix it»), outside the flow; before section.ov
+			// when there is one (the overview is in «More information», which
+			// only the not-connected report shows, after the space).
+			if !strings.Contains(page, `<section class="space"`) {
+				t.Errorf("%s (space=%v): section.space missing", lang, withSpace)
 			}
-			if withSpace {
-				flowEnd := strings.Index(page, `<div class="flow">`)
-				spacePos := strings.Index(page, `<section class="space"`)
-				ovPos := strings.Index(page, `<section class="ov"`)
-				if !(spacePos > flowEnd && (ovPos < 0 || spacePos < ovPos)) {
-					t.Errorf("%s: section.space at %d is not after the flow (%d) and before section.ov (%d)", lang, spacePos, flowEnd, ovPos)
-				}
+			flowEnd := strings.Index(page, `<div class="flow">`)
+			spacePos := strings.Index(page, `<section class="space"`)
+			ovPos := strings.Index(page, `<section class="ov"`)
+			if !(spacePos > flowEnd && (ovPos < 0 || spacePos < ovPos)) {
+				t.Errorf("%s: section.space at %d is not after the flow (%d) and before section.ov (%d)", lang, spacePos, flowEnd, ovPos)
 			}
 		}
 	}

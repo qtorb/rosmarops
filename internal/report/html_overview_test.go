@@ -47,8 +47,11 @@ func TestRenderHTML_OverviewRealCase(t *testing.T) {
 		page := renderHTML(t, lang, v)
 		sec := ovSection(t, page)
 		folded := ovFolded(t, page)
-		if i, j := strings.Index(page, `<div class="flow">`), strings.Index(page, `<div class="more">`); !(i < strings.Index(page, folded) && strings.Index(page, folded) < j) {
-			t.Errorf("%s: the section is not between .flow and .more", lang)
+		// BV-158: the overview is a cell inside «More information» (the
+		// not-connected report), after the flow and after the details opens.
+		flow, more := strings.Index(page, `<div class="flow">`), strings.Index(page, `<details class="moreinfo">`)
+		if !(flow >= 0 && more > flow && strings.Index(page, folded) > more) {
+			t.Errorf("%s: the overview is not inside «More information» after the flow", lang)
 		}
 		cols := regexp.MustCompile(`<th scope="col">([^<]*)<small`).FindAllStringSubmatch(sec, -1)
 		if len(cols) != 2 || cols[0][1] != "Cursor" || cols[1][1] != "Claude Code" {

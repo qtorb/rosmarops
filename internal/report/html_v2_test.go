@@ -71,11 +71,11 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 			}
 		}
 
-		// v3 §7: one h1, six h2 (step 1, today's action, step 3, §11's section
-		// and its window, v3 §16, and the assumptions' window, §17.5), the
-		// score an image named by its value. The «Your space» section (BV-119)
-		// is not here: this scenario has no key (BV-132).
-		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 6 {
+		// BV-158: one h1, eight h2 — step 1, today's action, step 3, «How to
+		// fix it», «Your space», «How your agents work» and its window, and the
+		// assumptions' window — the score an image named by its value. (The
+		// overview and the windows are in «More information», not connected.)
+		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 8 {
 			t.Errorf("%s: headings h1 %d, h2 %d", lang, strings.Count(page, "<h1"), strings.Count(page, "<h2"))
 		}
 		of := cat.Text("html.index.of", nil)
@@ -176,7 +176,7 @@ func TestRenderHTML_Memory(t *testing.T) {
 // (v3 §17.2), after its heading.
 func memoryBox(t *testing.T, page string, cat catalog.Catalog) string {
 	t.Helper()
-	head := `<div class="more"><div><h3>` + htmlEscape(cat.Text("html.since.title", nil)) + `</h3>`
+	head := `<div><h3>` + htmlEscape(cat.Text("html.since.title", nil)) + `</h3>`
 	i := strings.Index(page, head)
 	if i < 0 {
 		t.Fatal("no memory block")

@@ -137,7 +137,7 @@ func TestRenderHTML_TwoScores(t *testing.T) {
 			t.Errorf("%s: the big score is not the lowest", lang)
 		}
 		other := htmlEscape(cat.Text("html.step.1.other", map[string]string{"agent": "Claude Code", "score": strconv.Itoa(*cc.Value), "band": cat.Text("band."+cc.Band, nil)}))
-		if !strings.Contains(page, `<br>`+other) {
+		if !strings.Contains(page, `<p>`+other+`</p>`) {
 			t.Errorf("%s: no line %q", lang, other)
 		}
 		if !strings.Contains(page, `<p class="sagent">Cursor · `) {

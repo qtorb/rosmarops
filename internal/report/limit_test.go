@@ -42,7 +42,7 @@ func TestLimitLine(t *testing.T) {
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
-			want := htmlEscape(cat.Plural("html.limit", 48, map[string]string{"projects": "48", "minutes": "12"}))
+			want := htmlEscape(cat.Plural("html.meta.projects", 48, map[string]string{"projects": "48", "minutes": "12"}))
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: no limit line %q", lang, want)
 			}
@@ -57,7 +57,7 @@ func TestLimitLine(t *testing.T) {
 		v := buildV2Limit(t, []string{"/src/only"}, report.Build("t", nil, nil, 0, 0, 0, 0, nil), 5, false, 0)
 		cat, _ := catalog.Load("en")
 		page := renderHTML(t, "en", v)
-		if !strings.Contains(page, htmlEscape(cat.Text("html.limit.one", map[string]string{"minutes": "5"}))) {
+		if !strings.Contains(page, htmlEscape(cat.Text("html.meta.projects.one", map[string]string{"projects": "1", "minutes": "5"}))) {
 			t.Errorf("no singular limit line for one project")
 		}
 	})

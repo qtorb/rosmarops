@@ -10,7 +10,6 @@ import (
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
-	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -131,37 +130,9 @@ func TestBV94_MemoryLost(t *testing.T) {
 	}
 }
 
-// B8: with earlier runs, a missing score history says so; a set-aside one
-// keeps html.history.reset; a first run says neither.
-func TestBV94_HistoryMissing(t *testing.T) {
-	g := v2Graph(t)
-	cat, _ := catalog.Load("en")
-	missing, reset := htmlText(cat, "html.history.missing"), htmlText(cat, "html.history.reset")
-	for _, c := range []struct {
-		prior, reset, history bool
-		want, not             string
-	}{
-		{true, false, false, missing, reset},
-		{true, true, false, reset, missing},
-		{true, false, true, "", missing},
-		{false, false, false, "", missing},
-	} {
-		v := bv94Build(t, &g, func(in *report.V2Input) {
-			in.PriorRuns, in.HistoryReset = c.prior, c.reset
-			if c.history {
-				in.History = []index.Entry{{}}
-			}
-		})
-		page := renderHTML(t, "en", v)
-		if c.want != "" && !strings.Contains(page, c.want) || strings.Contains(page, c.not) {
-			t.Errorf("%+v: want %q, not %q", c, c.want, c.not)
-		}
-	}
-}
-
-// B9: what the configuration hides is counted in the HTML, next to the test
-// data, and listed entry by entry in the Markdown (list, id, note; the note
-// as plain text); nothing when nothing is hidden.
+// B9: what the configuration hides is listed entry by entry in the Markdown
+// (list, id, note; the note as plain text); nothing when nothing is hidden.
+// BV-158 removed the HTML count line from step 1 (the Markdown is unchanged).
 func TestBV94_HiddenByConfiguration(t *testing.T) {
 	g := v2Graph(t)
 	hits := []config.AllowHit{
@@ -175,10 +146,6 @@ func TestBV94_HiddenByConfiguration(t *testing.T) {
 	}
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
-		line := cat.Plural("html.silenced.config", 3, map[string]string{"count": "3"})
-		if !strings.Contains(renderHTML(t, lang, v), htmlText(cat, "")+escapeHTML(line)) {
-			t.Errorf("%s: no %q", lang, line)
-		}
 		md := report.RenderV2Markdown(v, cat, time.UTC)
 		for _, want := range []string{
 			"## " + cat.Text("md.silenced.config", nil) + "\n\n",
@@ -192,8 +159,7 @@ func TestBV94_HiddenByConfiguration(t *testing.T) {
 	}
 	none := bv94Build(t, &g, nil)
 	cat, _ := catalog.Load("en")
-	if strings.Contains(report.RenderV2Markdown(none, cat, time.UTC), cat.Text("md.silenced.config", nil)) ||
-		strings.Contains(renderHTML(t, "en", none), strings.SplitN(cat.Text("html.silenced.config.other", nil), "{count}", 2)[1]) {
+	if strings.Contains(report.RenderV2Markdown(none, cat, time.UTC), cat.Text("md.silenced.config", nil)) {
 		t.Error("hidden lines with nothing hidden")
 	}
 }

@@ -43,19 +43,24 @@ func v17Report(t *testing.T, in func(*report.V2Input)) report.V2 {
 	return v
 }
 
-// column cuts the n-th column (1–3) of div.more out of page, from its h3.
-func column(t *testing.T, page string, n int) string {
+// cell returns the «More information» grid cell whose <h3> is titleHTML (the
+// escaped catalog title), from the <h3> to just before the cell's closing
+// </div> (BV-158). The weekly, since and other sections live in .migrid now,
+// not the old div.more; renderSince/renderWeekly emit no <div>, so the first
+// </div> is the cell's.
+func cell(t *testing.T, page, titleHTML string) string {
 	t.Helper()
-	_, more, ok := strings.Cut(page, `<div class="more">`)
-	if !ok {
-		t.Fatal("no div.more")
+	start := `<h3>` + titleHTML + `</h3>`
+	i := strings.Index(page, start)
+	if i < 0 {
+		t.Fatalf("no «More information» cell %q", titleHTML)
 	}
-	more, _, _ = strings.Cut(more, `<p class="foot">`)
-	cols := strings.Split(more, `<h3>`)
-	if len(cols) != 4 {
-		t.Fatalf("%d columns", len(cols)-1)
+	rest := page[i:]
+	end := strings.Index(rest, `</div>`)
+	if end < 0 {
+		t.Fatal("no cell end")
 	}
-	return `<h3>` + cols[n]
+	return rest[:end]
 }
 
 // fakeTasks is the fake adapter's scheduled tasks for each state of column
@@ -96,7 +101,7 @@ func TestRenderHTML_WeeklyStates(t *testing.T) {
 			v := v17Report(t, func(in *report.V2Input) { in.Weekly, in.NotificationUnavailable = weekly, reason })
 			for _, lang := range []string{"en", "es"} {
 				cat, _ := catalog.Load(lang)
-				col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
+				col := cell(t, report.RenderHTML(v, cat, v17Home, time.UTC), htmlEscape(cat.Text("html.weekly.title", nil)))
 				esc := func(k string, p map[string]string) string { return htmlEscape(cat.Text(k, p)) }
 				cmd := html.EscapeString(report.WeeklyCommand(v17Exe, lang))
 				copyBlock := strings.Contains(col, `<pre hidden># `+esc("html.weekly.prompt", nil)+"\n\n"+cmd+`</pre><button type="button" class="wide"`) &&
@@ -215,7 +220,7 @@ func TestRenderHTML_SinceColumn(t *testing.T) {
 		w.Memory.Reason, w.Memory.Counts = "", c.counts
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
-			col := column(t, renderHTML(t, lang, w), 1)
+			col := cell(t, renderHTML(t, lang, w), htmlEscape(cat.Text("html.since.title", nil)))
 			esc := func(k string, p map[string]string) string { return htmlEscape(cat.Text(k, p)) }
 			if !strings.HasPrefix(col, `<h3>`+esc("html.since.title", nil)+`</h3>`) {
 				t.Errorf("%s %s: column 1 is not «%s»", c.name, lang, cat.Text("html.since.title", nil))
@@ -253,7 +258,6 @@ func TestRenderHTML_StripAndAssumptions(t *testing.T) {
 				t.Errorf("%s: retired %s in the HTML", lang, k)
 			}
 		}
-		column(t, page, 3) // three columns
 		_, dlg, ok := strings.Cut(page, `<dialog id="as-dialog"`)
 		dlg, _, _ = strings.Cut(dlg, `</dialog>`)
 		if !ok {
@@ -274,8 +278,8 @@ func TestRenderHTML_StripAndAssumptions(t *testing.T) {
 			!strings.Contains(page, `dlg('as-open','as-dialog','as-close')`) || !strings.Contains(dlg, `id="as-close"`) {
 			t.Errorf("%s: #as-open does not open the window", lang)
 		}
-		narrow := regexp.MustCompile(`@media \(max-width:1099px\)\{[^\n]*\.more\{grid-template-columns:minmax\(0,1fr\);row-gap:20px\}`)
-		if !narrow.MatchString(page) || !strings.Contains(page, `.more{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px`) {
+		narrow := regexp.MustCompile(`@media \(max-width:1100px\)\{\.migrid\{grid-template-columns:minmax\(0,1fr\);row-gap:20px\}`)
+		if !narrow.MatchString(page) || !strings.Contains(page, `.migrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px`) {
 			t.Errorf("%s: the strip's columns CSS", lang)
 		}
 		if strings.Contains(page, htmlEscape(cat.Text("html.integrity.not_checked", nil))) {
@@ -309,7 +313,7 @@ func TestRenderHTML_CopyCommandButton(t *testing.T) {
 		v := v17Report(t, func(in *report.V2Input) { in.Weekly = weekly })
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
-			col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
+			col := cell(t, report.RenderHTML(v, cat, v17Home, time.UTC), htmlEscape(cat.Text("html.weekly.title", nil)))
 			label := htmlEscape(cat.Text("html.weekly.copy_command", nil))
 			m := regexp.MustCompile(`<pre>([^<]*)</pre><button type="button" class="b2" data-copied="[^"]*">` + regexp.QuoteMeta(label) + `</button>`).FindStringSubmatch(col)
 			if m == nil || strings.Count(col, label) != 1 {
@@ -332,7 +336,7 @@ func TestRenderHTML_WeeklyCopyIsPowerShell(t *testing.T) {
 	v := v17Report(t, func(in *report.V2Input) { in.Weekly = weekly })
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
-		col := column(t, report.RenderHTML(v, cat, v17Home, time.UTC), 2)
+		col := cell(t, report.RenderHTML(v, cat, v17Home, time.UTC), htmlEscape(cat.Text("html.weekly.title", nil)))
 		m := regexp.MustCompile(`(?s)<pre hidden>(.*?)</pre><button type="button" class="wide"`).FindStringSubmatch(col)
 		if m == nil {
 			t.Fatalf("%s: no agent copy block", lang)

@@ -63,7 +63,7 @@ func TestDoubleClickMacOSNotChecked(t *testing.T) {
 			t.Errorf("%s not listed", code)
 		}
 	}
-	for _, want := range []string{`<li id="not-checked">`, esc(cat.Text("html.assume.scope.macos", nil)), `<div class="more two">`} {
+	for _, want := range []string{`<li id="not-checked">`, esc(cat.Text("html.assume.scope.macos", nil)), `<details class="moreinfo">`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("missing %s", want)
 		}

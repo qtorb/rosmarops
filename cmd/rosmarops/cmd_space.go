@@ -505,6 +505,17 @@ func runConnect(inv cli.Invocation) error {
 		fmt.Fprintln(kitOutput, cat.Text("connect.done", nil))
 		return nil
 	}
+	connectInConsole(cat, paths)
+	return nil
+}
+
+// connectInConsole asks the connect question and runs today's protocol in the
+// console (the flow `rosmarops connect` has always had), and reports the
+// outcome. It is also the macOS connect offer at the end of a double click
+// (BV-158 part 4); the console has no «Not now» button, so it only reports
+// connected or failed, never declined. It never returns an error: every outcome
+// is a line for the person.
+func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 	fmt.Fprintln(kitOutput, cat.Text("connect.q", nil))
 	fmt.Fprintln(kitOutput, cat.Text("connect.text", nil))
 	ctx, cancel := context.WithTimeout(context.Background(), 11*time.Minute)
@@ -522,17 +533,17 @@ func runConnect(inv cli.Invocation) error {
 	switch err := spaceConnect(ctx, paths, onNumber, onOpen); {
 	case err == nil:
 		fmt.Fprintln(kitOutput, cat.Text("connect.done", nil))
-		return nil
+		return connectConnected
 	case errors.Is(err, spacenet.ErrConnectExpired), errors.Is(err, context.DeadlineExceeded):
 		fmt.Fprintln(kitOutput, cat.Text("connect.expired", nil))
-		return nil
+		return connectFailed
 	case errors.Is(err, spacenet.ErrConnectCancelled):
 		fmt.Fprintln(kitOutput, cat.Text("connect.expired", nil))
-		return nil
+		return connectFailed
 	default:
 		slog.Warn("connect failed", "err", err)
 		fmt.Fprintln(kitOutput, cat.Text("connect.failed", nil))
-		return nil
+		return connectFailed
 	}
 }
 
