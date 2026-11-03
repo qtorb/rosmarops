@@ -582,6 +582,7 @@
   "html.weekly.pitch": "Schedule a review every Friday at 09:00. When it finishes, Windows shows you a notification; if notifications are turned off, the report opens in your browser.",
   "html.weekly.prompt": "Run exactly this PowerShell command, without changing it and without administrator rights. If it fails, stop and show me the error.",
   "html.weekly.title": "Weekly review",
+  "html.where": "Found in:",
   "legacy.also_in_v2": "Also covered above, under Findings.",
   "legacy.group.one": "1 finding",
   "legacy.group.other": "{count} findings",

@@ -139,6 +139,8 @@ details[open]>summary .chev{transform:rotate(90deg)}
 .tchip{font-size:12px;font-weight:600;color:var(--mut);border:1px solid var(--line);padding:1px 8px;border-radius:999px;white-space:nowrap}
 .chip-any{display:inline-block;font-size:13px;font-weight:600;color:var(--red);background:var(--red-bg);padding:3px 9px;border-radius:999px}
 .gain{font-size:15px;font-weight:600}
+.where{font-size:14px;color:var(--mut);line-height:1.6;margin:0 0 12px}
+.where code{background:var(--code);color:var(--ink);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all;user-select:all}
 .tech{font-size:14px;color:var(--mut);margin-top:12px}
 .tech>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
 .fix{background:var(--bg);border-radius:12px;padding:14px 16px;margin-top:12px}
@@ -889,8 +891,13 @@ func (c htmlCtx) renderStep3(todayID string) {
 // verdict as text; open, the card body of v1 §3.6.
 func (c htmlCtx) renderRow(f rules.Finding) {
 	p := c.params(f)
-	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s"><p>%s%s</p>`,
-		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
+	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s">`,
+		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID))
+	// BV-153: the file each finding is in, on the card's first line, so a
+	// person can check it without opening «Technical details» (which is
+	// unchanged). Same locations the «Where» line shows there.
+	c.whereLine(c.rowLocations(f))
+	c.w(`<p>%s%s</p>`, c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
 	}
@@ -992,6 +999,33 @@ func (c htmlCtx) renderMultiRow(f rules.Finding) {
 		c.w(`</ul>`)
 	}
 	c.w(`</details></div></details>`)
+}
+
+// rowLocations are the locations the card's «Found in» line shows for a
+// finding (BV-153): a merged row's combined, deduplicated list (the same one
+// renderMultiRow builds for «Technical details»), or a single finding's own.
+func (c htmlCtx) rowLocations(f rules.Finding) []string {
+	if c.multi(f) {
+		var locs []string
+		for _, m := range c.members(f) {
+			locs = append(locs, m.Evidence.Locations...)
+		}
+		return uniqueSorted(locs)
+	}
+	return f.Evidence.Locations
+}
+
+// whereLine writes the card's «Found in» line: the first location in a
+// <code>, then how many more (BV-153). Nothing when there is no location.
+func (c htmlCtx) whereLine(locs []string) {
+	if len(locs) == 0 {
+		return
+	}
+	c.w(`<p class="where">%s <code>%s</code>`, c.t("html.where", nil), html.EscapeString(untrusted.PlainText(locs[0])))
+	if len(locs) > 1 {
+		c.w(` %s`, c.t("html.tech.more", map[string]string{"count": strconv.Itoa(len(locs) - 1)}))
+	}
+	c.w(`</p>`)
 }
 
 // where is the «Where» line's locations: the first five, then how many
@@ -1362,6 +1396,7 @@ func HTMLKeys() []string {
 		"html.knowledge.reviewed", "html.knowledge.old", // BV-148
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
+		"html.where",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",
 		"html.unknown.body", "html.coverage.title", "html.coverage.body",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
