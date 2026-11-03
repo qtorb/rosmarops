@@ -72,7 +72,7 @@ CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o rosmarops-macos-app
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o rosmarops-macos-intel ./cmd/rosmarops
 ```
 
-To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and build it with Go 1.24.7, passing the version without the «v» (for v0.1.0: `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.1.0" -o rosmarops.exe ./cmd/rosmarops`). Its SHA-256 matches the one in `SHA256SUMS.txt`.
+To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and, with Go 1.24.7, first write the Windows icon and version, then build, passing the version without the «v» (for v0.7.3: `GOTOOLCHAIN=go1.24.7 go run ./tools/winres -version 0.7.3`, then `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.7.3" -o rosmarops.exe ./cmd/rosmarops`). Releases before v0.7.3 need only the second command. Its SHA-256 matches the one in `SHA256SUMS.txt`.
 
 ---
 
