@@ -127,8 +127,8 @@
       "properties": {
         "title": { "type": "string", "maxLength": 200 },
         "what_it_means": { "type": "string", "maxLength": 600 },
-        "steps": { "type": "array", "items": { "type": "string", "maxLength": 300 } },
-        "paste_block": { "type": ["string", "null"], "maxLength": 4000 }
+        "steps": { "type": "array", "items": { "type": "string", "maxLength": 1000 } },
+        "paste_block": { "type": ["string", "null"], "maxLength": 16000 }
       }
     }
   }
