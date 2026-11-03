@@ -184,6 +184,12 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		scope += " " + t("report.coverage_gap", map[string]string{"count": strconv.Itoa(gaps)})
 	}
 	w("%s\n\n", scope)
+	// BV-148: when the agent knowledge was last reviewed, and the same stale
+	// warning the HTML shows when the program is more than 14 days older than it.
+	w("%s\n\n", t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
+	if knowledgeOld(local, knowledge.ReviewedOn) {
+		w("%s\n\n", t("html.knowledge.old", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
+	}
 
 	byID := map[string]rules.Finding{}
 	for _, f := range v.Findings {
