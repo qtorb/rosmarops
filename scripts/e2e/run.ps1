@@ -203,10 +203,10 @@ $isRed = $false
 foreach ($m in $runFailed) { if ($page.Contains($m)) { $isRed = $true } }
 Check 'report is a normal report (not the red page)' (-not $isRed) 'the report shows the run-could-not-finish page'
 
-# The report states the limit: «12 minutos (48 proyectos)».
+# The report states the limit: «48 proyectos revisados · límite de 12 minutos».
 Check 'report states the 48-project limit' `
-    ($page -match "12 minutos \($expectedProjects proyectos\)") `
-    'report line "12 minutos (48 proyectos)"'
+    ($page -match "$expectedProjects proyectos revisados · límite de 12 minutos") `
+    'report line "48 proyectos revisados · límite de 12 minutos"'
 
 # Coherence of the limit warning: the top warning «llegó a su límite de tiempo»
 # must be present if and only if the run actually hit the limit. The ground
