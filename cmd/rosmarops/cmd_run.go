@@ -180,6 +180,23 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("message catalog: %w", err)
 	}
+
+	// Console branding (BV-151): on a manual run in a console, name the window,
+	// drive the taskbar button and print the brand header — the first thing the
+	// run prints, before the integrity questions and console.checking. A
+	// scheduled review (freeConsole above) and redirected output get none.
+	active := !unattended && isTerminal(os.Stdout)
+	vtOK := false
+	if active {
+		vtOK = enableVTProcessing()
+	}
+	taskbarOn := active && vtOK && os.Getenv("WT_SESSION") != ""
+	ui = newConsoleUI(cat, active, taskbarOn, os.Stdout)
+	if active {
+		writeBrandHeader(os.Stdout, version, vtOK)
+	}
+	ui.setTitle("console.title.running")
+
 	// Integrity (J1–J3): the state, the binary and the configuration
 	// against the references init recorded; a change is confirmed in the
 	// console or the run stops with a red report. A scheduled review never
@@ -813,6 +830,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err := state.SaveState(stPath, st); err != nil {
 		return "", fmt.Errorf("save state: %w", err)
 	}
+
+	// BV-151: the report is written — the window says so and the taskbar clears,
+	// just before the summary (and, on a double click, report_opened).
+	ui.done()
 
 	// Print summary.
 	if unattended {

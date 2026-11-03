@@ -178,8 +178,10 @@ func confirmConfig(cn confirmation, cat catalog.Catalog, st *state.State, stPath
 		fmt.Fprintln(cn.out, t("console.config_unconfirmed", nil))
 		return false, nil
 	}
+	ui.question() // BV-151: the window and taskbar show a pending question
 	fmt.Fprint(cn.out, t("console.config_confirm", nil))
 	answer, _ := bufio.NewReader(cn.in).ReadString('\n')
+	ui.running()
 	switch strings.ToLower(strings.TrimSpace(answer)) {
 	case "y", "s":
 	default:

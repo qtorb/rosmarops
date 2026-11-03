@@ -36,6 +36,8 @@ func (a asker) ask(key string) bool {
 	if !a.terminal {
 		return false
 	}
+	ui.question() // BV-151: the window and taskbar show a pending question
+	defer ui.running()
 	fmt.Fprint(a.out, a.cat.Text(key, nil))
 	answer, _ := bufio.NewReader(a.in).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(answer)) {

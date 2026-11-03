@@ -182,6 +182,7 @@ type abortOptions struct {
 // a red report.html), logs the finding, shows a scheduled review's
 // notification or opens the report, and exits with code 2. This function never returns.
 func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
+	ui.failed() // BV-151: the window and taskbar show the run could not finish
 	f := finding.Finding{
 		ID:              category + ":" + truncatedTimeID(),
 		Severity:        finding.SeverityRed,
@@ -252,6 +253,7 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 // shows the scheduled review's notification (unattended) or opens the page
 // (window), and exits with the run_failed code. This function never returns.
 func abortRunFailed(o abortOptions, cause error) {
+	ui.failed() // BV-151: the window and taskbar show the run could not finish
 	slog.Error("run failed", "err", cause)
 	reportDir, err := report.DefaultReportDir()
 	if err != nil {
