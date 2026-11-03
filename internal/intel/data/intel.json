@@ -1,6 +1,6 @@
 {
-  "version": "2026.10.29.1",
-  "published_at": "2026-10-29",
+  "version": "2026.11.03.1",
+  "published_at": "2026-11-03",
   "packages": [
     {
       "id": "rosmarops-2026-0001",
@@ -44,6 +44,50 @@
       "source": {
         "url": "https://osv.dev/vulnerability/MAL-2026-18300",
         "accessed_at": "2026-10-29"
+      }
+    },
+    {
+      "id": "rosmarops-2026-0005",
+      "ecosystem": "npm",
+      "package": "@ifasn/md-doc-mcp",
+      "versions": ["1.0.3", "1.0.4", "1.0.5"],
+      "aliases": ["MAL-2026-18486"],
+      "source": {
+        "url": "https://osv.dev/vulnerability/MAL-2026-18486",
+        "accessed_at": "2026-11-03"
+      }
+    },
+    {
+      "id": "rosmarops-2026-0006",
+      "ecosystem": "npm",
+      "package": "@ifasn/mdd-doc-mcp",
+      "versions": ["1.0.7", "1.0.8", "2.0.6"],
+      "aliases": ["MAL-2026-18487"],
+      "source": {
+        "url": "https://osv.dev/vulnerability/MAL-2026-18487",
+        "accessed_at": "2026-11-03"
+      }
+    },
+    {
+      "id": "rosmarops-2026-0007",
+      "ecosystem": "npm",
+      "package": "@ifasn/mmd-doc-mcp",
+      "versions": ["1.0.0", "1.0.2"],
+      "aliases": ["MAL-2026-18488"],
+      "source": {
+        "url": "https://osv.dev/vulnerability/MAL-2026-18488",
+        "accessed_at": "2026-11-03"
+      }
+    },
+    {
+      "id": "rosmarops-2026-0008",
+      "ecosystem": "npm",
+      "package": "@ifasn/mmdd-doc-mcp",
+      "versions": ["1.0.1", "1.0.3", "1.0.4", "1.0.4-2", "1.0.5", "1.0.6", "1.1.0", "1.1.1", "1.1.2", "1.1.3", "1.1.5", "1.1.6", "1.1.7", "1.1.8", "1.1.9-2", "2.0.1", "2.0.4"],
+      "aliases": ["MAL-2026-18489"],
+      "source": {
+        "url": "https://osv.dev/vulnerability/MAL-2026-18489",
+        "accessed_at": "2026-11-03"
       }
     }
   ]
