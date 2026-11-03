@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/schemas"
 	"github.com/qtorb/rosmarops/internal/schemaval"
@@ -169,5 +171,51 @@ func TestBV158_ReportStructure(t *testing.T) {
 	}
 	if !strings.Contains(con, `class="space"`) {
 		t.Error("connected: no «Your space» section")
+	}
+}
+
+// TestBV158_SilencedWarningsInStep1 (BV-158, the pre-merge fix): the silenced
+// counts are not dropped. With test data silenced and entries hidden by the
+// configuration, step 1 shows both warnings — html.silenced (test data) and
+// html.silenced.config — in en and es; with nothing silenced, neither appears.
+func TestBV158_SilencedWarningsInStep1(t *testing.T) {
+	g := v2Graph(t)
+	// One hidden-by-configuration entry (HiddenCount == 1) and two silenced as
+	// test data (Silenced.Count == 2).
+	v := bv94Build(t, &g, func(in *report.V2Input) {
+		in.AllowHits = []config.AllowHit{{List: config.ListGitHooks, ID: "pre-commit", Note: "x"}}
+	})
+	v.Silenced.Count = 2
+	if v.HiddenCount() != 1 {
+		t.Fatalf("hidden %d, want 1", v.HiddenCount())
+	}
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		_, step1, _ := strings.Cut(page, `<section class="s1" aria-labelledby="step1">`)
+		step1, _, _ = strings.Cut(step1, `</section>`)
+		testdata := escapeHTML(cat.Plural("html.silenced", 2, map[string]string{"count": "2"}))
+		hidden := escapeHTML(cat.Plural("html.silenced.config", 1, map[string]string{"count": "1"}))
+		if !strings.Contains(step1, `<p class="meta warn">`+testdata+`</p>`) {
+			t.Errorf("%s: step 1 lacks the test-data silenced warning", lang)
+		}
+		if !strings.Contains(step1, `<p class="meta warn">`+hidden+`</p>`) {
+			t.Errorf("%s: step 1 lacks the configuration-hidden warning", lang)
+		}
+	}
+
+	// With nothing silenced, neither warning appears.
+	none := bv94Build(t, &g, nil)
+	if none.Silenced.Count != 0 || none.HiddenCount() != 0 {
+		t.Fatalf("baseline not clean: silenced=%d hidden=%d", none.Silenced.Count, none.HiddenCount())
+	}
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, none)
+		for _, key := range []string{"html.silenced", "html.silenced.config"} {
+			if strings.Contains(page, escapeHTML(cat.Plural(key, 2, map[string]string{"count": "2"}))) {
+				t.Errorf("%s: %s warning present with nothing silenced", lang, key)
+			}
+		}
 	}
 }

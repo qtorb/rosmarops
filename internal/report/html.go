@@ -557,6 +557,15 @@ func (c htmlCtx) renderStep1() {
 	c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.meta.projects", v.repos,
 		map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})))
 	c.w(`</p>`)
+	// BV-158: the silenced counts are not dropped — they are warnings after the
+	// two-line meta block, like the others (never in the block). Test data first,
+	// then what the configuration hides; nothing when the count is 0.
+	if n := v.Silenced.Count; n > 0 {
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
+	if n := v.HiddenCount(); n > 0 {
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
 	if v.limitReached { // BV-155: the global time limit expired before every project was checked
 		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Text("html.limit.reached",
 			map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)})))
@@ -1365,10 +1374,13 @@ func HTMLKeys() []string {
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
-		"html.card.silenced", "html.memory.new_agent",
+		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
 		"html.signals.title", "html.signals.note")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
+	// BV-94, B9: what the configuration hides (shown as a warning in step 1,
+	// BV-158)
+	keys = append(keys, "html.silenced.config.one", "html.silenced.config.other")
 	// BV-55: the memory fold's label (v3 §6.2)
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
 	// v3 §13 (BV-56)
