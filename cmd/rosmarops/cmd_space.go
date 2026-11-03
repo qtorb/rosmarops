@@ -254,6 +254,15 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 			slog.Info("space send: credential rejected; forgetting the space")
 			forgetSpace(paths, stored)
 			return
+		case sendRejected:
+			// BV-164: 409 key_mismatch — the space was reset («Empezar de nuevo»),
+			// so this credential no longer matches. Forget it like `disconnect`
+			// and clear the 7-day decline so the connect offer shows in this same
+			// review. The report says it could not be sent (report.space_rejected).
+			slog.Info("space send: 409 key_mismatch; forgetting the space and re-offering this run")
+			forgetSpace(paths, stored)
+			clearConnectOfferDecline(paths.state)
+			return
 		case sendDeferred:
 			slog.Info("space send: deferred (offline or rate-limited); will retry next run")
 			return
@@ -482,6 +491,25 @@ func forgetSpace(paths spacePaths, stored *kit.Stored) {
 	}
 }
 
+// clearConnectOfferDecline resets the saved «Not now» time so the connect
+// offer is due again at once (BV-164: after a 409 key_mismatch the space was
+// reset, so the offer must show in this same review, without the 7-day wait).
+// Best effort: a failure is logged, not returned.
+func clearConnectOfferDecline(statePath string) {
+	st, err := state.LoadState(statePath)
+	if err != nil {
+		slog.Warn("clear connect-offer decline: load state", "err", err)
+		return
+	}
+	if st.ConnectOfferDeclinedAt == "" {
+		return
+	}
+	st.ConnectOfferDeclinedAt = ""
+	if err := state.SaveState(statePath, st); err != nil {
+		slog.Warn("clear connect-offer decline: save state", "err", err)
+	}
+}
+
 // newConnectCmd is `rosmarops connect`: the console path to connect this
 // computer (macOS has no window; on Windows the double click shows the window).
 func newConnectCmd() *cli.Command {
@@ -520,11 +548,10 @@ func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 	fmt.Fprintln(kitOutput, cat.Text("connect.text", nil))
 	ctx, cancel := context.WithTimeout(context.Background(), 11*time.Minute)
 	defer cancel()
-	onNumber := func(n int) {
-		fmt.Fprintln(kitOutput, cat.Text("connect.number", nil))
-		fmt.Fprintln(kitOutput, n)
-		fmt.Fprintln(kitOutput, cat.Text("connect.wait", nil))
-	}
+	// BV-164: the number is no longer shown. The protocol still sends n_sealed
+	// (inside spaceConnect); onNumber is only the former on-screen display, now
+	// a no-op in the console.
+	onNumber := func(int) {}
 	onOpen := func(u string) error {
 		fmt.Fprintln(kitOutput, u)
 		openSpaceURL(u)

@@ -193,8 +193,8 @@ func runSelfWindow(t *testing.T, readmode string) (<-chan string, func(string) e
 // selfConfig is the base64 config line (with newline) the window reads first.
 func selfConfig() string {
 	cfg := connectWindowConfig{
-		Title: "RosmarOps", Q: "Q", Text: "T", Yes: "Y", No: "N", Number: "Pick this number",
-		Wait: "Wait", Done: "DONE_OK", Expired: "EXP", Failed: "FAIL", OK: "OK",
+		Title: "RosmarOps", Q: "Q", Text: "T", Yes: "Y", No: "N",
+		Done: "DONE_OK", Expired: "EXP", Failed: "FAIL", OK: "OK",
 	}
 	return connectWindowInput(cfg) + "\n"
 }

@@ -66,8 +66,10 @@ var staticKeys = []string{
 	"notify.run_failed",
 	// BV-137: the connect window / `rosmarops connect` console texts (4 states)
 	// and the `rosmarops disconnect` confirmation.
-	"connect.q", "connect.text", "connect.yes", "connect.no", "connect.number",
-	"connect.ok", "connect.wait", "connect.done", "connect.expired", "connect.failed",
+	// BV-164: the connect offer no longer shows a number, so connect.number and
+	// connect.wait are gone; connect.yes is now «Save to my space».
+	"connect.q", "connect.text", "connect.yes", "connect.no",
+	"connect.ok", "connect.done", "connect.expired", "connect.failed",
 	"disconnect.done",
 }
 
