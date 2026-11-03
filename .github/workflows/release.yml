@@ -215,3 +215,46 @@ jobs:
         run: ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
       - name: Add the sample report to the release
         run: gh release upload "$env:TAG" dist/sample-report.en.html dist/sample-report.es.html --repo "$env:GITHUB_REPOSITORY" --clobber
+
+  e2e-realistic:
+    needs: release
+    # BV-157: after a successful release, run the just-published rosmarops.exe on
+    # a realistic 48-project test computer and fail — turning the whole release
+    # run red — if it repeats a failure like those of 02-11 (the space package
+    # tumbling the review) or 03-11 (the time limit). No network: nothing here
+    # touches app.rosmarops.com (invariant 1). Explicit `if`, like the other
+    # post-release jobs, so a skipped «tag» does not cascade a skip here.
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Download the released rosmarops.exe and verify its SHA-256
+        shell: pwsh
+        run: |
+          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
+          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
+          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
+          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+      - name: Build the openpkg helper (before the home is redirected)
+        shell: pwsh
+        run: go build -o openpkg.exe ./tests/e2e/openpkg
+      - name: Realistic end-to-end run on a 48-project computer
+        shell: pwsh
+        run: |
+          $e2eHome = 'C:\Users\e2e'
+          $manifest = Join-Path $env:RUNNER_TEMP 'rosmarops-e2e-manifest.json'
+          $openpkg = (Resolve-Path ./openpkg.exe).Path
+          ./scripts/e2e/make-home.ps1 -HomeDir $e2eHome -Manifest $manifest
+          ./scripts/e2e/run.ps1 -Exe dist/rosmarops.exe -HomeDir $e2eHome -Manifest $manifest -OpenPkg $openpkg
