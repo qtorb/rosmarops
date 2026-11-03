@@ -118,6 +118,8 @@
   "html.console.open": "Abriendo el informe.",
   "html.count.red": "urgentes",
   "html.count.repos": "proyectos revisados",
+  "html.knowledge.reviewed": "Conocimiento de los agentes revisado el {date}",
+  "html.knowledge.old": "El conocimiento de los agentes de este programa se revisó por última vez el {date}. Tus agentes pueden haber cambiado desde entonces: descarga la última versión en rosmarops.com.",
   "html.count.yellow": "para revisar",
   "html.counts.label": "Recuento de avisos",
   "html.coverage.body": "Esto no se revisó, así que no lo damos por limpio:",
