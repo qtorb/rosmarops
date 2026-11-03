@@ -14,14 +14,18 @@
 #   pwsh scripts/winget/make-manifests.ps1 -Tag v0.7.4
 #   pwsh scripts/winget/make-manifests.ps1 -Tag v0.7.4 -Sha256Sums dist/SHA256SUMS.txt
 #
-# ManifestVersion 1.12.0 is the most recent schema microsoft/winget-pkgs
-# accepts today (BV-162, 03-11; e.g. Microsoft.PowerToys 0.99.1). To move to a
-# newer one, bump $ManifestVersion after checking it is live in that repo.
+# ManifestVersion 1.10.0 (BV-162b): the winget client on the windows-latest CI
+# runner does not know the 1.12.0 schema and `winget validate` warns (and exits
+# non-zero) on its $schema header. 1.10.0 is the highest schema that client
+# validates without warnings and that microsoft/winget-pkgs still accepts today
+# (e.g. yt-dlp.yt-dlp 2025.11.12 is at 1.10.0). To raise it, check the runner's
+# `winget --version` (printed by winget-check.yml) knows the newer schema and
+# that winget-pkgs has recent manifests at it, then bump $ManifestVersion.
 param(
     [Parameter(Mandatory = $true)][string]$Tag,
     [string]$Sha256Sums,
     [string]$OutRoot = (Join-Path $PSScriptRoot '..\..\packaging\winget'),
-    [string]$ManifestVersion = '1.12.0'
+    [string]$ManifestVersion = '1.10.0'
 )
 
 $ErrorActionPreference = 'Stop'

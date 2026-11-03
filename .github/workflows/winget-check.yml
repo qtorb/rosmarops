@@ -35,7 +35,14 @@ jobs:
         run: |
           $w = Get-Command winget -ErrorAction SilentlyContinue
           if (-not $w) { throw "winget is not on this runner — cannot validate or install the manifests" }
-          winget --version
+
+      - name: winget version
+        shell: pwsh
+        # The client version decides which manifest schema versions validate
+        # without warnings (BV-162b). The ManifestVersion in packaging/winget/
+        # must be one this winget knows; printing it here makes the choice
+        # checkable against the run.
+        run: winget --version
 
       - name: The manifests exist
         shell: pwsh
@@ -43,9 +50,13 @@ jobs:
           if (-not (Test-Path "$env:MANIFESTS")) { throw "no manifests at $env:MANIFESTS" }
           Get-ChildItem "$env:MANIFESTS"
 
-      - name: winget validate
+      - name: winget validate (strict — a warning is a failure)
         shell: pwsh
-        run: winget validate --manifest "$env:MANIFESTS"
+        run: |
+          $out = winget validate --manifest "$env:MANIFESTS" 2>&1 | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { throw "winget validate exited $LASTEXITCODE" }
+          if ($out -match '(?i)warning') { throw "winget validate reported a warning — treated as a failure (BV-162b)" }
 
       - name: Allow installing from local manifest files
         shell: pwsh
