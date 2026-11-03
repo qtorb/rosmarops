@@ -41,6 +41,7 @@ var staticKeys = []string{
 	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
+	"console.title.running", "console.title.question", "console.title.done", "console.title.failed",
 	// BV-43
 	"section.memory", "memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
