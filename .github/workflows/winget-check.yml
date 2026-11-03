@@ -1,0 +1,78 @@
+# winget-check (BV-162): validate and install the RosmarOps winget manifests
+# on a Windows runner, by hand only (Run workflow). It never runs on push or
+# on a tag — it is a maintainer check before Albert submits the manifests to
+# microsoft/winget-pkgs, which this workflow does NOT do.
+#
+# No network beyond winget downloading the released rosmarops.exe named in the
+# installer manifest (invariant 1: nothing here touches app.rosmarops.com).
+name: winget-check
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Manifest version under packaging/winget/ to check, e.g. 0.7.4"
+        required: true
+        type: string
+        default: "0.7.4"
+
+permissions: {}
+
+jobs:
+  winget-check:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      MANIFESTS: packaging/winget/${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: winget must be on the runner
+        shell: pwsh
+        run: |
+          $w = Get-Command winget -ErrorAction SilentlyContinue
+          if (-not $w) { throw "winget is not on this runner — cannot validate or install the manifests" }
+          winget --version
+
+      - name: The manifests exist
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:MANIFESTS")) { throw "no manifests at $env:MANIFESTS" }
+          Get-ChildItem "$env:MANIFESTS"
+
+      - name: winget validate
+        shell: pwsh
+        run: winget validate --manifest "$env:MANIFESTS"
+
+      - name: Allow installing from local manifest files
+        shell: pwsh
+        run: winget settings --enable LocalManifestFiles
+
+      - name: winget install from the local manifest
+        shell: pwsh
+        run: |
+          winget install --manifest "$env:MANIFESTS" --accept-package-agreements --accept-source-agreements
+          if ($LASTEXITCODE -ne 0) { throw "winget install exited $LASTEXITCODE" }
+
+      - name: rosmarops is on the PATH and responds
+        shell: pwsh
+        run: |
+          # The portable alias is created under %LOCALAPPDATA%\Microsoft\WinGet\Links,
+          # which is on the PATH. A fresh process picks up the updated PATH.
+          $linksDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+          $env:PATH = "$linksDir;$env:PATH"
+          $cmd = Get-Command rosmarops -ErrorAction Stop
+          Write-Output "resolved: $($cmd.Source)"
+          # Diagnostics for BV-162 Phase A, point 1: show that the alias is a
+          # symlink into ...\WinGet\Packages and name its target, so the path
+          # the engine (os.Executable) and the weekly task record can be read
+          # off a real install.
+          $item = Get-Item $cmd.Source
+          if ($item.LinkType) { Write-Output "linkType: $($item.LinkType); target: $($item.Target)" }
+          $out = & rosmarops --version
+          if ($LASTEXITCODE -ne 0) { throw "rosmarops --version exited $LASTEXITCODE" }
+          Write-Output $out
+          if ($out -notmatch 'rosmarops version') { throw "unexpected --version output: $out" }
