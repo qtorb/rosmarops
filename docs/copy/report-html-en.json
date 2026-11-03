@@ -425,6 +425,7 @@
   "html.weekly.pitch": "Schedule a review every Friday at 09:00. When it finishes, Windows shows you a notification; if notifications are turned off, the report opens in your browser.",
   "html.weekly.prompt": "Run exactly this PowerShell command, without changing it and without administrator rights. If it fails, stop and show me the error.",
   "html.weekly.title": "Weekly review",
+  "html.where": "Found in:",
   "unknown.aux_model_permits": "Hermes Agent's smart mode: another AI model decides only on commands that match a dangerous pattern; other commands run without asking. RosmarOps assumes it lets them through.",
   "unknown.hermes_backend_unknown": "Hermes Agent uses a terminal backend RosmarOps does not recognize ({backend}). RosmarOps treats it as running on your computer.",
   "unknown.remote_visibility_unknown": "Knows that a remote is declared, not whether it is public or whether these commits were pushed."
