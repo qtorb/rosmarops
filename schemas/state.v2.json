@@ -33,6 +33,11 @@
       "type": "boolean",
       "description": "True once the person approved connecting this computer to their online space (BV-137). The only space state kept here; the key and send credential live in the kit DPAPI blob. No network happens unless this is true."
     },
+    "connect_offer_declined_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the person last declined («Not now») the connect offer at the end of a double-click review (BV-158, decision A). The offer is not shown again until 7 days after it. Optional."
+    },
     "integrity": {
       "type": "object",
       "required": ["vigil_binary_sha256", "config_sha256"],

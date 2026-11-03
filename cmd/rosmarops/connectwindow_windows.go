@@ -253,13 +253,14 @@ try {
 } catch { }
 if (-not $script:answered) { [Console]::Out.WriteLine('no'); [Console]::Out.Flush() }`
 
-// maybeConnectWindow shows the connect window on a Windows double click when
-// this computer is not connected, and runs the protocol if the person agrees
-// (BV-137 point 5). Any failure to show the window is logged and ignored: the
-// run goes on, and `rosmarops connect` is always available.
-func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
+// connectOffer shows the connect window on a Windows double click and runs the
+// protocol if the person agrees (BV-137 point 5; BV-158 part 4). Any failure to
+// show the window is logged and ignored (connectNotOffered): the run goes on,
+// and `rosmarops connect` is always available. The caller has already checked
+// that this computer is not connected and that the offer is due.
+func connectOffer(paths spacePaths, cat catalog.Catalog) connectResult {
 	if isSpaceConnected(paths) {
-		return // already connected (permission AND credential): no window
+		return connectNotOffered // already connected (permission AND credential): no window
 	}
 	// PowerShell by absolute path, with PSModulePath narrowed to the system
 	// modules, like the folder picker and the notifier (CTO-15 PR4, BV-93 B4):
@@ -273,15 +274,15 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return
+		return connectNotOffered
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return
+		return connectNotOffered
 	}
 	if err := cmd.Start(); err != nil {
 		slog.Info("connect window not shown", "err", err)
-		return
+		return connectNotOffered
 	}
 	fmt.Fprintln(stdin, connectWindowInput(connectWindowConfigFrom(cat)))
 	run := func(onNumber func(int), onOpen func(string) error) error {
@@ -292,18 +293,18 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 	// If nobody answers the window within 10 minutes, close it as «Not now»
 	// and let the run go on (CTO-15 PR5). Killing the process closes its
 	// stdout, so driveConnectWindow returns.
-	done := make(chan bool, 1)
+	done := make(chan connectResult, 1)
 	go func() { done <- driveConnectWindow(stdout, stdin, run) }()
+	result := connectDeclined
 	select {
-	case connected := <-done:
-		if connected {
-			slog.Info("connect window: this computer is now connected")
-		}
+	case result = <-done:
 	case <-time.After(10 * time.Minute):
 		slog.Info("connect window: no answer in 10 minutes; closing as «Not now» and continuing")
 		_ = cmd.Process.Kill()
 		<-done
+		result = connectDeclined
 	}
 	_ = stdin.Close()
 	_ = cmd.Wait()
+	return result
 }

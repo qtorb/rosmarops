@@ -13,6 +13,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -98,16 +99,46 @@ func runNoArgs() int {
 		return exitRunFailed
 	}
 
-	if openReport(htmlPath) {
+	reportOpened := openReport(htmlPath)
+	if reportOpened {
 		fmt.Println(cat.Text("console.report_opened", nil))
+	} else {
+		fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
+	}
+
+	// BV-158 part 4 (decision A): after the report opens, offer to connect when
+	// this computer is not connected and the offer was not declined in the last
+	// 7 days. This is the double click, never --unattended and never `run`. A
+	// connection failure changes nothing here (the report and exit code stand).
+	offerConnect(stPath)
+
+	if reportOpened {
 		if isTerminal(os.Stdout) {
 			time.Sleep(closeDelay)
 		}
 		return 0
 	}
-	fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
 	pressEnter(cat)
 	return 0
+}
+
+// offerConnect shows the end-of-double-click connect offer for the state at
+// stPath. It resolves the kit store and the reports directory and defers to
+// offerConnectAfterReport; a missing kit path just means no offer.
+func offerConnect(stPath string) {
+	storePath, err := kit.StorePath()
+	if err != nil {
+		return
+	}
+	reportDir, err := report.DefaultReportDir()
+	if err != nil {
+		return
+	}
+	cat, err := catalog.Load(systemLang())
+	if err != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	offerConnectAfterReport(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat, stPath, time.Now())
 }
 
 // firstRunRepos is U3, and U4 when U3 finds nothing: the repositories of

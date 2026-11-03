@@ -220,16 +220,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		reportDir = defaultDir
 	}
 
-	// The connect window (CTO-15 PR5, invariant 8): only on the double click,
-	// and only AFTER the integrity check above — never before a connection. On
-	// Windows, when this computer is not connected, it offers to connect so a
-	// fresh connection sends this run's results. A no-op off Windows and for
-	// the `run` command (m.window is false there).
-	if m.window {
-		if storePath, perr := kit.StorePath(); perr == nil {
-			connectWindowHook(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat)
-		}
-	}
+	// The connect offer moved to the end of the double click (BV-158 part 4,
+	// decision A): it is shown after the report opens, in runNoArgs, not here
+	// before the run. A fresh connection now sends the next run's results, as
+	// the report's «Your space» section says; this run seals its package and,
+	// if already connected, sends it in the send path below.
+	//
 	// Invariant §6 (BV-155): the global limit is 15 s per project to check, at
 	// least 300 and at most 1200 s, computed once now that the projects are
 	// known and before they are checked. The time already spent (agents,

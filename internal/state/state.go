@@ -36,6 +36,12 @@ type State struct {
 	// DPAPI blob, never here. No connection happens unless this is true.
 	SpacePermission bool `json:"space_permission,omitempty"`
 
+	// ConnectOfferDeclinedAt is when the person last said «Not now» to the
+	// connect offer at the end of a double-click review (BV-158 part 4, decision
+	// A): a UTC RFC 3339 time. The offer is not shown again until 7 days after
+	// it. Empty when never declined; cleared is fine. Optional in state.v2.
+	ConnectOfferDeclinedAt string `json:"connect_offer_declined_at,omitempty"`
+
 	Integrity Integrity `json:"integrity"`
 	Baselines Baselines `json:"baselines"`
 }
