@@ -10,6 +10,11 @@ name: diagnostic-windows
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version tag to test end-to-end, e.g. v0.7.3 (blank = latest published)"
+        required: false
+        type: string
   # Run the Windows-only checks (connect-window, BV-146; windows-exe-resources,
   # BV-149) on a pull request that touches what they cover, so the real-Windows
   # checks (which cannot run on Linux) gate those changes. The oracle loop below
@@ -123,3 +128,48 @@ jobs:
           }
           if (-not $found) { throw 'no rosemary-green (#6F8F78 +/-8) pixel in the icon' }
           Write-Host "version info and icon OK"
+
+  # BV-157: the realistic post-publish end-to-end check, by hand. Downloads a
+  # published rosmarops.exe (the version input, or the latest release), verifies
+  # its SHA-256, builds the 48-project test computer and runs it, failing if the
+  # report is the red "could not finish" page, the limit line is incoherent, the
+  # expected findings are missing, the sealed package does not open, a full fake
+  # secret leaks, or the process opens any outbound connection. Manual only.
+  e2e-realistic:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Download the published rosmarops.exe and verify its SHA-256
+        shell: pwsh
+        run: |
+          $tag = $env:VERSION
+          if (-not $tag) { $tag = gh release view --repo "$env:GITHUB_REPOSITORY" --json tagName -q .tagName }
+          Write-Host "Testing release $tag"
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          gh release download "$tag" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
+          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
+          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
+          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+      - name: Build the openpkg helper (before the home is redirected)
+        shell: pwsh
+        run: go build -o openpkg.exe ./tests/e2e/openpkg
+      - name: Realistic end-to-end run on a 48-project computer
+        shell: pwsh
+        run: |
+          $e2eHome = 'C:\Users\e2e'
+          $manifest = Join-Path $env:RUNNER_TEMP 'rosmarops-e2e-manifest.json'
+          $openpkg = (Resolve-Path ./openpkg.exe).Path
+          ./scripts/e2e/make-home.ps1 -HomeDir $e2eHome -Manifest $manifest
+          ./scripts/e2e/run.ps1 -Exe dist/rosmarops.exe -HomeDir $e2eHome -Manifest $manifest -OpenPkg $openpkg
