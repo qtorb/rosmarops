@@ -117,9 +117,79 @@
         "score_from": { "type": "integer", "minimum": 0, "maximum": 100 },
         "score_to": { "type": "integer", "minimum": 0, "maximum": 100 }
       }
-    }
+    },
+    "since": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparable", "first", "new", "gone", "still", "score_changes", "new_agents", "new_mcp"],
+      "properties": {
+        "comparable": { "type": "boolean" },
+        "first": { "type": "boolean" },
+        "new": { "type": "integer", "minimum": 0 },
+        "gone": { "type": "integer", "minimum": 0 },
+        "still": { "type": "integer", "minimum": 0 },
+        "score_changes": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["agent_id", "from", "to"],
+            "properties": {
+              "agent_id": { "type": "string", "maxLength": 64 },
+              "from": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "to": { "type": "integer", "minimum": 0, "maximum": 100 }
+            }
+          }
+        },
+        "new_agents": { "type": "integer", "minimum": 0 },
+        "new_mcp": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "weekly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "day", "time"],
+      "properties": {
+        "state": { "enum": ["own", "other", "none"] },
+        "day": { "enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun", null] },
+        "time": { "type": ["string", "null"], "pattern": "^[0-9]{2}:[0-9]{2}$" }
+      }
+    },
+    "overview": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agent_id", "nobody", "model", "you", "blocked"],
+        "properties": {
+          "agent_id": { "type": "string", "maxLength": 64 },
+          "nobody": { "$ref": "#/$defs/verb_list" },
+          "model": { "$ref": "#/$defs/verb_list" },
+          "you": { "$ref": "#/$defs/verb_list" },
+          "blocked": { "$ref": "#/$defs/verb_list" }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intel_version", "intel_date", "knowledge_reviewed_on", "testdata_count"],
+      "properties": {
+        "intel_version": { "type": ["string", "null"], "maxLength": 32 },
+        "intel_date": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "knowledge_reviewed_on": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "testdata_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "card_svg": { "type": ["string", "null"], "maxLength": 40000 }
   },
   "$defs": {
+    "verb_list": {
+      "type": "array",
+      "items": { "enum": ["reads_files", "writes_files", "runs_commands", "sends_out", "changes_other_agents"] }
+    },
     "finding_text": {
       "type": "object",
       "additionalProperties": false,
