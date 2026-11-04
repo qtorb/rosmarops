@@ -26,13 +26,21 @@ func n8nBridgeFinding(in Input, client, server graph.Node, edge graph.Edge) Find
 	case server.ConfigPath != "":
 		locations = []string{server.ConfigPath}
 	}
+	// {server} shows the server's own name in the agent's configuration and its
+	// host, never the full path, the Authorization header or any token (BV-175,
+	// advisor 04-11). The host rides on the in-memory match; empty for a
+	// package/stdio n8n, where only the name is shown.
+	srvLabel := server.Name
+	if server.N8N != nil && server.N8N.Host != "" {
+		srvLabel = server.Name + " (" + server.N8N.Host + ")"
+	}
 	return Finding{
 		ID:          findingID(RuleN8NMCPBridge, client.ID, server.ID),
 		Rule:        RuleN8NMCPBridge,
 		RuleVersion: RuleVersion,
 		Severity:    SeverityYellow,
 		Confidence:  ConfidenceHigh,
-		Params:      Params{Agent: client.Name, Server: server.Name, Count: 1},
+		Params:      Params{Agent: client.Name, Server: srvLabel, Count: 1},
 		Evidence: Evidence{
 			Nodes: []string{server.ID, client.ID}, Edges: []string{edge.ID},
 			Locations: locations, Assumptions: []string{},

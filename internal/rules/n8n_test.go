@@ -26,7 +26,7 @@ func n8nEval(t *testing.T, withBridge, withKey bool) rules.Result {
 		nodes = append(nodes, graph.Node{
 			ID: sid, Kind: graph.KindAgent, Type: graph.AgentMCPServer, Name: "n8n",
 			Platform: knowledge.ClaudeCodeProduct, ConfigPath: home + "/.claude.json", DiscoveredAt: seen,
-			N8N: &graph.N8NMatch{Signal: "port"},
+			N8N: &graph.N8NMatch{Signal: "cloud", Host: "acme.app.n8n.cloud"},
 		})
 		edges = append(edges, graph.Edge{
 			ID: "loads_n8n", Type: graph.EdgeLoads, From: mcpClient, To: sid,
@@ -68,7 +68,8 @@ func TestN8NBridgeFinding(t *testing.T) {
 	if f.Severity != rules.SeverityYellow {
 		t.Errorf("severity: want yellow, got %s", f.Severity)
 	}
-	if f.Params.Agent != "Claude Code" || f.Params.Server != "n8n" {
+	// {server} shows the server name and its host, never the path or a token.
+	if f.Params.Agent != "Claude Code" || f.Params.Server != "n8n (acme.app.n8n.cloud)" {
 		t.Errorf("params: agent=%q server=%q", f.Params.Agent, f.Params.Server)
 	}
 	// First evidence node is the n8n server, not the evaluated client: the

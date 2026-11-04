@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -10,31 +11,60 @@ import (
 
 func TestN8NSignal(t *testing.T) {
 	cases := []struct {
-		name string
-		srv  platform.MCPServer
-		want string // "" means no match
+		name     string
+		srv      platform.MCPServer
+		wantSig  string // "" means no match
+		wantHost string
 	}{
-		{"npx n8n package", platform.MCPServer{Command: "npx", Args: []string{"-y", "n8n"}}, "package"},
-		{"bare command n8n", platform.MCPServer{Command: "/usr/local/bin/n8n"}, "package"},
-		{"url port 5678", platform.MCPServer{URL: "http://localhost:5678/mcp"}, "port"},
-		{"url arg port 5678", platform.MCPServer{Command: "npx", Args: []string{"mcp-remote", "https://host.example:5678/mcp/abc/sse"}}, "port"},
-		{"server trigger test endpoint", platform.MCPServer{URL: "https://n8n.example.com/mcp-test/9f/sse"}, "endpoint"},
-		{"unrelated remote", platform.MCPServer{URL: "https://api.github.com/mcp"}, ""},
-		{"unrelated stdio", platform.MCPServer{Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"}}, ""},
+		// (a) instance MCP endpoint path on the person's own host.
+		{"endpoint own host", platform.MCPServer{URL: "https://n8n.mycompany.com/mcp-server/http"}, "endpoint", "n8n.mycompany.com"},
+		{"endpoint via mcp-remote arg", platform.MCPServer{Command: "npx", Args: []string{"-y", "mcp-remote", "https://ops.example.org/mcp-server/http"}}, "endpoint", "ops.example.org"},
+		{"endpoint via supergateway arg", platform.MCPServer{Command: "supergateway", Args: []string{"https://ops.example.org/mcp-server/http"}}, "endpoint", "ops.example.org"},
+		// (b) n8n Cloud host.
+		{"cloud host", platform.MCPServer{URL: "https://acme.app.n8n.cloud/mcp-test/9f/sse"}, "cloud", "acme.app.n8n.cloud"},
+		{"cloud host short", platform.MCPServer{URL: "https://acme.n8n.cloud/anything"}, "cloud", "acme.n8n.cloud"},
+		// (c) local 5678.
+		{"local 5678", platform.MCPServer{URL: "http://localhost:5678/mcp/abc/sse"}, "port", "localhost"},
+		{"loopback 5678", platform.MCPServer{URL: "http://127.0.0.1:5678/mcp-test/9f/sse"}, "port", "127.0.0.1"},
+		// (d) package/command.
+		{"npx n8n package", platform.MCPServer{Command: "npx", Args: []string{"-y", "n8n"}}, "package", ""},
+		{"bare command n8n", platform.MCPServer{Command: "/usr/local/bin/n8n"}, "package", ""},
+		// False positives: 5678 on a REMOTE host is not n8n; a random remote MCP
+		// server is not n8n; /mcp-test/ alone (no cloud host, no local port) is not.
+		{"remote 5678 not n8n", platform.MCPServer{URL: "https://api.example.com:5678/mcp"}, "", ""},
+		{"unrelated remote", platform.MCPServer{URL: "https://api.github.com/mcp"}, "", ""},
+		{"mcp-test alone not n8n", platform.MCPServer{URL: "https://mcp.example.com/mcp-test/9f/sse"}, "", ""},
+		{"unrelated stdio", platform.MCPServer{Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"}}, "", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			sig, ok := n8nSignal(c.srv)
-			if c.want == "" {
+			sig, host, ok := n8nSignal(c.srv)
+			if c.wantSig == "" {
 				if ok {
-					t.Fatalf("want no match, got %q", sig)
+					t.Fatalf("want no match, got %q host=%q", sig, host)
 				}
 				return
 			}
-			if !ok || sig != c.want {
-				t.Fatalf("want %q, got %q (ok=%v)", c.want, sig, ok)
+			if !ok || sig != c.wantSig || host != c.wantHost {
+				t.Fatalf("want %q/%q, got %q/%q (ok=%v)", c.wantSig, c.wantHost, sig, host, ok)
 			}
 		})
+	}
+}
+
+// TestN8NSignal_HostOnly: the host carried from a matched URL never includes
+// the path, the query or any token embedded in them.
+func TestN8NSignal_HostOnly(t *testing.T) {
+	const token = "SECRET-BEARER-TOKEN-NEVER-LEAK-abcdef"
+	srv := platform.MCPServer{URL: "https://acme.app.n8n.cloud/mcp-server/http?access_token=" + token}
+	sig, host, ok := n8nSignal(srv)
+	if !ok || host != "acme.app.n8n.cloud" {
+		t.Fatalf("want match with clean host, got sig=%q host=%q ok=%v", sig, host, ok)
+	}
+	for _, bad := range []string{token, "mcp-server", "access_token", "?"} {
+		if strings.Contains(host, bad) {
+			t.Errorf("host leaked %q: %q", bad, host)
+		}
 	}
 }
 

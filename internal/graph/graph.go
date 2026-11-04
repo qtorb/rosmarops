@@ -167,10 +167,13 @@ type Node struct {
 }
 
 // N8NMatch marks an mcp_server node recognised as an n8n instance (BV-175).
-// Signal is how it was recognised ("package", "port" or "endpoint"), for the
-// run log and tests; it carries no value read from the machine.
+// Signal is how it was recognised ("endpoint", "cloud", "port" or "package");
+// Host is the host of the matching URL, empty for a package/stdio match. The
+// path, query and any header or token are never carried — only the host, which
+// the finding shows alongside the server name.
 type N8NMatch struct {
 	Signal string
+	Host   string
 }
 
 // ExternalActionMatch is an mcp_server node's catalog match (BV-117/BV-121):

@@ -12,22 +12,26 @@ import (
 // that holds the accounts a person connects to it (email, payments, databases);
 // an agent that can run its workflows can use all of them. Recognition is from
 // the same raw server (URL, command and arguments, never persisted) RosmarOps
-// already reads for every agent:
+// already reads for every agent. A server is n8n when ANY of these hold
+// (advisor 04-11, who read the docs this build's network cannot reach):
 //
-//   - package/command: the invocation runs the `n8n` package (e.g. `npx n8n`),
-//     signal "package";
-//   - port: a URL (the server url, or a URL argument of a local wrapper) on
-//     n8n's fixed default port 5678, signal "port";
-//   - endpoint: a URL whose path is the MCP Server Trigger's test endpoint
-//     (`…/mcp-test/…`, distinctive to n8n), signal "endpoint".
+//   - endpoint: its URL, or a URL in its arguments (including a local wrapper
+//     such as `npx mcp-remote <URL>` or `supergateway <URL>`), has a path that
+//     ends in `/mcp-server/http` — the instance MCP server's Server URL
+//     (https://docs.n8n.io/advanced-ai/accessing-n8n-mcp-server/);
+//   - cloud: its host ends in `.app.n8n.cloud` or `.n8n.cloud` (n8n Cloud);
+//   - port: its URL is on port 5678 at a local host (localhost, 127.0.0.1 or
+//     ::1) — n8n's fixed default port, counted only when the host is local;
+//   - package: its command or package is `n8n` (e.g. `npx n8n`).
 //
-// Port 5678 and the `n8n` package are the reliable signals; the endpoint path
-// is a supplementary one. The two n8n MCP endpoints are the instance MCP server
-// (https://docs.n8n.io/advanced-ai/accessing-n8n-mcp-server/) and the MCP Server
-// Trigger node (https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/).
-// net/url is forbidden (a network package); URLs are parsed with the in-house
-// parseMCPURL (see mcpdest.go). The match is carried on the node's in-memory
-// N8N field; the rules layer reads it.
+// The MCP Server Trigger node (https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-langchain.mcptrigger/)
+// gives Claude Desktop a `npx mcp-remote <URL>` invocation with a random path;
+// that path alone is not a signal, so `…/mcp-test/…` counts only together with
+// a cloud host or a local port. net/url is forbidden (a network package); URLs
+// are parsed with the in-house parseMCPURL (see mcpdest.go). The match, with the
+// host of the URL that matched, is carried on the node's in-memory N8N field;
+// the rules layer reads it. The path, query, headers and any token are never
+// carried.
 
 // CrossN8N marks the graph's mcp_server nodes that are n8n instances. It
 // mutates g in place and is a no-op when g is nil.
@@ -44,37 +48,43 @@ func CrossN8N(g *Graph, servers []platform.MCPServer, _ time.Time) {
 		if !ok {
 			continue
 		}
-		if sig, ok := n8nSignal(srv); ok {
-			g.Nodes[idx].N8N = &N8NMatch{Signal: sig}
+		if sig, host, ok := n8nSignal(srv); ok {
+			g.Nodes[idx].N8N = &N8NMatch{Signal: sig, Host: host}
 		}
 	}
 }
 
-// n8nSignal reports whether an MCP server is an n8n instance and, if so, the
-// signal that recognised it.
-func n8nSignal(srv platform.MCPServer) (string, bool) {
+// n8nLocalHosts are the hosts at which port 5678 counts as n8n (a local n8n).
+var n8nLocalHosts = map[string]bool{
+	"localhost": true, "127.0.0.1": true, "::1": true, "[::1]": true,
+}
+
+// n8nSignal reports whether an MCP server is an n8n instance, the signal that
+// recognised it, and the host of the matching URL (empty for a package/stdio
+// match). Only the host is returned, never the path, query or any header.
+func n8nSignal(srv platform.MCPServer) (signal, host string, ok bool) {
+	// URL-based signals: the server url and any URL argument (a local wrapper
+	// such as `mcp-remote` or `supergateway` passes the real endpoint there).
+	for _, raw := range candidateURLs(srv) {
+		u, ok := parseMCPURL(raw)
+		if !ok {
+			continue
+		}
+		if path := strings.TrimRight(strings.ToLower(u.path), "/"); strings.HasSuffix(path, "/mcp-server/http") {
+			return "endpoint", u.host, true
+		}
+		h := u.host
+		if strings.HasSuffix(h, ".app.n8n.cloud") || strings.HasSuffix(h, ".n8n.cloud") {
+			return "cloud", h, true
+		}
+		if u.port == "5678" && n8nLocalHosts[h] {
+			return "port", h, true
+		}
+	}
 	if packageInInvocation(srv, "n8n") {
-		return "package", true
+		return "package", "", true
 	}
-	for _, raw := range candidateURLs(srv) {
-		u, ok := parseMCPURL(raw)
-		if !ok {
-			continue
-		}
-		if u.port == "5678" {
-			return "port", true
-		}
-	}
-	for _, raw := range candidateURLs(srv) {
-		u, ok := parseMCPURL(raw)
-		if !ok {
-			continue
-		}
-		if strings.Contains(strings.ToLower(u.path), "/mcp-test/") {
-			return "endpoint", true
-		}
-	}
-	return "", false
+	return "", "", false
 }
 
 // AddN8NKeyNode appends a file resource node for an n8n user folder that holds
