@@ -285,6 +285,90 @@ func TestConnectSameKeyUnchanged(t *testing.T) {
 	}
 }
 
+// TestConnectAfterResetSendsDespiteRejectedLog is Albert's real case (BV-180,
+// advisor 04-11 18:58): the package name is per day and host, and this run's
+// package already has terminal "rejected" lines in the sends log (the 409s
+// before the space reset). sendAfterConnect must still send it after connecting
+// — passing it as the current package so packagesToSend does not skip it as
+// terminal — both when the key was replaced and when it was not.
+func TestConnectAfterResetSendsDespiteRejectedLog(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		changesKey bool
+	}{
+		{"key replaced", true},
+		{"same key", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldKey := bv180Secret(t)
+			spaceKey := oldKey
+			if tc.changesKey {
+				spaceKey = bv180Secret(t)
+			}
+			oldKitID, spaceKitID := bv180KitID(t), bv180KitID(t)
+			if !tc.changesKey {
+				spaceKitID = oldKitID
+			}
+			hostID := "hostbv180abc"
+			date := time.Now().Format("2006-01-02")
+
+			sp := bv180Paths(t, oldKitID, oldKey)
+			content := []byte(`{"schema_version":"space-view.v1","run":"today"}`)
+			pkgPath := bv180WritePackage(t, sp.reports, oldKey.Key, oldKitID, hostID, date, content)
+			base := filepath.Base(pkgPath)
+
+			// The sends log already has three "rejected" lines for today's package
+			// name, as Albert's did after the 409 key_mismatch loop.
+			logLine := func(ts string) string {
+				return ts + " 1234 app.rosmarops.com " + sendRejected + " " + base + "\n"
+			}
+			seed := logLine("2026-11-03T23:14:31Z") + logLine("2026-11-04T08:59:48Z") + logLine("2026-11-04T12:05:50Z")
+			if err := os.WriteFile(filepath.Join(sp.reports, SendsLogName), []byte(seed), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			cred := make([]byte, 32)
+			rand.Read(cred)
+			bv180ConnectStub(t, spacenet.Material{Secret: spaceKey, KitID: spaceKitID, Credential: cred})
+
+			if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err != nil {
+				t.Fatalf("spaceConnect: %v", err)
+			}
+
+			var sent []string
+			bv180SendStub(t, &sent)
+			var out bytes.Buffer
+			prevOut := kitOutput
+			kitOutput = &out
+			t.Cleanup(func() { kitOutput = prevOut })
+
+			cat, _ := catalog.Load("en")
+			now := time.Now()
+			sendAfterConnect(sp, cat, now)
+
+			// Despite the three terminal "rejected" lines, this run's package is
+			// sent, sealed with the current key.
+			if len(sent) != 1 {
+				t.Fatalf("sent %d packages, want 1 (the current run's, despite the rejected log)", len(sent))
+			}
+			if sent[0] != kit.KeyID(spaceKey.Key) {
+				t.Errorf("sent key_id %q, want the current key %q", sent[0], kit.KeyID(spaceKey.Key))
+			}
+			want := cat.Text("report.space_sent", map[string]string{"date": now.In(time.Local).Format("2006-01-02")})
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("console did not confirm the send.\ngot: %q\nwant substring: %q", out.String(), want)
+			}
+			logRaw, err := os.ReadFile(filepath.Join(sp.reports, SendsLogName))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(logRaw), " "+sendSent+" "+base) {
+				t.Errorf("sends log has no accepted send for %s:\n%s", base, logRaw)
+			}
+		})
+	}
+}
+
 // TestConnectFailedSaveRevertsPermission: a failed save leaves the computer not
 // connected (unchanged by BV-180).
 func TestConnectFailedSaveRevertsPermission(t *testing.T) {

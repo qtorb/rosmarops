@@ -292,15 +292,20 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 // the person connects (BV-176): the same path as a normal send (spaceSend, so
 // the same checks and the same sends log), then the console says the result
 // with the keys the report already uses for an accepted or refused send. The
-// just-finished review's package is the newest pending one in the reports
-// directory — the one this run wrote, which the earlier (not-yet-connected)
-// send left untried. A failure changes nothing: the next review retries as
-// today (point 3). The report already open is not rewritten (point 2).
+// just-finished review's package is the newest in the reports directory — the
+// one this run wrote. It is passed to spaceSend as the current package so it is
+// always tried, even when an earlier send left a terminal result under the same
+// per-day name (BV-180): on «Empezar de nuevo» the package already carries 409
+// "rejected" lines from before the reset, which packagesToSend would otherwise
+// treat as terminal and skip, leaving the space waiting for a first review.
+// spaceSend's own checks do not change (it still sends only a package sealed
+// with the current key that fits in 2 MB). A failure changes nothing: the next
+// review retries as today (point 3). The report already open is not rewritten.
 func sendAfterConnect(paths spacePaths, cat catalog.Catalog, now time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	spaceSend(ctx, paths, "", now)
 	pkg := newestPackage(paths.reports)
+	spaceSend(ctx, paths, pkg, now)
 	if pkg == "" {
 		return
 	}
