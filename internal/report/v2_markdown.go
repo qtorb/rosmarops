@@ -114,6 +114,17 @@ func CatalogKeys() []string {
 			keys = append(keys, mcpExternalKeys()...)
 			continue
 		}
+		if r == rules.RuleN8NMCPBridge {
+			// BV-175: title, what, and two steps; no generic why.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".what",
+				"finding."+r+".step1", "finding."+r+".step2")
+			continue
+		}
+		if r == rules.RuleN8NKeyWithData {
+			// BV-175: title, what, and one step; no generic why.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".what", "finding."+r+".step1")
+			continue
+		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
 		if r == rules.RuleCredInGit {
 			keys = append(keys, "finding."+r+".why.remote", "finding."+r+".why.local")
@@ -230,6 +241,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	} else if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RuleMCPExternalAction {
 		p := findingParams(f) // BV-117/BV-121/BV-124: title, what it means, action
 		w("**%s**\n\n%s\n\n%s\n\n", t(mcpTitleKey(f), p), mcpWhatItMeans(cat, f, p), mcpAction(cat, p))
+	} else if f, ok := byID[v.Today.FindingID]; ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) {
+		p := findingParams(f) // BV-175: title, what, steps
+		w("**%s**\n\n%s\n\n%s", t("finding."+f.Rule+".title", p), t("finding."+f.Rule+".what", p), n8nMarkdownSteps(t, f, p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
@@ -327,6 +341,17 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), mcpWhatItMeans(cat, f, p))
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), mcpAction(cat, p))
+			continue
+		}
+		if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175: title/why/todo(steps)
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t("finding."+f.Rule+".title", p))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding."+f.Rule+".what", p))
+			w("#### %s\n\n%s", t("finding.part.todo", p), n8nMarkdownSteps(t, f, p))
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))
@@ -689,7 +714,26 @@ func findingParams(f rules.Finding) map[string]string {
 			p["script"] = untrusted.PlainText(f.Evidence.Locations[1])
 		}
 	}
+	// BV-175: {server} is the n8n MCP server entry's name, {path} the n8n user
+	// folder; both are data read from disk, sanitized. The key value is never
+	// read, so it never reaches a param.
+	if f.Rule == rules.RuleN8NMCPBridge {
+		p["server"] = untrusted.PlainText(f.Params.Server)
+	}
+	if f.Rule == rules.RuleN8NKeyWithData && len(f.Evidence.Locations) > 0 {
+		p["path"] = untrusted.PlainText(f.Evidence.Locations[0])
+	}
 	return p
+}
+
+// n8nMarkdownSteps is the «What to do» of an n8n finding (BV-175) as a Markdown
+// list: two steps for n8n_mcp_bridge, one for n8n_key_with_data.
+func n8nMarkdownSteps(t func(string, map[string]string) string, f rules.Finding, p map[string]string) string {
+	out := "- " + t("finding."+f.Rule+".step1", p) + "\n"
+	if f.Rule == rules.RuleN8NMCPBridge {
+		out += "- " + t("finding."+f.Rule+".step2", p) + "\n"
+	}
+	return out + "\n"
 }
 
 // projectHookKey is the catalog code for part ("title", "what", "impact" or

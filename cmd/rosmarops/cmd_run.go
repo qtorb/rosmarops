@@ -35,6 +35,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
 	"github.com/qtorb/rosmarops/internal/scan/mcp"
+	n8nscan "github.com/qtorb/rosmarops/internal/scan/n8n"
 	"github.com/qtorb/rosmarops/internal/scan/pyenv"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
@@ -476,8 +477,22 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							})
 						}
 					}
+					// n8n user folder (BV-175): read at rest, no network, no
+					// writes. Its community node packages are crossed against the
+					// threat data like any global npm package; the credential key
+					// beside the database gives the n8n_key_with_data finding.
+					n8nFolder := agentdirs.N8NDir(homeDir, nil)
+					n8nResult, n8nErrs := n8nscan.Scan(n8nFolder)
+					for _, e := range n8nErrs {
+						scanErrors = append(scanErrors, finding.ScanError{Scope: "n8n", Message: e.Error()})
+					}
 					pkgObs := packageObservations(pyResult, globalObs)
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
+					for _, p := range n8nResult.Packages {
+						pkgObs = append(pkgObs, graph.PackageObservation{
+							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
+						})
+					}
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -908,6 +923,8 @@ func writeGraph(
 	now time.Time,
 	matcher *intel.Matcher,
 	pkgObs []graph.PackageObservation,
+	n8nFolder string,
+	n8nKeyData bool,
 ) (*graph.Graph, string, string, error) {
 	fail := func(err error) (*graph.Graph, string, string, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -956,6 +973,14 @@ func writeGraph(
 		return nil, "", "", fmt.Errorf("mcp catalog: %w", err)
 	}
 	graph.CrossMCPCatalog(&g, scan.Servers, catalog, now)
+	// n8n cross (BV-175): mark mcp_server nodes that are n8n instances
+	// (in-memory, does not change the written file), and, when the n8n folder
+	// keeps its credential key beside the database, append the folder resource
+	// node the n8n_key_with_data finding stands on.
+	graph.CrossN8N(&g, scan.Servers, now)
+	if n8nKeyData {
+		graph.AddN8NKeyNode(&g, n8nFolder, now)
+	}
 	path, err := graph.WriteFile(dir, g)
 	if err != nil {
 		return nil, "", "", err

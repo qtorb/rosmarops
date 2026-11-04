@@ -577,6 +577,11 @@ var MemoryUntracked = map[string]bool{
 	rules.RulePackageKnownMalicious:     true,
 	rules.RuleProjectHookRunsRepoScript: true,
 	rules.RuleMCPExternalAction:         true,
+	// BV-175: n8n findings are re-derived each run from the configuration and
+	// the n8n folder; they are not in the memory schema's rule enum, so adding
+	// them to it would be a memory-schema change.
+	rules.RuleN8NMCPBridge:   true,
+	rules.RuleN8NKeyWithData: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

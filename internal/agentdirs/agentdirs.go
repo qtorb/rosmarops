@@ -74,6 +74,7 @@ const (
 	Antigravity   = "antigravity"
 	Hermes        = "hermes"
 	ClaudeDesktop = "claude-desktop"
+	N8N           = "n8n" // BV-175: detected by its user folder
 )
 
 // Env reads environment variables; os.LookupEnv outside tests.
@@ -244,7 +245,21 @@ func (l Layout) Detect(home string, env Env) []Present {
 			out = append(out, Present{ClaudeDesktop, desktop, p})
 		}
 	}
+	// n8n (BV-175): its user folder, ~/.n8n on every OS, or $N8N_USER_FOLDER/.n8n.
+	if n8n := N8NDir(home, env); isDir(n8n) {
+		out = append(out, Present{N8N, n8n, n8n})
+	}
 	return out
+}
+
+// N8NDir is n8n's user folder: $N8N_USER_FOLDER/.n8n when the variable is set
+// (n8n appends .n8n to it), else ~/.n8n. The same on Windows, macOS and Linux
+// (BV-175). Existence is checked by the caller; nothing here opens a file.
+func N8NDir(home string, env Env) string {
+	if v, ok := lookup(env)("N8N_USER_FOLDER"); ok && v != "" {
+		return filepath.Join(v, ".n8n")
+	}
+	return filepath.Join(home, ".n8n")
 }
 
 // Products is the set of products in present.
