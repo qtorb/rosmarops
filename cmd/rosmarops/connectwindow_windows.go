@@ -114,7 +114,10 @@ $resultl = Add-Label '' 14 120
 $resultl.Visible = $false
 $yes = New-Object System.Windows.Forms.Button
 $yes.Text = $cfg.yes
-$yes.SetBounds(248, 198, 84, 28)
+# BV-176: «Guardar en mi espacio» did not fit the old 84 px width and wrapped to
+# two lines. Widen it to 160 px (enough for the Spanish label on one line) and
+# shift it left so it keeps an 8 px gap before the «Not now» button at x=340.
+$yes.SetBounds(172, 198, 160, 28)
 $no = New-Object System.Windows.Forms.Button
 $no.Text = $cfg.no
 $no.SetBounds(340, 198, 84, 28)
