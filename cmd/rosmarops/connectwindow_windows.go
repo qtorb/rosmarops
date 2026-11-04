@@ -146,7 +146,7 @@ $tl.AutoSize = $true
 $tl.MaximumSize = New-Object System.Drawing.Size(424, 0)
 $tl.Font = $fBody; $tl.ForeColor = $cMuted; $tl.BackColor = $cWhite
 $tl.Text = $cfg.text
-$tl.Location = New-Object System.Drawing.Point(28, $ql.Bottom + 12)
+$tl.Location = New-Object System.Drawing.Point(28, ($ql.Bottom + 12))
 $form.Controls.Add($tl)
 # The result text replaces the title/body once connecting starts; same muted
 # body style, at the top-left content origin.
