@@ -773,18 +773,20 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
 		spaceSend(sendCtx, sp, currentPkg, pkgNow)
 		cancelSend()
-		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401
-		// during the send forgets both, and then the section is not shown.
-		if isSpaceConnected(sp) {
-			v2.SpaceConnected = true
-			// This run's package: sent (with this send's date), refused, or
-			// still pending (CTO-15 PR5).
-			v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
-			// If this run had no package to send because it could not be built
-			// or sealed, say so (BV-152 point 1): «rejected», not «pending».
-			if pkgFailed {
-				v2.SpaceSentDate, v2.SpaceRejected = "", true
-			}
+		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401 or
+		// 409 during the send forgets both, so the section then shows as not
+		// connected. BV-172: the rejection of this run's package is shown either
+		// way — a 409 key_mismatch forgets the space but the report must still
+		// say the check could not be sent (report.space_rejected) and offer to
+		// connect again. The send log carries «rejected» even after the forget.
+		v2.SpaceConnected = isSpaceConnected(sp)
+		// This run's package: sent (with this send's date), refused, or still
+		// pending (CTO-15 PR5).
+		v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
+		// If this run had no package to send because it could not be built or
+		// sealed, say so (BV-152 point 1): «rejected», not «pending».
+		if pkgFailed {
+			v2.SpaceSentDate, v2.SpaceRejected = "", true
 		}
 	} else {
 		slog.Warn("space send skipped: kit path", "err", perr)
@@ -821,6 +823,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// take its latest value — a 401 during the run must end "not connected".
 	if cur, curErr := state.LoadState(stPath); curErr == nil {
 		st.SpacePermission = cur.SpacePermission
+		// BV-172: the connect-offer decline is also a space-paths field; a 409 or
+		// 401 during the send clears it (clearConnectOfferDecline) so the offer
+		// shows this run. Take the latest from disk so this save does not restore
+		// an old decline and suppress the offer.
+		st.ConnectOfferDeclinedAt = cur.ConnectOfferDeclinedAt
 	}
 
 	// Update state with the run's status (the highest of v1 and v2).

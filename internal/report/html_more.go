@@ -90,6 +90,12 @@ func (c htmlCtx) renderYourSpace() {
 			c.renderWeeklyCopy()
 		}
 	} else {
+		// BV-172: a 409/401 during the send forgets the space mid-run, so this
+		// report is not connected; still say the check could not be sent before
+		// the pitch to reconnect, so the rejection is never silent.
+		if c.v.SpaceRejected {
+			c.w(`<p class="warn">%s</p>`, c.t("report.space_rejected", nil))
+		}
 		c.w(`<p>%s</p><p class="mut">%s</p><a class="spacebtn" href="https://app.rosmarops.com/space">%s</a>`,
 			c.t("report.space_pitch", nil), c.t("report.space_next", nil), c.t("report.space_create", nil))
 	}
