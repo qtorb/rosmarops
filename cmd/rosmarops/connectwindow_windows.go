@@ -24,8 +24,6 @@ type connectWindowConfig struct {
 	Text    string `json:"text"`
 	Yes     string `json:"yes"`
 	No      string `json:"no"`
-	Number  string `json:"number"`
-	Wait    string `json:"wait"`
 	Done    string `json:"done"`
 	Expired string `json:"expired"`
 	Failed  string `json:"failed"`
@@ -39,8 +37,6 @@ func connectWindowConfigFrom(cat catalog.Catalog) connectWindowConfig {
 		Text:    cat.Text("connect.text", nil),
 		Yes:     cat.Text("connect.yes", nil),
 		No:      cat.Text("connect.no", nil),
-		Number:  cat.Text("connect.number", nil),
-		Wait:    cat.Text("connect.wait", nil),
 		Done:    cat.Text("connect.done", nil),
 		Expired: cat.Text("connect.expired", nil),
 		Failed:  cat.Text("connect.failed", nil),
@@ -109,13 +105,11 @@ function Add-Label($text, $y, $h) {
 $ql = Add-Label $cfg.q 14 24
 $ql.Font = New-Object System.Drawing.Font($ql.Font, [System.Drawing.FontStyle]::Bold)
 $tl = Add-Label $cfg.text 44 90
-$numCaption = Add-Label $cfg.number 14 24
-$numCaption.Visible = $false
+# BV-164: the connect offer no longer shows a number. $numValue stays as an
+# invisible label, updated only so the Windows self-test can prove the reader
+# thread is alive (it echoes NUMLABEL); the person never sees it.
 $numValue = Add-Label '' 44 48
-$numValue.Font = New-Object System.Drawing.Font($numValue.Font.FontFamily, 32, [System.Drawing.FontStyle]::Bold)
 $numValue.Visible = $false
-$waitl = Add-Label $cfg.wait 96 48
-$waitl.Visible = $false
 $resultl = Add-Label '' 14 120
 $resultl.Visible = $false
 $yes = New-Object System.Windows.Forms.Button
@@ -145,7 +139,6 @@ $script:rs = $null
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 200
 function Show-Result($text) {
-  $waitl.Visible = $false
   $resultl.Text = $text
   $resultl.Visible = $true
   $ok.Visible = $true
@@ -155,10 +148,8 @@ function Handle-Line($line) {
   $parts = ([string]$line).Split(' ', 2)
   switch ($parts[0]) {
     'number' {
-      $numCaption.Visible = $true
+      # BV-164: not shown; $numValue is set only for the self-test's liveness echo.
       $numValue.Text = $parts[1]
-      $numValue.Visible = $true
-      $waitl.Visible = $true
       if ($selftest) { [Console]::Out.WriteLine('NUMLABEL=' + $numValue.Text); [Console]::Out.Flush() }
     }
     'done'    { Show-Result $cfg.done }
