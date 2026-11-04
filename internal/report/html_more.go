@@ -239,6 +239,10 @@ func (c htmlCtx) mcpParams(s MCPServerLine) map[string]string {
 // the pitch, or another copy's task, and the block that copies the command.
 // A scheduled review whose notification did not show says why.
 func (c htmlCtx) renderWeekly() {
+	if c.v.linux() {
+		c.renderWeeklyLinux()
+		return
+	}
 	w := c.v.weekly
 	switch w.State {
 	case scheduledtasks.WeeklyOwn:
@@ -255,6 +259,26 @@ func (c htmlCtx) renderWeekly() {
 	}
 }
 
+// renderWeeklyLinux is the weekly column on Linux (BV-165): the systemd user
+// timer, its state the same as on Windows, with the Linux texts and command; or
+// html.weekly.no_systemd when this machine has no user systemd.
+func (c htmlCtx) renderWeeklyLinux() {
+	if c.v.weeklyNoSystemd {
+		c.w(`<p>%s</p>`, c.t("html.weekly.no_systemd", nil))
+		return
+	}
+	switch w := c.v.weekly; w.State {
+	case scheduledtasks.WeeklyOwn:
+		c.w(`<p>%s</p>`, c.t("html.weekly.on", map[string]string{"day": c.cat.Text("html.day."+w.Day, nil), "time": w.Time}))
+	case scheduledtasks.WeeklyOther:
+		c.w(`<p>%s</p>`, c.t("html.weekly.other_exe", map[string]string{"path": userPath(w.Other, c.home, "~")}))
+		c.renderWeeklyCopy()
+	default:
+		c.w(`<p>%s</p>`, c.t("html.weekly.pitch.linux", nil))
+		c.renderWeeklyCopy()
+	}
+}
+
 // renderWeeklyCopy is the block that copies the command, as in step 2: the
 // hidden pre with the instruction (a PowerShell comment) and the command, the main button, the
 // live notice, the note on the agent the button is for (J11), and «I'd
@@ -264,15 +288,23 @@ func (c htmlCtx) renderWeeklyCopy() {
 	if c.v.exePath == "" {
 		return // the executable's path is not known: no command to give
 	}
-	cmd := html.EscapeString(WeeklyCommand(c.v.exePath, c.cat.Lang()))
-	// The instruction as a PowerShell comment («# »), so that the text
-	// pasted into PowerShell runs without error (BV-82).
+	// BV-165: on Linux the command is the systemd units shell snippet and the
+	// texts are the Linux ones; elsewhere the PowerShell command. The instruction
+	// is written as a «# » comment so pasting it runs without error in both
+	// PowerShell and a POSIX shell (BV-82).
+	prompt, manualStep := "html.weekly.prompt", "html.weekly.manual.step"
+	cmd := WeeklyCommand(c.v.exePath, c.cat.Lang())
+	if c.v.linux() {
+		prompt, manualStep = "html.weekly.prompt.linux", "html.weekly.manual.step.linux"
+		cmd = WeeklyCommandLinux(c.v.exePath)
+	}
+	cmd = html.EscapeString(cmd)
 	c.w(`<pre hidden># %s
 
 %s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span><p class="note">%s</p>`,
-		c.t("html.weekly.prompt", nil), cmd, c.t("html.fix.copied", nil), c.t("html.fix.copy.generic", nil), c.t("html.weekly.agent_note", nil))
+		c.t(prompt, nil), cmd, c.t("html.fix.copied", nil), c.t("html.fix.copy.generic", nil), c.t("html.weekly.agent_note", nil))
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><p>%s</p><pre>%s</pre><button type="button" class="b2" data-copied="%s">%s</button><span class="live" aria-live="polite"></span></details>`,
-		c.t("html.fix.manual", nil), c.t("html.weekly.manual.step", nil), cmd, c.t("html.fix.copied", nil), c.t("html.weekly.copy_command", nil))
+		c.t("html.fix.manual", nil), c.t(manualStep, nil), cmd, c.t("html.fix.copied", nil), c.t("html.weekly.copy_command", nil))
 }
 
 // psQuote is s in PowerShell single quotes, the inner quote doubled.
@@ -300,6 +332,45 @@ func WeeklyCommand(exe, lang string) string {
 		`$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited` + "\n" +
 		"$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew\n" +
 		"Register-ScheduledTask -TaskName 'RosmarOps weekly review' -Action $a -Trigger $t -Principal $p -Settings $s -Force"
+}
+
+// WeeklyCommandLinux is the shell command (BV-165) that creates the systemd
+// user units for the weekly review — rosmarops-weekly.service and
+// rosmarops-weekly.timer under ~/.config/systemd/user, Fridays at 09:00,
+// Persistent — and enables the timer. It runs exe with «run --unattended».
+// RosmarOps never runs this: the agent or the person does.
+func WeeklyCommandLinux(exe string) string {
+	return "mkdir -p ~/.config/systemd/user\n" +
+		"cat > ~/.config/systemd/user/rosmarops-weekly.service <<'EOF'\n" +
+		"[Unit]\n" +
+		"Description=RosmarOps weekly review\n" +
+		"\n" +
+		"[Service]\n" +
+		"Type=oneshot\n" +
+		"ExecStart=" + systemdExecArg(exe) + " run --unattended\n" +
+		"EOF\n" +
+		"cat > ~/.config/systemd/user/rosmarops-weekly.timer <<'EOF'\n" +
+		"[Unit]\n" +
+		"Description=RosmarOps weekly review\n" +
+		"\n" +
+		"[Timer]\n" +
+		"OnCalendar=Fri 09:00\n" +
+		"Persistent=true\n" +
+		"\n" +
+		"[Install]\n" +
+		"WantedBy=timers.target\n" +
+		"EOF\n" +
+		"systemctl --user enable --now rosmarops-weekly.timer"
+}
+
+// systemdExecArg is exe as a systemd ExecStart argument: double-quoted when it
+// has a space, with backslash and double-quote escaped (systemd quoting), so
+// the detection reads back the same path. A plain path is left as is.
+func systemdExecArg(exe string) string {
+	if !strings.ContainsAny(exe, " \t\"\\") {
+		return exe
+	}
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(exe) + `"`
 }
 
 // renderAssumeDialog is the window of the analysis assumptions (§17.5): the
@@ -340,6 +411,9 @@ func moreKeys() []string {
 	keys := []string{
 		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score",
 		"html.lang_switch", "html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note", "html.weekly.copy_command",
+		// BV-165: the Linux weekly review (systemd user timer) and its no-systemd note.
+		"html.weekly.pitch.linux", "html.weekly.prompt.linux", "html.weekly.manual.step.linux", "html.weekly.no_systemd",
+		"html.assume.scope.linux",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
 		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope", "html.assume.scope.macos",
 		"html.na.title", "html.na.intro",

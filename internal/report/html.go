@@ -1359,7 +1359,7 @@ func HTMLKeys() []string {
 		// v2
 		"html.legacy.pointer",
 		"html.ai.copy", "html.ai.download",
-		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.limits.macos", "ai.more",
+		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.limits.macos", "ai.limits.linux", "ai.more",
 		"html.memory.first", "html.memory.lost", // B8
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
