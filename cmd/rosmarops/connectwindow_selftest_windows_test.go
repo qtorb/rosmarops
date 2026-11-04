@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -42,6 +43,105 @@ func TestConnectWindowSelfTest(t *testing.T) {
 	t.Run("runspace alive", testWindowAlive)
 	t.Run("consolein_async freezes", func(t *testing.T) { testWindowFreezes(t, "consolein_async") })
 	t.Run("backgroundworker no number", func(t *testing.T) { testWindowNoNumber(t, "backgroundworker") })
+	t.Run("geometry and colours", testWindowLook)
+}
+
+// argbOf is the .NET Color.ToArgb() value of an opaque #RRGGBB, as the signed
+// int32 PowerShell prints.
+func argbOf(rgb uint32) int { return int(int32(0xFF000000 | rgb)) }
+
+// testWindowLook (BV-178) asserts the window's geometry and colours from the
+// self-test's GEOM/COLOR lines: the 480×248 white dialog, the ink title at
+// (28,28), the body 12 px below it, the flat primary button on the right and
+// the flat outlined secondary to its left, both 40 px tall, 28 px from the
+// edges. Values are scaled by the runner's DPI (also emitted).
+func testWindowLook(t *testing.T) {
+	lines, send, stop := runSelfWindow(t, "")
+	defer stop()
+	if err := send(selfConfig()); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(lines, shownTimeout, func(l string) bool { return l == "SHOWN" }) {
+		t.Fatal("no SHOWN: the window did not paint")
+	}
+	// Collect the key=value tokens the window emitted after SHOWN.
+	kv := map[string]string{}
+	deadline := time.After(5 * time.Second)
+collect:
+	for {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				break collect
+			}
+			if !strings.Contains(l, "=") {
+				continue
+			}
+			for _, tok := range strings.Fields(l) {
+				if i := strings.IndexByte(tok, '='); i > 0 {
+					kv[tok[:i]] = tok[i+1:]
+				}
+			}
+			if _, done := kv["NOBORDERCOLOR"]; done {
+				break collect
+			}
+		case <-deadline:
+			break collect
+		}
+	}
+	atoi := func(s string) int { n, _ := strconv.Atoi(s); return n }
+	nums := func(key string) []int {
+		var out []int
+		for _, p := range strings.Split(kv[key], ",") {
+			out = append(out, atoi(p))
+		}
+		return out
+	}
+	dpi := atoi(kv["DPI"])
+	if dpi == 0 {
+		t.Fatalf("no DPI emitted; collected: %v", kv)
+	}
+	sc := func(px int) int { return px * dpi / 96 }
+	near := func(name string, got, want int) {
+		if got < want-3 || got > want+3 {
+			t.Errorf("%s = %d, want ≈ %d (dpi %d)", name, got, want, dpi)
+		}
+	}
+	client := nums("CLIENT")
+	near("client width", client[0], sc(480))
+	near("client height", client[1], sc(248))
+	title := nums("TITLE")
+	near("title left", title[0], sc(28))
+	near("title top", title[1], sc(28))
+	body := nums("BODY")
+	near("body left", body[0], sc(28))
+	near("body top", body[1], title[1]+title[3]+sc(12))
+	yes := nums("YES")
+	no := nums("NO")
+	near("yes height", yes[3], sc(40))
+	near("no height", no[3], sc(40))
+	near("yes top", yes[1], sc(248-28-40))
+	near("no top", no[1], sc(248-28-40))
+	near("yes right edge", yes[0]+yes[2], sc(480-28))
+	near("no right edge", no[0]+no[2], yes[0]-sc(12))
+	// Border and window chrome.
+	if !strings.Contains(kv["BORDER"], "FixedSingle") {
+		t.Errorf("FormBorderStyle = %q, want FixedSingle", kv["BORDER"])
+	}
+	if kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
+		t.Errorf("chrome: MAX=%s MIN=%s TOP=%s, want False/False/True", kv["MAX"], kv["MIN"], kv["TOP"])
+	}
+	// Colours.
+	white, ink, border := argbOf(0xFFFFFF), argbOf(0x1B1A18), argbOf(0xC9C5BC)
+	if atoi(kv["FORMBACK"]) != white {
+		t.Errorf("form back = %s, want white (%d)", kv["FORMBACK"], white)
+	}
+	if atoi(kv["YESBACK"]) != ink || atoi(kv["YESFORE"]) != white || kv["YESBORDER"] != "0" || kv["YESFLAT"] != "Flat" {
+		t.Errorf("primary button: back=%s fore=%s border=%s flat=%s", kv["YESBACK"], kv["YESFORE"], kv["YESBORDER"], kv["YESFLAT"])
+	}
+	if atoi(kv["NOBACK"]) != white || atoi(kv["NOFORE"]) != ink || kv["NOBORDER"] != "1" || atoi(kv["NOBORDERCOLOR"]) != border || kv["NOFLAT"] != "Flat" {
+		t.Errorf("secondary button: back=%s fore=%s border=%s borderColor=%s flat=%s", kv["NOBACK"], kv["NOFORE"], kv["NOBORDER"], kv["NOBORDERCOLOR"], kv["NOFLAT"])
+	}
 }
 
 // testWindowAlive is the real proof of the fix: SHOWN, then at least 5 Timer
