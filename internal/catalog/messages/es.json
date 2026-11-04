@@ -490,7 +490,7 @@
   "report.space_has": "En tu espacio tienes la evolución de tu nota, cómo trabaja cada agente, qué ha cambiado desde la última revisión y los detalles del análisis, de todos tus ordenadores.",
   "report.space_next": "Al terminar la próxima revisión, RosmarOps te ofrecerá guardarla en tu espacio. Si aún no tienes cuenta, la creas en ese momento con tu correo y una contraseña.",
   "report.space_pending": "Aún no enviado: no hay conexión. Se enviará después de la próxima revisión.",
-  "report.space_pitch": "Guarda los resultados de cada revisión en un espacio cifrado y mira la evolución de todos tus ordenadores juntos. Solo tú puedes abrirlo.",
+  "report.space_pitch": "Guarda los resultados de cada revisión en tu espacio y mira la evolución de todos tus ordenadores juntos. Entras con tu correo y tu contraseña desde cualquier navegador.",
   "report.space_rejected": "Esta revisión no se ha podido enviar a tu espacio.",
   "report.space_sent": "Enviado a tu espacio el {date}.",
   "report.status.green": "Nada necesita tu atención.",
