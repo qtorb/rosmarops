@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/results"
 	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -121,12 +122,17 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 		revertSpacePermission(paths.state)
 		return err
 	}
-	// Never replace a different local key (CTO-15 PR5): if this computer
-	// already holds a kit with another key_id, refuse — revert the permission
-	// so the window shows connect.failed — rather than silently overwrite it.
+	// A space that started again («Empezar de nuevo») hands out a new key, so
+	// the kit this computer still holds no longer matches (BV-180, replacing the
+	// CTO-15 PR5 refusal). The person has just approved this connection in their
+	// space, with the session open, so take the space's new key instead of
+	// refusing: fall through to store {KitID, Secret, Credential} from the space.
+	// The old key is read only here, to re-seal this run's package below, and is
+	// never written to disk again.
+	var oldKeyReplaced []byte
 	if existing, _ := loadKitFrom(paths.store); existing != nil && kit.KeyID(existing.Secret.Key) != kit.KeyID(m.Secret.Key) {
-		revertSpacePermission(paths.state)
-		return fmt.Errorf("spacenet: this computer already holds a different space key")
+		oldKeyReplaced = append([]byte(nil), existing.Secret.Key...)
+		slog.Info("space key replaced on connect")
 	}
 	// Store the space key and credential BEFORE acking (BV-137 point 4, CTO-14
 	// P5): the area deletes the connection only on ack, so a failed save never
@@ -134,6 +140,13 @@ func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onO
 	if err := kit.Save(paths.store, kit.Stored{KitID: m.KitID, Secret: m.Secret, SpaceCredential: m.Credential}); err != nil {
 		revertSpacePermission(paths.state)
 		return fmt.Errorf("store the space key and credential: %w", err)
+	}
+	// If the key was replaced, re-seal this run's package (the newest, still
+	// sealed with the old key) with the new key, so sendAfterConnect sends it by
+	// the normal path (BV-180 point 2). Best effort: a failure leaves the old
+	// file, which spaceSend then skips.
+	if oldKeyReplaced != nil {
+		resealNewestForNewKey(paths.reports, oldKeyReplaced, m.KitID, m.Secret.Key)
 	}
 	if err := ack(ctx); err != nil {
 		// The credential is already stored and usable; the area expires the
@@ -310,6 +323,59 @@ func newestPackage(reportsDir string) string {
 	}
 	sort.Strings(matches)
 	return matches[len(matches)-1]
+}
+
+// resealNewestForNewKey re-seals this run's package with the space's new key
+// after the key was replaced on connect (BV-180 point 2). The newest package in
+// the reports directory is this run's; if it is still sealed with the old key,
+// open it with the old key and seal the same content (the same space-view v1)
+// under the new key and kit_id, writing it in place so sendAfterConnect sends it
+// by the normal path. The content is never changed, and the old key is never
+// written anywhere. Best effort: any failure is logged (never a secret, never a
+// value) and leaves the old file, which spaceSend then skips as a non-current
+// key. The write stays inside the reports directory (invariant 2).
+func resealNewestForNewKey(reportsDir string, oldKey []byte, newKitID string, newKey []byte) {
+	pkg := newestPackage(reportsDir)
+	if pkg == "" {
+		return
+	}
+	raw, err := os.ReadFile(pkg)
+	if err != nil {
+		slog.Warn("reseal package: read", "err", err)
+		return
+	}
+	p, err := results.Parse(raw)
+	if err != nil {
+		slog.Warn("reseal package: parse", "err", err)
+		return
+	}
+	// Only the package sealed with the old key is re-sealed; anything else is
+	// left as is (spaceSend sends only packages sealed with the current key).
+	if p.Header.KeyID != kit.KeyID(oldKey) {
+		return
+	}
+	content, err := results.Open(oldKey, p)
+	if err != nil {
+		slog.Warn("reseal package: open with the old key", "err", err)
+		return
+	}
+	h := p.Header
+	h.KitID, h.KeyID = newKitID, kit.KeyID(newKey)
+	np, err := results.Seal(newKey, h, content)
+	if err != nil {
+		slog.Warn("reseal package: seal with the new key", "err", err)
+		return
+	}
+	out, err := results.Marshal(np)
+	if err != nil {
+		slog.Warn("reseal package: marshal", "err", err)
+		return
+	}
+	if err := os.WriteFile(pkg, out, 0o600); err != nil {
+		slog.Warn("reseal package: write", "err", err)
+		return
+	}
+	slog.Info("space package re-sealed with the new key")
 }
 
 // sendResultFor maps an HTTP status (0 on a network error) to a log result.
