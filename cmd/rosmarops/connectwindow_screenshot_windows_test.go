@@ -34,7 +34,10 @@ func TestConnectWindowScreenshots(t *testing.T) {
 			t.Fatal(err)
 		}
 		cfg := connectWindowConfigFrom(cat)
-		cfg.Icon = "" // no exe in the test; keep the default icon
+		cfg.Icon = "" // no exe icon in the test binary; use the rosmarops.ico fallback
+		if ico, err := filepath.Abs(filepath.Join("..", "..", "assets", "windows", "rosmarops.ico")); err == nil {
+			cfg.IconFallback = ico
+		}
 		for _, s := range []struct{ scale, pct string }{{"1", "100"}, {"1.5", "150"}} {
 			out := filepath.Join(dir, "connect-"+lang+"-"+s.pct+".png")
 			cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-STA", "-File", ps1)

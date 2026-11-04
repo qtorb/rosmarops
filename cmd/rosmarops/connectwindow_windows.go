@@ -29,9 +29,12 @@ type connectWindowConfig struct {
 	Failed  string `json:"failed"`
 	OK      string `json:"ok"`
 	// Icon is the path of the running rosmarops.exe, so the window shows its
-	// icon (BV-178). Empty when it cannot be resolved; the window then keeps the
-	// default icon.
+	// embedded rosemary icon (BV-178). Empty when it cannot be resolved.
 	Icon string `json:"icon"`
+	// IconFallback is a .ico used when Icon carries none (a test binary): the
+	// repo's assets/windows/rosmarops.ico. Empty in production (the installed
+	// exe always carries the icon).
+	IconFallback string `json:"iconfallback"`
 }
 
 func connectWindowConfigFrom(cat catalog.Catalog) connectWindowConfig {
@@ -106,55 +109,74 @@ try {
     [void][RO.Dpi2]::SetProcessDPIAware()
   } catch { }
 }
-# BV-178: the RosmarOps look — a white dialog, dark ink, a flat primary button
-# and a flat outlined secondary, no grey chrome. All values are the 100 %
-# (96-DPI) design; AutoScaleMode Dpi scales them for the monitor.
+# BV-178: the RosmarOps look — a white dialog, dark ink, a cobalt primary button
+# and a flat outlined secondary, no grey chrome.
+#
+# One scale mechanism. In production $f is 1 and AutoScaleMode Dpi lets Windows
+# scale the 96-DPI design to the real monitor (fonts, in points, scale with it):
+# this is the single production mechanism. For the CI screenshots a 96-DPI runner
+# cannot drive a real 150 % monitor, so shot mode scales everything by $f
+# manually (fonts AND geometry together) with AutoScaleMode None — a true
+# 100 %/150 % window, not a stretched bitmap.
+$shot = $env:ROSMAROPS_CONNECT_WINDOW_SHOT
+$shotScale = $env:ROSMAROPS_CONNECT_WINDOW_SHOT_SCALE
+$f = 1.0
+if ($shot -and $shotScale) { $f = [double]$shotScale }
+function Px($n) { return [int][math]::Round([double]$n * $f) }
 $cWhite  = [System.Drawing.ColorTranslator]::FromHtml('#FFFFFF')
 $cInk    = [System.Drawing.ColorTranslator]::FromHtml('#1B1A18')
 $cMuted  = [System.Drawing.ColorTranslator]::FromHtml('#4F4C46')
 $cBorder = [System.Drawing.ColorTranslator]::FromHtml('#C9C5BC')
-$fTitle  = New-Object System.Drawing.Font('Segoe UI Semibold', 15)
-$fBody   = New-Object System.Drawing.Font('Segoe UI', 10.5)
-$fBtnP   = New-Object System.Drawing.Font('Segoe UI Semibold', 10.5)
-$fBtnS   = New-Object System.Drawing.Font('Segoe UI', 10.5)
+$cCobalt = [System.Drawing.ColorTranslator]::FromHtml('#2346B8')
+$fTitle  = New-Object System.Drawing.Font('Segoe UI Semibold', [single](15 * $f))
+$fBody   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
+$fBtnP   = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10.5 * $f))
+$fBtnS   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $cfg.title
-$form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi
-$form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96)
+if ($shot) { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None }
+else { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi; $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96) }
 $form.TopMost = $true
 $form.FormBorderStyle = 'FixedSingle'
 $form.StartPosition = 'CenterScreen'
 $form.BackColor = $cWhite
-$form.ClientSize = New-Object System.Drawing.Size(480, 248)
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), (Px 248))
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
+# Title-bar icon: the rosemary of rosmarops.exe (os.Executable, BV-149's embedded
+# icon), never PowerShell's own process icon. If that path carries no icon (a
+# test binary), fall back to assets/windows/rosmarops.ico.
+$iconSet = $false
 if ($cfg.icon -and (Test-Path -LiteralPath $cfg.icon)) {
-  try { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon) } catch { }
+  try { $ic = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon); if ($ic -ne $null) { $form.Icon = $ic; $iconSet = $true } } catch { }
+}
+if (-not $iconSet -and $cfg.iconfallback -and (Test-Path -LiteralPath $cfg.iconfallback)) {
+  try { $form.Icon = New-Object System.Drawing.Icon($cfg.iconfallback); $iconSet = $true } catch { }
 }
 $script:answered = $false
 # Title (connect.q): Segoe UI Semibold 15, ink, wraps within 424 px.
 $ql = New-Object System.Windows.Forms.Label
 $ql.AutoSize = $true
-$ql.MaximumSize = New-Object System.Drawing.Size(424, 0)
+$ql.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
 $ql.Font = $fTitle; $ql.ForeColor = $cInk; $ql.BackColor = $cWhite
 $ql.Text = $cfg.q
-$ql.Location = New-Object System.Drawing.Point(28, 28)
+$ql.Location = New-Object System.Drawing.Point((Px 28), (Px 28))
 $form.Controls.Add($ql)
 # Body (connect.text): Segoe UI 10.5, muted, 12 px under the title, 424 wide.
 $tl = New-Object System.Windows.Forms.Label
 $tl.AutoSize = $true
-$tl.MaximumSize = New-Object System.Drawing.Size(424, 0)
+$tl.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
 $tl.Font = $fBody; $tl.ForeColor = $cMuted; $tl.BackColor = $cWhite
 $tl.Text = $cfg.text
-$tl.Location = New-Object System.Drawing.Point(28, ($ql.Bottom + 12))
+$tl.Location = New-Object System.Drawing.Point((Px 28), ($ql.Bottom + (Px 12)))
 $form.Controls.Add($tl)
 # The result text replaces the title/body once connecting starts; same muted
 # body style, at the top-left content origin.
 $resultl = New-Object System.Windows.Forms.Label
 $resultl.AutoSize = $true
-$resultl.MaximumSize = New-Object System.Drawing.Size(424, 0)
+$resultl.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
 $resultl.Font = $fBody; $resultl.ForeColor = $cMuted; $resultl.BackColor = $cWhite
-$resultl.Location = New-Object System.Drawing.Point(28, 28)
+$resultl.Location = New-Object System.Drawing.Point((Px 28), (Px 28))
 $resultl.Visible = $false
 $form.Controls.Add($resultl)
 # BV-164: the connect offer no longer shows a number. $numValue stays an
@@ -164,11 +186,11 @@ $numValue = New-Object System.Windows.Forms.Label
 $numValue.AutoSize = $true; $numValue.Visible = $false
 $form.Controls.Add($numValue)
 # The window grows in height if the text needs it; the buttons never wrap.
-$clientH = 248
-$minH = $tl.Bottom + 16 + 40 + 28
+$clientH = Px 248
+$minH = $tl.Bottom + (Px 16) + (Px 40) + (Px 28)
 if ($minH -gt $clientH) { $clientH = $minH }
-$form.ClientSize = New-Object System.Drawing.Size(480, $clientH)
-$btnY = $clientH - 28 - 40
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), $clientH)
+$btnY = $clientH - (Px 28) - (Px 40)
 # A flat button sized to its text (one line) plus 18 px each side, 40 px tall.
 function New-FlatButton($text, $font, $back, $fore, $borderSize, $primary) {
   $b = New-Object System.Windows.Forms.Button
@@ -181,32 +203,28 @@ function New-FlatButton($text, $font, $back, $fore, $borderSize, $primary) {
   $b.ForeColor = $fore
   $b.AutoSize = $false
   $m = [System.Windows.Forms.TextRenderer]::MeasureText($text, $font)
-  $b.Height = 40
-  $b.Width = $m.Width + 36
+  $b.Height = Px 40
+  $b.Width = $m.Width + (Px 36)
   if ($primary) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
   $form.Controls.Add($b)
   return $b
 }
-# Primary «Save to my space» (connect.yes) on the right; secondary «Not now»
-# (connect.no) 12 px to its left.
-$yes = New-FlatButton $cfg.yes $fBtnP $cInk $cWhite 0 $true
+# Primary «Save to my space» (connect.yes), the web's cobalt (--brand #2346B8,
+# ink on hover/press), on the right; secondary «Not now» (connect.no) 12 px to
+# its left.
+$yes = New-FlatButton $cfg.yes $fBtnP $cCobalt $cWhite 0 $true
+$yes.FlatAppearance.MouseOverBackColor = $cInk
+$yes.FlatAppearance.MouseDownBackColor = $cInk
 $no  = New-FlatButton $cfg.no  $fBtnS $cWhite $cInk 1 $false
-$ok  = New-FlatButton $cfg.ok  $fBtnP $cInk $cWhite 0 $true
-$yes.Location = New-Object System.Drawing.Point((480 - 28 - $yes.Width), $btnY)
-$no.Location  = New-Object System.Drawing.Point(($yes.Left - 12 - $no.Width), $btnY)
-$ok.Location  = New-Object System.Drawing.Point((480 - 28 - $ok.Width), $btnY)
+$ok  = New-FlatButton $cfg.ok  $fBtnP $cCobalt $cWhite 0 $true
+$ok.FlatAppearance.MouseOverBackColor = $cInk
+$ok.FlatAppearance.MouseDownBackColor = $cInk
+$yes.Location = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $yes.Width), $btnY)
+$no.Location  = New-Object System.Drawing.Point(($yes.Left - (Px 12) - $no.Width), $btnY)
+$ok.Location  = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $ok.Width), $btnY)
 $ok.Visible = $false
 $form.AcceptButton = $yes
 $form.CancelButton = $no
-# BV-178: screenshot mode (CI only). ROSMAROPS_CONNECT_WINDOW_SHOT is the PNG
-# path; _SCALE renders the window at that factor (1.5 emulates 150 % on a
-# 96-DPI runner — the same multiply AutoScaleMode Dpi would apply). Never set in
-# production.
-$shot = $env:ROSMAROPS_CONNECT_WINDOW_SHOT
-$shotScale = $env:ROSMAROPS_CONNECT_WINDOW_SHOT_SCALE
-if ($shot -and $shotScale -and ([double]$shotScale -ne 1)) {
-  $form.Scale((New-Object System.Drawing.SizeF([double]$shotScale, [double]$shotScale)))
-}
 if ($shot) {
   $form.Add_Shown({
     Start-Sleep -Milliseconds 500
@@ -331,10 +349,29 @@ if ($selftest) {
     [Console]::Out.WriteLine('BODY=' + $tl.Left + ',' + $tl.Top + ',' + $tl.Width + ',' + $tl.Height)
     [Console]::Out.WriteLine('YES=' + $yes.Left + ',' + $yes.Top + ',' + $yes.Width + ',' + $yes.Height)
     [Console]::Out.WriteLine('NO=' + $no.Left + ',' + $no.Top + ',' + $no.Width + ',' + $no.Height)
+    [Console]::Out.WriteLine('CLIENTRECT=' + $form.ClientRectangle.Width + ',' + $form.ClientRectangle.Height)
+    [Console]::Out.WriteLine('VIS=' + $yes.Visible + ',' + $no.Visible)
+    [Console]::Out.WriteLine('PT=' + $ql.Font.SizeInPoints + ',' + $tl.Font.SizeInPoints + ',' + $yes.Font.SizeInPoints + ',' + $no.Font.SizeInPoints)
+    [Console]::Out.WriteLine('TEXTW=' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.yes, $fBtnP).Width) + ',' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.no, $fBtnS).Width) + ',' + (Px 36))
     [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
     [Console]::Out.WriteLine('FORMBACK=' + $form.BackColor.ToArgb())
-    [Console]::Out.WriteLine('YESBACK=' + $yes.BackColor.ToArgb() + ' YESFORE=' + $yes.ForeColor.ToArgb() + ' YESBORDER=' + $yes.FlatAppearance.BorderSize + ' YESFLAT=' + $yes.FlatStyle)
+    [Console]::Out.WriteLine('YESBACK=' + $yes.BackColor.ToArgb() + ' YESFORE=' + $yes.ForeColor.ToArgb() + ' YESBORDER=' + $yes.FlatAppearance.BorderSize + ' YESFLAT=' + $yes.FlatStyle + ' YESMOVER=' + $yes.FlatAppearance.MouseOverBackColor.ToArgb() + ' YESMDOWN=' + $yes.FlatAppearance.MouseDownBackColor.ToArgb())
     [Console]::Out.WriteLine('NOBACK=' + $no.BackColor.ToArgb() + ' NOFORE=' + $no.ForeColor.ToArgb() + ' NOBORDER=' + $no.FlatAppearance.BorderSize + ' NOBORDERCOLOR=' + $no.FlatAppearance.BorderColor.ToArgb() + ' NOFLAT=' + $no.FlatStyle)
+    # Icon: scan the title-bar icon for a rosemary-green (#6F8F78 +/-10) pixel, as
+    # BV-149 does for the exe icon, so the self-test can prove it is not the
+    # generic WinForms/PowerShell icon.
+    $iconRosemary = $false
+    try {
+      $ib = $form.Icon.ToBitmap()
+      for ($yy = 0; $yy -lt $ib.Height -and -not $iconRosemary; $yy++) {
+        for ($xx = 0; $xx -lt $ib.Width -and -not $iconRosemary; $xx++) {
+          $p = $ib.GetPixel($xx, $yy)
+          if (([math]::Abs($p.R - 111) -le 10) -and ([math]::Abs($p.G - 143) -le 10) -and ([math]::Abs($p.B - 120) -le 10)) { $iconRosemary = $true }
+        }
+      }
+      $ib.Dispose()
+    } catch { }
+    [Console]::Out.WriteLine('ICONROSEMARY=' + $iconRosemary)
     [Console]::Out.Flush()
     $script:answered = $true
     Start-Reading
