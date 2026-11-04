@@ -113,7 +113,7 @@ func TestInitRecordsReferences(t *testing.T) {
 	if st.Integrity.Binary != sha256Hex(exe) || st.Integrity.Config != sha256Hex(cfg) {
 		t.Errorf("references %+v", st.Integrity)
 	}
-	copyRaw, err := os.ReadFile(filepath.Join(dir, "reports", "config.accepted.json"))
+	copyRaw, err := os.ReadFile(filepath.Join(dir, "reports", "data", "config.accepted.json"))
 	if err != nil || string(copyRaw) != string(cfg) {
 		t.Errorf("accepted copy: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestUnattendedConfigAndLog(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
 		t.Fatal(err)
 	}
-	log, err := os.ReadFile(filepath.Join(reports, "last-scheduled-run-log.txt"))
+	log, err := os.ReadFile(filepath.Join(reports, "data", "last-scheduled-run-log.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
