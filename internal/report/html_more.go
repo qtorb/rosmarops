@@ -159,7 +159,7 @@ func (c htmlCtx) renderHowMade(local time.Time) {
 	}
 	c.w(`<p>%s</p>`, c.t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
 	c.w(`<p class="foot"><button type="button" class="b2" id="as-open">%s</button>%s</p>`,
-		c.t("html.assume.open", nil), c.t("html.legacy.pointer", map[string]string{"file": c.v.base + ".md"}))
+		c.t("html.assume.open", nil), c.t("html.legacy.pointer", map[string]string{"file": DataSubdir + "/" + MarkdownFileName}))
 	if a, ok := c.scored(); ok {
 		if svg, text, ok := index.Card(*a, c.v.Silenced.Count, local, c.cat); ok {
 			day := local.Format("2006-01-02")

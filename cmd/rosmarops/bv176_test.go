@@ -128,7 +128,7 @@ func TestConnectSendsThisRunsPackage(t *testing.T) {
 		t.Fatalf("sendPackage called %d times, want 1", sends)
 	}
 	// The send log records it as sent.
-	log, err := os.ReadFile(filepath.Join(reportDir, SendsLogName))
+	log, err := os.ReadFile(filepath.Join(report.DataDir(reportDir), SendsLogName))
 	if err != nil {
 		t.Fatalf("no sends log: %v", err)
 	}

@@ -71,7 +71,7 @@ func TestRenderHTML(t *testing.T) {
 			last = i
 		}
 		// The older checks left the HTML; a pointer to the technical report.
-		pointer := htmlEscape(cat.Text("html.legacy.pointer", map[string]string{"file": report.FilenameV2(v1, v) + ".md"}))
+		pointer := htmlEscape(cat.Text("html.legacy.pointer", map[string]string{"file": report.DataSubdir + "/" + report.MarkdownFileName}))
 		if i := strings.Index(page, pointer); i <= last {
 			t.Errorf("%s: legacy pointer %d after %d", lang, i, last)
 		}

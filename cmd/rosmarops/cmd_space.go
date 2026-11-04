@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
 	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
@@ -80,7 +81,9 @@ func resolveSpacePaths() (spacePaths, error) {
 	if err != nil {
 		return spacePaths{}, err
 	}
-	return spacePaths(p), nil
+	// BV-183: the sends log and the sealed packages live in data/ inside the
+	// reports directory.
+	return spacePaths{store: p.store, state: p.state, reports: report.DataDir(p.reports)}, nil
 }
 
 // spaceConnect runs the connect protocol for the console command and the

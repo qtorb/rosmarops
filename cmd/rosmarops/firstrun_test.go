@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // U1, U5, U7: a double click on a Spanish Windows (no --lang) writes
@@ -68,7 +69,7 @@ func TestDoubleClickSpanishOpensReport(t *testing.T) {
 	}
 	// The run's log is closed when runNoArgs returns: on Windows an open
 	// file cannot be removed.
-	if err := os.Remove(filepath.Join(reports, RunLogName)); err != nil {
+	if err := os.Remove(filepath.Join(report.DataDir(reports), RunLogName)); err != nil {
 		t.Errorf("run log still open: %v", err)
 	}
 }
@@ -119,7 +120,7 @@ func TestDoubleClickPickedFolder(t *testing.T) {
 	if len(cfg.RepoRoots) != 1 || cfg.RepoRoots[0] != filepath.Join(chosen, "app") {
 		t.Errorf("repo_roots %q", cfg.RepoRoots)
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", RunLogName))
+	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, RunLogName))
 	for _, want := range []string{
 		"source=picked_folder rule=no_git path=" + chosen,
 		"source=picked_folder rule=accepted path=" + filepath.Join(chosen, "app"),

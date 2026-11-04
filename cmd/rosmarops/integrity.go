@@ -13,6 +13,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -206,6 +207,8 @@ func (d *deferredLog) attach(dir string) error {
 	if d.file != nil || d.closed {
 		return nil
 	}
+	// BV-183: the run logs live in data/ inside the reports directory.
+	dir = report.DataDir(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create report dir %s: %w", dir, err)
 	}
