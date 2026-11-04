@@ -455,6 +455,12 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 	if len(sv.Keys) == 0 {
 		t.Fatal("space view carries no keys — the package leak check would be vacuous")
 	}
+	// BV-177: the report field (with ai_export) is in the sealed package, so the
+	// leak check below must cover it. Fail loudly if it is missing or empty, so
+	// the coverage is never vacuous.
+	if sv.Report == nil || len(sv.Report.Rows) == 0 || sv.Report.AIExport.EN == "" {
+		t.Fatal("space view carries no report rows or ai_export — the report leak check would be vacuous")
+	}
 	kitKey := []byte("kitkitkitkitkitkitkitkitkitkit12") // 32 bytes
 	pkg, err := results.Seal(kitKey, results.Header{KitID: strings.Repeat("a", 32), KeyID: strings.Repeat("b", 32), HostID: g.Provenance.HostID, CreatedAt: now.Format(time.RFC3339), RosmaropsVersion: "0.1.0"}, content)
 	if err != nil {
