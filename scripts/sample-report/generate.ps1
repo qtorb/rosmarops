@@ -223,8 +223,8 @@ foreach ($f in $outputs) {
 # packages, shell profiles or VS Code extensions. Those are older checks:
 # the technical report (.md, .json) lists them, the HTML has no section for
 # them, and only the HTML is published.
-$v1 = $v1Files[0]
-$machine = @((Get-Content -Raw -Path $v1.FullName | ConvertFrom-Json).findings |
+$v1Path = Join-Path $reports 'data\report.json'
+$machine = @((Get-Content -Raw -Path $v1Path | ConvertFrom-Json).findings |
         Where-Object { $_.category -match '^(av_exclusion|scheduled_task|global_package|npmrc|shell_profile|vscode_extension)' })
 Write-Output "Findings from the runner in the technical report, not published: $($machine.Count)"
 $machine | ForEach-Object { Write-Output "  $($_.category): $($_.title)" }
