@@ -80,6 +80,24 @@ jobs:
         env:
           ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN: "1"
         run: go test ./cmd/rosmarops -run '^TestConnectWindowSelfTest$' -count=1 -v
+      # BV-178: render the redesigned window in EN and ES at 100 % and 150 % and
+      # upload the PNGs. Best-effort (continue-on-error): a screenshot hiccup on
+      # the headless runner must not block; the geometry/colour self-test above is
+      # the authoritative check of the design.
+      - name: Connect window screenshots (EN/ES, 100% and 150%)
+        continue-on-error: true
+        env:
+          ROSMAROPS_CONNECT_WINDOW_SHOT_DIR: ${{ github.workspace }}\connect-shots
+        run: |
+          New-Item -ItemType Directory -Force -Path connect-shots | Out-Null
+          go test ./cmd/rosmarops -run '^TestConnectWindowScreenshots$' -count=1 -v
+      - name: Upload connect window screenshots
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: connect-window-screenshots
+          path: connect-shots/*.png
+          if-no-files-found: warn
 
   # BV-149: on a real Windows build, the .exe must show the rosemary icon and a
   # Properties version. Generate the resource object, build rosmarops.exe, then

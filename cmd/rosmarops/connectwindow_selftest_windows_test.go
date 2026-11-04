@@ -7,10 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/qtorb/rosmarops/internal/catalog"
 )
 
 // shownTimeout is generous: the first WinForms launch on a cold CI runner can
@@ -42,6 +45,158 @@ func TestConnectWindowSelfTest(t *testing.T) {
 	t.Run("runspace alive", testWindowAlive)
 	t.Run("consolein_async freezes", func(t *testing.T) { testWindowFreezes(t, "consolein_async") })
 	t.Run("backgroundworker no number", func(t *testing.T) { testWindowNoNumber(t, "backgroundworker") })
+	t.Run("geometry and colours", testWindowLook)
+}
+
+// argbOf is the .NET Color.ToArgb() value of an opaque #RRGGBB, as the signed
+// int32 PowerShell prints.
+func argbOf(rgb uint32) int { return int(int32(0xFF000000 | rgb)) }
+
+// testWindowLook (BV-178) asserts the window's geometry and colours with the
+// real (longest) Spanish texts, so a real-text layout bug is caught: both
+// buttons visible, inside the client and not overlapping; the title and body
+// fonts at 15 pt and 10.5 pt scaled to the runner DPI; each button sized to its
+// text + 2×18 px (scaled) and 40 px tall (scaled); the rosemary title-bar icon;
+// the cobalt primary (#2346B8, ink on hover/press).
+func testWindowLook(t *testing.T) {
+	ico, err := filepath.Abs(filepath.Join("..", "..", "assets", "windows", "rosmarops.ico"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := catalog.Load("es") // the longest button/text, to stress the layout
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := connectWindowConfigFrom(cat)
+	cfg.Icon = "" // no exe icon in the test binary; force the rosmarops.ico fallback
+	cfg.IconFallback = ico
+
+	lines, send, stop := runSelfWindow(t, "")
+	defer stop()
+	if err := send(connectWindowInput(cfg) + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(lines, shownTimeout, func(l string) bool { return l == "SHOWN" }) {
+		t.Fatal("no SHOWN: the window did not paint")
+	}
+	kv := map[string]string{}
+	deadline := time.After(5 * time.Second)
+collect:
+	for {
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				break collect
+			}
+			if !strings.Contains(l, "=") {
+				continue
+			}
+			for _, tok := range strings.Fields(l) {
+				if i := strings.IndexByte(tok, '='); i > 0 {
+					kv[tok[:i]] = tok[i+1:]
+				}
+			}
+			if _, done := kv["ICONROSEMARY"]; done {
+				break collect
+			}
+		case <-deadline:
+			break collect
+		}
+	}
+	atoi := func(s string) int { n, _ := strconv.Atoi(s); return n }
+	atof := func(s string) float64 { f, _ := strconv.ParseFloat(s, 64); return f }
+	nums := func(key string) []int {
+		var out []int
+		for _, p := range strings.Split(kv[key], ",") {
+			out = append(out, atoi(p))
+		}
+		return out
+	}
+	dpi := atoi(kv["DPI"])
+	if dpi == 0 {
+		t.Fatalf("no DPI emitted; collected: %v", kv)
+	}
+	s := float64(dpi) / 96
+	sc := func(px int) int { return int(float64(px)*s + 0.5) }
+	near := func(name string, got, want, tol int) {
+		if got < want-tol || got > want+tol {
+			t.Errorf("%s = %d, want ≈ %d (±%d, dpi %d)", name, got, want, tol, dpi)
+		}
+	}
+	client := nums("CLIENT")
+	cr := nums("CLIENTRECT")
+	title := nums("TITLE")
+	body := nums("BODY")
+	yes := nums("YES")
+	no := nums("NO")
+	near("client width", client[0], sc(480), 3)
+	if client[1] < sc(248)-3 {
+		t.Errorf("client height %d < %d (the window must not shrink below the design)", client[1], sc(248))
+	}
+	near("title left", title[0], sc(28), 3)
+	near("title top", title[1], sc(28), 3)
+	near("body left", body[0], sc(28), 3)
+	near("body top", body[1], title[1]+title[3]+sc(12), 4)
+
+	// (1) Both buttons visible, inside the client, not overlapping.
+	if kv["VIS"] != "True,True" {
+		t.Errorf("both buttons must be visible, VIS=%q", kv["VIS"])
+	}
+	inside := func(name string, b []int) {
+		if b[0] < 0 || b[1] < 0 || b[0]+b[2] > cr[0] || b[1]+b[3] > cr[1] {
+			t.Errorf("%s button %v not inside client %v", name, b, cr)
+		}
+	}
+	inside("primary", yes)
+	inside("secondary", no)
+	if no[0]+no[2] > yes[0] { // secondary fully left of primary
+		t.Errorf("buttons overlap: secondary right %d > primary left %d", no[0]+no[2], yes[0])
+	}
+	near("gap", yes[0]-(no[0]+no[2]), sc(12), 3)
+	near("yes height", yes[3], sc(40), 3)
+	near("no height", no[3], sc(40), 3)
+	near("yes top", yes[1], client[1]-sc(28)-sc(40), 3)
+	near("no top", no[1], client[1]-sc(28)-sc(40), 3)
+	near("yes right edge", yes[0]+yes[2], client[0]-sc(28), 3)
+
+	// (2) Fonts scaled to the runner DPI, and each button = its text + 2×18 px.
+	pt := strings.Split(kv["PT"], ",")
+	if d := atof(pt[0]) - 15*s; d < -0.7 || d > 0.7 {
+		t.Errorf("title font %s pt, want ≈ %.1f", pt[0], 15*s)
+	}
+	for i, name := range []string{"body", "primary", "secondary"} {
+		if d := atof(pt[i+1]) - 10.5*s; d < -0.7 || d > 0.7 {
+			t.Errorf("%s font %s pt, want ≈ %.2f", name, pt[i+1], 10.5*s)
+		}
+	}
+	tw := nums("TEXTW") // yesTextW, noTextW, pad(=18×2 scaled)
+	near("yes width", yes[2], tw[0]+tw[2], 2)
+	near("no width", no[2], tw[1]+tw[2], 2)
+
+	// (3) The rosemary icon, not the generic WinForms/PowerShell one.
+	if kv["ICONROSEMARY"] != "True" {
+		t.Errorf("title-bar icon is not the rosemary (ICONROSEMARY=%q)", kv["ICONROSEMARY"])
+	}
+
+	// Chrome and colours (4): cobalt primary, ink hover/press; secondary unchanged.
+	if !strings.Contains(kv["BORDER"], "FixedSingle") {
+		t.Errorf("FormBorderStyle = %q, want FixedSingle", kv["BORDER"])
+	}
+	if kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
+		t.Errorf("chrome: MAX=%s MIN=%s TOP=%s, want False/False/True", kv["MAX"], kv["MIN"], kv["TOP"])
+	}
+	white, ink, border, cobalt := argbOf(0xFFFFFF), argbOf(0x1B1A18), argbOf(0xC9C5BC), argbOf(0x2346B8)
+	if atoi(kv["FORMBACK"]) != white {
+		t.Errorf("form back = %s, want white (%d)", kv["FORMBACK"], white)
+	}
+	if atoi(kv["YESBACK"]) != cobalt || atoi(kv["YESFORE"]) != white || kv["YESBORDER"] != "0" || kv["YESFLAT"] != "Flat" ||
+		atoi(kv["YESMOVER"]) != ink || atoi(kv["YESMDOWN"]) != ink {
+		t.Errorf("primary button: back=%s fore=%s border=%s flat=%s mover=%s mdown=%s (want cobalt/white/0/Flat/ink/ink)",
+			kv["YESBACK"], kv["YESFORE"], kv["YESBORDER"], kv["YESFLAT"], kv["YESMOVER"], kv["YESMDOWN"])
+	}
+	if atoi(kv["NOBACK"]) != white || atoi(kv["NOFORE"]) != ink || kv["NOBORDER"] != "1" || atoi(kv["NOBORDERCOLOR"]) != border || kv["NOFLAT"] != "Flat" {
+		t.Errorf("secondary button: back=%s fore=%s border=%s borderColor=%s flat=%s", kv["NOBACK"], kv["NOFORE"], kv["NOBORDER"], kv["NOBORDERCOLOR"], kv["NOFLAT"])
+	}
 }
 
 // testWindowAlive is the real proof of the fix: SHOWN, then at least 5 Timer
