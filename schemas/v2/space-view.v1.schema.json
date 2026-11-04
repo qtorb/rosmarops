@@ -183,9 +183,265 @@
         "testdata_count": { "type": "integer", "minimum": 0 }
       }
     },
-    "card_svg": { "type": ["string", "null"], "maxLength": 40000 }
+    "card_svg": { "type": ["string", "null"], "maxLength": 40000 },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step1",
+        "step2",
+        "rows",
+        "how_fix_body",
+        "ai_export",
+        "coverage",
+        "signals"
+      ],
+      "properties": {
+        "step1": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "headline",
+            "counts",
+            "meta",
+            "warnings"
+          ],
+          "properties": {
+            "headline": {
+              "$ref": "#/$defs/t300"
+            },
+            "counts": {
+              "$ref": "#/$defs/t300"
+            },
+            "meta": {
+              "$ref": "#/$defs/t300"
+            },
+            "warnings": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "$ref": "#/$defs/t600"
+              }
+            }
+          }
+        },
+        "step2": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action_title",
+            "lines"
+          ],
+          "properties": {
+            "action_title": {
+              "$ref": "#/$defs/t300"
+            },
+            "lines": {
+              "type": "array",
+              "maxItems": 6,
+              "items": {
+                "$ref": "#/$defs/t600"
+              }
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "finding_id",
+              "verdict",
+              "locations",
+              "more",
+              "confidence",
+              "assumptions",
+              "fix_steps",
+              "gain"
+            ],
+            "properties": {
+              "finding_id": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "verdict": {
+                "$ref": "#/$defs/t200n"
+              },
+              "locations": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {
+                  "type": "string",
+                  "maxLength": 400
+                }
+              },
+              "more": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "confidence": {
+                "$ref": "#/$defs/t300n"
+              },
+              "assumptions": {
+                "type": "array",
+                "maxItems": 5,
+                "items": {
+                  "$ref": "#/$defs/t600"
+                }
+              },
+              "fix_steps": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {
+                  "$ref": "#/$defs/t1000"
+                }
+              },
+              "gain": {
+                "$ref": "#/$defs/t300n"
+              }
+            }
+          }
+        },
+        "how_fix_body": {
+          "$ref": "#/$defs/t600"
+        },
+        "ai_export": {
+          "$ref": "#/$defs/t49152"
+        },
+        "coverage": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/t600"
+          }
+        },
+        "signals": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/t300"
+          }
+        }
+      }
+    }
   },
   "$defs": {
+    "t200n": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "t300": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "t300n": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "t600": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 600
+        }
+      }
+    },
+    "t1000": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "t49152": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "en",
+        "es"
+      ],
+      "properties": {
+        "en": {
+          "type": "string",
+          "maxLength": 49152
+        },
+        "es": {
+          "type": "string",
+          "maxLength": 49152
+        }
+      }
+    },
     "verbs": {
       "type": "array",
       "items": { "enum": ["reads_files", "writes_files", "runs_commands", "sends_out", "changes_other_agents"] }

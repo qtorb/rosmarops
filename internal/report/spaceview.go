@@ -45,6 +45,10 @@ type SpaceView struct {
 	Overview []SVOverview `json:"overview"`
 	Analysis *SVAnalysis  `json:"analysis"`
 	CardSVG  *string      `json:"card_svg"`
+
+	// Report is the local report, also in the space (BV-177): the optional
+	// `report` field of space-view.v1. The program always fills it.
+	Report *SVReport `json:"report"`
 }
 
 // SVSince is «since the last check» as the report computes it: whether this run
@@ -234,6 +238,7 @@ func BuildSpaceView(v V2, g *graph.Graph, home, version string) (SpaceView, erro
 		Overview:         svOverview(v),
 		Analysis:         svAnalysis(v),
 		CardSVG:          svCard(v, cardCtx),
+		Report:           buildReport(v, ctxs, home),
 	}
 	return sv, nil
 }
