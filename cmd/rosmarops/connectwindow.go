@@ -71,6 +71,9 @@ func offerConnectAfterReport(paths spacePaths, cat catalog.Catalog, stPath strin
 		}
 	case connectConnected:
 		slog.Info("connect offer: this computer is now connected")
+		// BV-176: send this run's package now, by the normal send path, and say
+		// the result in the console. The report already open is not rewritten.
+		sendAfterConnect(paths, cat, now)
 	}
 }
 

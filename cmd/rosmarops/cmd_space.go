@@ -275,6 +275,43 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 	}
 }
 
+// sendAfterConnect sends the just-finished review's results package the moment
+// the person connects (BV-176): the same path as a normal send (spaceSend, so
+// the same checks and the same sends log), then the console says the result
+// with the keys the report already uses for an accepted or refused send. The
+// just-finished review's package is the newest pending one in the reports
+// directory — the one this run wrote, which the earlier (not-yet-connected)
+// send left untried. A failure changes nothing: the next review retries as
+// today (point 3). The report already open is not rewritten (point 2).
+func sendAfterConnect(paths spacePaths, cat catalog.Catalog, now time.Time) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	spaceSend(ctx, paths, "", now)
+	pkg := newestPackage(paths.reports)
+	if pkg == "" {
+		return
+	}
+	sentDate, rejected := currentPackageStatus(paths.reports, pkg, time.Local)
+	switch {
+	case sentDate != "":
+		fmt.Fprintln(kitOutput, cat.Text("report.space_sent", map[string]string{"date": sentDate}))
+	case rejected:
+		fmt.Fprintln(kitOutput, cat.Text("report.space_rejected", nil))
+	}
+}
+
+// newestPackage is the most recent results package in the reports directory
+// (its filename carries the date, so the last in sorted order is newest), or
+// "" when there is none.
+func newestPackage(reportsDir string) string {
+	matches, _ := filepath.Glob(filepath.Join(reportsDir, "rosmarops-results-*.locked.json"))
+	if len(matches) == 0 {
+		return ""
+	}
+	sort.Strings(matches)
+	return matches[len(matches)-1]
+}
+
 // sendResultFor maps an HTTP status (0 on a network error) to a log result.
 func sendResultFor(status int, err error) string {
 	if err != nil {
