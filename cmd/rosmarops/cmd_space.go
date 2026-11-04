@@ -56,10 +56,12 @@ var terminalResults = map[string]bool{
 	sendSkipped: true,
 }
 
-// rejectedResults are the terminal results, other than a 401, that mean the
-// area refused this run's package; the report says so (report.space_rejected).
+// rejectedResults are the terminal results that mean the area refused this
+// run's package; the report says so (report.space_rejected). BV-172: a 401
+// no_credential counts too — it forgets the space and the report must say the
+// check could not be sent, then offer to connect again.
 var rejectedResults = map[string]bool{
-	sendRejected: true, sendTooLarge: true, sendOtherDevice: true, sendBadRequest: true,
+	sendUnauthorized: true, sendRejected: true, sendTooLarge: true, sendOtherDevice: true, sendBadRequest: true,
 }
 
 // maxPackageBytes is the largest file spaceSend will send (CTO-15 PR5): a
@@ -251,8 +253,11 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 		appendSendLog(logPath, now, filepath.Base(pkg), len(body), result)
 		switch result {
 		case sendUnauthorized:
-			slog.Info("space send: credential rejected; forgetting the space")
+			// BV-172: 401 no_credential — forget like a 409 and clear the 7-day
+			// decline so the connect offer shows in this same review.
+			slog.Info("space send: 401 no_credential; forgetting the space and re-offering this run")
 			forgetSpace(paths, stored)
+			clearConnectOfferDecline(paths.state)
 			return
 		case sendRejected:
 			// BV-164: 409 key_mismatch — the space was reset («Empezar de nuevo»),
