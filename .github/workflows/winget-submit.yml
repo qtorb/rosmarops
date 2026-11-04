@@ -1,0 +1,111 @@
+# winget-submit (BV-173): open the pull request that publishes a released
+# version's manifests to microsoft/winget-pkgs, with Microsoft's wingetcreate.
+# By hand only (Run workflow). It is the only workflow that submits to
+# winget-pkgs; release.yml and winget-check.yml never do.
+#
+# It needs the repository secret WINGET_TOKEN: a classic GitHub token of the
+# qtorb account with the public_repo scope (it forks winget-pkgs and opens the
+# PR). Without it the job fails at once. wingetcreate.exe is downloaded at a
+# fixed version and checked against its published SHA-256 before it runs, and
+# the manifests are validated and their InstallerSha256 checked against the
+# release's SHA256SUMS.txt before anything is submitted.
+name: winget-submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version whose manifests to submit, e.g. 0.7.5"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  winget-submit:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      MANIFESTS: packaging/winget/${{ inputs.version }}
+      TAG: v${{ inputs.version }}
+      GH_TOKEN: ${{ github.token }}
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+      # wingetcreate.exe, pinned (Microsoft.WingetCreate 1.9.14.0 in
+      # microsoft/winget-pkgs). The job verifies this SHA-256 before running it.
+      WINGETCREATE_URL: https://github.com/microsoft/winget-create/releases/download/v1.9.14.0/wingetcreate.exe
+      WINGETCREATE_SHA256: B97B50C6166712E6099A98C6B190DF2147B4E6F1B18E9188D550AC976D9E8E3B
+    steps:
+      - name: WINGET_TOKEN must be set
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrEmpty($env:WINGET_TOKEN)) {
+            Write-Error "WINGET_TOKEN missing"
+            exit 1
+          }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The manifests exist
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:MANIFESTS")) { throw "no manifests at $env:MANIFESTS" }
+          Get-ChildItem "$env:MANIFESTS"
+
+      - name: Download wingetcreate and verify its SHA-256
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'wingetcreate.exe'
+          Invoke-WebRequest -Uri $env:WINGETCREATE_URL -OutFile $exe
+          $got = (Get-FileHash -Algorithm SHA256 -Path $exe).Hash
+          if ($got -ne $env:WINGETCREATE_SHA256) {
+            throw "wingetcreate.exe SHA-256 $got does not match the pinned $env:WINGETCREATE_SHA256"
+          }
+          Write-Output "wingetcreate verified: $got"
+
+      - name: winget validate (strict — a warning is a failure)
+        shell: pwsh
+        run: |
+          $w = Get-Command winget -ErrorAction SilentlyContinue
+          if (-not $w) { throw "winget is not on this runner" }
+          winget --version
+          $out = winget validate --manifest "$env:MANIFESTS" 2>&1 | Out-String
+          Write-Output $out
+          if ($LASTEXITCODE -ne 0) { throw "winget validate exited $LASTEXITCODE" }
+          if ($out -match '(?i)warning') { throw "winget validate reported a warning — treated as a failure" }
+
+      - name: The manifest InstallerSha256 matches the release SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir "$env:RUNNER_TEMP"
+          $sums = Get-Content (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt')
+          $releaseLine = $sums | Select-String -Pattern '^([0-9a-fA-F]{64})\s+\*?rosmarops\.exe$'
+          if (-not $releaseLine) { throw "no rosmarops.exe line in SHA256SUMS.txt" }
+          $releaseSha = $releaseLine.Matches[0].Groups[1].Value.ToLowerInvariant()
+          $installer = Get-ChildItem "$env:MANIFESTS" -Filter '*.installer.yaml' | Select-Object -First 1
+          $m = (Get-Content $installer.FullName | Select-String -Pattern 'InstallerSha256:\s*([0-9a-fA-F]{64})')
+          if (-not $m) { throw "no InstallerSha256 in the installer manifest" }
+          $manifestSha = $m.Matches[0].Groups[1].Value.ToLowerInvariant()
+          if ($manifestSha -ne $releaseSha) {
+            throw "manifest InstallerSha256 ($manifestSha) does not match the release rosmarops.exe ($releaseSha)"
+          }
+          Write-Output "InstallerSha256 matches the release: $manifestSha"
+
+      - name: Submit to microsoft/winget-pkgs
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'wingetcreate.exe'
+          # The token is read from the environment and passed to --token; it is
+          # never written to the log.
+          & $exe submit --token $env:WINGET_TOKEN "$env:MANIFESTS" 2>&1 |
+            Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'submit.log')
+          if ($LASTEXITCODE -ne 0) { throw "wingetcreate submit exited $LASTEXITCODE" }
+          $log = Get-Content (Join-Path $env:RUNNER_TEMP 'submit.log') -Raw
+          $pr = ([regex]'https://github\.com/microsoft/winget-pkgs/pull/\d+').Match($log)
+          if ($pr.Success) {
+            "Opened winget-pkgs PR: $($pr.Value)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          } else {
+            "wingetcreate submit finished; no PR URL found in its output." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          }
