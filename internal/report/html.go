@@ -699,6 +699,13 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 			c.title(f), c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
 		return
 	}
+	if ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) { // BV-175: why, then the steps
+		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
+		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p>%s</div></section>`,
+			c.title(f), c.impact(f), c.n8nSteps(f))
+		return
+	}
 	if !found {
 		c.w(`<section class="now" aria-labelledby="step2">%s`, c.todayFA(f, ok))
 		c.stepHead(2, "p", "step2", c.t("html.step.2", nil), "", true)
@@ -867,6 +874,8 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f)))) // BV-107
 	} else if f.Rule == rules.RuleMCPExternalAction {
 		c.w(`<p>%s</p>`, html.EscapeString(mcpAction(c.cat, c.params(f)))) // BV-124: the «what to do»
+	} else if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData {
+		c.w(`%s`, c.n8nSteps(f)) // BV-175: the steps
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
@@ -1203,6 +1212,18 @@ func (c htmlCtx) credKey(f rules.Finding) string {
 // title is the finding's title (§4), escaped.
 func (c htmlCtx) title(f rules.Finding) string { return html.EscapeString(c.titleText(f)) }
 
+// n8nSteps is the «what to do» of an n8n finding (BV-175) as an HTML list: two
+// steps for n8n_mcp_bridge, one for n8n_key_with_data. Each step text is
+// escaped by c.t.
+func (c htmlCtx) n8nSteps(f rules.Finding) string {
+	p := c.params(f)
+	out := `<ul><li>` + c.t("finding."+f.Rule+".step1", p) + `</li>`
+	if f.Rule == rules.RuleN8NMCPBridge {
+		out += `<li>` + c.t("finding."+f.Rule+".step2", p) + `</li>`
+	}
+	return out + `</ul>`
+}
+
 // malParams are the catalog params of a package_known_malicious finding (BV-100).
 func malParams(f rules.Finding) map[string]string { return findingParams(f) }
 
@@ -1216,6 +1237,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121
 		return c.cat.Text(mcpTitleKey(f), c.params(f))
+	}
+	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
+		return c.cat.Text("finding."+f.Rule+".title", c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
@@ -1303,6 +1327,9 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124
 		return mcpWhatItMeans(c.cat, f, c.params(f))
+	}
+	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
+		return c.cat.Text("finding."+f.Rule+".what", c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
@@ -1417,8 +1444,9 @@ func HTMLKeys() []string {
 		keys = append(keys, "html.signal."+sg)
 	}
 	for _, r := range rules.AllRules {
-		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction {
-			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117)
+		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction ||
+			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData {
+			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117, BV-175)
 		}
 		keys = append(keys, "html.headline."+r)
 	}
@@ -1459,6 +1487,12 @@ func HTMLKeys() []string {
 	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
 		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",
 		"finding.project_hook_runs_repo_script.impact", "finding.project_hook_runs_repo_script.fix")
+	// BV-175: the two n8n findings render with their finding.* texts (title,
+	// what, and the steps). Translated, so not in LegacyHTMLKeys.
+	keys = append(keys, "finding.n8n_mcp_bridge.title", "finding.n8n_mcp_bridge.what",
+		"finding.n8n_mcp_bridge.step1", "finding.n8n_mcp_bridge.step2",
+		"finding.n8n_key_with_data.title", "finding.n8n_key_with_data.what",
+		"finding.n8n_key_with_data.step1")
 	sort.Strings(keys)
 	return keys
 }

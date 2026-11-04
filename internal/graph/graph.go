@@ -150,6 +150,27 @@ type Node struct {
 	// graph schema does not change; the rules layer emits mcp_external_action
 	// and the services list from it.
 	ExternalAction *ExternalActionMatch `json:"-"`
+
+	// N8N, when set on an mcp_server node, marks the server as an n8n instance
+	// used over MCP (BV-175): the signal that recognised it. In memory only,
+	// like Malicious — never serialized to graph.v2.json, so the graph schema
+	// does not change; the rules layer emits n8n_mcp_bridge from it.
+	N8N *N8NMatch `json:"-"`
+
+	// N8NKey, when true on a file resource node for an n8n user folder, marks
+	// that the folder holds n8n's database alongside the config with its
+	// credential encryption key (BV-175). In memory only, like Malicious —
+	// never serialized to graph.v2.json; the rules layer emits
+	// n8n_key_with_data from it. The key's value is never read, only its
+	// presence (invariant 3).
+	N8NKey bool `json:"-"`
+}
+
+// N8NMatch marks an mcp_server node recognised as an n8n instance (BV-175).
+// Signal is how it was recognised ("package", "port" or "endpoint"), for the
+// run log and tests; it carries no value read from the machine.
+type N8NMatch struct {
+	Signal string
 }
 
 // ExternalActionMatch is an mcp_server node's catalog match (BV-117/BV-121):

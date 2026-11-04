@@ -49,6 +49,7 @@ var AllRules = []string{
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
 	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
+	RuleN8NMCPBridge, RuleN8NKeyWithData,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -307,6 +308,10 @@ type Params struct {
 	ResourceType string `json:"resource_type,omitempty"`
 	Count        int    `json:"count"`
 
+	// Server is the MCP server entry's own name (n8n_mcp_bridge, BV-175): the
+	// {server} of its text. Config-derived, sanitized when rendered.
+	Server string `json:"server,omitempty"`
+
 	// cred_in_git
 	CredID    string `json:"cred_id,omitempty"`
 	CredType  string `json:"cred_type,omitempty"`
@@ -540,6 +545,30 @@ func Evaluate(in Input) Result {
 	// on the server node in memory (graph.ExternalAction).
 	mcpFindings, mcpServices := mcpExternal(in, nodes, view)
 	res.Findings = append(res.Findings, mcpFindings...)
+	// n8n over MCP (BV-175): one finding per (agent, n8n server). The server was
+	// marked by graph.CrossN8N; the first evidence node is the server, so the
+	// finding weighs 0 and sits outside the agent's band.
+	for _, e := range g.Edges {
+		if e.Type != graph.EdgeLoads {
+			continue
+		}
+		server, ok := nodes[e.To]
+		if !ok || server.N8N == nil {
+			continue
+		}
+		client, ok := nodes[e.From]
+		if !ok || client.Kind != graph.KindAgent || client.Type != graph.AgentAIClient {
+			continue
+		}
+		res.Findings = append(res.Findings, n8nBridgeFinding(in, client, server, e))
+	}
+	// n8n keeps its credential key beside its database (BV-175): one finding per
+	// marked folder resource node (graph.AddN8NKeyNode).
+	for _, n := range g.Nodes {
+		if n.N8NKey {
+			res.Findings = append(res.Findings, n8nKeyFinding(in, n))
+		}
+	}
 	res.Silenced, res.TestData = silenced, testData
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
