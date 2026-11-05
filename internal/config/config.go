@@ -55,6 +55,11 @@ type AllowList struct {
 	// M9–M10).
 	RotatedCredentials []AllowEntryRotated     `json:"rotated_credentials,omitempty"`
 	TestFixtures       []AllowEntryTestFixture `json:"test_fixtures,omitempty"`
+
+	// Dismissed are the findings the person marked «No me afecta» from their
+	// own computer (BV-184): the id stops counting in the score and is dropped
+	// from the report and the space package.
+	Dismissed []AllowEntryDismissed `json:"dismissed,omitempty"`
 }
 
 // AllowHit is one warning an allow_list entry hid in this run (decision
@@ -75,6 +80,7 @@ const (
 	ListGitHooks           = "git_hooks"
 	ListSecretsInHistory   = "secrets_in_history"
 	ListRotatedCredentials = "rotated_credentials"
+	ListDismissed          = "dismissed"
 )
 
 // AllowEntryRotated declares a credential rotated by its id: it stops
@@ -83,6 +89,15 @@ type AllowEntryRotated struct {
 	ID   string `json:"id"`
 	Date string `json:"date"`
 	Note string `json:"note"`
+}
+
+// AllowEntryDismissed declares a finding dismissed by its id (BV-184): the
+// id stops counting in the score and is dropped from the report and the
+// space package. A dismissal is for one exact id; a new credential, or the
+// same one elsewhere, is a new finding.
+type AllowEntryDismissed struct {
+	ID   string `json:"id"`
+	Date string `json:"date"`
 }
 
 // AllowEntryTestFixture silences test data: the secrets committed in the
