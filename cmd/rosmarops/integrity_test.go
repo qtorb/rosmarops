@@ -11,6 +11,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -322,7 +323,7 @@ func TestDeferredLogClose(t *testing.T) {
 	if err := d.Close(); err != nil {
 		t.Errorf("second Close: %v", err)
 	}
-	path := filepath.Join(dir, RunLogName)
+	path := filepath.Join(report.DataDir(dir), RunLogName)
 	if raw, _ := os.ReadFile(path); string(raw) != "before\nafter\n" {
 		t.Errorf("log %q", raw)
 	}

@@ -213,7 +213,7 @@ Check 'report states the 48-project limit' `
 # truth is report.v2.json's coverage.scan_errors containing the global_timeout
 # scope. Either outcome is valid; only the incoherence fails.
 $warn = $page.Contains('llegó a su límite de tiempo')
-$v2Path = Join-Path $reports 'report.v2.json'
+$v2Path = Join-Path $reports 'data\report.v2.json'
 $reached = $false
 if (Test-Path $v2Path) {
     $v2 = Get-Content -Raw -Path $v2Path | ConvertFrom-Json
@@ -244,7 +244,7 @@ Check 'report has the «Encontrado en:» line' ($page.Contains('Encontrado en:')
 
 # --- The sealed space package opens with the kit key ------------------------
 
-$pkgs = @(Get-ChildItem -Path $reports -Filter 'rosmarops-results-*.locked.json' -ErrorAction SilentlyContinue)
+$pkgs = @(Get-ChildItem -Path (Join-Path $reports 'data') -Filter 'rosmarops-results-*.locked.json' -ErrorAction SilentlyContinue)
 Check 'space package sealed' ($pkgs.Count -ge 1) ("packages in reports: " + ($pkgs.Count))
 if ($pkgs.Count -ge 1) {
     if ($OpenPkg) {

@@ -21,6 +21,10 @@ const AIMaxBytes = 48 * 1024
 // AIFileName is the export's file name next to the run's report.
 func AIFileName(base string) string { return base + ".ai.md" }
 
+// AIFixedName is the export's fixed name inside the data directory (BV-183),
+// overwritten each run.
+const AIFixedName = "report.ai.md"
+
 // RenderAIExport renders the export for your AI (§6), in the catalog's
 // language, from the html.* texts the HTML shows for each finding. It
 // carries no value, preview, fingerprint or host id, and every path in the
@@ -210,10 +214,10 @@ func homeInRules(value, home string) string {
 	return strings.ReplaceAll(value, "/"+p+"/", "~/")
 }
 
-// WriteAIExport writes the export to dir as base.ai.md (§6), in the
-// reports directory.
-func WriteAIExport(v V2, cat catalog.Catalog, home, dir, base string) (string, error) {
-	path := filepath.Join(dir, AIFileName(base))
+// WriteAIExport writes the export to dir as report.ai.md (§6, BV-183: a fixed
+// name in the data directory the caller passes).
+func WriteAIExport(v V2, cat catalog.Catalog, home, dir string) (string, error) {
+	path := filepath.Join(dir, AIFixedName)
 	if err := os.WriteFile(path, []byte(RenderAIExport(v, cat, home)), 0o600); err != nil {
 		return "", fmt.Errorf("write ai export: %w", err)
 	}

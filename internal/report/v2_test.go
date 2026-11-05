@@ -388,8 +388,8 @@ func TestWriteV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 3 red since BV-64: a launcher writes, own_config_writable (L1).
-	if want := "report-" + v1.GeneratedAt[:10] + "__RED__3R-1Y"; filepath.Base(md) != want+".md" || filepath.Base(js) != want+".json" || filepath.Base(v2) != report.V2FileName {
+	// BV-183: fixed names in the data directory (no longer dated).
+	if filepath.Base(md) != report.MarkdownFileName || filepath.Base(js) != report.JSONFileName || filepath.Base(v2) != report.V2FileName {
 		t.Errorf("files %s %s %s", md, js, v2)
 	}
 	entries, _ := os.ReadDir(dir)

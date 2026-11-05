@@ -586,11 +586,11 @@ func TestNoFullSecretInAIExport(t *testing.T) {
 			t.Fatal(err)
 		}
 		dir := t.TempDir()
-		path, err := report.WriteAIExport(vA, cat, home, dir, "report-x")
+		path, err := report.WriteAIExport(vA, cat, home, dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if filepath.Base(path) != "report-x.ai.md" || filepath.Dir(path) != dir {
+		if filepath.Base(path) != report.AIFixedName || filepath.Dir(path) != dir {
 			t.Errorf("%s: export written to %s", lang, path)
 		}
 		raw, _ := os.ReadFile(path)
@@ -638,7 +638,7 @@ func TestNoCommittedSecretInRunOutputs(t *testing.T) {
 	s := newSandbox(t)
 	s.runAll(t, nil)
 	dir := filepath.Join(s.home, ".rosmarops")
-	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", "graph.v2.json"))
+	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", report.DataSubdir, "graph.v2.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -759,8 +759,12 @@ func TestNoKitSecretInOutputs(t *testing.T) {
 		}
 	}
 	reports := filepath.Join(s.home, ".rosmarops", "reports")
-	for _, f := range []string{"graph.v2.json", "report.v2.json", "report.html", "last-scheduled-run-log.txt"} {
-		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
+	data := filepath.Join(reports, report.DataSubdir)
+	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
+		t.Fatalf("run did not complete: %v", err)
+	}
+	for _, f := range []string{"graph.v2.json", "report.v2.json", "last-scheduled-run-log.txt"} {
+		if _, err := os.Stat(filepath.Join(data, f)); err != nil {
 			t.Fatalf("run did not complete: %v", err)
 		}
 	}

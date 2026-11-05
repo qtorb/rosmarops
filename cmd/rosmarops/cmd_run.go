@@ -170,6 +170,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve report dir: %w", err)
 	}
+	// BV-183: tidy the default reports directory into data/ before anything is
+	// read from or written to it (the log below, and the accepted-config copy
+	// the integrity check reads). The default directory is fixed, so this runs
+	// before the integrity check that still gates the configured directory.
+	// Idempotent and best effort.
+	migrateReportsLayout(defaultDir)
 
 	if runLog != nil {
 		if err := runLog.attach(defaultDir); err != nil {
@@ -220,6 +226,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if reportDir == "" {
 		reportDir = defaultDir
 	}
+	// BV-183: now that the configuration is verified, tidy the configured
+	// reports directory too (a no-op when it is the default, already migrated
+	// above). Everything but the three HTML pages lives in dataDir.
+	if reportDir != defaultDir {
+		migrateReportsLayout(reportDir)
+	}
+	dataDir := report.DataDir(reportDir)
 
 	// The connect offer moved to the end of the double click (BV-158 part 4,
 	// decision A): it is shown after the report opens, in runNoArgs, not here
@@ -492,7 +505,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -665,7 +678,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// A graph step that never returned leaves no graph of this run: remove a
 	// previous one, as when the graph cannot be built.
 	if !graphDone {
-		if rmErr := graph.RemoveStale(reportDir); rmErr != nil {
+		if rmErr := graph.RemoveStale(dataDir); rmErr != nil {
 			scanErrors = append(scanErrors, finding.ScanError{Scope: "graph", Message: rmErr.Error()})
 		}
 	}
@@ -702,7 +715,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	base := bases[knowledge.ClaudeCodeProduct]
 	// The score history (I9): the last entry is the comparison's base; an
 	// invalid file is set aside, never deleted.
-	history, historyReset, err := index.ReadHistory(reportDir)
+	history, historyReset, err := index.ReadHistory(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("index history: %w", err)
 	}
@@ -711,7 +724,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	}
 	// The findings memory (memoria, M2): an invalid file is set aside, never
 	// deleted.
-	mem, memReset, err := memory.Read(reportDir)
+	mem, memReset, err := memory.Read(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
@@ -765,7 +778,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	var currentPkg string
 	if stored != nil && built != nil {
 		pkgPath, err := writeResultsPkg(v2, built, homeDir, version,
-			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
+			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, dataDir)
 		switch {
 		case err != nil:
 			// Building or sealing the package failed (for example the space view
@@ -784,7 +797,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// package. Never fails the run — offline leaves it for next time, a 401
 	// forgets the space. Then set the «Your space» section (point 7).
 	if storePath, perr := kit.StorePath(); perr == nil {
-		sp := spacePaths{store: storePath, state: stPath, reports: reportDir}
+		sp := spacePaths{store: storePath, state: stPath, reports: dataDir}
 		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
 		spaceSend(sendCtx, sp, currentPkg, pkgNow)
 		cancelSend()
@@ -797,7 +810,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		v2.SpaceConnected = isSpaceConnected(sp)
 		// This run's package: sent (with this send's date), refused, or still
 		// pending (CTO-15 PR5).
-		v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
+		v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(dataDir, currentPkg, time.Local)
 		// If this run had no package to send because it could not be built or
 		// sealed, say so (BV-152 point 1): «rejected», not «pending».
 		if pkgFailed {
@@ -809,27 +822,31 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 	// Write report files.
 	progress.line("console.progress.report", nil)
-	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, reportDir)
+	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
-	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir, report.FilenameV2(r, v2))
+	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("html report written", "html", htmlPath)
-	aiPath, err := report.WriteAIExport(v2, cat, homeDir, reportDir, report.FilenameV2(r, v2))
+	aiPath, err := report.WriteAIExport(v2, cat, homeDir, dataDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("ai export written", "ai", aiPath)
-	if err := index.WriteHistory(reportDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
+	if err := index.WriteHistory(dataDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
 		return "", fmt.Errorf("index history: %w", err)
 	}
-	if err := memory.Write(reportDir, v2.NextMemory()); err != nil {
+	if err := memory.Write(dataDir, v2.NextMemory()); err != nil {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+
+	// BV-183: prune old sealed packages — those whose name is more than 30 days
+	// old and whose last send result is terminal. Nothing else is removed.
+	pruneResultsPackages(dataDir, time.Now(), terminalFilenames(dataDir))
 
 	// Re-read the space permission from disk before saving the run's own
 	// fields (CTO-15 PR2): spaceSend's 401 wipe, or a reverted connect, may
@@ -870,7 +887,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Info("scheduled run finished", "status", v2.Status)
 		return htmlPath, nil
 	}
-	fmt.Print("\n" + report.ConsoleSummary(v2, cat, mdPath))
+	// BV-183: point the person at the visual report (report.html), not the
+	// Markdown that now lives in data/.
+	fmt.Print("\n" + report.ConsoleSummary(v2, cat, htmlPath))
 
 	return htmlPath, nil
 }

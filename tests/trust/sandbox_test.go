@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // sandbox is an isolated root plus the binary under test.
@@ -250,14 +252,20 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 		}
 	}
 	reports := filepath.Join(s.home, ".rosmarops", "reports")
-	// Every file of the run, the BV-40 ones included, lands in the reports
-	// directory: the write test covers them.
-	for _, f := range []string{
-		"graph.v2.json", "report.v2.json", "report.html", "report.en.html", "report.es.html", "index-history.json", "findings-memory.json",
-		"last-scheduled-run-log.txt", "last-run-log.txt", filepath.Join("..", "firstuse", "config.json"),
-	} {
+	data := filepath.Join(reports, report.DataSubdir)
+	// BV-183: the three HTML pages stay in the reports root; everything else is
+	// in data/. The write test covers them all (data/ is under ~/.rosmarops).
+	for _, f := range []string{"report.html", "report.en.html", "report.es.html", filepath.Join("..", "firstuse", "config.json")} {
 		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
 			t.Fatalf("run did not complete: no %s in %s: %v", f, reports, err)
+		}
+	}
+	for _, f := range []string{
+		"graph.v2.json", "report.v2.json", "index-history.json", "findings-memory.json",
+		"last-scheduled-run-log.txt", "last-run-log.txt",
+	} {
+		if _, err := os.Stat(filepath.Join(data, f)); err != nil {
+			t.Fatalf("run did not complete: no %s in %s: %v", f, data, err)
 		}
 	}
 }

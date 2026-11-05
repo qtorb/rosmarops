@@ -340,6 +340,24 @@ func DefaultReportDir() (string, error) {
 	return filepath.Join(home, ".rosmarops", "reports"), nil
 }
 
+// DataSubdir is the subfolder of the reports directory that holds everything
+// except the three HTML pages the person reads (BV-183): the Markdown and JSON
+// reports, the v2 JSON, the AI export, the graph, the history, the findings
+// memory, the accepted-config copy, the run logs, the sends log and the sealed
+// results packages. It is inside the configured reports directory, so it stays
+// within invariant 2's "the configured reports directory".
+const DataSubdir = "data"
+
+// DataDir is DataSubdir inside reportsDir.
+func DataDir(reportsDir string) string { return filepath.Join(reportsDir, DataSubdir) }
+
+// Fixed names of the report files written inside DataDir (BV-183): no longer
+// dated, one per run, overwritten each time.
+const (
+	MarkdownFileName = "report.md"
+	JSONFileName     = "report.json"
+)
+
 // Filename returns the canonical filename (without extension) for a report.
 // Format: report-<YYYY-MM-DD>__<COLOR>__<R>R-<Y>Y
 func Filename(r Report) string {

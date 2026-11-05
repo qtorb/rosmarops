@@ -138,7 +138,7 @@ func offerConnect(stPath string) {
 	if err != nil {
 		cat, _ = catalog.Load(catalog.DefaultLang)
 	}
-	offerConnectAfterReport(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat, stPath, time.Now())
+	offerConnectAfterReport(spacePaths{store: storePath, state: stPath, reports: report.DataDir(reportDir)}, cat, stPath, time.Now())
 }
 
 // firstRunRepos is U3, and U4 when U3 finds nothing: the repositories of
@@ -202,13 +202,20 @@ func openReport(path string) bool {
 }
 
 // priorReportsExist reports whether the reports directory already holds a
-// report from an earlier run: report.html or any dated report-*.md. Used to
-// tell a true first use (an empty folder) from a lost state (BV-93, B3).
+// report from an earlier run. The visual report stays in the reports root;
+// the Markdown and v2 JSON moved to data/ (BV-183). Used to tell a true first
+// use (an empty folder) from a lost state (BV-93, B3).
 func priorReportsExist(dir string) bool {
 	if fileExists(filepath.Join(dir, report.HTMLFileName)) {
 		return true
 	}
-	matches, _ := filepath.Glob(filepath.Join(dir, "report-*.md"))
+	data := report.DataDir(dir)
+	if fileExists(filepath.Join(data, report.MarkdownFileName)) || fileExists(filepath.Join(data, report.V2FileName)) {
+		return true
+	}
+	// A directory migrated from an older layout keeps its dated reports in
+	// data/archive/.
+	matches, _ := filepath.Glob(filepath.Join(data, "archive", "report-*.md"))
 	return len(matches) > 0
 }
 

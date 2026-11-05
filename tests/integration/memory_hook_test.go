@@ -47,7 +47,7 @@ func TestRunWithProjectHookWritesMemory(t *testing.T) {
 	}
 
 	reports := filepath.Join(home, ".rosmarops", "reports")
-	raw, err := os.ReadFile(filepath.Join(reports, memory.FileName))
+	raw, err := os.ReadFile(filepath.Join(reports, "data", memory.FileName))
 	if err != nil {
 		t.Fatalf("findings memory not written: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestRunWithProjectHookWritesMemory(t *testing.T) {
 			} `json:"memory"`
 		} `json:"findings"`
 	}
-	readJSON(t, filepath.Join(reports, "report.v2.json"), &v2)
+	readJSON(t, filepath.Join(reports, "data", "report.v2.json"), &v2)
 	found := false
 	for _, f := range v2.Findings {
 		if f.Rule == "project_hook_runs_repo_script" {

@@ -175,7 +175,7 @@ jobs:
           if grep -q 'AF_INET' "$trace"; then
             echo "network connection during run:"; grep 'AF_INET' "$trace"; exit 1
           fi
-          R=$(ls "$H"/.rosmarops/reports/report-*.es.html | head -1)
+          R="$H"/.rosmarops/reports/report.es.html
           test -s "$R" || { echo "no Spanish report"; exit 1; }
           for a in "Claude Code" "Cursor" "Hermes Agent"; do
             grep -qF "$a" "$R" || { echo "report does not name $a"; exit 1; }

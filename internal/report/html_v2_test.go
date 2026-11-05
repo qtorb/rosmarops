@@ -131,13 +131,13 @@ func TestRenderHTML_Memory(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(old, gone+".html"), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, old, "run2"); err != nil {
+		if _, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, old); err != nil {
 			t.Fatal(err)
 		}
 		if raw, _ := os.ReadFile(filepath.Join(old, report.HTMLFileName)); !strings.Contains(string(raw), `<a href="`+gone+`.html">`) {
 			t.Errorf("%s: no link to the earlier run's one page", lang)
 		}
-		path, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, dir, "run2")
+		path, err := report.WriteHTMLPages(run2, lang, "/h", time.UTC, dir)
 		if err != nil {
 			t.Fatal(err)
 		}

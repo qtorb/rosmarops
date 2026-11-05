@@ -74,7 +74,6 @@ type V2 struct {
 	memoryLost     bool             // B8: prior runs, but no memory to compare with
 	historyMissing bool             // B8: prior runs, but no index-history.json
 	hidden         []HiddenEntry    // B9: what the configuration hid, by entry
-	base           string           // the run's report base name
 	series         []int            // the evaluated agent's comparable scores, oldest first
 	seriesBy       map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
 	// vscodeFirstRun is the first run of the extensions collector (A5).
@@ -455,7 +454,6 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	v.Status = string(maxStatus(finding.Status(legacyStatus), v2Status))
 	// The memory names the run's report, which needs the status.
 	applyMemory(&v, in)
-	v.base = FilenameV2(in.V1, v)
 	// The evolution follows the step 1 score: the evaluated agent with the
 	// lowest score, ties by name (informe HTML v3 §3 point 6).
 	v.series = []int{}
@@ -983,9 +981,10 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", "", fmt.Errorf("create report dir %s: %w", dir, err)
 	}
-	base := FilenameV2(r, v)
-	mdPath = filepath.Join(dir, base+".md")
-	jsonPath = filepath.Join(dir, base+".json")
+	// BV-183: fixed names, overwritten each run, in the data directory the
+	// caller passes (no longer the dated report-<date>__… names).
+	mdPath = filepath.Join(dir, MarkdownFileName)
+	jsonPath = filepath.Join(dir, JSONFileName)
 	v2Path = filepath.Join(dir, V2FileName)
 	if err := os.WriteFile(mdPath, []byte(RenderV2Markdown(v, cat, loc)), 0o600); err != nil {
 		return "", "", "", fmt.Errorf("write markdown report: %w", err)

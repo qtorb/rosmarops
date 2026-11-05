@@ -269,9 +269,9 @@ func userPath(file, home, repl string) string {
 }
 
 // langLinks is the link to the same page in each other language (informe
-// HTML v3 §19): the run's dated page, <base>.<lang>.html, which lives next to
-// every page written; the text is the page's own html.lang_switch, written
-// in the target language.
+// HTML v3 §19): the fixed-name page report.<lang>.html, which lives next to
+// report.html in the reports directory (BV-183: no longer the dated page); the
+// text is the page's own html.lang_switch, written in the target language.
 func (c htmlCtx) langLinks() string {
 	var b strings.Builder
 	for _, l := range catalog.Langs() {
@@ -279,7 +279,7 @@ func (c htmlCtx) langLinks() string {
 			continue
 		}
 		fmt.Fprintf(&b, `<a class="lang" href="%s" hreflang="%s" lang="%s">%s</a>`,
-			html.EscapeString(PageName(c.v.base, l)), html.EscapeString(l), html.EscapeString(l), c.t("html.lang_switch", nil))
+			html.EscapeString(LangFileName(l)), html.EscapeString(l), html.EscapeString(l), c.t("html.lang_switch", nil))
 	}
 	return b.String()
 }
@@ -1568,11 +1568,12 @@ var LegacyHTMLKeys = map[string]bool{
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language
-// (decision 2026-10-27, primer uso con un solo .exe, U7): <base>.<lang>.html
-// and report.<lang>.html for each, and report.html in the run's language,
-// the page that opens. It returns report.html's path. All of them are in the
-// reports directory.
-func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir, base string) (string, error) {
+// (decision 2026-10-27, primer uso con un solo .exe, U7; BV-183): the
+// fixed-name report.<lang>.html for each language, and report.html in the
+// run's language, the page that opens. The dated <base>.<lang>.html copies are
+// no longer written, so the reports directory shows only the three pages. It
+// returns report.html's path. All of them are in the reports directory.
+func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir string) (string, error) {
 	exists := func(name string) bool {
 		_, err := os.Stat(filepath.Join(dir, filepath.Base(name)))
 		return err == nil
@@ -1590,9 +1591,6 @@ func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir, base st
 			return "", fmt.Errorf("html report: %w", err)
 		}
 		page := []byte(renderHTML(v, cat, home, loc, exists))
-		if err := write(PageName(base, l), page); err != nil {
-			return "", err
-		}
 		if err := write(LangFileName(l), page); err != nil {
 			return "", err
 		}
