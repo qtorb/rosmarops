@@ -48,6 +48,7 @@ type repoTrace struct {
 	// skipped over the size limit; content cache lookups; the two git
 	// listings' durations.
 	trackedFiles, filesRead, filesSkippedSize int
+	filesSkippedBinary                        int // BV-186: binary files not opened
 	bytesRead                                 int64
 	blobHits, blobMisses                      int
 	lsFilesStagedMs, lsFilesModifiedMs        int64
@@ -89,7 +90,8 @@ func (t *repoTrace) topPatterns(n int) string {
 func (t *repoTrace) trackedAttrs() []any {
 	return []any{
 		"tracked_files", t.trackedFiles, "files_read", t.filesRead, "bytes_read", t.bytesRead,
-		"files_skipped_size", t.filesSkippedSize, "blob_cache_hits", t.blobHits, "blob_cache_misses", t.blobMisses,
+		"files_skipped_size", t.filesSkippedSize, "files_skipped_binary", t.filesSkippedBinary,
+		"blob_cache_hits", t.blobHits, "blob_cache_misses", t.blobMisses,
 		"ls_files_staged_ms", t.lsFilesStagedMs, "ls_files_modified_ms", t.lsFilesModifiedMs,
 		"read_ms", t.readTime.Milliseconds(), "match_ms", t.matchTime.Milliseconds(), "top_patterns_ms", t.topPatterns(3),
 	}

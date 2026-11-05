@@ -439,7 +439,7 @@ func (c htmlCtx) renderCoverage() {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) == 0 && cov.GraphBuilt {
+	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
 		return
 	}
 	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
@@ -455,6 +455,10 @@ func (c htmlCtx) renderCoverage() {
 	}
 	if !cov.GraphBuilt {
 		c.w(`<li><code>%s</code></li>`, graph.FileName)
+	}
+	// BV-186: the binary files not opened, as one line.
+	if cov.BinarySkipped > 0 {
+		c.w(`<li>%s</li>`, html.EscapeString(c.cat.Plural("coverage.binary_skipped", cov.BinarySkipped, map[string]string{"n": strconv.Itoa(cov.BinarySkipped)})))
 	}
 	c.w(`</ul></div>`)
 }

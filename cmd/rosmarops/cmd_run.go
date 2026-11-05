@@ -346,6 +346,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// repos step runs and reports it; the limit-reached note reads it, falling
 	// back to every project when the repos step never ran.
 	reposNotReviewed := -1
+	// BV-186: tracked files not opened because they are images, documents or
+	// other binaries; set by the repos step, shown in the report's coverage.
+	binarySkipped := 0
 	steps := []scan.Step{
 		// --- VS Code extensions scanner (M4). The reference is updated on
 		// every run, as the other collectors' (decision 2026-10-26, agentes
@@ -631,8 +634,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					defer hitsMu.Unlock()
 					repoHits = append(repoHits, h)
 				},
-				OnProgress: progress.repos,
-				OnCoverage: func(notReviewed int) { reposNotReviewed = notReviewed },
+				OnProgress:      progress.repos,
+				OnCoverage:      func(notReviewed int) { reposNotReviewed = notReviewed },
+				OnBinarySkipped: func(n int) { binarySkipped = n },
 			}
 			if saltErr == nil {
 				// Committed secrets become salted references in the scan;
@@ -739,6 +743,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
+		BinarySkipped: binarySkipped,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {

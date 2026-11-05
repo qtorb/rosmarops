@@ -115,6 +115,8 @@
   "console.title.failed": "RosmarOps · could not finish",
   "console.title.question": "RosmarOps · needs your answer",
   "console.title.running": "RosmarOps · checking this computer",
+  "coverage.binary_skipped.one": "{n} file in your repositories was not opened because it is an image, a document or another binary file.",
+  "coverage.binary_skipped.other": "{n} files in your repositories were not opened because they are images, documents or other binary files.",
   "coverage.none": "Everything RosmarOps looks for was read.",
   "disconnect.done": "This computer is no longer connected to your space.",
   "evidence.edges": "Graph edges behind this",

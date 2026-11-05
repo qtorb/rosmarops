@@ -458,6 +458,9 @@ func svCoverage(c htmlCtx) []string {
 	if !cov.GraphBuilt {
 		out = append(out, graph.FileName)
 	}
+	if cov.BinarySkipped > 0 { // BV-186: the binary files not opened
+		out = append(out, c.cat.Plural("coverage.binary_skipped", cov.BinarySkipped, map[string]string{"n": strconv.Itoa(cov.BinarySkipped)}))
+	}
 	return out
 }
 

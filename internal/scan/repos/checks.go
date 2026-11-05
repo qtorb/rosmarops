@@ -249,6 +249,12 @@ func checkTrackedSecrets(ctx context.Context, repoRoot string, patterns []secret
 		if isExcludedDir(relPath) {
 			continue
 		}
+		// BV-186: an image, document or other binary file by its extension is
+		// skipped by name, without being opened or stat'd.
+		if isBinaryExt(relPath) {
+			trace.filesSkippedBinary++
+			continue
+		}
 
 		absPath := repoRelPath(repoRoot, relPath)
 		matches, ok := trackedMatches(trace, cache, e, dirty[relPath], absPath, patterns, identifyOf(ctx).identify)
@@ -289,6 +295,12 @@ func trackedMatches(trace *repoTrace, cache *contentCache, e indexEntry, dirty b
 	if content == nil {
 		trace.filesSkippedSize++
 		return nil, false // oversized
+	}
+	// BV-186: a binary file with no listed extension — a NUL byte in the first
+	// bytes. It was read from disk but is not scanned and not cached.
+	if looksBinary(content) {
+		trace.filesSkippedBinary++
+		return nil, false
 	}
 	trace.filesRead++
 	trace.bytesRead += int64(len(content))

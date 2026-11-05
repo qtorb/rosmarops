@@ -199,6 +199,9 @@ type V2Coverage struct {
 	SourcesFailed     []graph.SourceFailed     `json:"sources_failed"`
 	AgentsUnsupported []graph.AgentUnsupported `json:"agents_unsupported"`
 	ScanErrors        []string                 `json:"scan_errors"`
+	// BinarySkipped is how many tracked files were not opened because they are
+	// images, documents or other binary files (BV-186). Omitted when zero.
+	BinarySkipped int `json:"binary_skipped,omitempty"`
 }
 
 // V2Legacy is the v1 findings, grouped (§3, E7).
@@ -332,6 +335,10 @@ type V2Input struct {
 	LimitMinutes        int
 	LimitReached        bool
 	ProjectsNotReviewed int
+
+	// BinarySkipped is how many tracked files the repository scan did not open
+	// because they are images, documents or other binary files (BV-186).
+	BinarySkipped int
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -422,6 +429,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.Coverage.AgentsUnsupported = []graph.AgentUnsupported{}
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
+	v.Coverage.BinarySkipped = in.BinarySkipped
 	v.hidden = hiddenEntries(append(append([]config.AllowHit{}, in.AllowHits...), res.Silenced.Rotated...))
 	v.Index, v.radiusProj = buildIndex(in, res, v)
 	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8
