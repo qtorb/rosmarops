@@ -37,7 +37,7 @@ var staticKeys = []string{
 	"evidence.edges",
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
-	"findings.none", "posture.none", "coverage.none", "legacy.none",
+	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "legacy.none",
 	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
@@ -189,6 +189,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs)
 	if !v.Coverage.GraphBuilt {
+		gaps++
+	}
+	if v.Coverage.BinarySkipped > 0 { // BV-186: binary files not opened
 		gaps++
 	}
 	w("%s %s\n\n", statusEmoji(v.Status), t("report.status."+v.Status, nil))
@@ -542,6 +545,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	if !v.Coverage.GraphBuilt {
 		w("- `graph.v2.json`\n")
+	}
+	if v.Coverage.BinarySkipped > 0 { // BV-186
+		w("- %s\n", cat.Plural("coverage.binary_skipped", v.Coverage.BinarySkipped, map[string]string{"n": strconv.Itoa(v.Coverage.BinarySkipped)}))
 	}
 	w("\n")
 	// What this system does not check yet: shown here, not a gap (decision

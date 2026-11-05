@@ -661,6 +661,11 @@
             "minLength": 1
           },
           "description": "Scopes of the scan errors of the run."
+        },
+        "binary_skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many tracked files were not opened because they are images, documents or other binary files (BV-186). Omitted when zero."
         }
       }
     },

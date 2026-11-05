@@ -87,6 +87,8 @@
   "console.title.failed": "RosmarOps · no pudo terminar",
   "console.title.question": "RosmarOps · necesita tu respuesta",
   "console.title.running": "RosmarOps · revisando este equipo",
+  "coverage.binary_skipped.one": "{n} fichero de tus repositorios no se abrió porque es una imagen, un documento u otro fichero binario.",
+  "coverage.binary_skipped.other": "{n} ficheros de tus repositorios no se abrieron porque son imágenes, documentos u otros ficheros binarios.",
   "disconnect.done": "Este ordenador ya no está conectado a tu espacio.",
   "finding.config_key_case_conflict.action": "Abre el fichero y escribe el ajuste con el nombre exacto que indica la documentación de su agente; si hay dos copias, deja solo una.",
   "finding.config_key_case_conflict.title": "Un ajuste de un fichero de configuración está escrito con mayúsculas distintas de las esperadas",
