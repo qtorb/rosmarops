@@ -20,6 +20,7 @@ const (
 	ClaudeCodeProduct = "claude-code"
 	CursorProduct     = "cursor"
 	HermesProduct     = "hermes"
+	CodexProduct      = "codex" // BV-140: OpenAI Codex (CLI and IDE extension)
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -33,6 +34,9 @@ const CursorVersion = "2026-10-25"
 // HermesVersion is the version of the embedded Hermes base (hermes.json,
 // BV-111).
 const HermesVersion = "2026-10-29"
+
+// CodexVersion is the version of the embedded Codex base (codex.json, BV-140).
+const CodexVersion = "2026-11-01"
 
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
@@ -69,6 +73,9 @@ var cursorJSON []byte
 
 //go:embed hermes.json
 var hermesJSON []byte
+
+//go:embed codex.json
+var codexJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -237,8 +244,29 @@ func Hermes() (Base, error) {
 	return b, nil
 }
 
+// Codex returns the embedded Codex knowledge base (BV-140), with Claude Code's
+// code launcher table (as Cursor and Hermes reuse it) so Codex's shell ways are
+// read for the code launchers too.
+func Codex() (Base, error) {
+	b, err := decode(codexJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != CodexVersion {
+		return Base{}, fmt.Errorf("knowledge base codex: version %q, want %q", b.Version, CodexVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
-// base is evaluated.
+// base is evaluated. Codex is registered (Codex()) but not yet listed here: it
+// joins All() with its graph builder and overview cells (BV-140 pieces c and d),
+// so that evaluating it produces valid rows.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
 	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes} {

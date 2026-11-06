@@ -40,6 +40,72 @@ func capabilityEnums(t *testing.T) (types, approvals map[string]bool) {
 	return types, approvals
 }
 
+// BV-140: the Codex base loads strictly, uses the schema's capability enums,
+// carries Claude Code's code launcher table, and its protected-paths entry is
+// the only path list (CTO-16 §4).
+func TestCodex_LoadsStrictly(t *testing.T) {
+	b, err := knowledge.Codex()
+	if err != nil {
+		t.Fatalf("Codex: %v", err)
+	}
+	if b.Product != knowledge.CodexProduct || b.Version != knowledge.CodexVersion {
+		t.Errorf("product/version: got %q/%q, want %q/%q", b.Product, b.Version, knowledge.CodexProduct, knowledge.CodexVersion)
+	}
+	if len(b.Entries) != 7 {
+		t.Errorf("entries: got %d, want 7", len(b.Entries))
+	}
+	if len(b.CodeLaunchers) == 0 {
+		t.Error("Codex base lacks the shared code launcher table")
+	}
+}
+
+func TestCodex_EntriesUseSchemaEnums(t *testing.T) {
+	types, approvals := capabilityEnums(t)
+	b, err := knowledge.Codex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range b.Entries {
+		if !types[e.Type] {
+			t.Errorf("entry %s: type %q is not a capability type of the graph schema", e.ID, e.Type)
+		}
+		if !approvals[e.Approval] {
+			t.Errorf("entry %s: approval %q is not an approval of the graph schema", e.ID, e.Approval)
+		}
+	}
+}
+
+func TestCodex_ProtectedPaths(t *testing.T) {
+	b, err := knowledge.Codex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, ok := b.Entry("protected_paths")
+	if !ok {
+		t.Fatal("no protected_paths entry")
+	}
+	if e.IsCapability() {
+		t.Errorf("protected_paths should carry a path list: %+v", e)
+	}
+	want := map[string]bool{".git/": false, ".agents/": false, ".codex/": false, ".aws/": false}
+	for _, p := range e.Paths {
+		if _, ok := want[p]; !ok {
+			t.Errorf("unexpected protected path %q", p)
+		}
+		want[p] = true
+	}
+	for p, found := range want {
+		if !found {
+			t.Errorf("protected paths lack %q", p)
+		}
+	}
+	for _, other := range b.Entries {
+		if other.ID != e.ID && !other.IsCapability() {
+			t.Errorf("entry %s has a path list", other.ID)
+		}
+	}
+}
+
 func TestClaudeCode_LoadsStrictly(t *testing.T) {
 	b, err := knowledge.ClaudeCode()
 	if err != nil {
