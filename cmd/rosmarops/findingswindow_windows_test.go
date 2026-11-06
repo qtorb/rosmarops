@@ -18,15 +18,20 @@ import (
 
 // sampleDismissCards are the shared test set (BV-184): at least six findings —
 // two new, three the rest, one dismissed — with reds and yellows, the longest
-// (Spanish) texts, to stress the window's layout and scrolling.
-func sampleDismissCards() []report.FindingCard {
+// (Spanish) texts, to stress the window's layout and scrolling. The «open
+// since» dates come from cat.LongDate, so they render in the catalog's long
+// form («25 de octubre de 2026» in Spanish) exactly as the real window does.
+func sampleDismissCards(cat catalog.Catalog) []report.FindingCard {
+	since := func(y int, m time.Month, d int) string {
+		return cat.LongDate(time.Date(y, m, d, 0, 0, 0, 0, time.UTC))
+	}
 	return []report.FindingCard{
 		{ID: "f_1", Severity: "red", Title: "Una clave de Supabase que un agente puede leer y enviar fuera", WhatItMeans: "El agente puede leer esta clave y mandarla a un servicio de fuera.", WhenApplies: "Si esa clave es de prueba o no da acceso a nada real, aunque el agente pueda enviarla fuera.", New: true, Agent: "Claude Code", Group: report.CardGroupNew},
 		{ID: "f_2", Severity: "yellow", Title: "Otro agente puede escribir la configuración de este agente", WhatItMeans: "Otro agente puede cambiar cómo trabaja este.", WhenApplies: "Si usas a propósito este agente para configurar al otro y revisas cada cambio que hace.", New: true, Agent: "Cursor", Group: report.CardGroupNew},
-		{ID: "f_3", Severity: "red", Title: "Una credencial dentro de git", WhatItMeans: "Hay una credencial guardada en el historial del repositorio.", WhenApplies: "Si es una clave de prueba, ya revocada o de un proyecto que nunca se publicó, y no abre nada real.", Since: "25 oct 2026", Agent: "Claude Code", Group: report.CardGroupRest},
-		{ID: "f_4", Severity: "yellow", Title: "Una clave que un agente puede leer", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: "1 nov 2026", Agent: "Aider", Group: report.CardGroupRest},
-		{ID: "f_5", Severity: "red", Title: "Un hook del proyecto ejecuta un script del repositorio", WhatItMeans: "Un script del repositorio se ejecuta cuando salta un hook.", WhenApplies: "Si el proyecto es tuyo y conoces el script que ejecuta ese hook.", Since: "30 oct 2026", Agent: "Codex", Group: report.CardGroupRest},
-		{ID: "cred_6", Severity: "yellow", Title: "Una clave de prueba que descartaste", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: "20 oct 2026", Agent: "Continue", Group: report.CardGroupDismissed},
+		{ID: "f_3", Severity: "red", Title: "Una credencial dentro de git", WhatItMeans: "Hay una credencial guardada en el historial del repositorio.", WhenApplies: "Si es una clave de prueba, ya revocada o de un proyecto que nunca se publicó, y no abre nada real.", Since: since(2026, time.October, 25), Agent: "Claude Code", Group: report.CardGroupRest},
+		{ID: "f_4", Severity: "yellow", Title: "Una clave que un agente puede leer", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.November, 1), Agent: "Aider", Group: report.CardGroupRest},
+		{ID: "f_5", Severity: "red", Title: "Un hook del proyecto ejecuta un script del repositorio", WhatItMeans: "Un script del repositorio se ejecuta cuando salta un hook.", WhenApplies: "Si el proyecto es tuyo y conoces el script que ejecuta ese hook.", Since: since(2026, time.October, 30), Agent: "Codex", Group: report.CardGroupRest},
+		{ID: "cred_6", Severity: "yellow", Title: "Una clave de prueba que descartaste", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.October, 20), Agent: "Continue", Group: report.CardGroupDismissed},
 	}
 }
 
@@ -60,11 +65,11 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if os.Getenv("ROSMAROPS_FINDINGS_WINDOW_SELFTEST_RUN") == "" {
 		t.Skip("set ROSMAROPS_FINDINGS_WINDOW_SELFTEST_RUN=1 on a Windows runner with a desktop session")
 	}
-	cards := sampleDismissCards()
 	cat, err := catalog.Load("es")
 	if err != nil {
 		t.Fatal(err)
 	}
+	cards := sampleDismissCards(cat)
 	cfg := dismissWindowConfigFrom(cat, cards)
 	ico, _ := filepath.Abs(filepath.Join("..", "..", "assets", "windows", "rosmarops.ico"))
 	cfg.Icon = ""
@@ -134,6 +139,11 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["ENCOK"] != "True" {
 		t.Errorf("ENCOK = %q, want True (UTF-8 text is garbled)", kv["ENCOK"])
 	}
+	// The «open since» date is in the catalog's long form: in Spanish it reads
+	// «… de … de …» (cat.LongDate), not an abbreviated «25 oct 2026».
+	if kv["DATEDE"] != "True" {
+		t.Errorf("DATEDE = %q, want True (the ES date is not in long form «… de …»)", kv["DATEDE"])
+	}
 	// (2) Every row inside the panel's visible width; no horizontal scrollbar.
 	listClient := nums("LISTCLIENT")
 	if right := atoi(kv["ROWMAXRIGHT"]); right > listClient[0] {
@@ -158,13 +168,22 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["CHECKCOBALT"] != "True" {
 		t.Errorf("no cobalt (#2346B8) in the ticked finding's checkbox")
 	}
-	// (4) Opening an «i» grows the row and draws the detail text.
+	// The pill is rounded: its corner (1 px inside the rectangle) still shows the
+	// row background, not the pill fill — i.e. the pill is not a plain rectangle.
+	if kv["PILLCORNER"] != "True" {
+		t.Errorf("PILLCORNER = %q, want True (the pill corner is filled — the pill is rectangular, not rounded)", kv["PILLCORNER"])
+	}
+	// (4) Opening an «i» grows the row, draws the detail text, and the icon itself
+	// becomes a filled dark disc (#1B1A18).
 	io := nums("IOPEN")
 	if len(io) != 2 || io[1] <= io[0] {
 		t.Errorf("opening an «i» did not grow the row: %v", kv["IOPEN"])
 	}
 	if kv["DETAILTEXT"] != "True" {
 		t.Errorf("opening an «i» drew no detail text (owner-draw did not render)")
+	}
+	if kv["ICONFILL"] != "True" {
+		t.Errorf("ICONFILL = %q, want True (the open «i» is not a filled #1B1A18 disc)", kv["ICONFILL"])
 	}
 	// Chrome.
 	if !strings.Contains(kv["BORDER"], "FixedSingle") || kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
@@ -195,7 +214,7 @@ func TestDismissWindowScreenshots(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg := dismissWindowConfigFrom(cat, sampleDismissCards())
+		cfg := dismissWindowConfigFrom(cat, sampleDismissCards(cat))
 		cfg.Icon = ""
 		cfg.IconFallback = ico
 		for _, s := range []struct{ scale, pct string }{{"1", "100"}, {"1.5", "150"}} {

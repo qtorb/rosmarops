@@ -175,13 +175,14 @@ func showDismiss(cards []report.FindingCard, cat catalog.Catalog) ([]string, boo
 }
 
 // dismissWindowScript shows the «No me afecta» window (BV-184 §4) with
-// System.Windows.Forms. Rows are built from ordinary controls (a bordered-Panel
-// checkbox, a rounded pill Label with a Region, the title and subtitle Labels),
-// and the «i» circle and the folded detail are drawn in their own control's
-// Paint (a Region for the shape, Paint for the border and the two inline
-// Semibold-label paragraphs). All non-ASCII text arrives as base64 UTF-8 JSON;
-// the only separator literal is built from a char code to stay ASCII in the
-// script. Screenshots and the self-test use DrawToBitmap.
+// System.Windows.Forms. Rows use ordinary controls: a bordered-Panel checkbox,
+// an owner-drawn pill and «i» (rounded/elliptical fills drawn in Paint), the
+// title and subtitle Labels, and a read-only borderless RichTextBox for the
+// open detail (left-aligned text with the two Semibold labels inline). Capture
+// (screenshots and the pixel self-test) goes through WM_PRINT, which renders the
+// RichTextBox and the owner-drawn shapes and does not need the window fully
+// on-screen. Non-ASCII text arrives as base64 UTF-8 JSON; the only separator
+// literal is built from a char code.
 const dismissWindowScript = `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -196,6 +197,9 @@ try {
     [void][RO.Dpi2]::SetProcessDPIAware()
   } catch { }
 }
+try {
+  Add-Type -Namespace RO -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern int SendMessage(System.IntPtr hWnd, int Msg, System.IntPtr wParam, System.IntPtr lParam);'
+} catch { }
 $shot = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT
 $shotScale = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCALE
 $shotOpenI = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I
@@ -233,7 +237,7 @@ $fCheck   = New-Object System.Drawing.Font('Segoe UI', [single](11 * $f), [Syste
 $fIcon    = New-Object System.Drawing.Font('Segoe UI', [single](9 * $f), [System.Drawing.FontStyle]::Italic)
 $noPad    = [System.Windows.Forms.TextFormatFlags]::NoPadding
 $wordBreak = [System.Windows.Forms.TextFormatFlags]::WordBreak
-$titleFlags = $wordBreak -bor ([System.Windows.Forms.TextFormatFlags]::EndEllipsis) -bor $noPad
+$center   = ([System.Windows.Forms.TextFormatFlags]::HorizontalCenter -bor [System.Windows.Forms.TextFormatFlags]::VerticalCenter -bor $noPad)
 $aTL = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left
 $aTLR = $aTL -bor [System.Windows.Forms.AnchorStyles]::Right
 $aTR = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Right
@@ -241,7 +245,7 @@ $aBR = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.An
 $aBL = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
 $aFill = $aTLR -bor [System.Windows.Forms.AnchorStyles]::Bottom
 
-function Rounded-Region($w, $h, $r) {
+function Rounded-Path($w, $h, $r) {
   $d = $r * 2
   if ($d -gt $w) { $d = $w }
   if ($d -gt $h) { $d = $h }
@@ -251,28 +255,9 @@ function Rounded-Region($w, $h, $r) {
   $p.AddArc($w - $d, $h - $d, $d, $d, 0, 90)
   $p.AddArc(0, $h - $d, $d, $d, 90, 90)
   $p.CloseFigure()
-  return (New-Object System.Drawing.Region($p))
+  return $p
 }
-
-# Flow-Para draws (or, with $g = $null, only measures) one paragraph: a Semibold
-# label at the start, then the body in the normal font, wrapping within $w at a
-# 1.45 line height. Returns the height used.
-function Flow-Para($g, $x, $y, $w, $label, $body) {
-  $lh = [int][math]::Ceiling($fDetail.GetHeight() * 1.45)
-  $cx = $x; $cy = $y
-  $segs = @()
-  foreach ($word in ($label.Trim() -split '\s+')) { if ($word -ne '') { $segs += , @($word, $fDetailB, $cInk) } }
-  foreach ($word in ($body.Trim() -split '\s+')) { if ($word -ne '') { $segs += , @($word, $fDetail, $cDetail) } }
-  foreach ($seg in $segs) {
-    $wpx = [System.Windows.Forms.TextRenderer]::MeasureText(($seg[0] + ' '), $seg[1], [System.Drawing.Size]::Empty, $noPad).Width
-    if (($cx + $wpx) -gt ($x + $w) -and $cx -gt $x) { $cx = $x; $cy += $lh }
-    if ($g -ne $null) {
-      [System.Windows.Forms.TextRenderer]::DrawText($g, $seg[0], $seg[1], (New-Object System.Drawing.Point($cx, $cy)), $seg[2], $noPad)
-    }
-    $cx += $wpx
-  }
-  return ($cy + $lh - $y)
-}
+function Rounded-Region($w, $h, $r) { return (New-Object System.Drawing.Region((Rounded-Path $w $h $r))) }
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $cfg.title
@@ -296,14 +281,12 @@ if (-not $iconSet -and $cfg.iconfallback -and (Test-Path -LiteralPath $cfg.iconf
 $ql = New-Object System.Windows.Forms.Label
 $ql.AutoSize = $true; $ql.MaximumSize = New-Object System.Drawing.Size((Px 584), 0)
 $ql.Font = $fTitle; $ql.ForeColor = $cInk; $ql.BackColor = $cWhite; $ql.Text = $cfg.q
-$ql.Location = New-Object System.Drawing.Point((Px 28), (Px 28))
-$ql.Anchor = $aTL
+$ql.Location = New-Object System.Drawing.Point((Px 28), (Px 28)); $ql.Anchor = $aTL
 $form.Controls.Add($ql)
 $tl = New-Object System.Windows.Forms.Label
 $tl.AutoSize = $true; $tl.MaximumSize = New-Object System.Drawing.Size((Px 584), 0)
 $tl.Font = $fBody; $tl.ForeColor = $cMuted; $tl.BackColor = $cWhite; $tl.Text = $cfg.text
-$tl.Location = New-Object System.Drawing.Point((Px 28), ($ql.Bottom + (Px 12)))
-$tl.Anchor = $aTL
+$tl.Location = New-Object System.Drawing.Point((Px 28), ($ql.Bottom + (Px 12))); $tl.Anchor = $aTL
 $form.Controls.Add($tl)
 
 function New-FlatButton($text, $font, $back, $fore, $borderSize, $primary) {
@@ -362,6 +345,7 @@ $titleMaxH = $titleLineH * 2
 $subH = [int][math]::Ceiling($fSub.GetHeight())
 $textX = (Px 16) + (Px 18) + (Px 12) + (Px 76) + (Px 12)
 $rightInset = (Px 16) + (Px 20) + (Px 12)
+$pillH = Px 22
 
 function Update-Count {
   $n = 0
@@ -403,7 +387,6 @@ function Add-Header($text) {
 
 function Add-Row($card) {
   $colW = $rowW0 - $textX - $rightInset
-  # Title height: the real wrapped height, one or two lines.
   $th = [System.Windows.Forms.TextRenderer]::MeasureText($card.title, $fRow, (New-Object System.Drawing.Size($colW, 0)), $wordBreak).Height
   if ($th -gt $titleMaxH) { $th = $titleMaxH }
   if ($th -lt $titleLineH) { $th = $titleLineH }
@@ -433,19 +416,24 @@ function Add-Row($card) {
   $tick.Visible = $false
   $cb.Controls.Add($tick)
 
-  # Severity pill (Region rounded, radius 9).
+  # Severity pill: owner-drawn rounded fill + centered text (radius 9, 22 tall).
   $pillTxt = $cfg.red; $pillTx = $cRedTx; $pillBg = $cRedBg
   if ($card.sev -eq 'yellow') { $pillTxt = $cfg.yellow; $pillTx = $cYelTx; $pillBg = $cYelBg }
-  $pm = [System.Windows.Forms.TextRenderer]::MeasureText($pillTxt, $fPill)
-  $ph = $pm.Height + (Px 4)
-  $pill = New-Object System.Windows.Forms.Label
-  $pill.AutoSize = $false
-  $pill.Size = New-Object System.Drawing.Size((Px 76), $ph)
+  $pill = New-Object System.Windows.Forms.Panel
+  $pill.Size = New-Object System.Drawing.Size((Px 76), $pillH)
   $pill.Location = New-Object System.Drawing.Point(((Px 16) + (Px 18) + (Px 12)), (Px 12))
   $pill.Anchor = $aTL
-  $pill.Font = $fPill; $pill.ForeColor = $pillTx; $pill.BackColor = $pillBg
-  $pill.Text = $pillTxt; $pill.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-  $pill.Region = Rounded-Region (Px 76) $ph (Px 9)
+  $pill.BackColor = $cWhite
+  $pill.Tag = @{ txt = $pillTxt; tx = $pillTx; bg = $pillBg }
+  $pill.Add_Paint({
+    param($s, $e)
+    $t = $s.Tag
+    $g = $e.Graphics; $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $w = $s.ClientSize.Width; $h = $s.ClientSize.Height
+    $path = Rounded-Path $w $h (Px 9)
+    $g.FillPath((New-Object System.Drawing.SolidBrush($t.bg)), $path)
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $t.txt, $fPill, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)), $t.tx, $center)
+  })
   $row.Controls.Add($pill)
 
   $title = New-Object System.Windows.Forms.Label
@@ -457,65 +445,79 @@ function Add-Row($card) {
   $title.AutoEllipsis = $true; $title.Text = $card.title
   $row.Controls.Add($title)
 
+  # Subtitle. For a dated finding the whole line is one muted label joined by
+  # « · »; for a new finding «New» is cobalt-bold and the agent muted.
   $subStatus = New-Object System.Windows.Forms.Label
   $subStatus.AutoSize = $true; $subStatus.BackColor = $cWhite
-  $subStatus.Location = New-Object System.Drawing.Point($textX, $rowSubTop)
-  $subStatus.Anchor = $aTL
-  if ($card.new) { $subStatus.Font = $fSubB; $subStatus.ForeColor = $cCobalt; $subStatus.Text = $cfg.sub_new }
-  else { $subStatus.Font = $fSub; $subStatus.ForeColor = $cSub; $subStatus.Text = $card.since }
-  $row.Controls.Add($subStatus)
+  $subStatus.Location = New-Object System.Drawing.Point($textX, $rowSubTop); $subStatus.Anchor = $aTL
   $subAgent = $null
-  if ($card.agent) {
-    $subAgent = New-Object System.Windows.Forms.Label
-    $subAgent.AutoSize = $true; $subAgent.BackColor = $cWhite; $subAgent.Font = $fSub; $subAgent.ForeColor = $cSub
-    $subAgent.Text = $mid + $card.agent
-    $subAgent.Anchor = $aTL
-    $subAgent.Location = New-Object System.Drawing.Point(($textX + $subStatus.PreferredWidth), $rowSubTop)
-    $row.Controls.Add($subAgent)
+  if ($card.new) {
+    $subStatus.Font = $fSubB; $subStatus.ForeColor = $cCobalt; $subStatus.Text = $cfg.sub_new
+    if ($card.agent) {
+      $subAgent = New-Object System.Windows.Forms.Label
+      $subAgent.AutoSize = $true; $subAgent.BackColor = $cWhite; $subAgent.Font = $fSub; $subAgent.ForeColor = $cSub
+      $subAgent.Text = $mid + $card.agent; $subAgent.Anchor = $aTL
+      $swid = [System.Windows.Forms.TextRenderer]::MeasureText($cfg.sub_new, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+      $subAgent.Location = New-Object System.Drawing.Point(($textX + $swid), $rowSubTop)
+      $row.Controls.Add($subAgent)
+    }
+  } else {
+    $parts = @()
+    if ($card.since) { $parts += $card.since }
+    if ($card.agent) { $parts += $card.agent }
+    $subStatus.Font = $fSub; $subStatus.ForeColor = $cSub; $subStatus.Text = [string]::Join($mid, $parts)
   }
+  $row.Controls.Add($subStatus)
 
-  # «i»: an elliptical Region for the shape; its Paint draws the border (closed)
-  # and the fill (open). The Label keeps the "i" text.
-  $icon = New-Object System.Windows.Forms.Label
-  $icon.AutoSize = $false; $icon.Size = New-Object System.Drawing.Size((Px 20), (Px 20))
+  # «i»: owner-drawn circle. Closed: white fill, 1 px #8A867E border, muted «i».
+  # Open: #1B1A18 fill, white «i». An elliptical Region clips it to a circle.
+  $icon = New-Object System.Windows.Forms.Panel
+  $icon.Size = New-Object System.Drawing.Size((Px 20), (Px 20))
   $icon.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - (Px 20)), (Px 12))
   $icon.Anchor = $aTR
-  $icon.Font = $fIcon; $icon.Text = 'i'; $icon.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-  $icon.ForeColor = $cMuted; $icon.BackColor = $cWhite
+  $icon.BackColor = $cWhite
   $icon.Region = Rounded-Region (Px 20) (Px 20) (Px 10)
   $icon.Cursor = [System.Windows.Forms.Cursors]::Hand
   $icon.Add_Paint({
     param($s, $e)
     $st = $s.Tag
-    $e.Graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g = $e.Graphics; $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $d = $s.ClientSize.Width
-    if (-not ($st -ne $null -and $st.open)) {
-      $e.Graphics.DrawEllipse((New-Object System.Drawing.Pen($cBox, 1)), 0, 0, ($d - 1), ($d - 1))
+    $rect = New-Object System.Drawing.Rectangle(0, 0, ($d - 1), ($d - 1))
+    if ($st -ne $null -and $st.open) {
+      $g.FillEllipse((New-Object System.Drawing.SolidBrush($cInk)), $rect)
+      [System.Windows.Forms.TextRenderer]::DrawText($g, 'i', $fIcon, (New-Object System.Drawing.Rectangle(0, 0, $d, $d)), $cWhite, $center)
+    } else {
+      $g.FillEllipse((New-Object System.Drawing.SolidBrush($cWhite)), $rect)
+      $g.DrawEllipse((New-Object System.Drawing.Pen($cBox, 1)), $rect)
+      [System.Windows.Forms.TextRenderer]::DrawText($g, 'i', $fIcon, (New-Object System.Drawing.Rectangle(0, 0, $d, $d)), $cMuted, $center)
     }
   })
   $row.Controls.Add($icon)
 
-  # Detail: an owner-drawn Panel; its Paint flows the two Semibold-label
-  # paragraphs. Hidden until the «i» opens.
-  $det = New-Object System.Windows.Forms.Panel
-  $det.BackColor = $cWhite; $det.Visible = $false; $det.Anchor = $aTLR
-  $det.Add_Paint({
-    param($s, $e)
-    $st = $s.Tag
-    if ($st -eq $null) { return }
-    $e.Graphics.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
-    $w = $s.ClientSize.Width
-    $lh = [int][math]::Ceiling($fDetail.GetHeight() * 1.45)
-    $h1 = Flow-Para $e.Graphics 0 0 $w $cfg.what_label $st.card.what
-    [void](Flow-Para $e.Graphics 0 ($h1 + $lh) $w $cfg.when_label $st.card.when)
-  })
-  $row.Controls.Add($det)
+  # Detail: a read-only, borderless, scroll-free RichTextBox; left-aligned text
+  # with the two Semibold labels inline. Built lazily when first opened.
+  $rtb = New-Object System.Windows.Forms.RichTextBox
+  $rtb.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+  $rtb.ReadOnly = $true
+  $rtb.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::None
+  $rtb.BackColor = $cWhite
+  $rtb.TabStop = $false
+  $rtb.Cursor = [System.Windows.Forms.Cursors]::Default
+  $rtb.Font = $fDetail
+  $rtb.WordWrap = $true
+  $rtb.Multiline = $true
+  $rtb.Visible = $false
+  $rtb.Width = $colW
+  $rtb.Anchor = $aTLR
+  $rtb.Add_ContentsResized({ param($s, $e) $s.Height = $e.NewRectangle.Height + (Px 2) })
+  $rtb.Add_Enter({ try { $list.Focus() } catch { } })
+  $row.Controls.Add($rtb)
 
-  $state = @{ card = $card; open = $false; row = $row; cb = $cb; tick = $tick; title = $title;
-    subStatus = $subStatus; subAgent = $subAgent; icon = $icon; det = $det; subtop = $rowSubTop; baseh = $baseH }
+  $state = @{ card = $card; open = $false; built = $false; row = $row; cb = $cb; tick = $tick; title = $title;
+    subStatus = $subStatus; subAgent = $subAgent; icon = $icon; pill = $pill; rtb = $rtb; subtop = $rowSubTop; baseh = $baseH }
   $row.Tag = $state
   $icon.Tag = $state
-  $det.Tag = $state
   Set-Check $state
 
   $toggleCheck = {
@@ -531,12 +533,23 @@ function Add-Row($card) {
   if ($subAgent -ne $null) { $subAgent.Add_Click($toggleCheck) }
   $icon.Add_Click({ Toggle-Detail $this.Parent })
 
-  $enter = { Set-RowBack $this.Tag $cHover }
-  $leave = { Set-RowBack $this.Tag $cWhite }
-  $row.Add_MouseEnter($enter); $row.Add_MouseLeave($leave)
+  $row.Add_MouseEnter({ Set-RowBack $this.Tag $cHover })
+  $row.Add_MouseLeave({ Set-RowBack $this.Tag $cWhite })
 
   $list.Controls.Add($row)
   $script:rows += $row
+}
+
+function Build-Detail($st) {
+  if ($st.built) { return }
+  $rtb = $st.rtb
+  [void]$rtb.Handle
+  $rtb.SelectionFont = $fDetailB; $rtb.SelectionColor = $cInk; $rtb.AppendText($cfg.what_label + ' ')
+  $rtb.SelectionFont = $fDetail; $rtb.SelectionColor = $cDetail; $rtb.AppendText($st.card.what + [Environment]::NewLine + [Environment]::NewLine)
+  $rtb.SelectionFont = $fDetailB; $rtb.SelectionColor = $cInk; $rtb.AppendText($cfg.when_label + ' ')
+  $rtb.SelectionFont = $fDetail; $rtb.SelectionColor = $cDetail; $rtb.AppendText($st.card.when)
+  $rtb.SelectionStart = 0; $rtb.SelectionLength = 0
+  $st.built = $true
 }
 
 function Toggle-Detail($row) {
@@ -553,21 +566,18 @@ function Open-Detail($row) {
   $w = $st.title.Width
   $x = $st.title.Left
   $y = $st.subtop + $subH + (Px 8)
-  $lh = [int][math]::Ceiling($fDetail.GetHeight() * 1.45)
-  $h1 = Flow-Para $null 0 0 $w $cfg.what_label $st.card.what
-  $h2 = Flow-Para $null 0 0 $w $cfg.when_label $st.card.when
-  $dh = $h1 + $lh + $h2
-  $st.det.SetBounds($x, $y, $w, $dh)
-  $st.det.Visible = $true
-  $st.det.Invalidate()
+  $st.rtb.Width = $w
+  Build-Detail $st
+  $st.rtb.Location = New-Object System.Drawing.Point($x, $y)
+  $st.rtb.Visible = $true
   $st.open = $true
   $st.icon.Invalidate()
-  $row.Height = $y + $dh + (Px 12)
+  $row.Height = $y + $st.rtb.Height + (Px 12)
 }
 
 function Close-Detail($row) {
   $st = $row.Tag
-  $st.det.Visible = $false
+  $st.rtb.Visible = $false
   $st.open = $false
   $st.icon.Invalidate()
   $row.Height = $st.baseh
@@ -578,8 +588,6 @@ function Fit-Rows {
   foreach ($c in $list.Controls) { $c.Width = $w }
 }
 
-# The cards arrive already ordered (new, then the rest, then dismissed), so we
-# walk them once and add a group header whenever the group changes.
 $lastGroup = [char]0
 foreach ($c in $cfg.cards) {
   if ($c.group -ne $lastGroup) {
@@ -614,32 +622,52 @@ $save.Add_Click({
 })
 $no.Add_Click({ $form.Close() })
 
+# Capture through WM_PRINT (PRF_CLIENT|PRF_ERASEBKGND|PRF_CHILDREN), which renders
+# the RichTextBox and the owner-drawn shapes and does not need the window fully
+# on-screen.
+function Print-Bitmap($ctrl, $w, $h) {
+  $bmp = New-Object System.Drawing.Bitmap($w, $h)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.Clear($cWhite)
+  $hdc = $g.GetHdc()
+  try { [void][RO.Win]::SendMessage($ctrl.Handle, 0x0317, $hdc, [System.IntPtr](28)) } catch { }
+  $g.ReleaseHdc($hdc)
+  $g.Dispose()
+  return $bmp
+}
 function Capture-Form($path) {
   $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-  $w = $form.ClientSize.Width; $h = $form.ClientSize.Height
-  $bmp = New-Object System.Drawing.Bitmap($w, $h)
-  $form.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
+  $bmp = Print-Bitmap $form $form.ClientSize.Width $form.ClientSize.Height
   $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
   $bmp.Dispose()
 }
-
 function Near($px, $r, $g, $b, $tol) {
   return (([math]::Abs([int]$px.R - $r) -le $tol) -and ([math]::Abs([int]$px.G - $g) -le $tol) -and ([math]::Abs([int]$px.B - $b) -le $tol))
 }
-function Row-Has($row, $r, $g, $b, $tol, $xmin, $ymin) {
+function Row-Has($row, $r, $g, $b, $tol, $xmin, $ymin, $ymax) {
   try {
     $w = $row.Width; $h = $row.Height
+    if ($ymax -le 0 -or $ymax -gt $h) { $ymax = $h }
     if ($w -le 0 -or $h -le 0) { return $false }
-    $bmp = New-Object System.Drawing.Bitmap($w, $h)
-    $row.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
+    $bmp = Print-Bitmap $row $w $h
     $found = $false
-    for ($y = $ymin; $y -lt $h -and -not $found; $y += 3) {
+    for ($y = $ymin; $y -lt $ymax -and -not $found; $y += 3) {
       for ($x = $xmin; $x -lt $w -and -not $found; $x += 3) {
         if ((Near $bmp.GetPixel($x, $y) $r $g $b $tol)) { $found = $true }
       }
     }
     $bmp.Dispose()
     return $found
+  } catch {
+    return $false
+  }
+}
+function Pixel-Near($row, $x, $y, $r, $g, $b, $tol) {
+  try {
+    $bmp = Print-Bitmap $row $row.Width $row.Height
+    $ok = Near $bmp.GetPixel($x, $y) $r $g $b $tol
+    $bmp.Dispose()
+    return $ok
   } catch {
     return $false
   }
@@ -668,6 +696,8 @@ if ($selftest) {
       $maxRight = 0
       foreach ($r in $rowsOnly) { if (($r.Left + $r.Width) -gt $maxRight) { $maxRight = $r.Left + $r.Width } }
       $encExpect = -join @([char]0x00B7, [char]0x00E1, [char]0x00F1)
+      $dateDe = $false
+      foreach ($c in $cfg.cards) { if ($c.since -and ($c.since -like '* de *')) { $dateDe = $true } }
       [Console]::Out.WriteLine('SHOWN')
       [Console]::Out.WriteLine('CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
       [Console]::Out.WriteLine('LISTCLIENT=' + $list.ClientSize.Width + ',' + $list.ClientSize.Height)
@@ -676,33 +706,43 @@ if ($selftest) {
       [Console]::Out.WriteLine('ROWMAXRIGHT=' + $maxRight)
       [Console]::Out.WriteLine('HSCROLL=' + $list.HorizontalScroll.Visible)
       [Console]::Out.WriteLine('ENCOK=' + ($cfg.enc_probe -eq $encExpect))
+      [Console]::Out.WriteLine('DATEDE=' + $dateDe)
       [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
       [Console]::Out.Flush()
-      $pillRed = $false; $pillYel = $false; $checkCobalt = $false; $titleDark = $false
+      $pillRed = $false; $pillYel = $false; $checkCobalt = $false; $titleDark = $false; $pillCorner = $false
       foreach ($r in $rowsOnly) {
-        if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 0 }
-        if (-not $pillYel) { $pillYel = Row-Has $r 253 245 223 6 0 0 }
+        if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 0 0 }
+        if (-not $pillYel) { $pillYel = Row-Has $r 253 245 223 6 0 0 0 }
         $rid = $null
         if ($r.Tag -ne $null -and $r.Tag.card -ne $null) { $rid = $r.Tag.card.id }
-        if (-not $checkCobalt -and $rid -and $script:checked[$rid]) { $checkCobalt = Row-Has $r 35 70 184 14 0 0 }
+        if (-not $checkCobalt -and $rid -and $script:checked[$rid]) { $checkCobalt = Row-Has $r 35 70 184 14 0 0 0 }
       }
-      if ($rowsOnly.Count -gt 0) { $titleDark = Row-Has $rowsOnly[0] 27 26 24 24 $textX 0 }
+      if ($rowsOnly.Count -gt 0) {
+        $r0 = $rowsOnly[0]
+        $titleDark = Row-Has $r0 27 26 24 24 $textX 0 0
+        $pl = $r0.Tag.pill
+        $pillCorner = Pixel-Near $r0 ($pl.Left + 1) ($pl.Top + 1) 255 255 255 8
+      }
       [Console]::Out.WriteLine('PILLRED=' + $pillRed)
       [Console]::Out.WriteLine('PILLYEL=' + $pillYel)
       [Console]::Out.WriteLine('TITLEDARK=' + $titleDark)
       [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
-      $hbefore = 0; $hafter = 0; $detailText = $false
+      [Console]::Out.WriteLine('PILLCORNER=' + $pillCorner)
+      $hbefore = 0; $hafter = 0; $detailText = $false; $iconFill = $false
       if ($rowsOnly.Count -gt 0) {
         $r0 = $rowsOnly[0]
         $hbefore = $r0.Height
         Open-Detail $r0
         $r0.Refresh(); [System.Windows.Forms.Application]::DoEvents()
         $hafter = $r0.Height
-        $detailText = Row-Has $r0 27 26 24 30 $textX ($r0.Tag.subtop + $subH + (Px 4))
+        $detailText = Row-Has $r0 27 26 24 30 $textX ($r0.Tag.subtop + $subH + (Px 4)) 0
+        $ic = $r0.Tag.icon
+        $iconFill = Row-Has $r0 27 26 24 16 $ic.Left (Px 12) ((Px 12) + (Px 20))
         Close-Detail $r0
       }
       [Console]::Out.WriteLine('IOPEN=' + $hbefore + ',' + $hafter)
       [Console]::Out.WriteLine('DETAILTEXT=' + $detailText)
+      [Console]::Out.WriteLine('ICONFILL=' + $iconFill)
       [Console]::Out.Flush()
     } catch {
       [Console]::Out.WriteLine('SELFTESTERR=' + ($_.Exception.Message -replace '\s+', ' ')); [Console]::Out.Flush()
