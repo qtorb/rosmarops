@@ -185,6 +185,22 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["ICONFILL"] != "True" {
 		t.Errorf("ICONFILL = %q, want True (the open «i» is not a filled #1B1A18 disc)", kv["ICONFILL"])
 	}
+	// Polish (BV-184): the detail box background tracks its row at rest and under
+	// the mouse (point 1); the pill corner shows the hover colour, not white, when
+	// the row is hovered (point 2); and the agent label sits flush at the end of
+	// «New», so the gaps around the «·» are equal (point 3).
+	if kv["DETAILBGREST"] != "True" {
+		t.Errorf("DETAILBGREST = %q, want True (the detail box background is not the row's at rest)", kv["DETAILBGREST"])
+	}
+	if kv["DETAILBGHOVER"] != "True" {
+		t.Errorf("DETAILBGHOVER = %q, want True (the detail box background does not follow the row on hover)", kv["DETAILBGHOVER"])
+	}
+	if kv["PILLCORNERHOVER"] != "True" {
+		t.Errorf("PILLCORNERHOVER = %q, want True (the pill corner is white on a hovered row, not the row colour)", kv["PILLCORNERHOVER"])
+	}
+	if kv["GAPFLUSH"] != "True" {
+		t.Errorf("GAPFLUSH = %q, want True (the agent label is not flush with «New»; the gaps around «·» differ)", kv["GAPFLUSH"])
+	}
 	// Chrome.
 	if !strings.Contains(kv["BORDER"], "FixedSingle") || kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
 		t.Errorf("chrome: BORDER=%s MAX=%s MIN=%s TOP=%s", kv["BORDER"], kv["MAX"], kv["MIN"], kv["TOP"])
@@ -218,17 +234,31 @@ func TestDismissWindowScreenshots(t *testing.T) {
 		cfg.Icon = ""
 		cfg.IconFallback = ico
 		for _, s := range []struct{ scale, pct string }{{"1", "100"}, {"1.5", "150"}} {
-			for _, openI := range []string{"", "1"} {
-				name := "findings-" + lang + "-" + s.pct
-				if openI != "" {
-					name += "-i"
-				}
+			// Four variants per language and scale (BV-184 §4): the list as it
+			// opens and with the first «i» open — in both, the first «new» row is
+			// ticked so a ticked box and «1 ticked» show on screen (4b); the list
+			// scrolled to the bottom, where «the rest» (long date) and «dismissed»
+			// are (4a); and a hover view with the «i» open, to check the detail and
+			// pill backgrounds (4c).
+			for _, v := range []struct {
+				suffix string
+				env    map[string]string
+			}{
+				{"", map[string]string{"TICK_NEW": "1"}},
+				{"-i", map[string]string{"TICK_NEW": "1", "OPEN_I": "1"}},
+				{"-rest", map[string]string{"SCROLL": "bottom"}},
+				{"-hover", map[string]string{"TICK_NEW": "1", "OPEN_I": "1", "HOVER": "1"}},
+			} {
+				name := "findings-" + lang + "-" + s.pct + v.suffix
 				out := filepath.Join(dir, name+".png")
 				cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-STA", "-File", ps1)
 				cmd.Env = append(os.Environ(),
 					"ROSMAROPS_FINDINGS_WINDOW_SHOT="+out,
 					"ROSMAROPS_FINDINGS_WINDOW_SHOT_SCALE="+s.scale,
-					"ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I="+openI,
+					"ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I="+v.env["OPEN_I"],
+					"ROSMAROPS_FINDINGS_WINDOW_SHOT_SCROLL="+v.env["SCROLL"],
+					"ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW="+v.env["TICK_NEW"],
+					"ROSMAROPS_FINDINGS_WINDOW_SHOT_HOVER="+v.env["HOVER"],
 				)
 				cmd.Stderr = os.Stderr
 				stdin, _ := cmd.StdinPipe()

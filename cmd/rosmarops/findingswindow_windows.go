@@ -201,6 +201,9 @@ try {
 $shot = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT
 $shotScale = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCALE
 $shotOpenI = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I
+$shotScroll = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCROLL     # "bottom" shows «the rest» and «dismissed»
+$shotTickNew = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW  # tick the first «new» row so «1 ticked» shows on screen
+$shotHover = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_HOVER       # paint one row in the hover colour
 $selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_FINDINGS_WINDOW_SELFTEST)
 $f = 1.0
 if ($shot -and $shotScale) { $f = [double]$shotScale }
@@ -366,8 +369,11 @@ function Set-Check($state) {
 }
 
 function Set-RowBack($state, $col) {
+  # The row and everything that must share its background change together: the
+  # title and subtitle labels, the pill (its corners outside the rounded fill
+  # show this colour) and the open detail box (BV-184 polish, points 1-2).
   $state.row.BackColor = $col
-  foreach ($c in @($state.title, $state.subStatus, $state.subAgent)) { if ($c -ne $null) { $c.BackColor = $col } }
+  foreach ($c in @($state.title, $state.subStatus, $state.subAgent, $state.pill, $state.rtb)) { if ($c -ne $null) { $c.BackColor = $col } }
 }
 
 function Add-Header($text) {
@@ -455,7 +461,12 @@ function Add-Row($card) {
       $subAgent = New-Object System.Windows.Forms.Label
       $subAgent.AutoSize = $true; $subAgent.BackColor = $cWhite; $subAgent.Font = $fSub; $subAgent.ForeColor = $cSub
       $subAgent.Text = $mid + $card.agent; $subAgent.Anchor = $aTL
-      $swid = [System.Windows.Forms.TextRenderer]::MeasureText($cfg.sub_new, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+      # Sit the agent label flush against the end of «New», using «New»'s own
+      # rendered width, so the gap before the «·» equals the gap after it
+      # (BV-184 polish, point 3). PreferredSize is the AutoSize label's real
+      # width, which TextRenderer.MeasureText did not match.
+      $subStatus.Margin = New-Object System.Windows.Forms.Padding(0)
+      $swid = $subStatus.PreferredSize.Width
       $subAgent.Location = New-Object System.Drawing.Point(($textX + $swid), $rowSubTop)
       $row.Controls.Add($subAgent)
     }
@@ -566,6 +577,7 @@ function Open-Detail($row) {
   $y = $st.subtop + $subH + (Px 8)
   $st.rtb.Width = $w
   Build-Detail $st
+  $st.rtb.BackColor = $row.BackColor # match the row, hovered or not (point 1)
   $st.rtb.Location = New-Object System.Drawing.Point($x, $y)
   $st.rtb.Visible = $true
   $st.open = $true
@@ -685,7 +697,25 @@ if ($shot) {
   $form.Add_Shown({
     try {
       Fit-Rows
-      if ($shotOpenI -and $script:rows.Count -gt 0) { Open-Detail $script:rows[0] }
+      $target = $null
+      if ($script:rows.Count -gt 0) { $target = $script:rows[0] } # first row = first «new»
+      # Tick exactly the first «new» row so a ticked box and «1 ticked» show
+      # on screen (BV-184 point 4b): clear the rest first.
+      if ($shotTickNew -and $target -ne $null) {
+        foreach ($k in @($script:checked.Keys)) { $script:checked[$k] = $false }
+        $script:checked[$target.Tag.card.id] = $true
+        foreach ($r in $script:rows) { Set-Check $r.Tag }
+        Update-Count
+      }
+      # Scroll to the bottom so «the rest» (long date) and «dismissed» show
+      # (point 4a).
+      if ($shotScroll -eq 'bottom' -and $script:rows.Count -gt 0) {
+        $list.ScrollControlIntoView($script:rows[$script:rows.Count - 1])
+      }
+      # Hover: paint the target row in the hover colour before opening its
+      # detail, so the detail and pill take the hover background (points 1-2, 4c).
+      if ($shotHover -and $target -ne $null) { Set-RowBack $target.Tag $cHover }
+      if ($shotOpenI -and $target -ne $null) { Open-Detail $target }
       Start-Sleep -Milliseconds 300
       Capture-Form $shot
     } catch {
@@ -740,8 +770,13 @@ if ($selftest) {
       [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
       [Console]::Out.WriteLine('PILLCORNER=' + $pillCorner)
       $hbefore = 0; $hafter = 0; $detailText = $false; $iconFill = $false
+      $gapFlush = $false; $detailBgRest = $false; $detailBgHover = $false; $pillCornerHover = $false
       if ($rowsOnly.Count -gt 0) {
         $r0 = $rowsOnly[0]
+        # Point 3: the agent label sits flush at the end of «New», so the gap
+        # before the «·» equals the gap after it (1 px margin).
+        $ss = $r0.Tag.subStatus; $sa = $r0.Tag.subAgent
+        if ($ss -ne $null -and $sa -ne $null) { $gapFlush = ([math]::Abs($sa.Left - ($ss.Left + $ss.Width)) -le 1) }
         $hbefore = $r0.Height
         Open-Detail $r0
         $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
@@ -750,11 +785,25 @@ if ($selftest) {
         $detailText = Row-Has $r0 27 26 24 30 $textX ($r0.Tag.subtop + $subH + (Px 4)) 0
         $ic = $r0.Tag.icon
         $iconFill = Row-Has $r0 27 26 24 16 $ic.Left (Px 12) ((Px 12) + (Px 20))
+        # Point 1 at rest: the detail box background equals its row's.
+        $detailBgRest = ($r0.Tag.rtb.BackColor.ToArgb() -eq $r0.BackColor.ToArgb())
+        # Points 1 & 2 under hover: paint the row in the hover colour; the detail
+        # box follows it and the pill corner shows the hover colour, not white.
+        Set-RowBack $r0.Tag $cHover
+        $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 200
+        $detailBgHover = ($r0.Tag.rtb.BackColor.ToArgb() -eq $r0.BackColor.ToArgb())
+        $pl = $r0.Tag.pill
+        $pillCornerHover = Pixel-Near $r0 ($pl.Left + 1) ($pl.Top + 1) 246 245 242 8
+        Set-RowBack $r0.Tag $cWhite
         Close-Detail $r0
       }
       [Console]::Out.WriteLine('IOPEN=' + $hbefore + ',' + $hafter)
       [Console]::Out.WriteLine('DETAILTEXT=' + $detailText)
       [Console]::Out.WriteLine('ICONFILL=' + $iconFill)
+      [Console]::Out.WriteLine('GAPFLUSH=' + $gapFlush)
+      [Console]::Out.WriteLine('DETAILBGREST=' + $detailBgRest)
+      [Console]::Out.WriteLine('DETAILBGHOVER=' + $detailBgHover)
+      [Console]::Out.WriteLine('PILLCORNERHOVER=' + $pillCornerHover)
       [Console]::Out.Flush()
     } catch {
       [Console]::Out.WriteLine('SELFTESTERR=' + ($_.Exception.Message -replace '\s+', ' ')); [Console]::Out.Flush()
