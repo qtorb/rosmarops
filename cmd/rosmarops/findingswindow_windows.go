@@ -602,60 +602,76 @@ function Near($px, $r, $g, $b, $tol) {
   return (([math]::Abs([int]$px.R - $r) -le $tol) -and ([math]::Abs([int]$px.G - $g) -le $tol) -and ([math]::Abs([int]$px.B - $b) -le $tol))
 }
 function Row-Has($row, $r, $g, $b, $tol, $xmin) {
-  $w = $row.Width; $h = $row.Height
-  if ($w -le 0 -or $h -le 0) { return $false }
-  $bmp = New-Object System.Drawing.Bitmap($w, $h)
-  $row.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
-  $found = $false
-  for ($y = 0; $y -lt $h -and -not $found; $y += 2) {
-    for ($x = $xmin; $x -lt $w -and -not $found; $x += 2) {
-      if (Near $bmp.GetPixel($x, $y) $r $g $b $tol) { $found = $true }
+  try {
+    $w = $row.Width; $h = $row.Height
+    if ($w -le 0 -or $h -le 0) { return $false }
+    $bmp = New-Object System.Drawing.Bitmap($w, $h)
+    $row.DrawToBitmap($bmp, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
+    $found = $false
+    for ($y = 0; $y -lt $h -and -not $found; $y += 3) {
+      for ($x = $xmin; $x -lt $w -and -not $found; $x += 3) {
+        $p = $bmp.GetPixel($x, $y)
+        if ((Near $p $r $g $b $tol)) { $found = $true }
+      }
     }
+    $bmp.Dispose()
+    return $found
+  } catch {
+    return $false
   }
-  $bmp.Dispose()
-  return $found
 }
 
 if ($shot) {
   $form.Add_Shown({
-    Fit-Rows
-    if ($shotOpenI -and $script:rows.Count -gt 0) { Open-Detail $script:rows[0] }
-    Start-Sleep -Milliseconds 300
-    Capture-Form $shot
-    $form.Close()
+    try {
+      Fit-Rows
+      if ($shotOpenI -and $script:rows.Count -gt 0) { Open-Detail $script:rows[0] }
+      Start-Sleep -Milliseconds 300
+      Capture-Form $shot
+    } catch {
+      [Console]::Out.WriteLine('SHOTERR=' + ($_.Exception.Message -replace '\s+', ' ')); [Console]::Out.Flush()
+    } finally {
+      $form.Close()
+    }
   })
 }
 if ($selftest) {
   $form.Add_Shown({
-    Fit-Rows
-    $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-    $rowsOnly = @($script:rows)
-    $pillRed = $false; $pillYel = $false; $checkCobalt = $false
-    foreach ($r in $rowsOnly) {
-      if (-not $pillRed -and (Row-Has $r 251 233 229 4 0)) { $pillRed = $true }
-      if (-not $pillYel -and (Row-Has $r 253 245 223 4 0)) { $pillYel = $true }
-      if (-not $checkCobalt -and $script:checked[$r.Tag.card.id] -and (Row-Has $r 35 70 184 12 0)) { $checkCobalt = $true }
+    try {
+      Fit-Rows
+      $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+      $rowsOnly = @($script:rows)
+      $maxRight = 0
+      foreach ($r in $rowsOnly) { if (($r.Left + $r.Width) -gt $maxRight) { $maxRight = $r.Left + $r.Width } }
+      # Geometry first, so we always get output even if the pixel scan fails.
+      [Console]::Out.WriteLine('SHOWN')
+      [Console]::Out.WriteLine('CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
+      [Console]::Out.WriteLine('LISTCLIENT=' + $list.ClientSize.Width + ',' + $list.ClientSize.Height)
+      [Console]::Out.WriteLine('ROWS=' + $rowsOnly.Count)
+      [Console]::Out.WriteLine('ROWMAXRIGHT=' + $maxRight)
+      [Console]::Out.WriteLine('HSCROLL=' + $list.HorizontalScroll.Visible)
+      [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
+      [Console]::Out.Flush()
+      $pillRed = $false; $pillYel = $false; $checkCobalt = $false; $titleDark = $false
+      foreach ($r in $rowsOnly) {
+        if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 }
+        if (-not $pillYel) { $pillYel = Row-Has $r 253 245 223 6 0 }
+        if (-not $checkCobalt -and $script:checked[$r.Tag.card.id]) { $checkCobalt = Row-Has $r 35 70 184 14 0 }
+      }
+      if ($rowsOnly.Count -gt 0) { $titleDark = Row-Has $rowsOnly[0] 27 26 24 24 $textX }
+      [Console]::Out.WriteLine('PILLRED=' + $pillRed)
+      [Console]::Out.WriteLine('PILLYEL=' + $pillYel)
+      [Console]::Out.WriteLine('TITLEDARK=' + $titleDark)
+      [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
+      $hbefore = 0; $hafter = 0
+      if ($rowsOnly.Count -gt 0) { $hbefore = $rowsOnly[0].Height; Open-Detail $rowsOnly[0]; $hafter = $rowsOnly[0].Height; Close-Detail $rowsOnly[0] }
+      [Console]::Out.WriteLine('IOPEN=' + $hbefore + ',' + $hafter)
+      [Console]::Out.Flush()
+    } catch {
+      [Console]::Out.WriteLine('SELFTESTERR=' + ($_.Exception.Message -replace '\s+', ' ')); [Console]::Out.Flush()
+    } finally {
+      $form.Close()
     }
-    $titleDark = $false
-    if ($rowsOnly.Count -gt 0) { $titleDark = Row-Has $rowsOnly[0] 27 26 24 20 $textX }
-    $maxRight = 0
-    foreach ($r in $rowsOnly) { if (($r.Left + $r.Width) -gt $maxRight) { $maxRight = $r.Left + $r.Width } }
-    [Console]::Out.WriteLine('SHOWN')
-    [Console]::Out.WriteLine('CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
-    [Console]::Out.WriteLine('LISTCLIENT=' + $list.ClientSize.Width + ',' + $list.ClientSize.Height)
-    [Console]::Out.WriteLine('ROWS=' + $rowsOnly.Count)
-    [Console]::Out.WriteLine('ROWMAXRIGHT=' + $maxRight)
-    [Console]::Out.WriteLine('HSCROLL=' + $list.HorizontalScroll.Visible)
-    [Console]::Out.WriteLine('PILLRED=' + $pillRed)
-    [Console]::Out.WriteLine('PILLYEL=' + $pillYel)
-    [Console]::Out.WriteLine('TITLEDARK=' + $titleDark)
-    [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
-    [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
-    $hbefore = 0; $hafter = 0
-    if ($rowsOnly.Count -gt 0) { $hbefore = $rowsOnly[0].Height; Open-Detail $rowsOnly[0]; $hafter = $rowsOnly[0].Height; Close-Detail $rowsOnly[0] }
-    [Console]::Out.WriteLine('IOPEN=' + $hbefore + ',' + $hafter)
-    [Console]::Out.Flush()
-    $form.Close()
   })
 }
 [void]$form.ShowDialog()

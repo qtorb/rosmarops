@@ -116,6 +116,9 @@ func TestDismissWindowSelfTest(t *testing.T) {
 		}
 		return out
 	}
+	if e, ok := kv["SELFTESTERR"]; ok {
+		t.Fatalf("window self-test raised an error: %s", e)
+	}
 	if kv["CLIENT"] == "" {
 		t.Fatalf("no CLIENT emitted; collected: %v", kv)
 	}
