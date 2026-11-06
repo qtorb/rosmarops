@@ -347,12 +347,6 @@ $subH = [int][math]::Ceiling($fSub.GetHeight())
 $textX = (Px 16) + (Px 18) + (Px 12) + (Px 76) + (Px 12)
 $rightInset = (Px 16) + (Px 20) + (Px 12)
 $pillH = Px 22
-# The title and the dated subtitles are Labels, whose text is inset from the
-# left by TextRenderer's GlyphOverhangPadding. The owner-drawn «new» subtitle
-# uses NoPadding (no inset), so it is shifted right by this much to line its
-# first ink up with the title's (BV-184 point 3 follow-up). Measured as half the
-# padding TextRenderer adds without NoPadding, for the title font.
-$subInkPad = [int][math]::Round(([System.Windows.Forms.TextRenderer]::MeasureText('Ag', $fRow).Width - [System.Windows.Forms.TextRenderer]::MeasureText('Ag', $fRow, [System.Drawing.Size]::Empty, $noPad).Width) / 2.0)
 
 function Update-Count {
   $n = 0
@@ -470,10 +464,17 @@ function Add-Row($card) {
     $subStatus.Add_Paint({
       param($s, $e)
       $t = $s.Tag; $g = $e.Graphics
-      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point($subInkPad, 0)), $cCobalt, $noPad)
+      # «New» is drawn with the default padding (GlyphOverhangPadding), exactly
+      # as a Label renders it, so its first ink lines up with the title's. The
+      # agent piece is drawn NoPadding at «New»'s ink-right edge (full width
+      # minus the right overhang), so the gap before the «·» equals the gap
+      # after it (BV-184 point 3).
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point(0, 0)), $cCobalt)
       if ($t.agent) {
-        $w1 = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
-        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($subInkPad + $w1), 0)), $cSub, $noPad)
+        $full = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB).Width
+        $ink = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+        $pad = [int][math]::Round(($full - $ink) / 2.0)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($pad + $ink), 0)), $cSub, $noPad)
       }
     })
   } else {
