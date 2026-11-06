@@ -13,9 +13,11 @@ import (
 
 // BV-140 (CTO-16 §7): the example report of a machine where OpenAI Codex runs
 // with the approve-everything preset (sandbox_mode = danger-full-access,
-// approval_policy = never) and a trusted project. It renders in both languages
-// with Codex evaluated, its findings and fixes shown, and no secret in clear.
-func TestRenderHTML_CodexEvaluated(t *testing.T) {
+// approval_policy = never) and a trusted project, and xAI Grok Build runs with
+// yolo and a key in its config.toml. It renders in both languages with Codex
+// and Grok Build evaluated, their findings and fixes shown, and no secret in
+// clear.
+func TestRenderHTML_CodexAndGrokEvaluated(t *testing.T) {
 	salt := []byte("0123456789abcdef0123456789abcdef")
 	codexDir, repo := "/h/.codex", "/src/a"
 	net := false
@@ -41,8 +43,17 @@ func TestRenderHTML_CodexEvaluated(t *testing.T) {
 		{Path: "/h/.claude/.credentials.json", Line: 1, Key: "SUPABASE_SECRET_KEY", Value: secrets.NewSecretValue("sb_secret_" + strings.Repeat("S", 22) + "_" + strings.Repeat("T", 8))},
 		{Path: codexDir + "/auth.json", Line: 1, Key: "OPENAI_API_KEY", Value: secrets.NewSecretValue("sk-proj-" + strings.Repeat("O", 48))},
 	}}
-	mcp := platform.MCPScan{Servers: graph.CodexMCPServers(scan)}
-	f, _, err := graph.FromScansWithCodex(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, platform.HermesScan{}, scan, salt, v2Now)
+	grokDir := "/h/.grok"
+	grok := platform.GrokScan{ConfigDir: grokDir, Exists: true, Layers: []platform.GrokLayer{{
+		Kind: platform.GrokLayerUser, Path: grokDir + "/config.toml", Status: platform.MCPSourceRead, Yolo: true,
+		APIKeys: []platform.EnvVar{{Key: "mine", Value: secrets.NewSecretValue("xai-FAKEapikey0000WXYZ")}},
+		MCP: []platform.GrokMCPServer{{
+			ID: "ghgrok", Command: "npx", EnvKeys: []string{"GITHUB_PERSONAL_ACCESS_TOKEN"},
+			Env: []platform.EnvVar{{Key: "GITHUB_PERSONAL_ACCESS_TOKEN", Value: secrets.NewSecretValue("ghp_GROKFAKEFAKEFAKE5678")}},
+		}},
+	}}}
+	mcp := platform.MCPScan{Servers: append(graph.CodexMCPServers(scan), graph.GrokMCPServers(grok)...)}
+	f, _, err := graph.FromScansWithGrok(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, platform.HermesScan{}, scan, grok, salt, v2Now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,15 +74,17 @@ func TestRenderHTML_CodexEvaluated(t *testing.T) {
 	v, _ := report.BuildV2(report.V2Input{
 		Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		RepoRoots: []string{repo}, Families: [][]string{{repo}}, V1: v1, GeneratedAt: v2Now,
-		ClaudeSettings: &settings, Home: "/h", Codex: scan,
+		ClaudeSettings: &settings, Home: "/h", Codex: scan, Grok: grok,
 	})
 
 	for _, lang := range []string{"en", "es"} {
 		html := renderHTML(t, lang, v)
-		if !strings.Contains(html, "Codex") {
-			t.Errorf("%s: the report does not mention Codex", lang)
+		for _, agent := range []string{"Codex", "Grok Build"} {
+			if !strings.Contains(html, agent) {
+				t.Errorf("%s: the report does not mention %s", lang, agent)
+			}
 		}
-		for _, leak := range []string{"FAKEFAKE", strings.Repeat("S", 22), strings.Repeat("O", 48)} {
+		for _, leak := range []string{"FAKEFAKE", "FAKEapikey", strings.Repeat("S", 22), strings.Repeat("O", 48)} {
 			if strings.Contains(html, leak) {
 				t.Errorf("%s: a secret leaked into the report (%q)", lang, leak)
 			}
