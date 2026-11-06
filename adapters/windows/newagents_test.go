@@ -210,7 +210,10 @@ func TestListAgentInstructions_NewAgentsOrderAndAbsence(t *testing.T) {
 	for _, p := range []string{".hermes.md", "HERMES.md", "AGENTS.md"} {
 		writeFile(t, filepath.Join(e.repo, p), "x")
 	}
-	writeFile(t, filepath.Join(e.home, ".codex", "AGENTS.md"), "x")  // no config.toml or auth.json: no Codex
+	// A ~/.codex folder is not used as an "absent Codex" fixture any more: since
+	// CTO-16 (BV-140) the folder alone counts as Codex present, so Codex absence
+	// here means no .codex folder at all. Codex presence is covered by
+	// TestNewAgentsGraph. Antigravity stays the absent new agent below.
 	writeFile(t, filepath.Join(e.home, ".gemini", "GEMINI.md"), "x") // Gemini CLI, not Antigravity
 	got := listedFiles(t, []string{e.repo})
 	if l := got[filepath.Join(e.repo, ".hermes.md")]; len(l) != 1 || l[0] != (listed{"hermes", false}) {
@@ -224,7 +227,7 @@ func TestListAgentInstructions_NewAgentsOrderAndAbsence(t *testing.T) {
 	if l := got[filepath.Join(e.repo, "AGENTS.md")]; len(l) != 2 || l[0].product != "claude-code" || l[1].product != "cursor" {
 		t.Errorf("AGENTS.md: %v", l)
 	}
-	for _, p := range []string{filepath.Join(e.home, ".codex", "AGENTS.md"), filepath.Join(e.home, ".gemini", "GEMINI.md")} {
+	for _, p := range []string{filepath.Join(e.home, ".gemini", "GEMINI.md")} {
 		if l := got[p]; len(l) != 0 {
 			t.Errorf("%s listed for an absent agent: %v", p, l)
 		}

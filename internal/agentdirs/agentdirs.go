@@ -206,7 +206,8 @@ type Present struct {
 func Detect(home string, env Env) []Present { return WindowsLayout.Detect(home, env) }
 
 // Detect lists the agents present on layout l, in a fixed order:
-//   - Codex: CodexHome\config.toml or CodexHome\auth.json;
+//   - Codex: CodexHome\config.toml or CodexHome\auth.json, or the CodexHome
+//     folder itself (CTO-16 §1: the session may live in the OS keyring);
 //   - Antigravity: .gemini\config\mcp_config.json, the folder
 //     .gemini\antigravity or the folder AntigravityUserDir; a
 //     .gemini folder alone is Gemini CLI's and does not count;
@@ -218,11 +219,21 @@ func (l Layout) Detect(home string, env Env) []Present {
 	}
 	var out []Present
 	codex := CodexHome(home, env)
+	codexMarker := ""
 	for _, name := range []string{"config.toml", "auth.json"} {
 		if p := filepath.Join(codex, name); exists(p) {
-			out = append(out, Present{Codex, codex, p})
+			codexMarker = p
 			break
 		}
+	}
+	// CTO-16 §1 (BV-140): the CODEX_HOME folder alone counts, even without
+	// config.toml or auth.json — someone who keeps the session in the OS keyring
+	// has neither file but is still running Codex.
+	if codexMarker == "" && isDir(codex) {
+		codexMarker = codex
+	}
+	if codexMarker != "" {
+		out = append(out, Present{Codex, codex, codexMarker})
 	}
 	gemini := AntigravityDir(home)
 	switch {

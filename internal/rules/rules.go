@@ -67,6 +67,31 @@ const AssumeAuxModelPermits = "aux_model_permits"
 // follow-up). The {backend} parameter carries the value, redacted and cut.
 const AssumeHermesBackendUnknown = "hermes_backend_unknown"
 
+// CTO-16 (BV-140) assumptions for Codex and Grok Build. Codes only; no schema
+// change. Their catalog texts are signed by Albert (unknown.<code>).
+const (
+	// AssumeReviewerModelPermits: the step depends on the vendor's reviewer
+	// model allowing it — Codex's auto_review, Antigravity's agentMode:auto and
+	// Copilot's Assisted (CTO-16 §6, point 6). A premise, like
+	// auto_classifier_permits, so it lowers confidence to medium.
+	AssumeReviewerModelPermits = "reviewer_model_permits"
+	// AssumeLaunchFlagsNotReadable: a launch flag such as --yolo, an environment
+	// variable or a choice made during the session is not visible at rest. Used
+	// by Codex and by Grok Build (CTO-16 point 7).
+	AssumeLaunchFlagsNotReadable = "launch_flags_not_readable"
+	// AssumeExecRulesNotEvaluated: Codex's rules\*.rules are not parsed; assume
+	// they can let commands run without asking (CTO-16 point 8).
+	AssumeExecRulesNotEvaluated = "exec_rules_not_evaluated"
+	// AssumeWindowsSandboxUnknown: Codex has no [windows] sandbox set; it picks
+	// an implementation at launch. Assume the least-isolating one (CTO-16
+	// point 9).
+	AssumeWindowsSandboxUnknown = "windows_sandbox_unknown"
+	// AssumeCompatCellRemoteUnknown: a Grok Build compatibility cell has no
+	// value in the file and xAI may set it remotely; assume it is on (CTO-16
+	// point 10).
+	AssumeCompatCellRemoteUnknown = "compat_cell_remote_unknown"
+)
+
 // AllAssumptions lists every assumption a finding can carry: the graph's and
 // code_launcher_rule.
 var AllAssumptions = []string{
@@ -77,6 +102,8 @@ var AllAssumptions = []string{
 	graph.AssumeIDERunModeNotReadable, graph.AssumeThirdPartyImportsNotReadable, graph.AssumeSandboxPlatformUnknown,
 	graph.AssumeConfigFileProtectionUnknown, graph.AssumeTeamPolicyUnknown, AssumeRemoteVisibilityUnknown,
 	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
+	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
+	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -88,6 +115,8 @@ var premiseAssumptions = map[string]bool{
 	graph.AssumeUIModeChoiceUnknown:   true,
 	graph.AssumeIDERunModeNotReadable: true,
 	AssumeAuxModelPermits:             true,
+	// A reviewer model decides the step (CTO-16): a premise, confidence medium.
+	AssumeReviewerModelPermits: true,
 }
 
 // Severities, confidences and radii.

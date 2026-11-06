@@ -27,10 +27,18 @@ const (
 	// isolated backend in its config.yaml, so its terminal, file and code
 	// tools run off the computer (BV-111, point 7).
 	ActionHermesIsolatedBackend = "hermes_isolated_backend"
+
+	// ActionCodexWorkspaceSandbox puts Codex back on sandbox_mode =
+	// "workspace-write" + approval_policy = "on-request" (CTO-16 §4, BV-140).
+	ActionCodexWorkspaceSandbox = "codex_workspace_sandbox"
+	// ActionCodexUntrustedProject marks a project untrusted in Codex's user
+	// config, so a cloned repo's own .codex settings, hooks, rules and
+	// AGENTS.md are ignored (CTO-16 §2, BV-140).
+	ActionCodexUntrustedProject = "codex_untrusted_project"
 )
 
 // AllActions lists every action code.
-var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential, ActionHermesIsolatedBackend}
+var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential, ActionHermesIsolatedBackend, ActionCodexWorkspaceSandbox, ActionCodexUntrustedProject}
 
 // Completeness of an action.
 const (

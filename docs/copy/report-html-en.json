@@ -74,6 +74,8 @@
   "html.action.ask_edit_rule.title": "Make {agent} ask before editing these files",
   "html.action.ask_read_rule.title": "Make {agent} ask before reading this file",
   "html.action.block_reads_outside.title": "Stop {agent} from reading outside the project it is working in",
+  "html.action.codex_untrusted_project.title": "Stop this project from changing how {agent} behaves",
+  "html.action.codex_workspace_sandbox.title": "Make {agent} ask before editing outside the project it is working in",
   "html.action.hermes_isolated_backend.how": "In {file}, set `terminal.backend: docker` (and a `docker_image`). Hermes then runs its terminal, file and code tools inside that container instead of on your computer.",
   "html.action.hermes_isolated_backend.title": "Run {agent} in a container",
   "html.action.manual_default_mode.title": "Make {agent} start every session by asking first",

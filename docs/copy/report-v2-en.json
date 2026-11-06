@@ -237,5 +237,14 @@
   "unknown.team_policy_unknown": "Assumes no team policy from a Cursor admin dashboard overrides your local settings; RosmarOps cannot see it.",
   "unknown.third_party_imports_setting_not_readable": "Assumes Cursor's Third-Party Imports setting is on, as it is by default. The setting is not stored where RosmarOps can read it.",
   "unknown.ui_mode_choice_unknown": "Assumes you use the default mode. A mode you pick in the app or the IDE is not stored where RosmarOps can read it.",
-  "unknown.version_behaves_as_documented": "Assumes your installed version of {agent} behaves as its documentation says."
+  "unknown.version_behaves_as_documented": "Assumes your installed version of {agent} behaves as its documentation says.",
+  "unknown.reviewer_model_permits": "Depends on {agent}'s reviewer allowing the step. The reviewer is another AI model, not a person, and RosmarOps cannot predict its decision.",
+  "unknown.launch_flags_not_readable": "Assumes {agent} starts with the settings in its files. A flag such as --yolo, an environment variable or a choice made during the session leaves no trace on disk, so RosmarOps cannot see it.",
+  "unknown.exec_rules_not_evaluated": "{agent} has command rules (.rules files) that RosmarOps does not interpret. Assumes they can let commands run without asking you.",
+  "unknown.windows_sandbox_unknown": "Your {agent} settings do not say which Windows sandbox to use, so {agent} picks one when it starts. Assumes the one that isolates least: it does not block reads and isolates the network less.",
+  "unknown.compat_cell_remote_unknown": "{agent} uses compatibility settings to decide whether it also loads Claude Code and Cursor files. Some are not set in your file, and xAI can set them remotely; assumes they are on.",
+  "action.codex_workspace_sandbox.label": "Ask before edits outside the project",
+  "action.codex_workspace_sandbox.how": "Set this in {file}. {agent} then edits files and runs commands inside the project it is working in, and asks you before editing outside it or using the network. It can still read any file your user can read.",
+  "action.codex_untrusted_project.label": "Don't load this project's {agent} settings",
+  "action.codex_untrusted_project.how": "In {file}, mark this project as untrusted. {agent} then ignores the project's own .codex settings, hooks, rules and AGENTS.md, so a cloned repository cannot change how it behaves. Commands ask you first, except those your own rules allow."
 }
