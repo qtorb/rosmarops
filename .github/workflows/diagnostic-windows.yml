@@ -122,14 +122,17 @@ jobs:
         env:
           ROSMAROPS_FINDINGS_WINDOW_SELFTEST_RUN: "1"
         run: go test ./cmd/rosmarops -run '^TestDismissWindowSelfTest$' -count=1 -v
+      # BV-184 point 2: all eight captures must land; a failed capture fails the
+      # job (no continue-on-error). The upload runs even on failure so whatever
+      # was captured is still available for diagnosis.
       - name: Findings window screenshots (EN/ES, 100% and 150%, closed and i-open)
-        continue-on-error: true
         env:
           ROSMAROPS_FINDINGS_WINDOW_SHOT_DIR: ${{ github.workspace }}\findings-shots
         run: |
           New-Item -ItemType Directory -Force -Path findings-shots | Out-Null
           go test ./cmd/rosmarops -run '^TestDismissWindowScreenshots$' -count=1 -v
       - name: Upload findings window screenshots
+        if: always()
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
