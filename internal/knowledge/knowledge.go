@@ -48,6 +48,10 @@ const CodexVersion = "2026-11-01"
 // (grok-build.json, BV-140).
 const GrokBuildVersion = "2026-11-01"
 
+// GitHubCopilotVersion is the version of the embedded GitHub Copilot base
+// (github-copilot.json, BV-140).
+const GitHubCopilotVersion = "2026-11-01"
+
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
 // Observatory findings move into these bases and a version goes out. The
@@ -63,9 +67,9 @@ const ReviewedOn = "2026-11-03"
 // agentes, cálculo, T9). A change in any base changes it.
 // The parts are sorted by product (claude-code < cursor < hermes), as
 // CompositeOf sorts them.
-// The parts are sorted by product (claude-code < codex < cursor < grok-build <
-// hermes), as CompositeOf sorts them.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
+// The parts are sorted by product (claude-code < codex < cursor <
+// github-copilot < grok-build < hermes), as CompositeOf sorts them.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -91,6 +95,9 @@ var codexJSON []byte
 
 //go:embed grok-build.json
 var grokBuildJSON []byte
+
+//go:embed github-copilot.json
+var gitHubCopilotJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -296,12 +303,31 @@ func GrokBuild() (Base, error) {
 	return b, nil
 }
 
+// GitHubCopilot returns the embedded GitHub Copilot base (BV-140), with Claude
+// Code's code launcher table (as Cursor, Hermes, Codex and Grok reuse it).
+func GitHubCopilot() (Base, error) {
+	b, err := decode(gitHubCopilotJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != GitHubCopilotVersion {
+		return Base{}, fmt.Errorf("knowledge base github-copilot: version %q, want %q", b.Version, GitHubCopilotVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated. Codex joins the set with its graph builder, inference and
-// overview cells (BV-140 pieces c and d); Grok Build joins the same way.
+// overview cells (BV-140 pieces c and d); Grok Build and GitHub Copilot join
+// the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot} {
 		b, err := load()
 		if err != nil {
 			return nil, err
