@@ -236,8 +236,25 @@ func mcpDisposition(v *agentView, serverName string) string {
 		return hermesMCPDisposition(v)
 	case knowledge.CodexProduct:
 		return codexMCPDisposition(v)
+	case knowledge.GrokBuildProduct:
+		return grokMCPDisposition(v)
 	}
 	return ""
+}
+
+// grokMCPDisposition maps Grok Build's effective mode to who approves an MCP
+// tool call (CTO-16 Grok §4): nobody with an approve-everything mode, another
+// model with auto, otherwise the person (the default mode asks).
+func grokMCPDisposition(v *agentView) string {
+	mode, _ := grokMode(v)
+	switch {
+	case grokBypassMode(mode):
+		return MCPApprovalNobody
+	case mode == "auto":
+		return MCPApprovalAnotherModel
+	default:
+		return MCPApprovalPerson
+	}
 }
 
 // codexMCPDisposition maps Codex's escalation decider (its approval policy and

@@ -294,6 +294,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.CodexProduct {
 		return oi.codexCells(v)
 	}
+	if v.node.Platform == knowledge.GrokBuildProduct {
+		return oi.grokCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
@@ -414,6 +417,209 @@ func (oi overviewInputs) codexCells(v *agentView) []OverviewCell {
 // codexBaseAssumptions are the assumptions every Codex cell carries.
 func codexBaseAssumptions(extra ...string) []string {
 	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+// grokCompatSurfaces is the count of compat cells Grok has (3 vendors × 6
+// surfaces, CTO-16 Grok §2).
+const grokCompatCells = 18
+
+// grokCompatIncomplete reports that some [compat] cell has no value in the file,
+// so a remote setting could decide it (compat_cell_remote_unknown, CTO-16 Grok
+// §2). With no scan, assume incomplete (the safe default).
+func grokCompatIncomplete(scan platform.GrokScan) bool {
+	set := map[string]bool{}
+	for _, l := range scan.Layers {
+		for k := range l.Compat {
+			set[k] = true
+		}
+	}
+	return len(set) < grokCompatCells
+}
+
+// grokBaseAssumptions are the assumptions every Grok Build cell carries: launch
+// flags are not readable at rest (CTO-16 Grok §4).
+func grokBaseAssumptions(extra ...string) []string {
+	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+// grokWriteDecider is who decides a without-asking write for Grok's mode (CTO-16
+// Grok §4): a wildcard write allow or an approve-everything mode or acceptEdits
+// edits without asking (nobody); auto is the classifier (model); dontAsk refuses
+// what is not pre-approved (blocked); the default mode asks (you).
+func grokWriteDecider(v *agentView, mode string) (decider, scope string, assume []string) {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			return DeciderNobody, ScopeMachine, nil
+		}
+	}
+	switch {
+	case grokBypassMode(mode), mode == "acceptEdits":
+		return DeciderNobody, ScopeMachine, nil
+	case mode == "auto":
+		return DeciderModel, ScopeMachine, []string{graph.AssumeAutoClassifierPermits}
+	case mode == "dontAsk":
+		return DeciderBlocked, ScopeNone, nil
+	default:
+		return DeciderYou, ScopeNone, nil
+	}
+}
+
+// grokEscalationDecider is who decides sending out or running the general shell
+// for Grok's mode: an approve-everything mode (nobody), auto (model), dontAsk
+// (blocked); otherwise the person asks (acceptEdits and the default mode).
+func grokEscalationDecider(mode string) (decider string, assume []string) {
+	switch {
+	case grokBypassMode(mode):
+		return DeciderNobody, nil
+	case mode == "auto":
+		return DeciderModel, []string{graph.AssumeAutoClassifierPermits}
+	case mode == "dontAsk":
+		return DeciderBlocked, nil
+	default:
+		return DeciderYou, nil
+	}
+}
+
+// grokCells are xAI Grok Build's six rows (BV-140, CTO-16 Grok §4). Grok reads
+// every file the user can read without asking (machine/nobody). Writing, sending
+// out and the general shell follow its permission mode — its own or the one it
+// inherits from Claude Code: an approve-everything mode or a wildcard allow acts
+// without asking (nobody), auto hands the step to a classifier (model), the
+// default mode asks (you). Every cell rests on launch_flags_not_readable; the
+// changes row notes compat_cell_remote_unknown when a compat cell is unset.
+func (oi overviewInputs) grokCells(v *agentView) []OverviewCell {
+	mode, _ := grokMode(v)
+	incomplete := grokCompatIncomplete(oi.in.Grok)
+	return []OverviewCell{
+		oi.grokReadsCell(v),
+		oi.grokWritesCell(v, mode),
+		oi.grokRunsCell(v, mode),
+		oi.grokSendsCell(v, mode),
+		oi.grokChangesCell(v, incomplete),
+		oi.providerCell(v),
+	}
+}
+
+func (oi overviewInputs) grokReadsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: OriginProductDefault}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = grokBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) grokWritesCell(v *agentView, mode string) OverviewCell {
+	decider, scope, assume := grokWriteDecider(v, mode)
+	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	edit := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			edit++
+		}
+	}
+	cell.Data.EditAllowRules = intp(edit)
+	cell.Data.Assumptions = sortedUnique(grokBaseAssumptions(assume...))
+	cell.Assumed = contains(assume, graph.AssumeAutoClassifierPermits)
+	if decider == DeciderNobody || decider == DeciderModel {
+		r := NoFindingNotAFinding
+		cell.NoFindingReason = &r
+		cell.Data.Excluded = []string{ExcludedProtectedPaths}
+	}
+	return cell
+}
+
+func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
+	decider, assume := grokEscalationDecider(mode)
+	scope := ScopeMachine
+	if decider == DeciderBlocked {
+		scope = ScopeNone
+	}
+	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	pre := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			pre++
+		}
+	}
+	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(pre), intp(0)
+	cell.Data.Assumptions = sortedUnique(grokBaseAssumptions(assume...))
+	cell.Assumed = contains(assume, graph.AssumeAutoClassifierPermits)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) grokSendsCell(v *agentView, mode string) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginConfigured}
+	assume := grokBaseAssumptions()
+	if len(v.egress) > 0 {
+		cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		for _, w := range v.egress {
+			if contains(w.assumptions, graph.AssumeAutoClassifierPermits) {
+				cell.Decider, cell.Assumed = DeciderModel, true
+				assume = append(assume, graph.AssumeAutoClassifierPermits)
+			}
+		}
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		d, a := grokEscalationDecider(mode)
+		cell.Decider, assume = d, grokBaseAssumptions(a...)
+		cell.Scope = ScopeAnyDestination
+		if d == DeciderBlocked {
+			cell.Scope = ScopeNone
+		}
+		cell.Assumed = contains(a, graph.AssumeAutoClassifierPermits)
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// grokChangesCell is Grok's writes to another agent's resources (CTO-16 Grok
+// §5). It rests on compat_cell_remote_unknown when a compat cell is unset,
+// because the cells decide which of Claude Code's and Cursor's files Grok loads
+// and can change.
+func (oi overviewInputs) grokChangesCell(v *agentView, compatIncomplete bool) OverviewCell {
+	base := grokBaseAssumptions()
+	if compatIncomplete {
+		base = append(base, AssumeCompatCellRemoteUnknown)
+	}
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisConfigured}, assumptions: base})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: sortedUnique(base)}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = sortedUnique(base)
+	return cell
 }
 
 func (oi overviewInputs) codexReadsCell(v *agentView) OverviewCell {

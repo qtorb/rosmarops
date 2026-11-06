@@ -877,8 +877,67 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 		v.egress = v.codexEgress()
 		return v
 	}
+	if n.Platform == knowledge.GrokBuildProduct {
+		v.egress = v.grokEgress()
+		return v
+	}
 	v.egress = v.egressWays(base, launchers)
 	return v
+}
+
+// grokMode is Grok Build's effective permission mode from its in-force
+// permission_mode capability (its own [ui] or the Claude Code defaultMode it
+// inherits); "default" (ask) when none is in force (CTO-16 Grok §4).
+func grokMode(v *agentView) (mode string, cap *graph.Node) {
+	var fallback *graph.Node
+	for i := range v.inForce {
+		c := &v.inForce[i]
+		if c.Type != graph.CapPermissionMode {
+			continue
+		}
+		if c.Basis == graph.BasisConfigured {
+			return c.TargetScope, c // a configured mode (its own [ui] or inherited) wins
+		}
+		if fallback == nil {
+			fallback = c
+		}
+	}
+	if fallback != nil {
+		return fallback.TargetScope, fallback
+	}
+	return "default", nil
+}
+
+// grokBypassMode reports a Grok mode that approves everything without asking.
+func grokBypassMode(mode string) bool {
+	switch mode {
+	case "bypassPermissions", "always-approve":
+		return true
+	}
+	return false
+}
+
+// grokEgress are Grok Build's ways to send data out without a person (CTO-16
+// Grok §4): with an approve-everything mode (bypassPermissions, always-approve,
+// yolo) the network and shell send without asking; with auto a classifier
+// decides; a wildcard network allow also sends. The default mode asks, so it is
+// no egress. Every Grok way carries launch_flags_not_readable.
+func (v *agentView) grokEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
+	mode, modeCap := grokMode(v)
+	var out []way
+	switch {
+	case grokBypassMode(mode) && modeCap != nil:
+		out = append(out, way{id: modeCap.ID, code: "egress_network", cap: modeCap.ID, assumptions: append([]string{}, baseA...)})
+	case mode == "auto" && modeCap != nil:
+		out = append(out, way{id: modeCap.ID, code: "egress_auto", cap: modeCap.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeAutoClassifierPermits)})
+	}
+	for _, c := range v.inForce {
+		if c.Type == graph.CapNetwork && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		}
+	}
+	return out
 }
 
 // codexEgress are Codex's ways to send data out without a person (CTO-16 §4):

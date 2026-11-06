@@ -58,9 +58,9 @@ const ReviewedOn = "2026-11-03"
 // agentes, cálculo, T9). A change in any base changes it.
 // The parts are sorted by product (claude-code < cursor < hermes), as
 // CompositeOf sorts them.
-// The parts are sorted by product (claude-code < codex < cursor < hermes), as
-// CompositeOf sorts them.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + HermesProduct + "@" + HermesVersion
+// The parts are sorted by product (claude-code < codex < cursor < grok-build <
+// hermes), as CompositeOf sorts them.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -296,7 +296,7 @@ func GrokBuild() (Base, error) {
 // overview cells (BV-140 pieces c and d); Grok Build joins the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild} {
 		b, err := load()
 		if err != nil {
 			return nil, err
