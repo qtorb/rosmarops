@@ -1,0 +1,56 @@
+{
+  "product": "grok-build",
+  "version": "2026-11-01",
+  "entries": [
+    {
+      "id": "read_accessible",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "any_path",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: read_file, list_dir, grep, web_search and skills are allowed with no folder limit (default mode)"
+    },
+    {
+      "id": "shell_readonly_bash_commands",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "builtin_read_only_bash_commands",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: read-only shell (ls, cat, git log, rg, kubectl get…) runs without asking"
+    },
+    {
+      "id": "shell_default",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: the rest of shell asks the user in the default mode"
+    },
+    {
+      "id": "edit_default",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: editing asks the user in the default mode"
+    },
+    {
+      "id": "web_default",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: web_fetch asks the user in the default mode (not in the read-only list)"
+    },
+    {
+      "id": "builtin_default_mode",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "default",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: the default permission mode is \"default\" (ask)"
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

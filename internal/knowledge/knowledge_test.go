@@ -59,6 +59,31 @@ func TestCodex_LoadsStrictly(t *testing.T) {
 	}
 }
 
+func TestGrokBuild_LoadsStrictly(t *testing.T) {
+	b, err := knowledge.GrokBuild()
+	if err != nil {
+		t.Fatalf("GrokBuild: %v", err)
+	}
+	if b.Product != knowledge.GrokBuildProduct || b.Version != knowledge.GrokBuildVersion {
+		t.Errorf("product/version: got %q/%q, want %q/%q", b.Product, b.Version, knowledge.GrokBuildProduct, knowledge.GrokBuildVersion)
+	}
+	if len(b.Entries) != 6 {
+		t.Errorf("entries: got %d, want 6", len(b.Entries))
+	}
+	if len(b.CodeLaunchers) == 0 {
+		t.Error("Grok Build base lacks the shared code launcher table")
+	}
+	types, approvals := capabilityEnums(t)
+	for _, e := range b.Entries {
+		if !types[e.Type] {
+			t.Errorf("entry %s: type %q is not a capability type of the graph schema", e.ID, e.Type)
+		}
+		if !approvals[e.Approval] {
+			t.Errorf("entry %s: approval %q is not an approval of the graph schema", e.ID, e.Approval)
+		}
+	}
+}
+
 func TestCodex_EntriesUseSchemaEnums(t *testing.T) {
 	types, approvals := capabilityEnums(t)
 	b, err := knowledge.Codex()

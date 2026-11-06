@@ -20,7 +20,8 @@ const (
 	ClaudeCodeProduct = "claude-code"
 	CursorProduct     = "cursor"
 	HermesProduct     = "hermes"
-	CodexProduct      = "codex" // BV-140: OpenAI Codex (CLI and IDE extension)
+	CodexProduct      = "codex"      // BV-140: OpenAI Codex (CLI and IDE extension)
+	GrokBuildProduct  = "grok-build" // BV-140: xAI Grok Build (CLI)
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -37,6 +38,10 @@ const HermesVersion = "2026-10-29"
 
 // CodexVersion is the version of the embedded Codex base (codex.json, BV-140).
 const CodexVersion = "2026-11-01"
+
+// GrokBuildVersion is the version of the embedded Grok Build base
+// (grok-build.json, BV-140).
+const GrokBuildVersion = "2026-11-01"
 
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
@@ -78,6 +83,9 @@ var hermesJSON []byte
 
 //go:embed codex.json
 var codexJSON []byte
+
+//go:embed grok-build.json
+var grokBuildJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -265,10 +273,27 @@ func Codex() (Base, error) {
 	return b, nil
 }
 
+// GrokBuild returns the embedded Grok Build knowledge base (BV-140), with
+// Claude Code's code launcher table (as Cursor, Hermes and Codex reuse it).
+func GrokBuild() (Base, error) {
+	b, err := decode(grokBuildJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != GrokBuildVersion {
+		return Base{}, fmt.Errorf("knowledge base grok-build: version %q, want %q", b.Version, GrokBuildVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated. Codex joins the set with its graph builder, inference and
-// overview cells (BV-140 pieces c and d), so that evaluating it produces valid
-// rows.
+// overview cells (BV-140 pieces c and d); Grok Build joins the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
 	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex} {
