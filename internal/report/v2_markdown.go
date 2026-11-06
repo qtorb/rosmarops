@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
@@ -36,10 +37,11 @@ var staticKeys = []string{
 	"evidence.edges",
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
-	"findings.none", "posture.none", "coverage.none", "legacy.none",
+	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "legacy.none",
 	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
+	"console.title.running", "console.title.question", "console.title.done", "console.title.failed",
 	// BV-43
 	"section.memory", "memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 	"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
@@ -55,7 +57,8 @@ var staticKeys = []string{
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification
 	"console.first_run.detecting", "console.first_run.found", "console.first_run.none", "console.first_run.picker_title",
-	"console.first_run.agents_only", "console.checking", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	"console.first_run.agents_only", "console.checking.one", "console.checking.other", "console.checking.agents_only", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	"html.limit.one", "html.limit.other", "html.limit.reached",
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",
@@ -63,8 +66,10 @@ var staticKeys = []string{
 	"notify.run_failed",
 	// BV-137: the connect window / `rosmarops connect` console texts (4 states)
 	// and the `rosmarops disconnect` confirmation.
-	"connect.q", "connect.text", "connect.yes", "connect.no", "connect.number",
-	"connect.ok", "connect.wait", "connect.done", "connect.expired", "connect.failed",
+	// BV-164: the connect offer no longer shows a number, so connect.number and
+	// connect.wait are gone; connect.yes is now «Save to my space».
+	"connect.q", "connect.text", "connect.yes", "connect.no",
+	"connect.ok", "connect.done", "connect.expired", "connect.failed",
 	"disconnect.done",
 }
 
@@ -107,6 +112,17 @@ func CatalogKeys() []string {
 			// BV-117/BV-121: a title per category (money has an asking
 			// variant), the another-model and vendor sentences, and the action.
 			keys = append(keys, mcpExternalKeys()...)
+			continue
+		}
+		if r == rules.RuleN8NMCPBridge {
+			// BV-175: title, what, and two steps; no generic why.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".what",
+				"finding."+r+".step1", "finding."+r+".step2")
+			continue
+		}
+		if r == rules.RuleN8NKeyWithData {
+			// BV-175: title, what, and one step; no generic why.
+			keys = append(keys, "finding."+r+".title", "finding."+r+".what", "finding."+r+".step1")
 			continue
 		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
@@ -162,9 +178,20 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	local := at.In(loc)
 	w("# %s\n\n", t("report.title", map[string]string{"date": local.Format("2006-01-02")}))
 
-	// 1. Status and scope.
-	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(v.Coverage.ScanErrors)
+	// 1. Status and scope. The global time limit is not a coverage code
+	// (BV-155): it is left out of the gaps and the coverage list, and has its
+	// own line below.
+	scanErrs := make([]string, 0, len(v.Coverage.ScanErrors))
+	for _, s := range v.Coverage.ScanErrors {
+		if s != scan.GlobalTimeoutScope {
+			scanErrs = append(scanErrs, s)
+		}
+	}
+	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs)
 	if !v.Coverage.GraphBuilt {
+		gaps++
+	}
+	if v.Coverage.BinarySkipped > 0 { // BV-186: binary files not opened
 		gaps++
 	}
 	w("%s %s\n\n", statusEmoji(v.Status), t("report.status."+v.Status, nil))
@@ -184,6 +211,20 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		scope += " " + t("report.coverage_gap", map[string]string{"count": strconv.Itoa(gaps)})
 	}
 	w("%s\n\n", scope)
+	// BV-148: when the agent knowledge was last reviewed, and the same stale
+	// warning the HTML shows when the program is more than 14 days older than it.
+	w("%s\n\n", t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
+	if knowledgeOld(local, knowledge.ReviewedOn) {
+		w("%s\n\n", t("html.knowledge.old", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))
+	}
+
+	// The run's time limit, and whether it expired (BV-155, points 3-5).
+	if v.limitMinutes > 0 {
+		w("%s\n\n", cat.Plural("html.limit", v.repos, map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)}))
+	}
+	if v.limitReached {
+		w("%s\n\n", t("html.limit.reached", map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)}))
+	}
 
 	byID := map[string]rules.Finding{}
 	for _, f := range v.Findings {
@@ -203,6 +244,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	} else if f, ok := byID[v.Today.FindingID]; ok && f.Rule == rules.RuleMCPExternalAction {
 		p := findingParams(f) // BV-117/BV-121/BV-124: title, what it means, action
 		w("**%s**\n\n%s\n\n%s\n\n", t(mcpTitleKey(f), p), mcpWhatItMeans(cat, f, p), mcpAction(cat, p))
+	} else if f, ok := byID[v.Today.FindingID]; ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) {
+		p := findingParams(f) // BV-175: title, what, steps
+		w("**%s**\n\n%s\n\n%s", t("finding."+f.Rule+".title", p), t("finding."+f.Rule+".what", p), n8nMarkdownSteps(t, f, p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
 		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
@@ -300,6 +344,17 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), mcpWhatItMeans(cat, f, p))
 			w("#### %s\n\n%s\n\n", t("finding.part.todo", p), mcpAction(cat, p))
+			continue
+		}
+		if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175: title/why/todo(steps)
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t("finding."+f.Rule+".title", p))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding."+f.Rule+".what", p))
+			w("#### %s\n\n%s", t("finding.part.todo", p), n8nMarkdownSteps(t, f, p))
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))
@@ -485,11 +540,14 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	for _, a := range v.Coverage.AgentsUnsupported {
 		w("- `%s` — `%s`\n", untrusted.PlainText(a.Platform), untrusted.PlainText(a.ConfigPath))
 	}
-	for _, s := range v.Coverage.ScanErrors {
+	for _, s := range scanErrs {
 		w("- `%s`\n", untrusted.PlainText(s))
 	}
 	if !v.Coverage.GraphBuilt {
 		w("- `graph.v2.json`\n")
+	}
+	if v.Coverage.BinarySkipped > 0 { // BV-186
+		w("- %s\n", cat.Plural("coverage.binary_skipped", v.Coverage.BinarySkipped, map[string]string{"n": strconv.Itoa(v.Coverage.BinarySkipped)}))
 	}
 	w("\n")
 	// What this system does not check yet: shown here, not a gap (decision
@@ -662,7 +720,26 @@ func findingParams(f rules.Finding) map[string]string {
 			p["script"] = untrusted.PlainText(f.Evidence.Locations[1])
 		}
 	}
+	// BV-175: {server} is the n8n MCP server entry's name, {path} the n8n user
+	// folder; both are data read from disk, sanitized. The key value is never
+	// read, so it never reaches a param.
+	if f.Rule == rules.RuleN8NMCPBridge {
+		p["server"] = untrusted.PlainText(f.Params.Server)
+	}
+	if f.Rule == rules.RuleN8NKeyWithData && len(f.Evidence.Locations) > 0 {
+		p["path"] = untrusted.PlainText(f.Evidence.Locations[0])
+	}
 	return p
+}
+
+// n8nMarkdownSteps is the «What to do» of an n8n finding (BV-175) as a Markdown
+// list: two steps for n8n_mcp_bridge, one for n8n_key_with_data.
+func n8nMarkdownSteps(t func(string, map[string]string) string, f rules.Finding, p map[string]string) string {
+	out := "- " + t("finding."+f.Rule+".step1", p) + "\n"
+	if f.Rule == rules.RuleN8NMCPBridge {
+		out += "- " + t("finding."+f.Rule+".step2", p) + "\n"
+	}
+	return out + "\n"
 }
 
 // projectHookKey is the catalog code for part ("title", "what", "impact" or

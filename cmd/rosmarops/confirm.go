@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -28,10 +29,12 @@ const acceptedCopyName = "config.accepted.json"
 // reports: done together with config_sha256, on acceptance and by
 // rosmarops baseline.
 func writeAcceptedCopy(reportDir string, raw []byte) error {
-	if err := os.MkdirAll(reportDir, 0o700); err != nil {
-		return fmt.Errorf("create report dir %s: %w", reportDir, err)
+	// BV-183: the accepted-config copy lives in data/ inside the reports dir.
+	dir := report.DataDir(reportDir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create report dir %s: %w", dir, err)
 	}
-	if err := os.WriteFile(filepath.Join(reportDir, acceptedCopyName), raw, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, acceptedCopyName), raw, 0o600); err != nil {
 		return fmt.Errorf("write accepted configuration copy: %w", err)
 	}
 	return nil
@@ -167,7 +170,7 @@ func confirmConfig(cn confirmation, cat catalog.Catalog, st *state.State, stPath
 	if err != nil {
 		return false, fmt.Errorf("read config: %w", err)
 	}
-	prev, err := os.ReadFile(filepath.Join(reportDir, acceptedCopyName))
+	prev, err := os.ReadFile(filepath.Join(report.DataDir(reportDir), acceptedCopyName))
 	prevOK := err == nil && hash.Bytes(prev) == st.Integrity.ConfigSHA256
 	t := func(key string, p map[string]string) string { return cat.Text(key, p) }
 	fmt.Fprintln(cn.out, t("console.config_changed", nil))
@@ -178,8 +181,10 @@ func confirmConfig(cn confirmation, cat catalog.Catalog, st *state.State, stPath
 		fmt.Fprintln(cn.out, t("console.config_unconfirmed", nil))
 		return false, nil
 	}
+	ui.question() // BV-151: the window and taskbar show a pending question
 	fmt.Fprint(cn.out, t("console.config_confirm", nil))
 	answer, _ := bufio.NewReader(cn.in).ReadString('\n')
+	ui.running()
 	switch strings.ToLower(strings.TrimSpace(answer)) {
 	case "y", "s":
 	default:

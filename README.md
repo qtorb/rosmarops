@@ -24,7 +24,7 @@ Want to see the report before you run it? Open the [sample report](https://rosma
 1. Download `rosmarops.exe` from the [latest release](https://github.com/qtorb/rosmarops/releases/latest).
 2. Optional, recommended: check it (see [Check the download](#check-the-download)).
 3. Double-click `rosmarops.exe`. It finds your projects on its own; if it finds none, it asks you to choose the folder where you keep them.
-4. The report opens in your browser when it finishes (up to 5 minutes), in your Windows language, with a link to the other language.
+4. The report opens in your browser when it finishes (usually within 5 minutes; with many projects, up to 20), in your Windows language, with a link to the other language.
 
 Run it again after you change something: the report remembers the previous run and tells you which findings are new, still there or no longer observed, which agents or MCP servers are new, and which MCP servers now point somewhere else.
 
@@ -72,7 +72,7 @@ CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o rosmarops-macos-app
 CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o rosmarops-macos-intel ./cmd/rosmarops
 ```
 
-To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and build it with Go 1.24.7, passing the version without the «v» (for v0.1.0: `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.1.0" -o rosmarops.exe ./cmd/rosmarops`). Its SHA-256 matches the one in `SHA256SUMS.txt`.
+To reproduce the released `rosmarops.exe` exactly, check out the release tag in a clean git clone and, with Go 1.24.7, first write the Windows icon and version, then build, passing the version without the «v» (for v0.7.3: `GOTOOLCHAIN=go1.24.7 go run ./tools/winres -version 0.7.3`, then `GOTOOLCHAIN=go1.24.7 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=0.7.3" -o rosmarops.exe ./cmd/rosmarops`). Releases before v0.7.3 need only the second command. Its SHA-256 matches the one in `SHA256SUMS.txt`.
 
 ---
 

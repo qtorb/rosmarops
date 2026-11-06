@@ -98,6 +98,18 @@ type ScanConfig struct {
 	// roots in repoRoots order) once they are known, on the calling
 	// goroutine. The v2 report groups its members by family.
 	OnFamilies func(families [][]string)
+
+	// OnCoverage, when set, is called once at the end with how many
+	// repositories were not reviewed because the global time limit expired:
+	// those never started plus the one interrupted mid-scan (BV-155). A
+	// per-repo timeout is not counted here — that repository was reviewed and
+	// has its own scan_timeout finding.
+	OnCoverage func(notReviewed int)
+
+	// OnBinarySkipped, when set, is called once at the end with how many
+	// tracked files across all repositories were not opened because they are
+	// images, documents or other binary files (BV-186).
+	OnBinarySkipped func(total int)
 }
 
 // perRepoTimeout is the per-repo deadline ScanAllRepos applies. Always
@@ -136,10 +148,11 @@ const (
 
 // repoResult is the outcome of one repository's scan.
 type repoResult struct {
-	status   repoStatus
-	findings []finding.Finding
-	baseline state.RepoBaseline
-	err      error
+	status             repoStatus
+	findings           []finding.Finding
+	baseline           state.RepoBaseline
+	err                error
+	filesSkippedBinary int // BV-186
 }
 
 // ScanAllRepos runs ScanRepo for each entry in repoRoots, enforcing per-repo
@@ -234,8 +247,10 @@ func ScanAllRepos(
 		}
 	}
 	scanned, timedOut, interrupted, notScanned := 0, 0, 0, 0
+	binarySkipped := 0
 	for i, root := range repoRoots {
 		r := results[i]
+		binarySkipped += r.filesSkippedBinary
 		if r.err != nil {
 			scanErrors = append(scanErrors, finding.ScanError{
 				Scope:   "repos:" + root,
@@ -270,6 +285,14 @@ func ScanAllRepos(
 	}
 	slog.Info("repos: scan finished", "configured", len(repoRoots), "scanned", scanned,
 		"timed_out", timedOut, "interrupted", interrupted, "not_scanned", notScanned)
+	if cfg.OnCoverage != nil {
+		// Not reviewed = never started + interrupted mid-scan by the global
+		// deadline (BV-155). A per-repo timeout was reviewed, so it is excluded.
+		cfg.OnCoverage(notScanned + interrupted)
+	}
+	if cfg.OnBinarySkipped != nil {
+		cfg.OnBinarySkipped(binarySkipped)
+	}
 	return allFindings, newBaselines, scanErrors
 }
 
@@ -383,7 +406,7 @@ func scanOneRepo(ctx context.Context, root string, baseline *state.RepoBaseline,
 		slog.Warn("repos: scan failed", "repo", root, "err", err)
 	}
 
-	r := repoResult{status: repoCompleted, findings: repoFindings, baseline: newBL, err: err}
+	r := repoResult{status: repoCompleted, findings: repoFindings, baseline: newBL, err: err, filesSkippedBinary: trace.filesSkippedBinary}
 	switch {
 	case repoCtx.Err() == nil:
 	case errors.Is(context.Cause(repoCtx), errRepoTimeout):

@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
+	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
 	"github.com/qtorb/rosmarops/internal/schemas"
 	"github.com/qtorb/rosmarops/internal/schemaval"
 	"github.com/qtorb/rosmarops/internal/untrusted"
@@ -32,6 +35,70 @@ type SpaceView struct {
 	Keys             []SVKey      `json:"keys"`
 	Changes          []SVChange   `json:"changes"`
 	TopAction        *SVTopAction `json:"top_action"`
+
+	// The optional fields BA-49/BV-158 added so the space keeps what leaves the
+	// report: the score's evolution, how each agent works, what changed and the
+	// analysis details. All optional in the schema; the program always fills
+	// them. None carries any path, machine name or secret.
+	Since    *SVSince     `json:"since"`
+	Weekly   *SVWeekly    `json:"weekly"`
+	Overview []SVOverview `json:"overview"`
+	Analysis *SVAnalysis  `json:"analysis"`
+	CardSVG  *string      `json:"card_svg"`
+
+	// Report is the local report, also in the space (BV-177): the optional
+	// `report` field of space-view.v1. The program always fills it.
+	Report *SVReport `json:"report"`
+}
+
+// SVSince is «since the last check» as the report computes it: whether this run
+// is comparable with the previous one (or the first), the finding counts, the
+// per-agent score changes, and how many agents and MCP servers are new.
+type SVSince struct {
+	Comparable   bool            `json:"comparable"`
+	First        bool            `json:"first"`
+	New          int             `json:"new"`
+	Gone         int             `json:"gone"`
+	Still        int             `json:"still"`
+	ScoreChanges []SVScoreChange `json:"score_changes"`
+	NewAgents    int             `json:"new_agents"`
+	NewMCP       int             `json:"new_mcp"`
+}
+
+// SVScoreChange is one agent whose score changed against the previous run,
+// by its product slug (agents[].id).
+type SVScoreChange struct {
+	AgentID string `json:"agent_id"`
+	From    int    `json:"from"`
+	To      int    `json:"to"`
+}
+
+// SVWeekly is the automatic review's state, and its day and time when it is
+// this computer's own task. It never carries the other copy's path or the
+// executable's path (trust test, BV-158).
+type SVWeekly struct {
+	State string  `json:"state"`
+	Day   *string `json:"day"`
+	Time  *string `json:"time"`
+}
+
+// SVOverview is one agent's «how your agents work», the five verbs split by who
+// decides each one, by the same criteria as the report's summary line.
+type SVOverview struct {
+	AgentID string   `json:"agent_id"`
+	Nobody  []string `json:"nobody"`
+	Model   []string `json:"model"`
+	You     []string `json:"you"`
+	Blocked []string `json:"blocked"`
+}
+
+// SVAnalysis is «how this analysis was made»: the threat-data stamp, when the
+// agents' knowledge was reviewed, and the test/template-key count.
+type SVAnalysis struct {
+	IntelVersion        *string `json:"intel_version"`
+	IntelDate           *string `json:"intel_date"`
+	KnowledgeReviewedOn *string `json:"knowledge_reviewed_on"`
+	TestdataCount       int     `json:"testdata_count"`
 }
 
 // SVAgent is one detected agent: its product slug, name, score and band when
@@ -154,6 +221,7 @@ func BuildSpaceView(v V2, g *graph.Graph, home, version string) (SpaceView, erro
 		// hex (its own pattern), so drop the prefix.
 		hostID = strings.TrimPrefix(g.Provenance.HostID, "host_")
 	}
+	cardCtx := svPickCtx(ctxs)
 	sv := SpaceView{
 		SchemaVersion:    "space-view.v1",
 		RosmaropsVersion: svVersion(version),
@@ -165,8 +233,192 @@ func BuildSpaceView(v V2, g *graph.Graph, home, version string) (SpaceView, erro
 		Keys:             svKeys(g, ctxs),
 		Changes:          svChanges(v, ctxs),
 		TopAction:        svTopAction(v),
+		Since:            svSince(v, cardCtx),
+		Weekly:           svWeekly(v),
+		Overview:         svOverview(v),
+		Analysis:         svAnalysis(v),
+		CardSVG:          svCard(v, cardCtx),
+		Report:           buildReport(v, ctxs, home),
 	}
 	return sv, nil
+}
+
+// svPickCtx returns the English htmlCtx when there is one, else any (the
+// card_svg is one string, written in the source language).
+func svPickCtx(ctxs map[string]htmlCtx) htmlCtx {
+	if c, ok := ctxs[catalog.DefaultLang]; ok {
+		return c
+	}
+	for _, c := range ctxs {
+		return c
+	}
+	return htmlCtx{}
+}
+
+// svProductByAgentID maps an overview agent id to its product slug (agents[].id),
+// the same id svAgents uses, so score_changes and overview point at agents[].
+func svProductByAgentID(v V2) map[string]string {
+	m := map[string]string{}
+	for _, oa := range v.AgentsOverview {
+		id := oa.Product
+		if id == "" {
+			id = oa.AgentID
+		}
+		m[oa.AgentID] = id
+	}
+	return m
+}
+
+// svSince is «since the last check» (BA-49 point 1): comparable/first from the
+// memory, the finding counts as renderSince computes them, the per-agent score
+// changes (max 20), and how many agents and MCP servers are new.
+func svSince(v V2, c htmlCtx) *SVSince {
+	m := v.Memory
+	s := &SVSince{
+		First:        !v.memoryPrev && !v.memoryLost,
+		Comparable:   v.memoryPrev && m.Reason == "",
+		New:          m.Counts[memory.VerdictNew] + m.Counts[memory.VerdictObservedAgain],
+		Gone:         m.Counts[memory.VerdictNoLongerObserved],
+		Still:        m.Counts[memory.VerdictStillObserved],
+		ScoreChanges: []SVScoreChange{},
+		NewAgents:    len(v.NewAgents),
+		NewMCP:       len(v.NewMCP),
+	}
+	slug := svProductByAgentID(v)
+	for _, a := range c.scoredAgents() {
+		cmp := a.Comparison
+		if cmp.Status != index.CompareDirect || cmp.Previous == nil || a.Value == nil || *cmp.Previous == *a.Value {
+			continue
+		}
+		id := slug[a.AgentID]
+		if id == "" {
+			id = a.AgentID
+		}
+		s.ScoreChanges = append(s.ScoreChanges, SVScoreChange{AgentID: id, From: *cmp.Previous, To: *a.Value})
+		if len(s.ScoreChanges) >= 20 {
+			break
+		}
+	}
+	return s
+}
+
+// svWeeklyDay maps scheduledtasks' full English weekday ("friday") to the
+// space view's three-letter code ("fri"); "" for anything else.
+var svWeeklyDay = map[string]string{
+	"monday": "mon", "tuesday": "tue", "wednesday": "wed", "thursday": "thu",
+	"friday": "fri", "saturday": "sat", "sunday": "sun",
+}
+
+// svWeekly is the automatic review's state, with the day and time only when it
+// is this computer's own task. It never carries the other copy's path.
+func svWeekly(v V2) *SVWeekly {
+	w := v.weekly
+	out := &SVWeekly{State: w.State}
+	if out.State != scheduledtasks.WeeklyOwn && out.State != scheduledtasks.WeeklyOther && out.State != scheduledtasks.WeeklyNone {
+		out.State = scheduledtasks.WeeklyNone
+	}
+	if w.State == scheduledtasks.WeeklyOwn {
+		if d := svWeeklyDay[strings.ToLower(w.Day)]; d != "" {
+			out.Day = &d
+		}
+		if w.Time != "" {
+			t := w.Time
+			out.Time = &t
+		}
+	}
+	return out
+}
+
+// svOverview is «how your agents work» for the space (max 20): one entry per
+// overview agent, its five verbs split by who decides each (nobody/model/you/
+// blocked), from the same cells the report's summary line uses. The row and
+// decider codes are exactly the schema's verbs and groups.
+func svOverview(v V2) []SVOverview {
+	slug := svProductByAgentID(v)
+	out := []SVOverview{}
+	for _, oa := range v.AgentsOverview {
+		if len(out) >= 20 {
+			break
+		}
+		id := slug[oa.AgentID]
+		if id == "" {
+			id = oa.AgentID
+		}
+		o := SVOverview{AgentID: id, Nobody: []string{}, Model: []string{}, You: []string{}, Blocked: []string{}}
+		for _, cell := range oa.Rows {
+			bucket := svOverviewBucket(&o, cell.Decider)
+			if bucket == nil {
+				continue // a decider outside the four groups: not shown (never happens with the rules' constants)
+			}
+			if !svContains(*bucket, cell.Row) {
+				*bucket = append(*bucket, cell.Row)
+			}
+		}
+		out = append(out, o)
+	}
+	return out
+}
+
+// svOverviewBucket returns the verb list of o for a decider code, or nil for an
+// unknown one.
+func svOverviewBucket(o *SVOverview, decider string) *[]string {
+	switch decider {
+	case rules.DeciderNobody:
+		return &o.Nobody
+	case rules.DeciderModel:
+		return &o.Model
+	case rules.DeciderYou:
+		return &o.You
+	case rules.DeciderBlocked:
+		return &o.Blocked
+	}
+	return nil
+}
+
+func svContains(xs []string, x string) bool {
+	for _, s := range xs {
+		if s == x {
+			return true
+		}
+	}
+	return false
+}
+
+// svAnalysis is «how this analysis was made»: the threat-data stamp, when the
+// agents' knowledge was reviewed, and the test/template-key count. A missing
+// intel stamp is null; the knowledge date is always known.
+func svAnalysis(v V2) *SVAnalysis {
+	a := &SVAnalysis{TestdataCount: v.TestData.Count}
+	if s := v.Provenance.IntelVersion; s != "" {
+		a.IntelVersion = &s
+	}
+	if s := v.Provenance.IntelPublishedAt; s != "" {
+		a.IntelDate = &s
+	}
+	if s := knowledge.ReviewedOn; s != "" {
+		a.KnowledgeReviewedOn = &s
+	}
+	return a
+}
+
+// svCard is the share card SVG of the lowest-scored agent, the same SVG the
+// report's «Save my card» button saves, for the package's date. It carries
+// nothing of the machine (index.Card's closed list; no_identity_in_card_test).
+// null when no agent has a score.
+func svCard(v V2, c htmlCtx) *string {
+	a, ok := c.scored()
+	if !ok {
+		return nil
+	}
+	day, err := time.Parse(time.RFC3339, v.GeneratedAt)
+	if err != nil {
+		day = time.Now().UTC()
+	}
+	svg, _, ok := index.Card(*a, v.Silenced.Count, day, c.cat)
+	if !ok {
+		return nil
+	}
+	return &svg
 }
 
 // svVersion keeps the major.minor.patch of version (the schema pattern): a

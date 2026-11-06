@@ -26,10 +26,11 @@ type progress struct {
 	last     time.Time
 	open     bool // a repositories line is being rewritten
 	now      func() time.Time
+	bar      *taskbar // BV-151: taskbar progress; nil when off
 }
 
 func newProgress(out io.Writer, terminal bool, cat catalog.Catalog) *progress {
-	return &progress{out: out, terminal: terminal, cat: cat, now: time.Now}
+	return &progress{out: out, terminal: terminal, cat: cat, now: time.Now, bar: ui.taskbar()}
 }
 
 // line prints one progress line, ending a repositories line in progress.
@@ -37,6 +38,13 @@ func (p *progress) line(key string, params map[string]string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.end()
+	// BV-151: the matching taskbar state for the two step lines.
+	switch key {
+	case "console.progress.agents":
+		p.bar.agents()
+	case "console.progress.report":
+		p.bar.report()
+	}
 	fmt.Fprintln(p.out, p.cat.Text(key, params))
 }
 
@@ -61,6 +69,13 @@ func (p *progress) repos(done, total int) {
 	}
 	if t := p.now(); first || last || t.Sub(p.last) >= progressInterval {
 		p.last = t
+		// BV-151: the taskbar percentage, under the same 250 ms limit. The
+		// sequence goes on its own (no newline) before the line is rewritten.
+		pct := 0
+		if total > 0 {
+			pct = done * 100 / total
+		}
+		p.bar.reposPct(pct)
 		fmt.Fprint(p.out, "\r"+text)
 		p.open = true
 		if last {

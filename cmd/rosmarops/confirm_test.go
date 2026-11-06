@@ -10,6 +10,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -81,7 +82,7 @@ func TestConfirmConfig(t *testing.T) {
 			if asked := strings.Contains(text, cat.Text("console.config_confirm", nil)); asked != c.terminal {
 				t.Errorf("%s %q: asked %v", lang, c.answer, asked)
 			}
-			copyRaw, _ := os.ReadFile(filepath.Join(reports, acceptedCopyName))
+			copyRaw, _ := os.ReadFile(filepath.Join(report.DataDir(reports), acceptedCopyName))
 			saved, _ := state.LoadState(stPath)
 			if c.ok {
 				if st.Integrity.ConfigSHA256 != hash.Bytes([]byte(changedConfig)) || string(copyRaw) != changedConfig ||
@@ -101,8 +102,10 @@ func TestConfirmConfig(t *testing.T) {
 func TestConfirmConfig_TamperedCopy(t *testing.T) {
 	cat, _ := catalog.Load("en")
 	for _, tamper := range []func(reports string){
-		func(r string) { _ = os.WriteFile(filepath.Join(r, acceptedCopyName), []byte(changedConfig), 0o600) },
-		func(r string) { _ = os.Remove(filepath.Join(r, acceptedCopyName)) },
+		func(r string) {
+			_ = os.WriteFile(filepath.Join(report.DataDir(r), acceptedCopyName), []byte(changedConfig), 0o600)
+		},
+		func(r string) { _ = os.Remove(filepath.Join(report.DataDir(r), acceptedCopyName)) },
 	} {
 		st, stPath, cfgPath, reports := confirmSetup(t)
 		tamper(reports)

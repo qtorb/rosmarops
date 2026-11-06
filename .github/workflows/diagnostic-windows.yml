@@ -10,13 +10,21 @@ name: diagnostic-windows
 
 on:
   workflow_dispatch:
-  # BV-146: run ONLY the connect-window job on a pull request that touches the
-  # window script or this workflow, so the real Windows GUI check (which cannot
-  # run on Linux) gates those changes. The oracle loop below stays manual — it is
-  # the ~1h job BV-136 moved out of ci.yml, and its own `if` keeps it off PRs.
+    inputs:
+      version:
+        description: "Released version tag to test end-to-end, e.g. v0.7.3 (blank = latest published)"
+        required: false
+        type: string
+  # Run the Windows-only checks (connect-window, BV-146; windows-exe-resources,
+  # BV-149) on a pull request that touches what they cover, so the real-Windows
+  # checks (which cannot run on Linux) gate those changes. The oracle loop below
+  # stays manual — it is the ~1h job BV-136 moved out of ci.yml, and its own `if`
+  # keeps it off PRs.
   pull_request:
     paths:
       - "cmd/rosmarops/connectwindow*.go"
+      - "tools/winres/**"
+      - "assets/windows/**"
       - ".github/workflows/diagnostic-windows.yml"
 
 permissions:
@@ -72,3 +80,114 @@ jobs:
         env:
           ROSMAROPS_CONNECT_WINDOW_SELFTEST_RUN: "1"
         run: go test ./cmd/rosmarops -run '^TestConnectWindowSelfTest$' -count=1 -v
+      # BV-178: render the redesigned window in EN and ES at 100 % and 150 % and
+      # upload the PNGs. Best-effort (continue-on-error): a screenshot hiccup on
+      # the headless runner must not block; the geometry/colour self-test above is
+      # the authoritative check of the design.
+      - name: Connect window screenshots (EN/ES, 100% and 150%)
+        continue-on-error: true
+        env:
+          ROSMAROPS_CONNECT_WINDOW_SHOT_DIR: ${{ github.workspace }}\connect-shots
+        run: |
+          New-Item -ItemType Directory -Force -Path connect-shots | Out-Null
+          go test ./cmd/rosmarops -run '^TestConnectWindowScreenshots$' -count=1 -v
+      - name: Upload connect window screenshots
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: connect-window-screenshots
+          path: connect-shots/*.png
+          if-no-files-found: warn
+
+  # BV-149: on a real Windows build, the .exe must show the rosemary icon and a
+  # Properties version. Generate the resource object, build rosmarops.exe, then
+  # read its VersionInfo and extract its icon with PowerShell. Runs by hand and,
+  # via the pull_request trigger above, on any PR that touches tools/winres,
+  # assets/windows or this workflow.
+  windows-exe-resources:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      VER: "0.7.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Build rosmarops.exe with icon and version
+        run: |
+          go run ./tools/winres -version $env:VER
+          go build -trimpath -ldflags="-X main.version=$env:VER" -o rosmarops.exe ./cmd/rosmarops
+      - name: Check version info and icon
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Resolve-Path .\rosmarops.exe
+          $vi = (Get-Item $exe).VersionInfo
+          if ($vi.ProductName -ne 'RosmarOps') { throw "ProductName = '$($vi.ProductName)'" }
+          if ($vi.ProductVersion -ne $env:VER) { throw "ProductVersion = '$($vi.ProductVersion)'" }
+          if ($vi.OriginalFilename -ne 'rosmarops.exe') { throw "OriginalFilename = '$($vi.OriginalFilename)'" }
+          $copyright = [char]0x00A9 + ' 2026 Albert Garcia Pujadas. AGPL-3.0'
+          if ($vi.LegalCopyright -ne $copyright) { throw "LegalCopyright = '$($vi.LegalCopyright)'" }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          $bmp = $icon.ToBitmap()
+          if ($bmp.Width -ne 32 -or $bmp.Height -ne 32) { throw "icon is $($bmp.Width)x$($bmp.Height), not 32x32 (generic icon?)" }
+          $found = $false
+          for ($y = 0; $y -lt $bmp.Height -and -not $found; $y++) {
+            for ($x = 0; $x -lt $bmp.Width -and -not $found; $x++) {
+              $p = $bmp.GetPixel($x, $y)
+              if (([math]::Abs($p.R - 111) -le 8) -and ([math]::Abs($p.G - 143) -le 8) -and ([math]::Abs($p.B - 120) -le 8)) { $found = $true }
+            }
+          }
+          if (-not $found) { throw 'no rosemary-green (#6F8F78 +/-8) pixel in the icon' }
+          Write-Host "version info and icon OK"
+
+  # BV-157: the realistic post-publish end-to-end check, by hand. Downloads a
+  # published rosmarops.exe (the version input, or the latest release), verifies
+  # its SHA-256, builds the 48-project test computer and runs it, failing if the
+  # report is the red "could not finish" page, the limit line is incoherent, the
+  # expected findings are missing, the sealed package does not open, a full fake
+  # secret leaks, or the process opens any outbound connection. Manual only.
+  e2e-realistic:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Download the published rosmarops.exe and verify its SHA-256
+        shell: pwsh
+        run: |
+          $tag = $env:VERSION
+          if (-not $tag) { $tag = gh release view --repo "$env:GITHUB_REPOSITORY" --json tagName -q .tagName }
+          Write-Host "Testing release $tag"
+          "TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          gh release download "$tag" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
+          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
+          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
+          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+      - name: Build the openpkg helper (before the home is redirected)
+        shell: pwsh
+        run: go build -o openpkg.exe ./tests/e2e/openpkg
+      - name: Realistic end-to-end run on a 48-project computer
+        shell: pwsh
+        run: |
+          $e2eHome = 'C:\Users\e2e'
+          $manifest = Join-Path $env:RUNNER_TEMP 'rosmarops-e2e-manifest.json'
+          $openpkg = (Resolve-Path ./openpkg.exe).Path
+          ./scripts/e2e/make-home.ps1 -HomeDir $e2eHome -Manifest $manifest
+          ./scripts/e2e/run.ps1 -Exe dist/rosmarops.exe -HomeDir $e2eHome -Manifest $manifest -OpenPkg $openpkg

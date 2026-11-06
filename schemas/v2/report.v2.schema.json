@@ -268,7 +268,9 @@
             "own_config_writable",
             "package_known_malicious",
             "project_hook_runs_repo_script",
-            "mcp_external_action"
+            "mcp_external_action",
+            "n8n_mcp_bridge",
+            "n8n_key_with_data"
           ]
         },
         "rule_version": {
@@ -327,6 +329,10 @@
             "count": {
               "type": "integer",
               "minimum": 0
+            },
+            "server": {
+              "type": "string",
+              "description": "n8n_mcp_bridge: the MCP server entry's own name."
             },
             "cred_id": {
               "type": "string",
@@ -655,6 +661,11 @@
             "minLength": 1
           },
           "description": "Scopes of the scan errors of the run."
+        },
+        "binary_skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many tracked files were not opened because they are images, documents or other binary files (BV-186). Omitted when zero."
         }
       }
     },

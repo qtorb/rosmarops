@@ -34,6 +34,15 @@ const CursorVersion = "2026-10-25"
 // BV-111).
 const HermesVersion = "2026-10-29"
 
+// ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
+// knowledge base against the Observatory (BV-148): every Tuesday the new
+// Observatory findings move into these bases and a version goes out. The
+// report shows this date and, when the running program is more than 14 days
+// older than it, warns that the program may be out of date (compared offline
+// against the run's own local date). It is not before any embedded base's
+// Version (checked by tests).
+const ReviewedOn = "2026-11-03"
+
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
 // product and joined with ";" (decision 2026-10-25, cómo trabajan tus

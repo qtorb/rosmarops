@@ -131,10 +131,8 @@ func TestNoise_RealCase(t *testing.T) {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
 		line := htmlEscape(cat.Plural("html.testdata", 4, map[string]string{"count": "4"}))
-		_, meta, _ := strings.Cut(page, `<p class="meta">`)
-		meta, _, _ = strings.Cut(meta, `</p>`)
-		if !strings.Contains(meta, "<br>"+line+"<br>") {
-			t.Errorf("%s: step 1 lacks %q: %s", lang, line, meta)
+		if !strings.Contains(page, `<p>`+line+`</p>`) { // BV-158: in «How this analysis was made»
+			t.Errorf("%s: «How this analysis was made» lacks %q", lang, line)
 		}
 		want := htmlEscape(cat.Text("html.f.cred.title.multi", map[string]string{
 			"cred_name": cat.Text("html.cred.supabase.service_role.name", nil),
@@ -356,7 +354,7 @@ func TestNoise_Wording(t *testing.T) {
 		if !strings.Contains(page, `</p><p class="scale">`+htmlEscape(cat.Text("html.index.scale", nil))+`</p>`) {
 			t.Errorf("%s: no scale under the score's agent line", lang)
 		}
-		if all := htmlEscape(cat.Text("html.step.1.coverage.all", map[string]string{"evaluated": listNames(cat, []string{"Claude Code", "Cursor"})})); !strings.Contains(page, "<br>"+all) {
+		if all := htmlEscape(cat.Text("html.step.1.coverage.all", map[string]string{"evaluated": listNames(cat, []string{"Claude Code", "Cursor"})})); !strings.Contains(page, "<p>"+all+"</p>") {
 			t.Errorf("%s: no coverage line %q", lang, all)
 		}
 		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
@@ -376,7 +374,7 @@ func TestNoise_Wording(t *testing.T) {
 		cov := htmlEscape(cat.Text("html.step.1.coverage", map[string]string{"evaluated": "Claude Code", "pending": "Cursor"}))
 		_, foot, _ := strings.Cut(p1, `<p class="foot">`)
 		foot, _, _ = strings.Cut(foot, `</p>`) // the footer only: the window follows it (v3 §16.2)
-		if !strings.Contains(p1, "<br>"+cov) || strings.Contains(foot, "Cursor") {
+		if !strings.Contains(p1, "<p>"+cov+"</p>") || strings.Contains(foot, "Cursor") {
 			t.Errorf("%s: coverage %q, footer %q", lang, cov, foot)
 		}
 	}

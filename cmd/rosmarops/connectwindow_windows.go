@@ -24,27 +24,32 @@ type connectWindowConfig struct {
 	Text    string `json:"text"`
 	Yes     string `json:"yes"`
 	No      string `json:"no"`
-	Number  string `json:"number"`
-	Wait    string `json:"wait"`
 	Done    string `json:"done"`
 	Expired string `json:"expired"`
 	Failed  string `json:"failed"`
 	OK      string `json:"ok"`
+	// Icon is the path of the running rosmarops.exe, so the window shows its
+	// embedded rosemary icon (BV-178). Empty when it cannot be resolved.
+	Icon string `json:"icon"`
+	// IconFallback is a .ico used when Icon carries none (a test binary): the
+	// repo's assets/windows/rosmarops.ico. Empty in production (the installed
+	// exe always carries the icon).
+	IconFallback string `json:"iconfallback"`
 }
 
 func connectWindowConfigFrom(cat catalog.Catalog) connectWindowConfig {
+	icon, _ := os.Executable()
 	return connectWindowConfig{
 		Title:   "RosmarOps",
 		Q:       cat.Text("connect.q", nil),
 		Text:    cat.Text("connect.text", nil),
 		Yes:     cat.Text("connect.yes", nil),
 		No:      cat.Text("connect.no", nil),
-		Number:  cat.Text("connect.number", nil),
-		Wait:    cat.Text("connect.wait", nil),
 		Done:    cat.Text("connect.done", nil),
 		Expired: cat.Text("connect.expired", nil),
 		Failed:  cat.Text("connect.failed", nil),
 		OK:      cat.Text("connect.ok", nil),
+		Icon:    icon,
 	}
 }
 
@@ -90,47 +95,149 @@ $readmode = $env:ROSMAROPS_CONNECT_WINDOW_READMODE
 # mixing a second reader over the same input is not reliable (its buffer and the
 # host's would split the stream).
 $cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadLine().Trim())) | ConvertFrom-Json
+# BV-178: make the process DPI-aware before any window exists, so the window is
+# crisp at 125/150 % instead of a stretched bitmap. PerMonitorV2 (-4) on Windows
+# 10 1703+; if that is not available, fall back to system-DPI aware. Both are
+# wrapped so a locked-down host (no Add-Type) just keeps the default (the
+# WinForms Add-Type above would already have failed there).
+try {
+  Add-Type -Namespace RO -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value);'
+  [void][RO.Dpi]::SetProcessDpiAwarenessContext([System.IntPtr](-4))
+} catch {
+  try {
+    Add-Type -Namespace RO -Name Dpi2 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    [void][RO.Dpi2]::SetProcessDPIAware()
+  } catch { }
+}
+# BV-178: the RosmarOps look — a white dialog, dark ink, a cobalt primary button
+# and a flat outlined secondary, no grey chrome.
+#
+# One scale mechanism. In production $f is 1 and AutoScaleMode Dpi lets Windows
+# scale the 96-DPI design to the real monitor (fonts, in points, scale with it):
+# this is the single production mechanism. For the CI screenshots a 96-DPI runner
+# cannot drive a real 150 % monitor, so shot mode scales everything by $f
+# manually (fonts AND geometry together) with AutoScaleMode None — a true
+# 100 %/150 % window, not a stretched bitmap.
+$shot = $env:ROSMAROPS_CONNECT_WINDOW_SHOT
+$shotScale = $env:ROSMAROPS_CONNECT_WINDOW_SHOT_SCALE
+$f = 1.0
+if ($shot -and $shotScale) { $f = [double]$shotScale }
+function Px($n) { return [int][math]::Round([double]$n * $f) }
+$cWhite  = [System.Drawing.ColorTranslator]::FromHtml('#FFFFFF')
+$cInk    = [System.Drawing.ColorTranslator]::FromHtml('#1B1A18')
+$cMuted  = [System.Drawing.ColorTranslator]::FromHtml('#4F4C46')
+$cBorder = [System.Drawing.ColorTranslator]::FromHtml('#C9C5BC')
+$cCobalt = [System.Drawing.ColorTranslator]::FromHtml('#2346B8')
+$fTitle  = New-Object System.Drawing.Font('Segoe UI Semibold', [single](15 * $f))
+$fBody   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
+$fBtnP   = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10.5 * $f))
+$fBtnS   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $cfg.title
+if ($shot) { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None }
+else { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi; $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96) }
 $form.TopMost = $true
-$form.FormBorderStyle = 'FixedDialog'
+$form.FormBorderStyle = 'FixedSingle'
 $form.StartPosition = 'CenterScreen'
-$form.ClientSize = New-Object System.Drawing.Size(440, 240)
+$form.BackColor = $cWhite
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), (Px 248))
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
-$script:answered = $false
-function Add-Label($text, $y, $h) {
-  $l = New-Object System.Windows.Forms.Label
-  $l.Text = $text
-  $l.SetBounds(16, $y, 408, $h)
-  $form.Controls.Add($l)
-  return $l
+# Title-bar icon: the rosemary of rosmarops.exe (os.Executable, BV-149's embedded
+# icon), never PowerShell's own process icon. If that path carries no icon (a
+# test binary), fall back to assets/windows/rosmarops.ico.
+$iconSet = $false
+if ($cfg.icon -and (Test-Path -LiteralPath $cfg.icon)) {
+  try { $ic = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon); if ($ic -ne $null) { $form.Icon = $ic; $iconSet = $true } } catch { }
 }
-$ql = Add-Label $cfg.q 14 24
-$ql.Font = New-Object System.Drawing.Font($ql.Font, [System.Drawing.FontStyle]::Bold)
-$tl = Add-Label $cfg.text 44 90
-$numCaption = Add-Label $cfg.number 14 24
-$numCaption.Visible = $false
-$numValue = Add-Label '' 44 48
-$numValue.Font = New-Object System.Drawing.Font($numValue.Font.FontFamily, 32, [System.Drawing.FontStyle]::Bold)
-$numValue.Visible = $false
-$waitl = Add-Label $cfg.wait 96 48
-$waitl.Visible = $false
-$resultl = Add-Label '' 14 120
+if (-not $iconSet -and $cfg.iconfallback -and (Test-Path -LiteralPath $cfg.iconfallback)) {
+  try { $form.Icon = New-Object System.Drawing.Icon($cfg.iconfallback); $iconSet = $true } catch { }
+}
+$script:answered = $false
+# Title (connect.q): Segoe UI Semibold 15, ink, wraps within 424 px.
+$ql = New-Object System.Windows.Forms.Label
+$ql.AutoSize = $true
+$ql.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$ql.Font = $fTitle; $ql.ForeColor = $cInk; $ql.BackColor = $cWhite
+$ql.Text = $cfg.q
+$ql.Location = New-Object System.Drawing.Point((Px 28), (Px 28))
+$form.Controls.Add($ql)
+# Body (connect.text): Segoe UI 10.5, muted, 12 px under the title, 424 wide.
+$tl = New-Object System.Windows.Forms.Label
+$tl.AutoSize = $true
+$tl.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$tl.Font = $fBody; $tl.ForeColor = $cMuted; $tl.BackColor = $cWhite
+$tl.Text = $cfg.text
+$tl.Location = New-Object System.Drawing.Point((Px 28), ($ql.Bottom + (Px 12)))
+$form.Controls.Add($tl)
+# The result text replaces the title/body once connecting starts; same muted
+# body style, at the top-left content origin.
+$resultl = New-Object System.Windows.Forms.Label
+$resultl.AutoSize = $true
+$resultl.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$resultl.Font = $fBody; $resultl.ForeColor = $cMuted; $resultl.BackColor = $cWhite
+$resultl.Location = New-Object System.Drawing.Point((Px 28), (Px 28))
 $resultl.Visible = $false
-$yes = New-Object System.Windows.Forms.Button
-$yes.Text = $cfg.yes
-$yes.SetBounds(248, 198, 84, 28)
-$no = New-Object System.Windows.Forms.Button
-$no.Text = $cfg.no
-$no.SetBounds(340, 198, 84, 28)
-$ok = New-Object System.Windows.Forms.Button
-$ok.Text = $cfg.ok
-$ok.SetBounds(340, 198, 84, 28)
+$form.Controls.Add($resultl)
+# BV-164: the connect offer no longer shows a number. $numValue stays an
+# invisible label, set only so the Windows self-test can prove the reader thread
+# is alive (it echoes NUMLABEL); the person never sees it.
+$numValue = New-Object System.Windows.Forms.Label
+$numValue.AutoSize = $true; $numValue.Visible = $false
+$form.Controls.Add($numValue)
+# The window grows in height if the text needs it; the buttons never wrap.
+$clientH = Px 248
+$minH = $tl.Bottom + (Px 16) + (Px 40) + (Px 28)
+if ($minH -gt $clientH) { $clientH = $minH }
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), $clientH)
+$btnY = $clientH - (Px 28) - (Px 40)
+# A flat button sized to its text (one line) plus 18 px each side, 40 px tall.
+function New-FlatButton($text, $font, $back, $fore, $borderSize, $primary) {
+  $b = New-Object System.Windows.Forms.Button
+  $b.Text = $text
+  $b.Font = $font
+  $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $b.FlatAppearance.BorderSize = $borderSize
+  if ($borderSize -gt 0) { $b.FlatAppearance.BorderColor = $cBorder }
+  $b.BackColor = $back
+  $b.ForeColor = $fore
+  $b.AutoSize = $false
+  $m = [System.Windows.Forms.TextRenderer]::MeasureText($text, $font)
+  $b.Height = Px 40
+  $b.Width = $m.Width + (Px 36)
+  if ($primary) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
+  $form.Controls.Add($b)
+  return $b
+}
+# Primary «Save to my space» (connect.yes), the web's cobalt (--brand #2346B8,
+# ink on hover/press), on the right; secondary «Not now» (connect.no) 12 px to
+# its left.
+$yes = New-FlatButton $cfg.yes $fBtnP $cCobalt $cWhite 0 $true
+$yes.FlatAppearance.MouseOverBackColor = $cInk
+$yes.FlatAppearance.MouseDownBackColor = $cInk
+$no  = New-FlatButton $cfg.no  $fBtnS $cWhite $cInk 1 $false
+$ok  = New-FlatButton $cfg.ok  $fBtnP $cCobalt $cWhite 0 $true
+$ok.FlatAppearance.MouseOverBackColor = $cInk
+$ok.FlatAppearance.MouseDownBackColor = $cInk
+$yes.Location = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $yes.Width), $btnY)
+$no.Location  = New-Object System.Drawing.Point(($yes.Left - (Px 12) - $no.Width), $btnY)
+$ok.Location  = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $ok.Width), $btnY)
 $ok.Visible = $false
-$form.Controls.Add($yes); $form.Controls.Add($no); $form.Controls.Add($ok)
 $form.AcceptButton = $yes
 $form.CancelButton = $no
+if ($shot) {
+  $form.Add_Shown({
+    Start-Sleep -Milliseconds 500
+    $b = $form.Bounds
+    $bmp = New-Object System.Drawing.Bitmap($b.Width, $b.Height)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+    $bmp.Save($shot, [System.Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+    $script:answered = $true
+    $form.Close()
+  })
+}
 # Read the program's state lines without blocking the interface thread (BV-145,
 # BV-146, BV-147). A dedicated runspace reads [Console]::In line by line on its
 # own thread into $q; the UI Timer drains $q and handles each line ("number <N>",
@@ -145,7 +252,6 @@ $script:rs = $null
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 200
 function Show-Result($text) {
-  $waitl.Visible = $false
   $resultl.Text = $text
   $resultl.Visible = $true
   $ok.Visible = $true
@@ -155,10 +261,8 @@ function Handle-Line($line) {
   $parts = ([string]$line).Split(' ', 2)
   switch ($parts[0]) {
     'number' {
-      $numCaption.Visible = $true
+      # BV-164: not shown; $numValue is set only for the self-test's liveness echo.
       $numValue.Text = $parts[1]
-      $numValue.Visible = $true
-      $waitl.Visible = $true
       if ($selftest) { [Console]::Out.WriteLine('NUMLABEL=' + $numValue.Text); [Console]::Out.Flush() }
     }
     'done'    { Show-Result $cfg.done }
@@ -239,6 +343,35 @@ if ($selftest) {
   # while no line has arrived yet (the interface thread is alive). Test only.
   $form.Add_Shown({
     [Console]::Out.WriteLine('SHOWN')
+    [Console]::Out.WriteLine('DPI=' + $form.DeviceDpi)
+    [Console]::Out.WriteLine('CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
+    [Console]::Out.WriteLine('TITLE=' + $ql.Left + ',' + $ql.Top + ',' + $ql.Width + ',' + $ql.Height)
+    [Console]::Out.WriteLine('BODY=' + $tl.Left + ',' + $tl.Top + ',' + $tl.Width + ',' + $tl.Height)
+    [Console]::Out.WriteLine('YES=' + $yes.Left + ',' + $yes.Top + ',' + $yes.Width + ',' + $yes.Height)
+    [Console]::Out.WriteLine('NO=' + $no.Left + ',' + $no.Top + ',' + $no.Width + ',' + $no.Height)
+    [Console]::Out.WriteLine('CLIENTRECT=' + $form.ClientRectangle.Width + ',' + $form.ClientRectangle.Height)
+    [Console]::Out.WriteLine('VIS=' + $yes.Visible + ',' + $no.Visible)
+    [Console]::Out.WriteLine('PT=' + $ql.Font.SizeInPoints + ',' + $tl.Font.SizeInPoints + ',' + $yes.Font.SizeInPoints + ',' + $no.Font.SizeInPoints)
+    [Console]::Out.WriteLine('TEXTW=' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.yes, $fBtnP).Width) + ',' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.no, $fBtnS).Width) + ',' + (Px 36))
+    [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
+    [Console]::Out.WriteLine('FORMBACK=' + $form.BackColor.ToArgb())
+    [Console]::Out.WriteLine('YESBACK=' + $yes.BackColor.ToArgb() + ' YESFORE=' + $yes.ForeColor.ToArgb() + ' YESBORDER=' + $yes.FlatAppearance.BorderSize + ' YESFLAT=' + $yes.FlatStyle + ' YESMOVER=' + $yes.FlatAppearance.MouseOverBackColor.ToArgb() + ' YESMDOWN=' + $yes.FlatAppearance.MouseDownBackColor.ToArgb())
+    [Console]::Out.WriteLine('NOBACK=' + $no.BackColor.ToArgb() + ' NOFORE=' + $no.ForeColor.ToArgb() + ' NOBORDER=' + $no.FlatAppearance.BorderSize + ' NOBORDERCOLOR=' + $no.FlatAppearance.BorderColor.ToArgb() + ' NOFLAT=' + $no.FlatStyle)
+    # Icon: scan the title-bar icon for a rosemary-green (#6F8F78 +/-10) pixel, as
+    # BV-149 does for the exe icon, so the self-test can prove it is not the
+    # generic WinForms/PowerShell icon.
+    $iconRosemary = $false
+    try {
+      $ib = $form.Icon.ToBitmap()
+      for ($yy = 0; $yy -lt $ib.Height -and -not $iconRosemary; $yy++) {
+        for ($xx = 0; $xx -lt $ib.Width -and -not $iconRosemary; $xx++) {
+          $p = $ib.GetPixel($xx, $yy)
+          if (([math]::Abs($p.R - 111) -le 10) -and ([math]::Abs($p.G - 143) -le 10) -and ([math]::Abs($p.B - 120) -le 10)) { $iconRosemary = $true }
+        }
+      }
+      $ib.Dispose()
+    } catch { }
+    [Console]::Out.WriteLine('ICONROSEMARY=' + $iconRosemary)
     [Console]::Out.Flush()
     $script:answered = $true
     Start-Reading
@@ -253,13 +386,14 @@ try {
 } catch { }
 if (-not $script:answered) { [Console]::Out.WriteLine('no'); [Console]::Out.Flush() }`
 
-// maybeConnectWindow shows the connect window on a Windows double click when
-// this computer is not connected, and runs the protocol if the person agrees
-// (BV-137 point 5). Any failure to show the window is logged and ignored: the
-// run goes on, and `rosmarops connect` is always available.
-func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
+// connectOffer shows the connect window on a Windows double click and runs the
+// protocol if the person agrees (BV-137 point 5; BV-158 part 4). Any failure to
+// show the window is logged and ignored (connectNotOffered): the run goes on,
+// and `rosmarops connect` is always available. The caller has already checked
+// that this computer is not connected and that the offer is due.
+func connectOffer(paths spacePaths, cat catalog.Catalog) connectResult {
 	if isSpaceConnected(paths) {
-		return // already connected (permission AND credential): no window
+		return connectNotOffered // already connected (permission AND credential): no window
 	}
 	// PowerShell by absolute path, with PSModulePath narrowed to the system
 	// modules, like the folder picker and the notifier (CTO-15 PR4, BV-93 B4):
@@ -273,15 +407,15 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return
+		return connectNotOffered
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return
+		return connectNotOffered
 	}
 	if err := cmd.Start(); err != nil {
 		slog.Info("connect window not shown", "err", err)
-		return
+		return connectNotOffered
 	}
 	fmt.Fprintln(stdin, connectWindowInput(connectWindowConfigFrom(cat)))
 	run := func(onNumber func(int), onOpen func(string) error) error {
@@ -292,18 +426,18 @@ func maybeConnectWindow(paths spacePaths, cat catalog.Catalog) {
 	// If nobody answers the window within 10 minutes, close it as «Not now»
 	// and let the run go on (CTO-15 PR5). Killing the process closes its
 	// stdout, so driveConnectWindow returns.
-	done := make(chan bool, 1)
+	done := make(chan connectResult, 1)
 	go func() { done <- driveConnectWindow(stdout, stdin, run) }()
+	result := connectDeclined
 	select {
-	case connected := <-done:
-		if connected {
-			slog.Info("connect window: this computer is now connected")
-		}
+	case result = <-done:
 	case <-time.After(10 * time.Minute):
 		slog.Info("connect window: no answer in 10 minutes; closing as «Not now» and continuing")
 		_ = cmd.Process.Kill()
 		<-done
+		result = connectDeclined
 	}
 	_ = stdin.Close()
 	_ = cmd.Wait()
+	return result
 }

@@ -188,7 +188,7 @@ func TestDoubleClickFirstUse(t *testing.T) {
 		t.Errorf("repo_roots\n got %q\nwant %q", cfg.RepoRoots, want)
 	}
 
-	log, err := os.ReadFile(filepath.Join(reports, "last-run-log.txt"))
+	log, err := os.ReadFile(filepath.Join(reports, "data", "last-run-log.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,23 +234,12 @@ func TestDoubleClickFirstUse(t *testing.T) {
 // exists, with its own catalog's text.
 func checkPages(t *testing.T, reports, runLang string) {
 	t.Helper()
-	// The last run's base, from report.html's link.
-	raw, _ := os.ReadFile(filepath.Join(reports, "report.html"))
-	m := regexp.MustCompile(`<a class="lang" href="(report-[^"]+)\.(en|es)\.html"`).FindStringSubmatch(string(raw))
-	if m == nil {
-		t.Fatal("report.html has no language link")
-	}
-	base := m[1]
-	if dated, _ := filepath.Glob(filepath.Join(reports, base+".*.html")); len(dated) != 2 {
-		t.Fatalf("dated pages %v", dated)
-	}
-	if _, err := os.Stat(filepath.Join(reports, base+".html")); err == nil {
-		t.Error("<base>.html is still written")
+	// BV-183: only the three fixed pages are written, with no dated copies.
+	if dated, _ := filepath.Glob(filepath.Join(reports, "report-*.html")); len(dated) != 0 {
+		t.Errorf("dated HTML pages still written: %v", dated)
 	}
 	other := map[string]string{"en": "es", "es": "en"}
-	pages := map[string]string{
-		base + ".en.html": "en", base + ".es.html": "es", "report.en.html": "en", "report.es.html": "es", "report.html": runLang,
-	}
+	pages := map[string]string{"report.en.html": "en", "report.es.html": "es", "report.html": runLang}
 	for name, lang := range pages {
 		raw, err := os.ReadFile(filepath.Join(reports, name))
 		if err != nil {
@@ -261,11 +250,11 @@ func checkPages(t *testing.T, reports, runLang string) {
 			t.Errorf("%s: not in %s", name, lang)
 		}
 		o := other[lang]
-		link := `<a class="lang" href="` + base + "." + o + `.html" hreflang="` + o + `" lang="` + o + `">` + html.EscapeString(catalogOf(t, lang)["html.lang_switch"]) + `</a>`
+		link := `<a class="lang" href="report.` + o + `.html" hreflang="` + o + `" lang="` + o + `">` + html.EscapeString(catalogOf(t, lang)["html.lang_switch"]) + `</a>`
 		if !strings.Contains(page, link) {
 			t.Errorf("%s: no link %s", name, link)
 		}
-		if _, err := os.Stat(filepath.Join(reports, base+"."+o+".html")); err != nil {
+		if _, err := os.Stat(filepath.Join(reports, "report."+o+".html")); err != nil {
 			t.Errorf("%s: link to a missing page", name)
 		}
 	}
@@ -303,7 +292,7 @@ func TestDoubleClickLimit(t *testing.T) {
 	if len(cfg.RepoRoots) != 100 || filepath.Base(cfg.RepoRoots[99]) != "r099" {
 		t.Errorf("%d repo_roots, last %q", len(cfg.RepoRoots), cfg.RepoRoots[len(cfg.RepoRoots)-1])
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "last-run-log.txt"))
+	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", "last-run-log.txt"))
 	if n := strings.Count(string(log), "rule=over_limit"); n != 5 || !strings.Contains(string(log), "count=5 limit=100") {
 		t.Errorf("%d over_limit lines\n%s", n, log)
 	}
@@ -340,7 +329,7 @@ func TestDoubleClickNothingFound(t *testing.T) {
 	if cfg.RepoRoots == nil || len(cfg.RepoRoots) != 0 {
 		t.Errorf("repo_roots %v", cfg.RepoRoots)
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "last-run-log.txt"))
+	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", "last-run-log.txt"))
 	// On macOS the picker opens (here, a fake osascript that cancels):
 	// only «no folder chosen» (BV-102).
 	if (runtime.GOOS != "darwin" && !strings.Contains(string(log), "folder picker not opened")) || !strings.Contains(string(log), "no folder chosen") {

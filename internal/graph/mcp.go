@@ -31,6 +31,7 @@ var clientDisplayNames = map[string]string{
 	agentdirs.Antigravity:   "Antigravity",
 	agentdirs.Hermes:        "Hermes Agent",
 	agentdirs.ClaudeDesktop: "Claude Desktop",
+	agentdirs.N8N:           "n8n", // BV-175: detected by its user folder
 }
 
 // clientDisplayName returns the display name for a client product, never

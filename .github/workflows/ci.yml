@@ -126,3 +126,63 @@ jobs:
       # network checks run.
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+
+  linux-smoke:
+    # BV-165: a real Linux run of the program. It builds the Linux binary, makes
+    # a fake HOME with one file per agent and a repo with a planted secret, runs
+    # init/baseline/run under strace (as the runtime network trust test does),
+    # and checks: exit 0, no AF_INET socket call, the Spanish report exists and
+    # names Claude Code, Cursor and Hermes Agent, no full secret in any output,
+    # and the weekly section (no user systemd on the runner → the no-systemd
+    # text, or the Linux pitch if it is there).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: strace
+        run: sudo apt-get update && sudo apt-get install -y strace
+      - name: Build the Linux binary
+        run: CGO_ENABLED=0 GOOS=linux go build -o "$RUNNER_TEMP/rosmarops" ./cmd/rosmarops
+      - name: Realistic Linux run and checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE="$RUNNER_TEMP/rosmarops"
+          H="$RUNNER_TEMP/smokehome"
+          SECRET="test-SMOKEa1b2c3d4e5f6g7h8i9j0"
+          mkdir -p "$H/.claude" "$H/.cursor" "$H/.config/Code/User" "$H/.hermes" "$H/projects/app"
+          echo '{"permissions":{"allow":["Bash"]}}' > "$H/.claude/settings.json"
+          echo '{"mcpServers":{"db":{"command":"psql"}}}' > "$H/.cursor/mcp.json"
+          echo '{"terminal.integrated.env.linux":{}}' > "$H/.config/Code/User/settings.json"
+          printf 'approvals:\n  mode: smart\n' > "$H/.hermes/config.yaml"
+          printf 'API_KEY=%s\n' "$SECRET" > "$H/projects/app/.env"
+          git -C "$H/projects/app" init -q
+          git -C "$H/projects/app" -c user.email=a@b.c -c user.name=x add -A
+          git -C "$H/projects/app" -c user.email=a@b.c -c user.name=x commit -qm init
+          export HOME="$H" LANG=es_ES.UTF-8
+          "$EXE" init --repos-under "$H/projects"
+          "$EXE" baseline
+          # The run under strace, like the runtime network trust test.
+          trace="$RUNNER_TEMP/run.strace"
+          strace -f -qq -Y -e trace=connect,sendto,sendmsg -o "$trace" "$EXE" run --lang es
+          if grep -q 'AF_INET' "$trace"; then
+            echo "network connection during run:"; grep 'AF_INET' "$trace"; exit 1
+          fi
+          R="$H"/.rosmarops/reports/report.es.html
+          test -s "$R" || { echo "no Spanish report"; exit 1; }
+          for a in "Claude Code" "Cursor" "Hermes Agent"; do
+            grep -qF "$a" "$R" || { echo "report does not name $a"; exit 1; }
+          done
+          if grep -rqF "$SECRET" "$H/.rosmarops"; then
+            echo "full secret leaked into an output"; exit 1
+          fi
+          grep -qE 'no tiene systemd de usuario|Programa una revisión cada viernes' "$R" \
+            || { echo "weekly section missing (no_systemd or linux pitch)"; exit 1; }
+          echo "linux-smoke OK"

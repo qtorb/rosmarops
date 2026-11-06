@@ -23,20 +23,49 @@ const (
 	// MacOSLayout: ~/Library/Application Support and the agents' own
 	// dot folders (LECTURA-101 §2).
 	MacOSLayout
+	// LinuxLayout: $XDG_CONFIG_HOME or ~/.config, and the agents' own dot
+	// folders (BV-165).
+	LinuxLayout
 )
 
-// Current is this system's layout: macOS's on darwin, Windows's elsewhere
-// (Linux keeps the Windows layout, as before M1a).
+// Current is this system's layout: macOS's on darwin, Linux's on linux,
+// Windows's elsewhere.
 func Current() Layout {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return MacOSLayout
+	case "linux":
+		return LinuxLayout
+	default:
+		return WindowsLayout
 	}
-	return WindowsLayout
 }
 
 // appSupport is ~/Library/Application Support (macOS).
 func appSupport(home string) string {
 	return filepath.Join(home, "Library", "Application Support")
+}
+
+// xdgConfig is $XDG_CONFIG_HOME or ~/.config (Linux, XDG Base Directory spec).
+func xdgConfig(home string, env Env) string {
+	if v, ok := lookup(env)("XDG_CONFIG_HOME"); ok && v != "" {
+		return v
+	}
+	return filepath.Join(home, ".config")
+}
+
+// configBase is the per-OS base for the VS Code-style config folders:
+// %APPDATA% on Windows, ~/Library/Application Support on macOS, and
+// $XDG_CONFIG_HOME or ~/.config on Linux.
+func (l Layout) configBase(home string, env Env) string {
+	switch l {
+	case MacOSLayout:
+		return appSupport(home)
+	case LinuxLayout:
+		return xdgConfig(home, env)
+	default:
+		return appData(home, env)
+	}
 }
 
 // Product codes (graph.clientDisplayNames).
@@ -45,6 +74,7 @@ const (
 	Antigravity   = "antigravity"
 	Hermes        = "hermes"
 	ClaudeDesktop = "claude-desktop"
+	N8N           = "n8n" // BV-175: detected by its user folder
 )
 
 // Env reads environment variables; os.LookupEnv outside tests.
@@ -115,7 +145,9 @@ func (l Layout) HermesHome(home string, env Env) string {
 	if v, ok := varDir(env, "HERMES_HOME"); ok {
 		return v
 	}
-	if l == MacOSLayout {
+	// macOS and Linux: ~/.hermes (hermes_constants.py _platform_default_hermes_home,
+	// the non-Windows default). Windows: %LOCALAPPDATA%\hermes.
+	if l == MacOSLayout || l == LinuxLayout {
 		return filepath.Join(home, ".hermes")
 	}
 	return filepath.Join(localAppData(home, env), "hermes")
@@ -134,10 +166,7 @@ func AntigravityUserDir(home string, env Env) string {
 // on Windows, ~/Library/Application Support/Antigravity/User on macOS (VS
 // Code's convention; no official source, LECTURA-101 §2).
 func (l Layout) AntigravityUserDir(home string, env Env) string {
-	if l == MacOSLayout {
-		return filepath.Join(appSupport(home), "Antigravity", "User")
-	}
-	return filepath.Join(appData(home, env), "Antigravity", "User")
+	return filepath.Join(l.configBase(home, env), "Antigravity", "User")
 }
 
 // ClaudeDesktopDir is Claude Desktop's folder on the Windows layout.
@@ -148,20 +177,14 @@ func ClaudeDesktopDir(home string, env Env) string { return WindowsLayout.Claude
 // ~/Library/Application Support/Claude on macOS (modelcontextprotocol docs,
 // LECTURA-101 §2).
 func (l Layout) ClaudeDesktopDir(home string, env Env) string {
-	if l == MacOSLayout {
-		return filepath.Join(appSupport(home), "Claude")
-	}
-	return filepath.Join(appData(home, env), "Claude")
+	return filepath.Join(l.configBase(home, env), "Claude")
 }
 
 // VSCodeUserDir is VS Code's user folder: %APPDATA%\Code\User on Windows,
 // ~/Library/Application Support/Code/User on macOS (vscode-docs, "Settings
 // file locations"; LECTURA-101 §2).
 func (l Layout) VSCodeUserDir(home string, env Env) string {
-	if l == MacOSLayout {
-		return filepath.Join(appSupport(home), "Code", "User")
-	}
-	return filepath.Join(appData(home, env), "Code", "User")
+	return filepath.Join(l.configBase(home, env), "Code", "User")
 }
 
 // ClineDir is Cline's settings folder, under VS Code's global storage of its
@@ -214,11 +237,29 @@ func (l Layout) Detect(home string, env Env) []Present {
 	if p := filepath.Join(hermes, "config.yaml"); exists(p) {
 		out = append(out, Present{Hermes, hermes, p})
 	}
-	desktop := l.ClaudeDesktopDir(home, env)
-	if p := filepath.Join(desktop, "claude_desktop_config.json"); exists(p) {
-		out = append(out, Present{ClaudeDesktop, desktop, p})
+	// Claude Desktop is not offered on Linux (no official Linux build), so it
+	// is not searched there (BV-165).
+	if l != LinuxLayout {
+		desktop := l.ClaudeDesktopDir(home, env)
+		if p := filepath.Join(desktop, "claude_desktop_config.json"); exists(p) {
+			out = append(out, Present{ClaudeDesktop, desktop, p})
+		}
+	}
+	// n8n (BV-175): its user folder, ~/.n8n on every OS, or $N8N_USER_FOLDER/.n8n.
+	if n8n := N8NDir(home, env); isDir(n8n) {
+		out = append(out, Present{N8N, n8n, n8n})
 	}
 	return out
+}
+
+// N8NDir is n8n's user folder: $N8N_USER_FOLDER/.n8n when the variable is set
+// (n8n appends .n8n to it), else ~/.n8n. The same on Windows, macOS and Linux
+// (BV-175). Existence is checked by the caller; nothing here opens a file.
+func N8NDir(home string, env Env) string {
+	if v, ok := lookup(env)("N8N_USER_FOLDER"); ok && v != "" {
+		return filepath.Join(v, ".n8n")
+	}
+	return filepath.Join(home, ".n8n")
 }
 
 // Products is the set of products in present.

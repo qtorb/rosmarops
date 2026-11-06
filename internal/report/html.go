@@ -19,6 +19,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
@@ -138,6 +139,8 @@ details[open]>summary .chev{transform:rotate(90deg)}
 .tchip{font-size:12px;font-weight:600;color:var(--mut);border:1px solid var(--line);padding:1px 8px;border-radius:999px;white-space:nowrap}
 .chip-any{display:inline-block;font-size:13px;font-weight:600;color:var(--red);background:var(--red-bg);padding:3px 9px;border-radius:999px}
 .gain{font-size:15px;font-weight:600}
+.where{font-size:14px;color:var(--mut);line-height:1.6;margin:0 0 12px}
+.where code{background:var(--code);color:var(--ink);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all;user-select:all}
 .tech{font-size:14px;color:var(--mut);margin-top:12px}
 .tech>summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
 .fix{background:var(--bg);border-radius:12px;padding:14px 16px;margin-top:12px}
@@ -222,6 +225,7 @@ type htmlCtx struct {
 	gloss  *int                         // the last help id, g1, g2…
 	exists func(name string) bool       // a file of the reports directory exists
 	rows   map[string]*credRow          // finding id → its row (v3 §12.2)
+	local  time.Time                    // the run's time in the report's timezone (BV-148)
 }
 
 // help is the «i» of term (§4): the button and, right after it, its hidden
@@ -265,9 +269,9 @@ func userPath(file, home, repl string) string {
 }
 
 // langLinks is the link to the same page in each other language (informe
-// HTML v3 §19): the run's dated page, <base>.<lang>.html, which lives next to
-// every page written; the text is the page's own html.lang_switch, written
-// in the target language.
+// HTML v3 §19): the fixed-name page report.<lang>.html, which lives next to
+// report.html in the reports directory (BV-183: no longer the dated page); the
+// text is the page's own html.lang_switch, written in the target language.
 func (c htmlCtx) langLinks() string {
 	var b strings.Builder
 	for _, l := range catalog.Langs() {
@@ -275,7 +279,7 @@ func (c htmlCtx) langLinks() string {
 			continue
 		}
 		fmt.Fprintf(&b, `<a class="lang" href="%s" hreflang="%s" lang="%s">%s</a>`,
-			html.EscapeString(PageName(c.v.base, l)), html.EscapeString(l), html.EscapeString(l), c.t("html.lang_switch", nil))
+			html.EscapeString(LangFileName(l)), html.EscapeString(l), html.EscapeString(l), c.t("html.lang_switch", nil))
 	}
 	return b.String()
 }
@@ -304,7 +308,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	}
 	local := at.In(loc)
 	var sb strings.Builder
-	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists, rows: credRows(v)}
+	c := htmlCtx{v: v, cat: cat, home: home, sb: &sb, score: map[string]*index.AgentIndex{}, gloss: new(int), exists: exists, rows: credRows(v), local: local}
 	for i := range v.Index.Agents {
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
@@ -331,57 +335,25 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.renderStep3(today.ID)
 	c.w(`</div>`)
 
-	// «Your space» (BV-119, AP-17 §2; placement BV-141): full width, right
-	// after the flow and before «How your agents work». Only when connected.
+	// BV-158 part 3: below the flow, in this order.
+	// a) «How to fix it»: the agent-fix block (always).
+	c.renderHowFix(local)
+	// b) «Your space» (always): connected status, or the pitch to connect.
 	c.renderYourSpace()
-
-	// §11 How your agents work: right after the steps.
-	c.renderOverview()
-
-	// §6.1 What we could not read, only with coverage gaps.
-	cov := v.Coverage
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(cov.ScanErrors) > 0 || !cov.GraphBuilt {
-		c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
-		for _, f := range cov.SourcesFailed {
-			code, _, _ := strings.Cut(f.Reason, ": ")
-			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))
-		}
-		for _, a := range cov.AgentsUnsupported {
-			c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(a.ConfigPath)), html.EscapeString(untrusted.PlainText(a.Platform)))
-		}
-		for _, s := range cov.ScanErrors {
-			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(s)))
-		}
-		if !cov.GraphBuilt {
-			c.w(`<li><code>%s</code></li>`, graph.FileName)
-		}
-		c.w(`</ul></div>`)
+	// c) What we could not read, and other signals on this computer (always,
+	// when there are any): never hidden.
+	c.renderCoverage()
+	c.renderSignals()
+	// d) Only when not connected: a folded «More information» with the detail
+	// that left the page (your agents, since the last check, how your agents
+	// work, the automatic check, how this analysis was made). When connected,
+	// all of that is in the space, so none of this is in the report, and the
+	// footer and the old bottom strip are gone with it.
+	if !c.v.SpaceConnected {
+		c.renderMoreInfo(local)
+		c.renderOverviewDialog()
+		c.renderAssumeDialog()
 	}
-
-	// §9.4 Other signals on this computer (adjustment B): the red
-	// technical-report categories, not in the score.
-	if len(v.Signals) > 0 {
-		c.w(`<div class="cov"><h3>%s</h3><p class="note">%s</p><ul class="sig">`, c.t("html.signals.title", nil), c.t("html.signals.note", nil))
-		for _, sg := range v.Signals {
-			n := ""
-			if sg.Count > 1 {
-				n = ` <span class="n">· ` + strconv.Itoa(sg.Count) + `</span>`
-			}
-			fill := "var(--redfill)"
-			if !sg.red {
-				fill = "var(--ambfill)" // a yellow signal (own_task_changed)
-			}
-			c.w(`<li><span class="dot" style="background:%s"></span>%s%s</li>`, fill, c.t("html.signal."+sg.Category, nil), n)
-		}
-		c.w(`</ul></div>`)
-	}
-
-	// §17 The bottom strip: since the last review, the weekly review, fix
-	// it with your agent; the footer with the analysis assumptions.
-	c.renderMore(local)
-	c.renderFoot()
-	c.renderOverviewDialog() // v3 §16.2: at the end of main
-	c.renderAssumeDialog()   // v3 §17.5
 	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS)
 	return sb.String()
 }
@@ -455,27 +427,61 @@ func (c htmlCtx) stepHead(n int, tag, id, title, hint string, arrow bool) {
 	c.w(`</div>`)
 }
 
-// renderYourSpace is the «Your space» section (BV-137 point 7): shown only when
-// this computer is connected to the online space. It says whether the results
-// were sent or are still pending, and links to the space. Its only external URL
-// is the exact https://app.rosmarops.com/space, the one the trust test allows.
-func (c htmlCtx) renderYourSpace() {
-	// Only on a connected computer; otherwise the section is not shown and the
-	// report is as it was before.
-	if !c.v.SpaceConnected {
+// renderCoverage is «What we could not read» (§6.1), only when there are
+// coverage gaps. The global time limit is not a code here (BV-155): step 1
+// carries the limit, so it is left out and the block is absent when nothing
+// else remains.
+func (c htmlCtx) renderCoverage() {
+	cov := c.v.Coverage
+	scanErrs := make([]string, 0, len(cov.ScanErrors))
+	for _, s := range cov.ScanErrors {
+		if s != scan.GlobalTimeoutScope {
+			scanErrs = append(scanErrs, s)
+		}
+	}
+	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
 		return
 	}
-	line := c.t("report.space_pending", nil)
-	switch {
-	case c.v.SpaceSentDate != "":
-		line = c.t("report.space_sent", map[string]string{"date": c.v.SpaceSentDate})
-	case c.v.SpaceRejected:
-		line = c.t("report.space_rejected", nil)
+	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
+	for _, f := range cov.SourcesFailed {
+		code, _, _ := strings.Cut(f.Reason, ": ")
+		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))
 	}
-	c.w(`<section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
-	c.w(`<p>%s</p><a class="spacebtn" href="https://app.rosmarops.com/space">%s</a>`,
-		line, c.t("report.space_button", nil))
-	c.w(`</section>`)
+	for _, a := range cov.AgentsUnsupported {
+		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(a.ConfigPath)), html.EscapeString(untrusted.PlainText(a.Platform)))
+	}
+	for _, s := range scanErrs {
+		c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(s)))
+	}
+	if !cov.GraphBuilt {
+		c.w(`<li><code>%s</code></li>`, graph.FileName)
+	}
+	// BV-186: the binary files not opened, as one line.
+	if cov.BinarySkipped > 0 {
+		c.w(`<li>%s</li>`, html.EscapeString(c.cat.Plural("coverage.binary_skipped", cov.BinarySkipped, map[string]string{"n": strconv.Itoa(cov.BinarySkipped)})))
+	}
+	c.w(`</ul></div>`)
+}
+
+// renderSignals is «Other signals on this computer» (§9.4): the red
+// technical-report categories, not in the score. Never hidden.
+func (c htmlCtx) renderSignals() {
+	if len(c.v.Signals) == 0 {
+		return
+	}
+	c.w(`<div class="cov"><h3>%s</h3><p class="note">%s</p><ul class="sig">`, c.t("html.signals.title", nil), c.t("html.signals.note", nil))
+	for _, sg := range c.v.Signals {
+		n := ""
+		if sg.Count > 1 {
+			n = ` <span class="n">· ` + strconv.Itoa(sg.Count) + `</span>`
+		}
+		fill := "var(--redfill)"
+		if !sg.red {
+			fill = "var(--ambfill)" // a yellow signal (own_task_changed)
+		}
+		c.w(`<li><span class="dot" style="background:%s"></span>%s%s</li>`, fill, c.t("html.signal."+sg.Category, nil), n)
+	}
+	c.w(`</ul></div>`)
 }
 
 // renderStep1 is v3 §3: your situation.
@@ -546,60 +552,52 @@ func (c htmlCtx) renderStep1() {
 		counts = "html.step.1.counts.multi"
 	}
 	c.w(`%s`, c.t(counts, map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
-	if n := v.Silenced.Count; n > 0 {
-		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
-	}
-	if n := v.TestData.Count; n > 0 { // v3 §12.1
-		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.testdata", n, map[string]string{"count": strconv.Itoa(n)})))
-	}
-	if n := v.HiddenCount(); n > 0 { // B9: what the configuration hides
-		c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
-	}
-	c.w(`<br>%d %s`, v.repos, c.t("html.count.repos", nil))
-	// Which agents are evaluated, and which detected but not yet (v3 §13.1).
-	if ev := v.Index.Scope.Evaluated; len(ev) > 0 {
-		if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 {
-			c.w(`<br>%s`, c.t("html.step.1.coverage", map[string]string{"evaluated": listNames(c.cat, ev), "pending": listNames(c.cat, ne)}))
-		} else {
-			c.w(`<br>%s`, c.t("html.step.1.coverage.all", map[string]string{"evaluated": listNames(c.cat, ev)}))
-		}
-	} else if ne := v.Index.Scope.NotEvaluated; len(ne) > 0 { // U12: detected, none evaluated
-		c.w(`<br>%s`, c.t("html.step.1.coverage.none", map[string]string{"pending": listNames(c.cat, ne)}))
-	}
-	if scored {
-		switch cmp := a.Comparison; cmp.Status {
-		case index.CompareDirect:
-			if *cmp.Previous == *a.Value {
-				c.w(`<br>%s`, c.t("html.index.unchanged", nil))
-			} else {
-				c.w(`<br>%s`, c.t("html.index.delta", map[string]string{"prev": strconv.Itoa(*cmp.Previous), "now": strconv.Itoa(*a.Value)}))
-			}
-			if d := cmp.MethodDelta; d != nil && *d != 0 {
-				c.w(` %s`, c.t("html.index.method_change", map[string]string{"delta": fmt.Sprintf("%+d", *d)}))
-			}
-		case index.CompareNotComparableRules:
-			c.w(`<br>%s`, c.t("html.index.not_comparable.rules", nil))
-		case index.CompareNotComparableScope:
-			c.w(`<br>%s`, c.t("html.index.not_comparable.scope", map[string]string{"prev": strconv.Itoa(cmp.PrevRepos), "now": strconv.Itoa(cmp.NowRepos)}))
-		}
-	}
-	// The other evaluated agents, by score (v3 §3 point 6).
-	if scored {
-		for _, o := range c.scoredAgents()[1:] {
-			c.w(`<br>%s`, c.t("html.step.1.other", map[string]string{"agent": o.Agent, "score": strconv.Itoa(*o.Value), "band": c.cat.Text("band."+o.Band, nil)}))
-		}
-	}
-	switch {
-	case v.Index.HistoryReset:
-		c.w(`<br>%s`, c.t("html.history.reset", nil))
-	case v.historyMissing: // B8: RosmarOps ran before, the history is gone
-		c.w(`<br>%s`, c.t("html.history.missing", nil))
-	}
+	// BV-158 part 2: the meta block is only these two lines — the counts above
+	// and the projects-checked line (which replaces html.count.repos and the
+	// old limit line). Everything else that used to sit here (test-data keys,
+	// coverage, the score comparison, the other agents, knowledge-reviewed, the
+	// silenced and history notes) leaves step 1: what the report keeps now lives
+	// in «More information» (and in your space), the rest is gone.
+	c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.meta.projects", v.repos,
+		map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})))
 	c.w(`</p>`)
+	// BV-158: the silenced counts are not dropped — they are warnings after the
+	// two-line meta block, like the others (never in the block). Test data first,
+	// then what the configuration hides; nothing when the count is 0.
+	if n := v.Silenced.Count; n > 0 {
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Plural("html.silenced", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
+	if n := v.HiddenCount(); n > 0 {
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
+	}
+	if v.limitReached { // BV-155: the global time limit expired before every project was checked
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Text("html.limit.reached",
+			map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)})))
+	}
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
 		c.w(`<p class="meta warn">%s</p>`, c.t("html.integrity.not_checked", nil))
 	}
+	// BV-148: the program's knowledge is more than 14 days older than its last
+	// review — it may miss newer agent behaviour. Compared offline, against the
+	// run's own local date; no URL (the report carries none).
+	if knowledgeOld(c.local, knowledge.ReviewedOn) {
+		c.w(`<p class="meta warn">%s</p>`, c.t("html.knowledge.old", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
+	}
 	c.w(`</section>`)
+}
+
+// knowledgeOld reports whether the run's local date is more than 14 days after
+// reviewedOn (BV-148): 14 days exactly is not old, 15 is. Dates are compared as
+// calendar days, so the time of day and the timezone offset do not matter.
+func knowledgeOld(local time.Time, reviewedOn string) bool {
+	r, err := time.Parse("2006-01-02", reviewedOn)
+	if err != nil {
+		return false
+	}
+	day := func(t time.Time) time.Time {
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	return day(local).Sub(day(r)) > 14*24*time.Hour
 }
 
 // gitEnvHelp is the «i» env after cred_in_git's impact, only when the key
@@ -703,6 +701,13 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
 		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
 			c.title(f), c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
+		return
+	}
+	if ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) { // BV-175: why, then the steps
+		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
+		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p>%s</div></section>`,
+			c.title(f), c.impact(f), c.n8nSteps(f))
 		return
 	}
 	if !found {
@@ -847,8 +852,13 @@ func (c htmlCtx) renderStep3(todayID string) {
 // verdict as text; open, the card body of v1 §3.6.
 func (c htmlCtx) renderRow(f rules.Finding) {
 	p := c.params(f)
-	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s"><p>%s%s</p>`,
-		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID), c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
+	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s">`,
+		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID))
+	// BV-153: the file each finding is in, on the card's first line, so a
+	// person can check it without opening «Technical details» (which is
+	// unchanged). Same locations the «Where» line shows there.
+	c.whereLine(c.rowLocations(f))
+	c.w(`<p>%s%s</p>`, c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
 	}
@@ -868,6 +878,8 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f)))) // BV-107
 	} else if f.Rule == rules.RuleMCPExternalAction {
 		c.w(`<p>%s</p>`, html.EscapeString(mcpAction(c.cat, c.params(f)))) // BV-124: the «what to do»
+	} else if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData {
+		c.w(`%s`, c.n8nSteps(f)) // BV-175: the steps
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
 	} else {
@@ -950,6 +962,33 @@ func (c htmlCtx) renderMultiRow(f rules.Finding) {
 		c.w(`</ul>`)
 	}
 	c.w(`</details></div></details>`)
+}
+
+// rowLocations are the locations the card's «Found in» line shows for a
+// finding (BV-153): a merged row's combined, deduplicated list (the same one
+// renderMultiRow builds for «Technical details»), or a single finding's own.
+func (c htmlCtx) rowLocations(f rules.Finding) []string {
+	if c.multi(f) {
+		var locs []string
+		for _, m := range c.members(f) {
+			locs = append(locs, m.Evidence.Locations...)
+		}
+		return uniqueSorted(locs)
+	}
+	return f.Evidence.Locations
+}
+
+// whereLine writes the card's «Found in» line: the first location in a
+// <code>, then how many more (BV-153). Nothing when there is no location.
+func (c htmlCtx) whereLine(locs []string) {
+	if len(locs) == 0 {
+		return
+	}
+	c.w(`<p class="where">%s <code>%s</code>`, c.t("html.where", nil), html.EscapeString(untrusted.PlainText(locs[0])))
+	if len(locs) > 1 {
+		c.w(` %s`, c.t("html.tech.more", map[string]string{"count": strconv.Itoa(len(locs) - 1)}))
+	}
+	c.w(`</p>`)
 }
 
 // where is the «Where» line's locations: the first five, then how many
@@ -1177,6 +1216,18 @@ func (c htmlCtx) credKey(f rules.Finding) string {
 // title is the finding's title (§4), escaped.
 func (c htmlCtx) title(f rules.Finding) string { return html.EscapeString(c.titleText(f)) }
 
+// n8nSteps is the «what to do» of an n8n finding (BV-175) as an HTML list: two
+// steps for n8n_mcp_bridge, one for n8n_key_with_data. Each step text is
+// escaped by c.t.
+func (c htmlCtx) n8nSteps(f rules.Finding) string {
+	p := c.params(f)
+	out := `<ul><li>` + c.t("finding."+f.Rule+".step1", p) + `</li>`
+	if f.Rule == rules.RuleN8NMCPBridge {
+		out += `<li>` + c.t("finding."+f.Rule+".step2", p) + `</li>`
+	}
+	return out + `</ul>`
+}
+
 // malParams are the catalog params of a package_known_malicious finding (BV-100).
 func malParams(f rules.Finding) map[string]string { return findingParams(f) }
 
@@ -1190,6 +1241,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121
 		return c.cat.Text(mcpTitleKey(f), c.params(f))
+	}
+	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
+		return c.cat.Text("finding."+f.Rule+".title", c.params(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
@@ -1278,6 +1332,9 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	if f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124
 		return mcpWhatItMeans(c.cat, f, c.params(f))
 	}
+	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
+		return c.cat.Text("finding."+f.Rule+".what", c.params(f))
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
 		if f.Params.HasRemote != nil && *f.Params.HasRemote {
@@ -1311,13 +1368,16 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 func HTMLKeys() []string {
 	keys := []string{
 		"html.doc_title", "html.header", "html.header_sent", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
-		"html.index.of", "html.index.name", "html.index.perfect", "html.index.delta", "html.index.not_comparable.rules",
-		"html.index.not_comparable.scope", "html.index.unavailable",
+		"html.index.of", "html.index.name", "html.index.perfect", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
 		"html.card.button", "html.card.counts", "html.card.method",
-		"html.count.repos", "html.none",
+		"html.none",
+		"html.meta.projects.one", "html.meta.projects.other", // BV-158: the step-1 projects/limit line
+		"html.limit.one", "html.limit.other", "html.limit.reached",
+		"html.knowledge.reviewed", "html.knowledge.old", // BV-148
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
+		"html.where",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",
 		"html.unknown.body", "html.coverage.title", "html.coverage.body",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
@@ -1325,13 +1385,13 @@ func HTMLKeys() []string {
 		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.open.macos", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
 		"html.fix.remove", "html.agent.prompt.merge", "html.agent.prompt.create",
 		"html.after.full", "html.after.radius", "html.after.partial",
-		"html.history.reset", "html.today.projection",
+		"html.today.projection",
 		"html.f.cred.others.one", "html.f.cred.others.other",
 		// v2
-		"html.index.unchanged", "html.legacy.pointer",
+		"html.legacy.pointer",
 		"html.ai.copy", "html.ai.download",
-		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.limits.macos", "ai.more",
-		"html.memory.first", "html.memory.lost", "html.history.missing", // B8
+		"ai.instruction", "ai.what", "ai.untrusted_data", "ai.today", "ai.findings", "ai.limits", "ai.limits.macos", "ai.limits.linux", "ai.more",
+		"html.memory.first", "html.memory.lost", // B8
 		"memory.counts", "memory.not_comparable", "memory.moved", "memory.no_longer_observed.line",
 		"memory.reason." + memory.ReasonRulesChanged, "memory.reason." + memory.ReasonScopeChanged, "memory.reason." + memory.ReasonSaltChanged,
 		"memory.reason." + memory.ReasonMemoryLost,
@@ -1346,10 +1406,11 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
 		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
-		"html.signals.title", "html.signals.note", "html.index.method_change")
+		"html.signals.title", "html.signals.note")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
-	// BV-94, B9: what the configuration hides
+	// BV-94, B9: what the configuration hides (shown as a warning in step 1,
+	// BV-158)
 	keys = append(keys, "html.silenced.config.one", "html.silenced.config.other")
 	// BV-55: the memory fold's label (v3 §6.2)
 	keys = append(keys, "html.memory.more.one", "html.memory.more.other")
@@ -1371,6 +1432,10 @@ func HTMLKeys() []string {
 	// BV-119: the «Your space» section (AP-17 §2); BV-132: shown only with a
 	// key, so report.space_no_kit is gone.
 	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_rejected", "report.space_button")
+	// BV-158 part 3: the always-shown «Your space» copy (connected and not) and
+	// the folded «More information» (not connected).
+	keys = append(keys, "report.space_has", "report.space_pitch", "report.space_next", "report.space_create",
+		"html.more.title", "html.more.agents", "html.more.analysis")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {
@@ -1383,8 +1448,9 @@ func HTMLKeys() []string {
 		keys = append(keys, "html.signal."+sg)
 	}
 	for _, r := range rules.AllRules {
-		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction {
-			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117)
+		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction ||
+			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData {
+			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117, BV-175)
 		}
 		keys = append(keys, "html.headline."+r)
 	}
@@ -1425,6 +1491,12 @@ func HTMLKeys() []string {
 	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
 		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",
 		"finding.project_hook_runs_repo_script.impact", "finding.project_hook_runs_repo_script.fix")
+	// BV-175: the two n8n findings render with their finding.* texts (title,
+	// what, and the steps). Translated, so not in LegacyHTMLKeys.
+	keys = append(keys, "finding.n8n_mcp_bridge.title", "finding.n8n_mcp_bridge.what",
+		"finding.n8n_mcp_bridge.step1", "finding.n8n_mcp_bridge.step2",
+		"finding.n8n_key_with_data.title", "finding.n8n_key_with_data.what",
+		"finding.n8n_key_with_data.step1")
 	sort.Strings(keys)
 	return keys
 }
@@ -1500,11 +1572,12 @@ var LegacyHTMLKeys = map[string]bool{
 }
 
 // WriteHTMLPages writes the visual report to dir in every catalog language
-// (decision 2026-10-27, primer uso con un solo .exe, U7): <base>.<lang>.html
-// and report.<lang>.html for each, and report.html in the run's language,
-// the page that opens. It returns report.html's path. All of them are in the
-// reports directory.
-func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir, base string) (string, error) {
+// (decision 2026-10-27, primer uso con un solo .exe, U7; BV-183): the
+// fixed-name report.<lang>.html for each language, and report.html in the
+// run's language, the page that opens. The dated <base>.<lang>.html copies are
+// no longer written, so the reports directory shows only the three pages. It
+// returns report.html's path. All of them are in the reports directory.
+func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir string) (string, error) {
 	exists := func(name string) bool {
 		_, err := os.Stat(filepath.Join(dir, filepath.Base(name)))
 		return err == nil
@@ -1522,9 +1595,6 @@ func WriteHTMLPages(v V2, runLang, home string, loc *time.Location, dir, base st
 			return "", fmt.Errorf("html report: %w", err)
 		}
 		page := []byte(renderHTML(v, cat, home, loc, exists))
-		if err := write(PageName(base, l), page); err != nil {
-			return "", err
-		}
 		if err := write(LangFileName(l), page); err != nil {
 			return "", err
 		}

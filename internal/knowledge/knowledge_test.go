@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/schemas"
@@ -139,5 +140,23 @@ func TestComposite(t *testing.T) {
 	bases[knowledge.CursorProduct] = c
 	if knowledge.CompositeOf(bases) == knowledge.Composite {
 		t.Error("a change in cursor.json does not change the composite")
+	}
+}
+
+// BV-148: ReviewedOn is a valid date and is not before any embedded base's
+// Version — the weekly review covers every base it ships.
+func TestReviewedOn(t *testing.T) {
+	bases, err := knowledge.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := time.Parse("2006-01-02", knowledge.ReviewedOn); err != nil {
+		t.Fatalf("ReviewedOn %q is not a YYYY-MM-DD date: %v", knowledge.ReviewedOn, err)
+	}
+	for _, b := range bases {
+		// Dates in YYYY-MM-DD compare correctly as strings.
+		if knowledge.ReviewedOn < b.Version {
+			t.Errorf("ReviewedOn %q is before %s base version %q", knowledge.ReviewedOn, b.Product, b.Version)
+		}
 	}
 }

@@ -99,7 +99,6 @@ func TestCTO7Report(t *testing.T) {
 			htmlEscape(cat.Text("html.agent.prompt.rotated", map[string]string{"file": "%USERPROFILE%/.rosmarops/config.json"})),
 			credID, `&#34;note&#34;: &#34;&#34;`,
 			htmlEscape(cat.Text("html.fix.copy.rotated", nil)), // v3 §15.1
-			htmlEscape(cat.Plural("html.silenced", 1, map[string]string{"count": "1"})),
 			`<h3>` + htmlEscape(cat.Text("html.signals.title", nil)) + `</h3>`,
 			htmlEscape(cat.Text("html.signal.git_hook_with_network", nil)) + ` <span class="n">· 2</span>`,
 			htmlEscape(cat.Text("html.signal.av_exclusion_new", nil)) + `</li>`,

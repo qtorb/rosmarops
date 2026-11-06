@@ -244,15 +244,15 @@ func TestIntegrityBeforeConfig_LogInDefaultDir(t *testing.T) {
 	if _, err := runWith("en", runMode{unattended: true}); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(defaultReports, ScheduledLogName)); err != nil {
+	if _, err := os.Stat(filepath.Join(report.DataDir(defaultReports), ScheduledLogName)); err != nil {
 		t.Errorf("scheduled log not in the default report dir: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(customReports, ScheduledLogName)); err == nil {
+	if _, err := os.Stat(filepath.Join(report.DataDir(customReports), ScheduledLogName)); err == nil {
 		t.Error("scheduled log written to the config's report dir before integrity was verified")
 	}
 	// The report itself does go to the configured directory (used after the
 	// integrity check passed).
-	if _, err := os.Stat(filepath.Join(customReports, "report.v2.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(report.DataDir(customReports), "report.v2.json")); err != nil {
 		t.Errorf("report not written to the configured dir: %v", err)
 	}
 }

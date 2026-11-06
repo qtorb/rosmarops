@@ -43,8 +43,13 @@ func TestInitAndRunWithoutRepos(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run: exit %d\n%s%s", code, out, errOut)
 	}
-	for _, f := range []string{"report.html", "report.v2.json", "graph.v2.json"} {
-		if _, err := os.Stat(filepath.Join(home, ".rosmarops", "reports", f)); err != nil {
+	reports := filepath.Join(home, ".rosmarops", "reports")
+	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
+		t.Errorf("no report.html: %v", err)
+	}
+	// BV-183: everything but the HTML pages is in data/.
+	for _, f := range []string{"report.v2.json", "graph.v2.json"} {
+		if _, err := os.Stat(filepath.Join(reports, "data", f)); err != nil {
 			t.Errorf("no %s: %v", f, err)
 		}
 	}

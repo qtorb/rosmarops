@@ -13,6 +13,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -36,6 +37,8 @@ func (a asker) ask(key string) bool {
 	if !a.terminal {
 		return false
 	}
+	ui.question() // BV-151: the window and taskbar show a pending question
+	defer ui.running()
 	fmt.Fprint(a.out, a.cat.Text(key, nil))
 	answer, _ := bufio.NewReader(a.in).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(answer)) {
@@ -204,6 +207,8 @@ func (d *deferredLog) attach(dir string) error {
 	if d.file != nil || d.closed {
 		return nil
 	}
+	// BV-183: the run logs live in data/ inside the reports directory.
+	dir = report.DataDir(dir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create report dir %s: %w", dir, err)
 	}

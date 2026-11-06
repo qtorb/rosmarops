@@ -131,17 +131,15 @@ Copy-Item -Path (Join-Path $reports 'report.es.html') -Destination $published.es
 # The links of the published pages: the language link goes to the other
 # published page (exactly one replacement per page), and any other relative
 # href, to a file that is not published (.md, .json, .ai.md…), loses its
-# href and keeps its text. Nothing else in the HTML changes.
-$v1Files = @(Get-ChildItem -Path $reports -Filter 'report-*.json')
-if ($v1Files.Count -ne 1) { throw "$($v1Files.Count) report-*.json in $reports, want 1" }
-$base = $v1Files[0].BaseName # report-<date>__<STATUS>__<counts>, the pages' base
+# href and keeps its text. Nothing else in the HTML changes. (BV-183: the
+# language link is now the fixed report.<lang>.html, not a dated page.)
 $unlinked = [System.Collections.Generic.List[string]]::new()
 foreach ($lang in $published.Keys) {
     $other = if ($lang -eq 'en') { 'es' } else { 'en' }
     $page = [System.IO.File]::ReadAllText($published[$lang])
-    $from = "href=`"$base.$other.html`""
+    $from = "href=`"report.$other.html`""
     $count = [regex]::Matches($page, [regex]::Escape($from)).Count
-    if ($count -ne 1) { throw "sample-report.$lang.html: $count language links to $base.$other.html, want 1" }
+    if ($count -ne 1) { throw "sample-report.$lang.html: $count language links to report.$other.html, want 1" }
     $page = $page.Replace($from, "href=`"sample-report.$other.html`"")
     $page = [regex]::Replace($page, '\shref="(?![a-zA-Z][a-zA-Z0-9+.-]*:|#|//|sample-report\.(?:en|es)\.html")([^"]*)"', {
             param($m)
@@ -170,7 +168,7 @@ foreach ($lang in $published.Keys) {
 # --- The checks ------------------------------------------------------------
 
 $failures = [System.Collections.Generic.List[string]]::new()
-$v2 = Get-Content -Raw -Path (Join-Path $reports 'report.v2.json') | ConvertFrom-Json
+$v2 = Get-Content -Raw -Path (Join-Path $reports 'data\report.v2.json') | ConvertFrom-Json
 $enHTML = [System.IO.File]::ReadAllText((Join-Path $OutDir 'sample-report.en.html'))
 
 Write-Output 'Findings (report.v2.json):'
@@ -194,7 +192,7 @@ foreach ($e in $expected) {
 # 1b. Another agent can change shop-api's CLAUDE.md: a
 # foreign_agent_instructions_writable finding whose evidence holds that file
 # (its node in graph.v2.json), shown in the English HTML.
-$graph = Get-Content -Raw -Path (Join-Path $reports 'graph.v2.json') | ConvertFrom-Json
+$graph = Get-Content -Raw -Path (Join-Path $reports 'data\graph.v2.json') | ConvertFrom-Json
 $claudeMD = Join-Path $SampleHome 'projects\shop-api\CLAUDE.md'
 $claudeMDNodes = @($graph.nodes | Where-Object { $_.PSObject.Properties['path'] -and $_.path -eq $claudeMD } | ForEach-Object { $_.id })
 $onClaudeMD = $v2.findings | Where-Object {
@@ -225,8 +223,8 @@ foreach ($f in $outputs) {
 # packages, shell profiles or VS Code extensions. Those are older checks:
 # the technical report (.md, .json) lists them, the HTML has no section for
 # them, and only the HTML is published.
-$v1 = $v1Files[0]
-$machine = @((Get-Content -Raw -Path $v1.FullName | ConvertFrom-Json).findings |
+$v1Path = Join-Path $reports 'data\report.json'
+$machine = @((Get-Content -Raw -Path $v1Path | ConvertFrom-Json).findings |
         Where-Object { $_.category -match '^(av_exclusion|scheduled_task|global_package|npmrc|shell_profile|vscode_extension)' })
 Write-Output "Findings from the runner in the technical report, not published: $($machine.Count)"
 $machine | ForEach-Object { Write-Output "  $($_.category): $($_.title)" }

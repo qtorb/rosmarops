@@ -40,7 +40,7 @@ func TestRenderHTML_DetectedNoneEvaluated(t *testing.T) {
 
 		page := renderHTML(t, lang, only)
 		if !strings.Contains(page, `<div class="unavail">`+unavailable(index.ReasonAgentsNotEvaluated)+`</div>`) ||
-			!strings.Contains(page, `<br>`+listed+`</p>`) || strings.Contains(page, notApplicable) {
+			!strings.Contains(page, `<p>`+listed+`</p>`) || strings.Contains(page, notApplicable) {
 			t.Errorf("%s: only Copilot: reason or list wrong", lang)
 		} else {
 			t.Logf("%s, only Copilot: %q · %q", lang, cat.Text("html.index.unavailable", map[string]string{"reason": cat.Text("html.index.reason.agents_not_evaluated", nil)}),

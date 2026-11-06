@@ -66,12 +66,14 @@ type V2 struct {
 	NewMCP         []MCPServerLine  `json:"-"`
 	MCPChanged     []MCPServerLine  `json:"-"`
 	repos          int              // configured repositories
+	limitMinutes   int              // BV-155: the run's time limit, in minutes (rounded up)
+	limitReached   bool             // BV-155: the global time limit expired this run
+	notReviewed    int              // BV-155: projects left unreviewed when the limit expired
 	nextMemory     memory.File      // findings-memory.json after this run
 	memoryPrev     bool             // an earlier findings-memory.json was read
 	memoryLost     bool             // B8: prior runs, but no memory to compare with
 	historyMissing bool             // B8: prior runs, but no index-history.json
 	hidden         []HiddenEntry    // B9: what the configuration hid, by entry
-	base           string           // the run's report base name
 	series         []int            // the evaluated agent's comparable scores, oldest first
 	seriesBy       map[string][]int // every evaluated agent\'s, by name (v3 §10.4)
 	// vscodeFirstRun is the first run of the extensions collector (A5).
@@ -88,6 +90,7 @@ type V2 struct {
 	integrityNotChecked bool
 	exePath             string
 	weekly              scheduledtasks.Weekly
+	weeklyNoSystemd     bool // BV-165: Linux has no user systemd; the weekly section says so
 	// OS is the operating system of the run, from the v1 report's platform
 	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
 	// sections (decision 2026-10-29, macOS vista previa).
@@ -116,6 +119,15 @@ var NotCheckedCodes = []string{"scheduledtasks", "avexclusions", "shellprofile",
 // macOS reports a run on macOS.
 func (v V2) macOS() bool { return v.OS == "macos" }
 
+func (v V2) linux() bool { return v.OS == "linux" }
+
+// osLinuxVariant are the keys that have a «.linux» text (BV-165). Only these
+// get the «.linux» suffix on Linux; every other key keeps its base text.
+var osLinuxVariant = map[string]bool{
+	"ai.limits":         true,
+	"html.assume.scope": true,
+}
+
 // homePrefix is how the agent prompt names the user's folder: "~" on
 // macOS, "%USERPROFILE%" elsewhere (decision 2026-10-29, point 6).
 func (v V2) homePrefix() string {
@@ -130,6 +142,9 @@ func (v V2) homePrefix() string {
 func (v V2) osKey(key string) string {
 	if v.macOS() {
 		return key + ".macos"
+	}
+	if v.linux() && osLinuxVariant[key] {
+		return key + ".linux"
 	}
 	return key
 }
@@ -183,6 +198,9 @@ type V2Coverage struct {
 	SourcesFailed     []graph.SourceFailed     `json:"sources_failed"`
 	AgentsUnsupported []graph.AgentUnsupported `json:"agents_unsupported"`
 	ScanErrors        []string                 `json:"scan_errors"`
+	// BinarySkipped is how many tracked files were not opened because they are
+	// images, documents or other binary files (BV-186). Omitted when zero.
+	BinarySkipped int `json:"binary_skipped,omitempty"`
 }
 
 // V2Legacy is the v1 findings, grouped (§3, E7).
@@ -292,8 +310,11 @@ type V2Input struct {
 	// and Weekly what the scheduled tasks say about its weekly review (J4,
 	// J5; v3 §17.3). NotificationUnavailable is the reason a scheduled
 	// review's notification will not show (J7), empty otherwise.
-	ExePath                 string
-	Weekly                  scheduledtasks.Weekly
+	ExePath string
+	Weekly  scheduledtasks.Weekly
+	// WeeklyNoSystemd marks a Linux host with no user systemd (BV-165): the
+	// weekly section shows html.weekly.no_systemd instead of the pitch.
+	WeeklyNoSystemd         bool
 	NotificationUnavailable string
 
 	// IntelVersion and IntelPublishedAt are the embedded threat-data snapshot
@@ -306,6 +327,17 @@ type V2Input struct {
 	// this system, by code (NotCheckedCodes); unknown codes are dropped
 	// and the rest shown in NotCheckedCodes' order, on macOS only.
 	NotChecked []string
+
+	// LimitMinutes is the run's global time limit in minutes, rounded up
+	// (BV-155), shown in the report. LimitReached is whether the limit expired
+	// this run; ProjectsNotReviewed is how many projects it left unreviewed.
+	LimitMinutes        int
+	LimitReached        bool
+	ProjectsNotReviewed int
+
+	// BinarySkipped is how many tracked files the repository scan did not open
+	// because they are images, documents or other binary files (BV-186).
+	BinarySkipped int
 }
 
 // bases are the knowledge bases by product: Bases, or Base alone.
@@ -344,10 +376,14 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		Posture:       []rules.Posture{},
 		repos:         len(in.RepoRoots),
 		repoRoots:     in.RepoRoots,
+		limitMinutes:  in.LimitMinutes,
+		limitReached:  in.LimitReached,
+		notReviewed:   in.ProjectsNotReviewed,
 
 		integrityNotChecked: in.IntegrityNotChecked,
 		exePath:             in.ExePath,
 		weekly:              in.Weekly,
+		weeklyNoSystemd:     in.WeeklyNoSystemd,
 		OS:                  in.V1.Platform.OS,
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
@@ -392,6 +428,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.Coverage.AgentsUnsupported = []graph.AgentUnsupported{}
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
+	v.Coverage.BinarySkipped = in.BinarySkipped
 	v.hidden = hiddenEntries(append(append([]config.AllowHit{}, in.AllowHits...), res.Silenced.Rotated...))
 	v.Index, v.radiusProj = buildIndex(in, res, v)
 	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8
@@ -425,7 +462,6 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	v.Status = string(maxStatus(finding.Status(legacyStatus), v2Status))
 	// The memory names the run's report, which needs the status.
 	applyMemory(&v, in)
-	v.base = FilenameV2(in.V1, v)
 	// The evolution follows the step 1 score: the evaluated agent with the
 	// lowest score, ties by name (informe HTML v3 §3 point 6).
 	v.series = []int{}
@@ -547,6 +583,11 @@ var MemoryUntracked = map[string]bool{
 	rules.RulePackageKnownMalicious:     true,
 	rules.RuleProjectHookRunsRepoScript: true,
 	rules.RuleMCPExternalAction:         true,
+	// BV-175: n8n findings are re-derived each run from the configuration and
+	// the n8n folder; they are not in the memory schema's rule enum, so adding
+	// them to it would be a memory-schema change.
+	rules.RuleN8NMCPBridge:   true,
+	rules.RuleN8NKeyWithData: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).
@@ -948,9 +989,10 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", "", fmt.Errorf("create report dir %s: %w", dir, err)
 	}
-	base := FilenameV2(r, v)
-	mdPath = filepath.Join(dir, base+".md")
-	jsonPath = filepath.Join(dir, base+".json")
+	// BV-183: fixed names, overwritten each run, in the data directory the
+	// caller passes (no longer the dated report-<date>__… names).
+	mdPath = filepath.Join(dir, MarkdownFileName)
+	jsonPath = filepath.Join(dir, JSONFileName)
 	v2Path = filepath.Join(dir, V2FileName)
 	if err := os.WriteFile(mdPath, []byte(RenderV2Markdown(v, cat, loc)), 0o600); err != nil {
 		return "", "", "", fmt.Errorf("write markdown report: %w", err)

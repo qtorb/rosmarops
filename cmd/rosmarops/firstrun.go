@@ -13,6 +13,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -87,7 +88,8 @@ func runNoArgs() int {
 		}
 	}
 
-	fmt.Println(cat.Text("console.checking", nil))
+	// The «checking this computer» line is printed by runWith once the number
+	// of projects, and so the time limit, is known (BV-155).
 	htmlPath, err := runWith(lang, runMode{window: true, log: log})
 	if err != nil {
 		// B3 (BV-93): a double click never fails in silence — the red
@@ -97,16 +99,46 @@ func runNoArgs() int {
 		return exitRunFailed
 	}
 
-	if openReport(htmlPath) {
+	reportOpened := openReport(htmlPath)
+	if reportOpened {
 		fmt.Println(cat.Text("console.report_opened", nil))
+	} else {
+		fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
+	}
+
+	// BV-158 part 4 (decision A): after the report opens, offer to connect when
+	// this computer is not connected and the offer was not declined in the last
+	// 7 days. This is the double click, never --unattended and never `run`. A
+	// connection failure changes nothing here (the report and exit code stand).
+	offerConnect(stPath)
+
+	if reportOpened {
 		if isTerminal(os.Stdout) {
 			time.Sleep(closeDelay)
 		}
 		return 0
 	}
-	fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
 	pressEnter(cat)
 	return 0
+}
+
+// offerConnect shows the end-of-double-click connect offer for the state at
+// stPath. It resolves the kit store and the reports directory and defers to
+// offerConnectAfterReport; a missing kit path just means no offer.
+func offerConnect(stPath string) {
+	storePath, err := kit.StorePath()
+	if err != nil {
+		return
+	}
+	reportDir, err := report.DefaultReportDir()
+	if err != nil {
+		return
+	}
+	cat, err := catalog.Load(systemLang())
+	if err != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	offerConnectAfterReport(spacePaths{store: storePath, state: stPath, reports: report.DataDir(reportDir)}, cat, stPath, time.Now())
 }
 
 // firstRunRepos is U3, and U4 when U3 finds nothing: the repositories of
@@ -170,13 +202,20 @@ func openReport(path string) bool {
 }
 
 // priorReportsExist reports whether the reports directory already holds a
-// report from an earlier run: report.html or any dated report-*.md. Used to
-// tell a true first use (an empty folder) from a lost state (BV-93, B3).
+// report from an earlier run. The visual report stays in the reports root;
+// the Markdown and v2 JSON moved to data/ (BV-183). Used to tell a true first
+// use (an empty folder) from a lost state (BV-93, B3).
 func priorReportsExist(dir string) bool {
 	if fileExists(filepath.Join(dir, report.HTMLFileName)) {
 		return true
 	}
-	matches, _ := filepath.Glob(filepath.Join(dir, "report-*.md"))
+	data := report.DataDir(dir)
+	if fileExists(filepath.Join(data, report.MarkdownFileName)) || fileExists(filepath.Join(data, report.V2FileName)) {
+		return true
+	}
+	// A directory migrated from an older layout keeps its dated reports in
+	// data/archive/.
+	matches, _ := filepath.Glob(filepath.Join(data, "archive", "report-*.md"))
 	return len(matches) > 0
 }
 

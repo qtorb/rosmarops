@@ -54,7 +54,7 @@ These cannot be violated by any code you write. They are the product.
 
 6. **Resource limits, hardcoded:**
    - Files >2 MB are not opened for content scan.
-   - Global scan timeout: 300 seconds. Hard cap.
+   - Global scan timeout: 15 seconds per project to scan, at least 300 and at most 1,200 seconds, computed once per run after the projects are found. Hard cap (signed by Albert 03-11 11:06, BV-155).
    - Per-repo timeout: 60 seconds. Repo over budget → yellow finding "scan_timeout", continue with next repo.
 
 7. **Per-repo isolation.** Each repo scan runs in its own context with `defer`/`recover` for the equivalent of try/finally. One repo failing must not abort the run.

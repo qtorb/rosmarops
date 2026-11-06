@@ -101,22 +101,37 @@ func mustLoad(t *testing.T) *intel.Snapshot {
 	return snap
 }
 
-// BV-106: the snapshot 2026.10.29.1 carries the four signed entries.
+// BV-154: the snapshot 2026.11.03.1 carries the four signed PyPI entries plus
+// the four npm malicious MCP-server packages (@ifasn/*-doc-mcp).
 func TestSnapshotEntries(t *testing.T) {
 	snap := mustLoad(t)
-	if snap.Version != "2026.10.29.1" || snap.PublishedAt != "2026-10-29" {
-		t.Errorf("snapshot %s of %s, want 2026.10.29.1 of 2026-10-29", snap.Version, snap.PublishedAt)
+	if snap.Version != "2026.11.03.1" || snap.PublishedAt != "2026-11-03" {
+		t.Errorf("snapshot %s of %s, want 2026.11.03.1 of 2026-11-03", snap.Version, snap.PublishedAt)
 	}
-	want := map[string]string{
-		"rosmarops-2026-0001": "litellm 1.107.0",
-		"rosmarops-2026-0002": "claudeopusfile 0.1.1 0.1.2",
-		"rosmarops-2026-0003": "claudeopuseni 0.1.0 0.1.1",
-		"rosmarops-2026-0004": "claudeopusenifile 0.1.3",
+	type entry struct {
+		eco    string
+		pkg    string
+		verKey string // ecosystem/package versions, space-joined, in file order
+	}
+	want := map[string]entry{
+		"rosmarops-2026-0001": {intel.EcosystemPyPI, "litellm", "1.107.0"},
+		"rosmarops-2026-0002": {intel.EcosystemPyPI, "claudeopusfile", "0.1.1 0.1.2"},
+		"rosmarops-2026-0003": {intel.EcosystemPyPI, "claudeopuseni", "0.1.0 0.1.1"},
+		"rosmarops-2026-0004": {intel.EcosystemPyPI, "claudeopusenifile", "0.1.3"},
+		"rosmarops-2026-0005": {intel.EcosystemNPM, "@ifasn/md-doc-mcp", "1.0.3 1.0.4 1.0.5"},
+		"rosmarops-2026-0006": {intel.EcosystemNPM, "@ifasn/mdd-doc-mcp", "1.0.7 1.0.8 2.0.6"},
+		"rosmarops-2026-0007": {intel.EcosystemNPM, "@ifasn/mmd-doc-mcp", "1.0.0 1.0.2"},
+		"rosmarops-2026-0008": {intel.EcosystemNPM, "@ifasn/mmdd-doc-mcp", "1.0.1 1.0.3 1.0.4 1.0.4-2 1.0.5 1.0.6 1.1.0 1.1.1 1.1.2 1.1.3 1.1.5 1.1.6 1.1.7 1.1.8 1.1.9-2 2.0.1 2.0.4"},
 	}
 	for _, p := range snap.Packages {
-		got := p.Package + " " + strings.Join(p.Versions, " ")
-		if w, ok := want[p.ID]; !ok || got != w || p.Ecosystem != intel.EcosystemPyPI {
-			t.Errorf("%s: %s/%s, want pypi/%s", p.ID, p.Ecosystem, got, w)
+		w, ok := want[p.ID]
+		if !ok {
+			t.Errorf("%s: unexpected entry in the snapshot (%s/%s)", p.ID, p.Ecosystem, p.Package)
+			continue
+		}
+		got := strings.Join(p.Versions, " ")
+		if p.Ecosystem != w.eco || p.Package != w.pkg || got != w.verKey {
+			t.Errorf("%s: %s/%s [%s], want %s/%s [%s]", p.ID, p.Ecosystem, p.Package, got, w.eco, w.pkg, w.verKey)
 		}
 		delete(want, p.ID)
 	}

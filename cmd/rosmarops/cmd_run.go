@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/globals"
 	"github.com/qtorb/rosmarops/internal/scan/mcp"
+	n8nscan "github.com/qtorb/rosmarops/internal/scan/n8n"
 	"github.com/qtorb/rosmarops/internal/scan/pyenv"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
@@ -47,6 +49,10 @@ import (
 // language when it has a translation, else English (decision 2026-10-27,
 // primer uso con un solo .exe, U7).
 var runLangs = map[string]bool{"en": true, "es": true}
+
+// writeResultsPkg builds and seals this run's results package. A package-level
+// var so a test can make it fail and check the review still finishes (BV-152).
+var writeResultsPkg = report.WriteResultsPackage
 
 func newRunCmd() *cli.Command {
 	return &cli.Command{
@@ -68,8 +74,8 @@ func newRunCmd() *cli.Command {
 var (
 	runInput       io.Reader = os.Stdin
 	runCanAsk                = func() bool { return canAsk(os.Stdin, os.Stdout) }
-	newScanContext           = func() (context.Context, context.CancelFunc) {
-		return context.WithTimeout(context.Background(), scan.GlobalTimeout)
+	newScanContext           = func(projects int) (context.Context, context.CancelFunc) {
+		return context.WithTimeout(context.Background(), scan.GlobalTimeoutFor(projects))
 	}
 )
 
@@ -164,6 +170,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve report dir: %w", err)
 	}
+	// BV-183: tidy the default reports directory into data/ before anything is
+	// read from or written to it (the log below, and the accepted-config copy
+	// the integrity check reads). The default directory is fixed, so this runs
+	// before the integrity check that still gates the configured directory.
+	// Idempotent and best effort.
+	migrateReportsLayout(defaultDir)
 
 	if runLog != nil {
 		if err := runLog.attach(defaultDir); err != nil {
@@ -175,6 +187,23 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("message catalog: %w", err)
 	}
+
+	// Console branding (BV-151): on a manual run in a console, name the window,
+	// drive the taskbar button and print the brand header — the first thing the
+	// run prints, before the integrity questions and console.checking. A
+	// scheduled review (freeConsole above) and redirected output get none.
+	active := !unattended && isTerminal(os.Stdout)
+	vtOK := false
+	if active {
+		vtOK = enableVTProcessing()
+	}
+	taskbarOn := active && vtOK && os.Getenv("WT_SESSION") != ""
+	ui = newConsoleUI(cat, active, taskbarOn, os.Stdout)
+	if active {
+		writeBrandHeader(os.Stdout, version, vtOK)
+	}
+	ui.setTitle("console.title.running")
+
 	// Integrity (J1–J3): the state, the binary and the configuration
 	// against the references init recorded; a change is confirmed in the
 	// console or the run stops with a red report. A scheduled review never
@@ -197,21 +226,35 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if reportDir == "" {
 		reportDir = defaultDir
 	}
-
-	// The connect window (CTO-15 PR5, invariant 8): only on the double click,
-	// and only AFTER the integrity check above — never before a connection. On
-	// Windows, when this computer is not connected, it offers to connect so a
-	// fresh connection sends this run's results. A no-op off Windows and for
-	// the `run` command (m.window is false there).
-	if m.window {
-		if storePath, perr := kit.StorePath(); perr == nil {
-			connectWindowHook(spacePaths{store: storePath, state: stPath, reports: reportDir}, cat)
-		}
+	// BV-183: now that the configuration is verified, tidy the configured
+	// reports directory too (a no-op when it is the default, already migrated
+	// above). Everything but the three HTML pages lives in dataDir.
+	if reportDir != defaultDir {
+		migrateReportsLayout(reportDir)
 	}
-	// Invariant §6: every scanner and subprocess runs under the global cap,
-	// which counts from after the integrity questions: the time a person
-	// takes to answer is not the scan's (J13).
-	ctx, cancel := newScanContext()
+	dataDir := report.DataDir(reportDir)
+
+	// The connect offer moved to the end of the double click (BV-158 part 4,
+	// decision A): it is shown after the report opens, in runNoArgs, not here
+	// before the run. A fresh connection now sends the next run's results, as
+	// the report's «Your space» section says; this run seals its package and,
+	// if already connected, sends it in the send path below.
+	//
+	// Invariant §6 (BV-155): the global limit is 15 s per project to check, at
+	// least 300 and at most 1200 s, computed once now that the projects are
+	// known and before they are checked. The time already spent (agents,
+	// discovery) counts within the same limit: every scanner runs under this
+	// one context, which counts from after the integrity questions — the time a
+	// person takes to answer is not the scan's (J13).
+	projects := len(cfg.RepoRoots)
+	limit := scan.GlobalTimeoutFor(projects)
+	limitMinutes := scan.LimitMinutes(limit)
+	// The console line, once the number of projects is known (BV-155 point 2);
+	// never on a scheduled review (no console) or when output is discarded.
+	if !unattended {
+		fmt.Fprintln(os.Stdout, checkingLine(cat, projects, limitMinutes))
+	}
+	ctx, cancel := newScanContext(projects)
 	defer cancel()
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
 
@@ -246,6 +289,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	sort.Strings(langs)
 	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs}
 	weekly := scheduledtasks.Weekly{State: scheduledtasks.WeeklyNone}
+	weeklyNoSystemd := false
 	// The checks that do not apply on this system yet (ErrNotApplicable),
 	// by report.NotCheckedCodes' code: the macOS report lists them
 	// (decision 2026-10-29, macOS vista previa, point 3).
@@ -311,6 +355,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	)
 	salt, saltErr := st.Salt()
 	graphDone := false
+	// How many projects the global limit left unreviewed (BV-155): -1 until the
+	// repos step runs and reports it; the limit-reached note reads it, falling
+	// back to every project when the repos step never ran.
+	reposNotReviewed := -1
+	// BV-186: tracked files not opened because they are images, documents or
+	// other binaries; set by the repos step, shown in the report's coverage.
+	binarySkipped := 0
 	steps := []scan.Step{
 		// --- VS Code extensions scanner (M4). The reference is updated on
 		// every run, as the other collectors' (decision 2026-10-26, agentes
@@ -442,8 +493,22 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							})
 						}
 					}
+					// n8n user folder (BV-175): read at rest, no network, no
+					// writes. Its community node packages are crossed against the
+					// threat data like any global npm package; the credential key
+					// beside the database gives the n8n_key_with_data finding.
+					n8nFolder := agentdirs.N8NDir(homeDir, nil)
+					n8nResult, n8nErrs := n8nscan.Scan(n8nFolder)
+					for _, e := range n8nErrs {
+						scanErrors = append(scanErrors, finding.ScanError{Scope: "n8n", Message: e.Error()})
+					}
 					pkgObs := packageObservations(pyResult, globalObs)
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, reportDir, start, intelMatcher, pkgObs)
+					for _, p := range n8nResult.Packages {
+						pkgObs = append(pkgObs, graph.PackageObservation{
+							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
+						})
+					}
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -489,6 +554,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			return func() {
 				if errors.Is(tasksErr, platform.ErrNotApplicable) {
 					slog.Info("scheduledtasks", "err", tasksErr)
+					// BV-165: on Linux the weekly review is a systemd user timer,
+					// read directly (not Windows Task Scheduler), so weekly IS
+					// checked here. Elsewhere (macOS) there is no weekly review yet.
+					if runtimeGOOS == "linux" {
+						weekly, weeklyNoSystemd = linuxWeekly(exePath)
+						return
+					}
 					// No task list: no weekly review either (point 4).
 					notChecked = append(notChecked, "scheduledtasks", "weekly")
 					return
@@ -575,7 +647,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					defer hitsMu.Unlock()
 					repoHits = append(repoHits, h)
 				},
-				OnProgress: progress.repos,
+				OnProgress:      progress.repos,
+				OnCoverage:      func(notReviewed int) { reposNotReviewed = notReviewed },
+				OnBinarySkipped: func(n int) { binarySkipped = n },
 			}
 			if saltErr == nil {
 				// Committed secrets become salted references in the scan;
@@ -608,8 +682,26 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// A graph step that never returned leaves no graph of this run: remove a
 	// previous one, as when the graph cannot be built.
 	if !graphDone {
-		if rmErr := graph.RemoveStale(reportDir); rmErr != nil {
+		if rmErr := graph.RemoveStale(dataDir); rmErr != nil {
 			scanErrors = append(scanErrors, finding.ScanError{Scope: "graph", Message: rmErr.Error()})
+		}
+	}
+
+	// The global time limit (BV-155): whether it expired this run, and how many
+	// projects it left unreviewed (every project when the repos step never ran).
+	limitReached := false
+	for _, se := range scanErrors {
+		if se.Scope == scan.GlobalTimeoutScope {
+			limitReached = true
+			break
+		}
+	}
+	projectsNotReviewed := 0
+	if limitReached {
+		if reposNotReviewed >= 0 {
+			projectsNotReviewed = reposNotReviewed
+		} else {
+			projectsNotReviewed = projects
 		}
 	}
 
@@ -627,7 +719,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	base := bases[knowledge.ClaudeCodeProduct]
 	// The score history (I9): the last entry is the comparison's base; an
 	// invalid file is set aside, never deleted.
-	history, historyReset, err := index.ReadHistory(reportDir)
+	history, historyReset, err := index.ReadHistory(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("index history: %w", err)
 	}
@@ -636,7 +728,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	}
 	// The findings memory (memoria, M2): an invalid file is set aside, never
 	// deleted.
-	mem, memReset, err := memory.Read(reportDir)
+	mem, memReset, err := memory.Read(dataDir)
 	if err != nil {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
@@ -661,8 +753,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan,
 		IntegrityNotChecked: integrityNotChecked,
-		ExePath:             exePath, Weekly: weekly, NotificationUnavailable: nt.code, NotChecked: notChecked,
+		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
+		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
+		BinarySkipped: binarySkipped,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -677,17 +771,28 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// the «Your space» section reflects this run (sent today, or pending).
 	pkgNow := time.Now()
 	stored, kitErr := loadKitIfPresent()
+	// A failure to build, seal or read the kit for this run's package never
+	// stops the review (BV-152 point 1): the local review is done and its report
+	// is always written. pkgFailed only changes what the «Your space» section
+	// says — «this check couldn't be sent» instead of «pending».
+	pkgFailed := false
 	if kitErr != nil {
 		slog.Warn("results package skipped: kit could not be read", "err", kitErr)
+		pkgFailed = true
 	}
 	var currentPkg string
 	if stored != nil && built != nil {
-		pkgPath, err := report.WriteResultsPackage(v2, built, homeDir, version,
-			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, reportDir)
-		if err != nil {
-			return "", fmt.Errorf("results package: %w", err)
-		}
-		if pkgPath != "" {
+		pkgPath, err := writeResultsPkg(v2, built, homeDir, version,
+			stored.Secret.Key, stored.KitID, kit.KeyID(stored.Secret.Key), pkgNow, dataDir)
+		switch {
+		case err != nil:
+			// Building or sealing the package failed (for example the space view
+			// does not fit its schema). The error carries only field paths, no
+			// values (tested in TestResultsPackageErrorHasNoValues), so logging
+			// it is safe.
+			slog.Warn("results package skipped", "err", err)
+			pkgFailed = true
+		case pkgPath != "":
 			currentPkg = pkgPath
 			slog.Info("results package written", "path", pkgPath)
 		}
@@ -697,17 +802,24 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// package. Never fails the run — offline leaves it for next time, a 401
 	// forgets the space. Then set the «Your space» section (point 7).
 	if storePath, perr := kit.StorePath(); perr == nil {
-		sp := spacePaths{store: storePath, state: stPath, reports: reportDir}
+		sp := spacePaths{store: storePath, state: stPath, reports: dataDir}
 		sendCtx, cancelSend := context.WithTimeout(context.Background(), 2*time.Minute)
 		spaceSend(sendCtx, sp, currentPkg, pkgNow)
 		cancelSend()
-		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401
-		// during the send forgets both, and then the section is not shown.
-		if isSpaceConnected(sp) {
-			v2.SpaceConnected = true
-			// This run's package: sent (with this send's date), refused, or
-			// still pending (CTO-15 PR5).
-			v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(reportDir, currentPkg, time.Local)
+		// «Connected» is the permission AND a credential (CTO-15 PR2); a 401 or
+		// 409 during the send forgets both, so the section then shows as not
+		// connected. BV-172: the rejection of this run's package is shown either
+		// way — a 409 key_mismatch forgets the space but the report must still
+		// say the check could not be sent (report.space_rejected) and offer to
+		// connect again. The send log carries «rejected» even after the forget.
+		v2.SpaceConnected = isSpaceConnected(sp)
+		// This run's package: sent (with this send's date), refused, or still
+		// pending (CTO-15 PR5).
+		v2.SpaceSentDate, v2.SpaceRejected = currentPackageStatus(dataDir, currentPkg, time.Local)
+		// If this run had no package to send because it could not be built or
+		// sealed, say so (BV-152 point 1): «rejected», not «pending».
+		if pkgFailed {
+			v2.SpaceSentDate, v2.SpaceRejected = "", true
 		}
 	} else {
 		slog.Warn("space send skipped: kit path", "err", perr)
@@ -715,27 +827,31 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 	// Write report files.
 	progress.line("console.progress.report", nil)
-	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, reportDir)
+	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
-	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir, report.FilenameV2(r, v2))
+	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("html report written", "html", htmlPath)
-	aiPath, err := report.WriteAIExport(v2, cat, homeDir, reportDir, report.FilenameV2(r, v2))
+	aiPath, err := report.WriteAIExport(v2, cat, homeDir, dataDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
 	}
 	slog.Info("ai export written", "ai", aiPath)
-	if err := index.WriteHistory(reportDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
+	if err := index.WriteHistory(dataDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
 		return "", fmt.Errorf("index history: %w", err)
 	}
-	if err := memory.Write(reportDir, v2.NextMemory()); err != nil {
+	if err := memory.Write(dataDir, v2.NextMemory()); err != nil {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+
+	// BV-183: prune old sealed packages — those whose name is more than 30 days
+	// old and whose last send result is terminal. Nothing else is removed.
+	pruneResultsPackages(dataDir, time.Now(), terminalFilenames(dataDir))
 
 	// Re-read the space permission from disk before saving the run's own
 	// fields (CTO-15 PR2): spaceSend's 401 wipe, or a reverted connect, may
@@ -744,6 +860,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// take its latest value — a 401 during the run must end "not connected".
 	if cur, curErr := state.LoadState(stPath); curErr == nil {
 		st.SpacePermission = cur.SpacePermission
+		// BV-172: the connect-offer decline is also a space-paths field; a 409 or
+		// 401 during the send clears it (clearConnectOfferDecline) so the offer
+		// shows this run. Take the latest from disk so this save does not restore
+		// an old decline and suppress the offer.
+		st.ConnectOfferDeclinedAt = cur.ConnectOfferDeclinedAt
 	}
 
 	// Update state with the run's status (the highest of v1 and v2).
@@ -758,6 +879,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		return "", fmt.Errorf("save state: %w", err)
 	}
 
+	// BV-151: the report is written — the window says so and the taskbar clears,
+	// just before the summary (and, on a double click, report_opened).
+	ui.done()
+
 	// Print summary.
 	if unattended {
 		// The notice, last (J7, J9): agent, score and counts, or the report
@@ -767,9 +892,25 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Info("scheduled run finished", "status", v2.Status)
 		return htmlPath, nil
 	}
-	fmt.Print("\n" + report.ConsoleSummary(v2, cat, mdPath))
+	// BV-183: point the person at the visual report (report.html), not the
+	// Markdown that now lives in data/.
+	fmt.Print("\n" + report.ConsoleSummary(v2, cat, htmlPath))
 
 	return htmlPath, nil
+}
+
+// checkingLine is the console's «checking this computer» line (BV-155),
+// chosen by the number of projects: none (agents only), one, or several, with
+// the time limit in minutes.
+func checkingLine(cat catalog.Catalog, projects, minutes int) string {
+	switch {
+	case projects == 0:
+		return cat.Text("console.checking.agents_only", nil)
+	case projects == 1:
+		return cat.Text("console.checking.one", map[string]string{"minutes": strconv.Itoa(minutes)})
+	default:
+		return cat.Text("console.checking.other", map[string]string{"projects": strconv.Itoa(projects), "minutes": strconv.Itoa(minutes)})
+	}
 }
 
 // compileExtraPattern compiles a single user-defined secret pattern from config.
@@ -806,6 +947,8 @@ func writeGraph(
 	now time.Time,
 	matcher *intel.Matcher,
 	pkgObs []graph.PackageObservation,
+	n8nFolder string,
+	n8nKeyData bool,
 ) (*graph.Graph, string, string, error) {
 	fail := func(err error) (*graph.Graph, string, string, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -854,6 +997,14 @@ func writeGraph(
 		return nil, "", "", fmt.Errorf("mcp catalog: %w", err)
 	}
 	graph.CrossMCPCatalog(&g, scan.Servers, catalog, now)
+	// n8n cross (BV-175): mark mcp_server nodes that are n8n instances
+	// (in-memory, does not change the written file), and, when the n8n folder
+	// keeps its credential key beside the database, append the folder resource
+	// node the n8n_key_with_data finding stands on.
+	graph.CrossN8N(&g, scan.Servers, now)
+	if n8nKeyData {
+		graph.AddN8NKeyNode(&g, n8nFolder, now)
+	}
 	path, err := graph.WriteFile(dir, g)
 	if err != nil {
 		return nil, "", "", err

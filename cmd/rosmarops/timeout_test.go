@@ -12,6 +12,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -87,7 +88,7 @@ func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
 	prevIn, prevAsk, prevCtx := runInput, runCanAsk, newScanContext
 	t.Cleanup(func() { runInput, runCanAsk, newScanContext = prevIn, prevAsk, prevCtx })
 	runInput, runCanAsk = answer, func() bool { return true }
-	newScanContext = func() (context.Context, context.CancelFunc) {
+	newScanContext = func(int) (context.Context, context.CancelFunc) {
 		created = time.Now()
 		return context.WithTimeout(context.Background(), budget)
 	}
@@ -104,7 +105,7 @@ func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
 			ScanErrors []string `json:"scan_errors"`
 		} `json:"coverage"`
 	}
-	b, err := os.ReadFile(filepath.Join(reports, "report.v2.json"))
+	b, err := os.ReadFile(filepath.Join(report.DataDir(reports), "report.v2.json"))
 	if err == nil {
 		err = json.Unmarshal(b, &v2)
 	}
@@ -119,7 +120,7 @@ func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
 			t.Errorf("the answer consumed the scan's budget: %s", e)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(reports, "graph.v2.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(report.DataDir(reports), "graph.v2.json")); err != nil {
 		t.Error(err)
 	}
 	if saved, _ := state.LoadState(stPath); saved.Integrity.VigilBinarySHA256 == strings.Repeat("a", 64) {

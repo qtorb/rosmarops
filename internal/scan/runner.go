@@ -12,11 +12,42 @@ import (
 	"github.com/qtorb/rosmarops/internal/finding"
 )
 
-// GlobalTimeout is the hard cap on a whole run (CLAUDE.md invariant §6).
-// Hardcoded, not configurable.
-const GlobalTimeout = 300 * time.Second
+// The global time limit is proportional to how many projects a run will check
+// (CLAUDE.md invariant §6, signed by Albert 2026-11-03, BV-155): 15 seconds per
+// project, at least 300 and at most 1200 seconds. Hardcoded, not configurable.
+const (
+	PerProjectBudget = 15 * time.Second
+	MinGlobalTimeout = 300 * time.Second
+	MaxGlobalTimeout = 1200 * time.Second
+)
 
-// GlobalTimeoutScope is the ScanError scope recorded when GlobalTimeout
+// GlobalTimeoutFor is the run's global time limit for the given number of
+// projects to check: PerProjectBudget × projects, clamped to
+// [MinGlobalTimeout, MaxGlobalTimeout]. A count that could not be established
+// (negative) falls back to MinGlobalTimeout. Computed once per run, after the
+// projects are found and before they are checked.
+func GlobalTimeoutFor(projects int) time.Duration {
+	if projects < 0 {
+		return MinGlobalTimeout
+	}
+	d := time.Duration(projects) * PerProjectBudget
+	switch {
+	case d < MinGlobalTimeout:
+		return MinGlobalTimeout
+	case d > MaxGlobalTimeout:
+		return MaxGlobalTimeout
+	default:
+		return d
+	}
+}
+
+// LimitMinutes is the limit shown to the person: the limit in minutes, rounded
+// up.
+func LimitMinutes(d time.Duration) int {
+	return int((d + time.Minute - 1) / time.Minute)
+}
+
+// GlobalTimeoutScope is the ScanError scope recorded when the global time limit
 // expires before every scanner has finished.
 const GlobalTimeoutScope = "global_timeout"
 
@@ -94,8 +125,8 @@ func timeoutError(ctx context.Context, interrupted string, notRun []Step) *findi
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		cause = ctx.Err().Error()
 	}
-	msg := fmt.Sprintf("global scan timeout (%s, %s): interrupted scanner: %s; scanners not run: %s",
-		GlobalTimeout, cause, interrupted, notRunList)
+	msg := fmt.Sprintf("global scan timeout (%s): interrupted scanner: %s; scanners not run: %s",
+		cause, interrupted, notRunList)
 	slog.Warn("scan: global timeout", "interrupted", interrupted, "not_run", names)
 	return &finding.ScanError{Scope: GlobalTimeoutScope, Message: msg}
 }

@@ -86,7 +86,7 @@ func TestMarkdownAlwaysEnglish(t *testing.T) {
 		}
 	}
 
-	all, _ := filepath.Glob(filepath.Join(home, ".rosmarops", "reports", "*.md"))
+	all, _ := filepath.Glob(filepath.Join(home, ".rosmarops", "reports", "data", "*.md"))
 	var mds, exports []string // the technical Markdown; the exports for your AI
 	for _, p := range all {
 		if strings.HasSuffix(p, ".ai.md") {

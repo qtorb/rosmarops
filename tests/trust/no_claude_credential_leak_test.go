@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // fakeClaudeOAuthToken and fakeClaudeRefreshToken are synthetic Claude Code
@@ -30,7 +32,7 @@ func TestNoClaudeCredentialSecretLeak(t *testing.T) {
 	s.runAll(t, nil)
 	dir := filepath.Join(s.home, ".rosmarops")
 
-	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", "graph.v2.json"))
+	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", report.DataSubdir, "graph.v2.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

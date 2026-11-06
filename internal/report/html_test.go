@@ -61,8 +61,9 @@ func TestRenderHTML(t *testing.T) {
 			t.Errorf("%s: html lang", lang)
 		}
 		last := -1
-		// v3: the three steps, then the bottom strip's three columns (§17).
-		for _, k := range []string{"html.step.1", "html.index.name", "html.step.2", "html.today.fixes", "html.step.3", "html.since.title", "html.weekly.title", "html.agentfix.title"} {
+		// BV-158: the three steps, then «How to fix it», then «More information»'s
+		// cells (since the last check, the weekly review) when not connected.
+		for _, k := range []string{"html.step.1", "html.index.name", "html.step.2", "html.today.fixes", "html.step.3", "html.agentfix.title", "html.since.title", "html.weekly.title"} {
 			i := strings.Index(page, htmlEscape(cat.Text(k, nil)))
 			if i <= last {
 				t.Errorf("%s: %s out of order (%d after %d)", lang, k, i, last)
@@ -70,7 +71,7 @@ func TestRenderHTML(t *testing.T) {
 			last = i
 		}
 		// The older checks left the HTML; a pointer to the technical report.
-		pointer := htmlEscape(cat.Text("html.legacy.pointer", map[string]string{"file": report.FilenameV2(v1, v) + ".md"}))
+		pointer := htmlEscape(cat.Text("html.legacy.pointer", map[string]string{"file": report.DataSubdir + "/" + report.MarkdownFileName}))
 		if i := strings.Index(page, pointer); i <= last {
 			t.Errorf("%s: legacy pointer %d after %d", lang, i, last)
 		}
@@ -149,9 +150,9 @@ func TestRenderHTML_NoScoreNoFindings(t *testing.T) {
 }
 
 // BV-41: today's projection shows before the fix box, only with a score
-// that rises and an action that is not partial; the history notice shows
-// only when history_reset.
-func TestRenderHTML_ProjectionAndHistoryReset(t *testing.T) {
+// that rises and an action that is not partial. (BV-158 removed the history
+// notice from the report; the fix box button is now class "wide".)
+func TestRenderHTML_Projection(t *testing.T) {
 	g := v2Graph(t)
 	base := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	a := base.Index.Agents[0]
@@ -161,15 +162,13 @@ func TestRenderHTML_ProjectionAndHistoryReset(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		proj := htmlEscape(cat.Text("html.today.projection", map[string]string{"now": strconv.Itoa(*a.Value), "then": strconv.Itoa(a.Projection.Value)}))
-		reset := htmlEscape(cat.Text("html.history.reset", nil))
 
 		page := renderHTML(t, lang, base)
+		// The step-2 fix button is the first class="wide" (before «How to fix
+		// it»'s copy button); the projection shows above it.
 		p, fix := strings.Index(page, proj), strings.Index(page, `class="wide"`)
-		if p < 0 || p > fix {
+		if p < 0 || fix < 0 || p > fix {
 			t.Errorf("%s: projection missing or after the fix box", lang)
-		}
-		if strings.Contains(page, reset) {
-			t.Errorf("%s: history notice without a reset", lang)
 		}
 
 		partial := cloneV2(base)
@@ -185,12 +184,6 @@ func TestRenderHTML_ProjectionAndHistoryReset(t *testing.T) {
 		flat.Index.Agents[0].Projection = &index.Projection{ActionID: flat.Today.ActionID, Value: *a.Value}
 		if strings.Contains(renderHTML(t, lang, flat), htmlEscape(cat.Text("html.today.projection", map[string]string{"now": strconv.Itoa(*a.Value), "then": strconv.Itoa(*a.Value)}))) {
 			t.Errorf("%s: projection shown without a rise", lang)
-		}
-
-		reseted := cloneV2(base)
-		reseted.Index.HistoryReset = true
-		if !strings.Contains(renderHTML(t, lang, reseted), `<br>`+reset+`</p>`) {
-			t.Errorf("%s: history notice missing", lang)
 		}
 	}
 }
@@ -252,32 +245,51 @@ func TestRenderHTML_TitleOthers(t *testing.T) {
 	}
 }
 
-// TestRenderHTML_YourSpaceOnlyWithKey (BV-132): the «Your space» section and
-// its app.rosmarops.com URL appear only when this run wrote a closed package
-// (a key on this computer); without a key neither is in the HTML, in en and es.
-func TestRenderHTML_YourSpaceOnlyWhenConnected(t *testing.T) {
+// TestRenderHTML_YourSpaceAlways (BV-158): the «Your space» section is always
+// shown, with the exact https://app.rosmarops.com/space URL exactly once. Not
+// connected, it pitches the space (report.space_pitch/next) with the «Create
+// your space» button; connected, it shows the status and «Open your space».
+func TestRenderHTML_YourSpaceAlways(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		// Not connected: the pitch and the «Create your space» button.
 		notConnected := renderHTML(t, lang, v)
-		// Not connected: no «Your space» section and no space button URL. (The
-		// AI export's ai.what mentions app.rosmarops.com in prose, which is not
-		// a loaded resource, so the bare domain may appear; the button URL must
-		// not.)
-		if strings.Contains(notConnected, `class="space"`) || strings.Contains(notConnected, "app.rosmarops.com/space") {
-			t.Errorf("%s: not connected, but the HTML has the «Your space» section or URL", lang)
+		if !strings.Contains(notConnected, `class="space"`) {
+			t.Errorf("%s: not connected, but no «Your space» section", lang)
 		}
-		// Connected but nothing sent yet: the pending line, no date.
+		for _, want := range []string{
+			htmlEscape(cat.Text("report.space_pitch", nil)),
+			htmlEscape(cat.Text("report.space_next", nil)),
+			`href="https://app.rosmarops.com/space">` + htmlEscape(cat.Text("report.space_create", nil)),
+		} {
+			if !strings.Contains(notConnected, want) {
+				t.Errorf("%s: not connected, missing %q", lang, want)
+			}
+		}
+		if n := strings.Count(notConnected, "app.rosmarops.com/space"); n != 1 {
+			t.Errorf("%s: not connected, app.rosmarops.com/space appears %d times, want 1", lang, n)
+		}
+		// Connected but nothing sent yet: the pending line, report.space_has and
+		// «Open your space».
 		v.SpaceConnected = true
 		v.SpaceSentDate = ""
 		pending := renderHTML(t, lang, v)
-		if !strings.Contains(pending, `class="space"`) || !strings.Contains(pending, `href="https://app.rosmarops.com/space"`) {
-			t.Errorf("%s: connected, but the HTML lacks the «Your space» section or its button URL", lang)
+		for _, want := range []string{
+			htmlEscape(cat.Text("report.space_has", nil)),
+			`href="https://app.rosmarops.com/space">` + htmlEscape(cat.Text("report.space_button", nil)),
+		} {
+			if !strings.Contains(pending, want) {
+				t.Errorf("%s: connected, missing %q", lang, want)
+			}
+		}
+		if n := strings.Count(pending, "app.rosmarops.com/space"); n != 1 {
+			t.Errorf("%s: connected, app.rosmarops.com/space appears %d times, want 1", lang, n)
 		}
 		// Connected and sent: the sent line carries the date.
 		v.SpaceSentDate = "2026-10-25"
-		sent := renderHTML(t, lang, v)
-		if !strings.Contains(sent, "2026-10-25") {
+		if !strings.Contains(renderHTML(t, lang, v), "2026-10-25") {
 			t.Errorf("%s: the sent line does not carry the date", lang)
 		}
 		v.SpaceConnected = false

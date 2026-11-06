@@ -21,9 +21,9 @@ func TestDriveConnectWindow_Connected(t *testing.T) {
 		_ = onOpen("https://app.rosmarops.com/connect#v1.x.y")
 		return nil
 	}
-	connected := driveConnectWindow(out, &writerTo{&in}, run)
-	if !connected {
-		t.Error("want connected on a successful protocol")
+	got := driveConnectWindow(out, &writerTo{&in}, run)
+	if got != connectConnected {
+		t.Errorf("want connectConnected on a successful protocol, got %d", got)
 	}
 	if !strings.Contains(in.String(), "number 42") {
 		t.Errorf("number not forwarded to the window: %q", in.String())
@@ -39,8 +39,8 @@ func TestDriveConnectWindow_Connected(t *testing.T) {
 func TestDriveConnectWindow_NotNow(t *testing.T) {
 	ran := false
 	run := func(func(int), func(string) error) error { ran = true; return nil }
-	if driveConnectWindow(strings.NewReader("no\n"), &writerTo{&strings.Builder{}}, run) {
-		t.Error("want not connected on «Not now»")
+	if got := driveConnectWindow(strings.NewReader("no\n"), &writerTo{&strings.Builder{}}, run); got != connectDeclined {
+		t.Errorf("want connectDeclined on «Not now», got %d", got)
 	}
 	if ran {
 		t.Error("the protocol ran despite «Not now»")
@@ -52,8 +52,8 @@ func TestDriveConnectWindow_NotNow(t *testing.T) {
 func TestDriveConnectWindow_Expired(t *testing.T) {
 	var in strings.Builder
 	run := func(func(int), func(string) error) error { return spacenet.ErrConnectExpired }
-	if driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run) {
-		t.Error("want not connected on expiry")
+	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run); got != connectFailed {
+		t.Errorf("want connectFailed on expiry, got %d", got)
 	}
 	if !strings.Contains(in.String(), "expired") {
 		t.Errorf("expired state not sent: %q", in.String())
@@ -64,8 +64,8 @@ func TestDriveConnectWindow_Expired(t *testing.T) {
 func TestDriveConnectWindow_Failed(t *testing.T) {
 	var in strings.Builder
 	run := func(func(int), func(string) error) error { return errors.New("boom") }
-	if driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run) {
-		t.Error("want not connected on failure")
+	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run); got != connectFailed {
+		t.Errorf("want connectFailed on failure, got %d", got)
 	}
 	if !strings.Contains(in.String(), "failed") {
 		t.Errorf("failed state not sent: %q", in.String())

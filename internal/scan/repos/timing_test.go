@@ -134,7 +134,7 @@ func TestScanAllRepos_ScanMetrics(t *testing.T) {
 	ScanAllRepos(context.Background(), []string{repo}, nil, ScanConfig{Patterns: secrets.BuiltinPatterns()})
 	log := buf.String()
 	for _, want := range []*regexp.Regexp{
-		regexp.MustCompile(`check=tracked_secrets duration_ms=\d+ outcome=ok tracked_files=\d+ files_read=\d+ bytes_read=\d+ files_skipped_size=0 blob_cache_hits=0 blob_cache_misses=\d+ ls_files_staged_ms=\d+ ls_files_modified_ms=\d+ read_ms=\d+ match_ms=\d+ top_patterns_ms=([a-z0-9_]+:\d+,){2}[a-z0-9_]+:\d+`),
+		regexp.MustCompile(`check=tracked_secrets duration_ms=\d+ outcome=ok tracked_files=\d+ files_read=\d+ bytes_read=\d+ files_skipped_size=0 files_skipped_binary=0 blob_cache_hits=0 blob_cache_misses=\d+ ls_files_staged_ms=\d+ ls_files_modified_ms=\d+ read_ms=\d+ match_ms=\d+ top_patterns_ms=([a-z0-9_]+:\d+,){2}[a-z0-9_]+:\d+`),
 		regexp.MustCompile(`msg="repos: repo done" .* commit_cache_hits=0 commit_cache_misses=5 tracked_files=\d+ files_read=\d+ bytes_read=\d+`),
 	} {
 		if !want.MatchString(log) {

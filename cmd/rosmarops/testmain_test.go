@@ -13,6 +13,6 @@ import (
 // until the timeout (seen in CI as a 10-minute `verify-windows` failure). The
 // window's own driver is tested directly in connectwindow_test.go.
 func TestMain(m *testing.M) {
-	connectWindowHook = func(spacePaths, catalog.Catalog) {}
+	connectOfferHook = func(spacePaths, catalog.Catalog) connectResult { return connectNotOffered }
 	os.Exit(m.Run())
 }
