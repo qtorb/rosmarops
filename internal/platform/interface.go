@@ -598,6 +598,11 @@ type Platform interface {
 	// protected instruction files and its MCP servers.
 	ListHermes(ctx context.Context) (HermesScan, error)
 
+	// ListCodex reads OpenAI Codex's TOML config layers (BV-140, CTO-16 §2):
+	// the user config, the profiles, each repository's .codex/config.toml (in
+	// force only when the user config trusts it) and the system requirements.
+	ListCodex(ctx context.Context, repoRoots []string) (CodexScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.

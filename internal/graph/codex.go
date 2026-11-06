@@ -84,6 +84,52 @@ func FromCodex(scan platform.CodexScan, discoveredAt time.Time) Fragment {
 	return b.fragment()
 }
 
+// CodexMCPServers converts the MCP servers of Codex's in-force layers (the user
+// config and the trusted project configs, CTO-16 §2) into the shared MCP
+// pipeline's platform.MCPServer, so that the pipeline builds their mcp_server
+// nodes, the loads edges from Codex's ai_client, and — through the credential
+// pipeline reading their env and http_headers — the credentials and
+// authenticates_to edges (CTO-16 §3, §5). The servers of an untrusted project do
+// not load, so they are left out. The client id matches FromCodex's because the
+// ConfigDir is the CODEX_HOME folder.
+func CodexMCPServers(scan platform.CodexScan) []platform.MCPServer {
+	if !scan.Exists {
+		return nil
+	}
+	var out []platform.MCPServer
+	for _, l := range scan.Layers {
+		if l.Status != platform.MCPSourceRead {
+			continue
+		}
+		inForce := l.Kind == platform.CodexLayerUser || (l.Kind == platform.CodexLayerProject && l.Trusted)
+		if !inForce {
+			continue
+		}
+		scope := platform.MCPScopeUser
+		if l.Kind == platform.CodexLayerProject {
+			scope = platform.MCPScopeProject
+		}
+		for _, s := range l.MCP {
+			out = append(out, platform.MCPServer{
+				Client:     knowledge.CodexProduct,
+				Name:       s.ID,
+				Command:    s.Command,
+				Args:       s.Args,
+				EnvKeys:    s.EnvKeys,
+				Env:        s.Env,
+				Headers:    s.Headers,
+				ConfigPath: l.Path,
+				ConfigDir:  scan.ConfigDir,
+				Pointer:    "/mcp_servers/" + s.ID,
+				LoadsMCP:   true,
+				Scope:      scope,
+				ScopePath:  l.Root,
+			})
+		}
+	}
+	return out
+}
+
 // codexCap is one configured capability to emit.
 type codexCap struct {
 	typ      string
@@ -152,4 +198,131 @@ func codexEffectiveSandbox(l platform.CodexLayer) string {
 
 func codexCapID(client, kind, path, typ, scope string) string {
 	return "cap_" + keyHash(KindCapability, BasisConfigured, client, kind, canonicalPath(path), typ, scope)
+}
+
+// AssumeLaunchFlagsNotReadable marks every Codex edge: a launch flag such as
+// --yolo, an environment variable or a session choice is not visible at rest
+// (CTO-16 §4, point 7). Its value matches the rules-layer constant of the same
+// name, which validates and renders it.
+const AssumeLaunchFlagsNotReadable = "launch_flags_not_readable"
+
+// kbCodexProtected is the knowledge-base entry id of Codex's protected paths
+// (.git, .agents, .codex, .aws), never written inside a writable root.
+const kbCodexProtected = "protected_paths"
+
+// codexInference holds what one Codex client's edges are inferred from
+// (CTO-16 §5). Codex reads every file the user can read (read_files allow
+// any_path, always in force), so it reaches every credential. It writes
+// another agent's configuration without asking inside the workspace, outside
+// the protected paths (sandbox_mode workspace-write); or anywhere with
+// danger-full-access.
+type codexInference struct {
+	client    Node
+	roots     []string
+	protected []string // kbCodexProtected, relative to a workspace root
+	readCap   *Node    // read_files allow, in force (any_path)
+	writeCap  *Node    // write_files allow, in force; widest scope
+	writeAny  bool     // writeCap reaches any path (danger-full-access)
+}
+
+func (p prepared) codexInference(client Node, repoRoots []string) codexInference {
+	in := codexInference{client: client, roots: append([]string{}, repoRoots...)}
+	if e, ok := p.codex.Entry(kbCodexProtected); ok {
+		in.protected = e.Paths
+	}
+	for i := range p.caps[client.ID] {
+		c := p.caps[client.ID][i]
+		if !c.InForce || c.Approval != ApprovalAllow {
+			continue
+		}
+		switch c.Type {
+		case CapReadFiles:
+			if in.readCap == nil || c.TargetScope == CodexScopeAnyPath {
+				in.readCap = &p.caps[client.ID][i]
+			}
+		case CapWriteFiles:
+			// The widest write-allow in force governs: any_path
+			// (danger-full-access) over working_directory (workspace-write).
+			if in.writeCap == nil || (!in.writeAny && c.TargetScope == CodexScopeAnyPath) {
+				in.writeCap = &p.caps[client.ID][i]
+			}
+			if c.TargetScope == CodexScopeAnyPath {
+				in.writeAny = true
+			}
+		}
+	}
+	return in
+}
+
+// reaches is one reaches edge per credential Codex can read: the whole machine
+// (its own auth.json is excused in the rules layer, not here).
+func (in codexInference) reaches(all []Node) []Edge {
+	if in.readCap == nil {
+		return nil
+	}
+	var out []Edge
+	for _, cred := range all {
+		if cred.Kind != KindCredential {
+			continue
+		}
+		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
+	}
+	return out
+}
+
+// writes is one writes_config_of edge per agent resource with a file Codex can
+// write without a person: any resource with danger-full-access; a resource
+// inside a workspace root and outside the protected paths with workspace-write.
+func (in codexInference) writes(all []Node) []Edge {
+	if in.writeCap == nil {
+		return nil
+	}
+	var out []Edge
+	for _, res := range all {
+		if res.Kind != KindResource || !isAgentResource(res.Type) {
+			continue
+		}
+		file, ok := resourceFile(res.Path)
+		if !ok {
+			continue
+		}
+		if !in.writeAny && !in.writableWorkspace(file) {
+			continue
+		}
+		out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.writeCap))
+	}
+	return out
+}
+
+// writableWorkspace reports a file inside a workspace root and outside the
+// protected paths (.git, .agents, .codex, .aws), which workspace-write edits
+// without asking.
+func (in codexInference) writableWorkspace(file string) bool {
+	for _, r := range in.roots {
+		if !within(r, file) {
+			continue
+		}
+		rel, ok := relTo(r, file)
+		if ok && !matchesAny(in.protected, rel) {
+			return true
+		}
+	}
+	return false
+}
+
+func (in codexInference) edge(typ, to string, cap Node) Edge {
+	e := Edge{
+		ID:          "edge_" + typ + "_" + keyHash(typ, in.client.ID, to, cap.ID),
+		Type:        typ,
+		From:        in.client.ID,
+		To:          to,
+		Source:      cap.Source,
+		Certainty:   CertaintyInferred,
+		DerivedFrom: []string{in.client.ID, cap.ID, to},
+		Assumptions: baseAssumptions(AssumeLaunchFlagsNotReadable),
+	}
+	if typ == EdgeReaches {
+		e.Via = cap.ID
+	}
+	return e
 }

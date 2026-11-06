@@ -53,7 +53,9 @@ const ReviewedOn = "2026-11-03"
 // agentes, cálculo, T9). A change in any base changes it.
 // The parts are sorted by product (claude-code < cursor < hermes), as
 // CompositeOf sorts them.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CursorProduct + "@" + CursorVersion + ";" + HermesProduct + "@" + HermesVersion
+// The parts are sorted by product (claude-code < codex < cursor < hermes), as
+// CompositeOf sorts them.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -264,12 +266,12 @@ func Codex() (Base, error) {
 }
 
 // All returns every embedded base, by product: an agent whose product has a
-// base is evaluated. Codex is registered (Codex()) but not yet listed here: it
-// joins All() with its graph builder and overview cells (BV-140 pieces c and d),
-// so that evaluating it produces valid rows.
+// base is evaluated. Codex joins the set with its graph builder, inference and
+// overview cells (BV-140 pieces c and d), so that evaluating it produces valid
+// rows.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex} {
 		b, err := load()
 		if err != nil {
 			return nil, err

@@ -240,6 +240,12 @@ type Input struct {
 	// unrecognized value treated as local) to scope its read/write/shell
 	// rows. Optional.
 	Hermes platform.HermesScan
+
+	// Codex is the OpenAI Codex scan (BV-140): the overview reads each agent's
+	// layers from it to know when its commands rest on rules it does not parse
+	// (exec_rules_not_evaluated) and when no Windows sandbox is set
+	// (windows_sandbox_unknown). Optional.
+	Codex platform.CodexScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -828,8 +834,37 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 		v.egress = v.hermesEgress()
 		return v
 	}
+	if n.Platform == knowledge.CodexProduct {
+		v.egress = v.codexEgress()
+		return v
+	}
 	v.egress = v.egressWays(base, launchers)
 	return v
+}
+
+// codexEgress are Codex's ways to send data out without a person (CTO-16 §4):
+// the network, off by default (no way), allowed with workspace-write +
+// network_access or with danger-full-access; and the shell when it runs on the
+// machine (danger-full-access, target "*"). A workspace-sandbox shell is no
+// egress of the computer's data. Every Codex way carries launch_flags_not_readable.
+func (v *agentView) codexEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
+	var out []way
+	for _, c := range v.inForce {
+		if c.Approval != graph.ApprovalAllow {
+			continue
+		}
+		switch c.Type {
+		case graph.CapNetwork:
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		case graph.CapExecuteShell:
+			if c.TargetScope != scopeAll {
+				continue // a workspace-sandbox shell stays in its sandbox
+			}
+			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
+		}
+	}
+	return out
 }
 
 // hermesEgress are Hermes Agent's ways to send data out without a person

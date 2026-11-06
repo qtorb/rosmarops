@@ -73,6 +73,9 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case knowledge.HermesProduct:
 			in := p.hermesInference(client)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+		case knowledge.CodexProduct:
+			in := p.codexInference(client, repoRoots)
+			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {
 			if _, dup := edges[e.ID]; !dup {
@@ -101,10 +104,10 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 // client's capabilities. Infer and Probe build their inferences from it, so
 // both see exactly the same inputs.
 type prepared struct {
-	claude, cursor knowledge.Base
-	prot           knowledge.Entry
-	nodes          map[string]Node
-	caps           map[string][]Node
+	claude, cursor, codex knowledge.Base
+	prot                  knowledge.Entry
+	nodes                 map[string]Node
+	caps                  map[string][]Node
 }
 
 func prepare(g Graph) (prepared, error) {
@@ -112,7 +115,7 @@ func prepare(g Graph) (prepared, error) {
 	if err != nil {
 		return prepared{}, fmt.Errorf("knowledge base: %w", err)
 	}
-	p := prepared{claude: bases[knowledge.ClaudeCodeProduct], cursor: bases[knowledge.CursorProduct], nodes: make(map[string]Node, len(g.Nodes)), caps: map[string][]Node{}}
+	p := prepared{claude: bases[knowledge.ClaudeCodeProduct], cursor: bases[knowledge.CursorProduct], codex: bases[knowledge.CodexProduct], nodes: make(map[string]Node, len(g.Nodes)), caps: map[string][]Node{}}
 	prot, ok := p.claude.Entry(kbProtectedPaths)
 	if !ok {
 		return prepared{}, fmt.Errorf("knowledge base: no %s entry", kbProtectedPaths)

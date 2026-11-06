@@ -291,9 +291,268 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.HermesProduct {
 		return oi.hermesCells(v)
 	}
+	if v.node.Platform == knowledge.CodexProduct {
+		return oi.codexCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
+}
+
+// Codex sandbox modes, by permissiveness (CTO-16 §4).
+const (
+	codexDanger    = "danger-full-access"
+	codexWorkspace = "workspace-write"
+	codexReadOnly  = "read-only"
+)
+
+// codexSandbox is Codex's effective sandbox from the widest write-allow in
+// force, and whether a configured layer set it: any_path is danger-full-access,
+// working_directory is workspace-write, else read-only (the default is
+// workspace-write, a product default).
+func codexSandbox(v *agentView) (mode string, configured bool) {
+	mode = codexReadOnly
+	rank := map[string]int{codexDanger: 3, codexWorkspace: 2, codexReadOnly: 1}
+	for _, c := range v.inForce {
+		if c.Type != graph.CapWriteFiles || c.Approval != graph.ApprovalAllow {
+			continue
+		}
+		var m string
+		switch c.TargetScope {
+		case graph.CodexScopeAnyPath:
+			m = codexDanger
+		case graph.CodexScopeWorkingDir:
+			m = codexWorkspace
+		default:
+			continue
+		}
+		if rank[m] > rank[mode] {
+			mode, configured = m, c.Basis == graph.BasisConfigured
+		}
+	}
+	return mode, configured
+}
+
+// codexPolicy is Codex's approval policy and whether its reviewer is the
+// auto_review model (CTO-16 §4), from the permission_mode capability in force;
+// the default is on-request (a product default).
+func codexPolicy(v *agentView) (policy string, autoReview bool) {
+	policy = "on-request"
+	for _, c := range v.inForce {
+		if c.Type != graph.CapPermissionMode {
+			continue
+		}
+		policy = c.TargetScope
+		if strings.Contains(c.Rule, "auto_review") {
+			autoReview = true
+		}
+	}
+	return policy, autoReview
+}
+
+// codexEscalationDecider is who decides an action that needs escalation beyond
+// the sandbox — writing outside the workspace or using the network (CTO-16 §4):
+// nobody with danger-full-access (nothing escalates), blocked with a blanket
+// never, the reviewer model with auto_review, otherwise the person.
+func codexEscalationDecider(v *agentView) string {
+	if mode, _ := codexSandbox(v); mode == codexDanger {
+		return DeciderNobody
+	}
+	policy, autoReview := codexPolicy(v)
+	switch {
+	case policy == "never":
+		return DeciderBlocked
+	case autoReview:
+		return DeciderModel
+	default:
+		return DeciderYou
+	}
+}
+
+// codexScanFlags reports, for the single Codex client of this run, whether any
+// of its layers carries rules\*.rules (exec_rules_not_evaluated) and whether a
+// [windows] sandbox is set anywhere (else windows_sandbox_unknown).
+func codexScanFlags(scan platform.CodexScan) (rulesFiles, windowsSandboxSet bool) {
+	for _, l := range scan.Layers {
+		rulesFiles = rulesFiles || l.HasRulesFiles
+		windowsSandboxSet = windowsSandboxSet || l.HasWindowsSandbox
+	}
+	return rulesFiles, windowsSandboxSet
+}
+
+// codexInForceCap is the in-force capability of type typ with an allow
+// approval, widest scope first (for the cell's finding lookup).
+func (v *agentView) codexInForceCap(typ string) string {
+	for _, c := range v.inForce {
+		if c.Type == typ && c.Approval == graph.ApprovalAllow {
+			return c.ID
+		}
+	}
+	return ""
+}
+
+// codexCells are OpenAI Codex's six rows (BV-140, CTO-16 §4). Codex reads every
+// file the user can read without asking (machine/nobody). Its write and shell
+// rows follow the sandbox: workspace-write keeps writes to the project
+// (same_project) and commands to its sandbox; danger-full-access reaches the
+// whole machine. Sending out and writing outside the workspace escalate, decided
+// by the approval policy (you), the reviewer model (auto_review) or refused
+// (never). Every Codex cell rests on launch_flags_not_readable.
+func (oi overviewInputs) codexCells(v *agentView) []OverviewCell {
+	mode, configured := codexSandbox(v)
+	rulesFiles, windowsSandboxSet := codexScanFlags(oi.in.Codex)
+	return []OverviewCell{
+		oi.codexReadsCell(v),
+		oi.codexWritesCell(v, mode, configured),
+		oi.codexRunsCell(v, mode, configured, rulesFiles, windowsSandboxSet),
+		oi.codexSendsCell(v),
+		oi.codexChangesCell(v),
+		oi.providerCell(v),
+	}
+}
+
+// codexBaseAssumptions are the assumptions every Codex cell carries.
+func codexBaseAssumptions(extra ...string) []string {
+	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+func (oi overviewInputs) codexReadsCell(v *agentView) OverviewCell {
+	origin := OriginProductDefault
+	for _, c := range v.inForce {
+		if c.Type == graph.CapReadFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			origin = OriginMixed
+		}
+	}
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: origin}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = codexBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) codexWritesCell(v *agentView, mode string, configured bool) OverviewCell {
+	scope := ScopeSameProject
+	if mode == codexDanger {
+		scope = ScopeMachine
+	}
+	origin := OriginProductDefault
+	if configured {
+		origin = OriginConfigured
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: DeciderNobody, Scope: scope, Origin: origin}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	edit := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			edit++
+		}
+	}
+	cell.Data.EditAllowRules = intp(edit)
+	cell.Data.Assumptions = codexBaseAssumptions()
+	cell.Data.Excluded = []string{ExcludedProtectedPaths}
+	r := NoFindingNotAFinding
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, rulesFiles, windowsSandboxSet bool) OverviewCell {
+	scope, decider := ScopeSandbox, DeciderNobody
+	if mode == codexDanger {
+		scope = ScopeMachine
+	}
+	origin := OriginProductDefault
+	if configured {
+		origin = OriginConfigured
+	}
+	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: origin}
+	pre := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			pre++
+		}
+	}
+	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(pre), intp(0)
+	assume := codexBaseAssumptions()
+	if rulesFiles {
+		assume = append(assume, AssumeExecRulesNotEvaluated)
+	}
+	if mode != codexDanger && !windowsSandboxSet {
+		// The command runs in a Windows sandbox whose implementation is chosen
+		// at launch; assume the least isolating one (CTO-16 §4, point 9).
+		assume = append(assume, AssumeWindowsSandboxUnknown)
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) codexSendsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginNone}
+	assume := codexBaseAssumptions()
+	if len(v.egress) > 0 {
+		// A network or machine-shell allow sends out without asking.
+		cell.Decider, cell.Scope, cell.Origin = DeciderNobody, ScopeAnyDestination, OriginConfigured
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		// Network off by default: using it escalates, decided by the policy.
+		cell.Decider = codexEscalationDecider(v)
+		cell.Origin = OriginProductDefault
+		switch cell.Decider {
+		case DeciderBlocked:
+			cell.Scope = ScopeNone
+		case DeciderModel:
+			cell.Scope = ScopeAnyDestination
+			assume = append(assume, AssumeReviewerModelPermits)
+			cell.Assumed = true
+		default:
+			cell.Scope = ScopeAnyDestination
+		}
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// codexChangesCell is Codex's writes to another agent's resources (CTO-16 §5):
+// each writes_config_of edge is a write without asking (workspace-write inside
+// the project, danger-full-access anywhere), so decider nobody.
+func (oi overviewInputs) codexChangesCell(v *agentView) OverviewCell {
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisProductDefault}, assumptions: codexBaseAssumptions()})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: codexBaseAssumptions()}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = codexBaseAssumptions()
+	return cell
 }
 
 // hermesCells are Hermes Agent's six rows (BV-111). Its read, write, shell and

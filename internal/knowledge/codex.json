@@ -65,6 +65,29 @@
       ]
     }
   ],
-  "mitigations": [],
+  "mitigations": [
+    {
+      "id": "codex_workspace_sandbox",
+      "setting": "sandbox_mode",
+      "completeness": "by_cuts",
+      "narrows": [
+        "any_reach"
+      ],
+      "magnitude": 3,
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: sandbox_mode = workspace-write + approval_policy = on-request keeps edits and commands to the project and asks before editing outside it or using the network"
+    },
+    {
+      "id": "codex_untrusted_project",
+      "setting": "projects",
+      "completeness": "by_cuts",
+      "narrows": [
+        "any_reach"
+      ],
+      "magnitude": 2,
+      "source_url": "https://learn.chatgpt.com/docs/config-reference",
+      "verified": "CTO-16 §2, 2026-11-01: [projects.<path>] trust_level = \"untrusted\" makes Codex ignore the repository's own .codex settings, hooks, rules and AGENTS.md"
+    }
+  ],
   "code_launchers": []
 }
