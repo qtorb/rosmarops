@@ -71,6 +71,7 @@ func (l Layout) configBase(home string, env Env) string {
 // Product codes (graph.clientDisplayNames).
 const (
 	Codex         = "codex"
+	GrokBuild     = "grok-build" // BV-140: xAI Grok Build
 	Antigravity   = "antigravity"
 	Hermes        = "hermes"
 	ClaudeDesktop = "claude-desktop"
@@ -132,6 +133,15 @@ func CodexHome(home string, env Env) string {
 		return v
 	}
 	return filepath.Join(home, ".codex")
+}
+
+// GrokHome is Grok Build's folder: GROK_HOME when set and non-empty,
+// otherwise <home>\.grok (xai-org/grok-build, xai-dirs/src/lib.rs:33-58).
+func GrokHome(home string, env Env) string {
+	if v, ok := lookup(env)("GROK_HOME"); ok && v != "" {
+		return v
+	}
+	return filepath.Join(home, ".grok")
 }
 
 // HermesHome is Hermes Agent's folder on the Windows layout.
@@ -208,6 +218,7 @@ func Detect(home string, env Env) []Present { return WindowsLayout.Detect(home, 
 // Detect lists the agents present on layout l, in a fixed order:
 //   - Codex: CodexHome\config.toml or CodexHome\auth.json, or the CodexHome
 //     folder itself (CTO-16 §1: the session may live in the OS keyring);
+//   - Grok Build: GrokHome\config.toml or GrokHome\auth.json (CTO-16 Grok §6);
 //   - Antigravity: .gemini\config\mcp_config.json, the folder
 //     .gemini\antigravity or the folder AntigravityUserDir; a
 //     .gemini folder alone is Gemini CLI's and does not count;
@@ -234,6 +245,14 @@ func (l Layout) Detect(home string, env Env) []Present {
 	}
 	if codexMarker != "" {
 		out = append(out, Present{Codex, codex, codexMarker})
+	}
+	// Grok Build (CTO-16 Grok §6): GROK_HOME\config.toml or GROK_HOME\auth.json.
+	grok := GrokHome(home, env)
+	for _, name := range []string{"config.toml", "auth.json"} {
+		if p := filepath.Join(grok, name); exists(p) {
+			out = append(out, Present{GrokBuild, grok, p})
+			break
+		}
 	}
 	gemini := AntigravityDir(home)
 	switch {

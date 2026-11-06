@@ -603,6 +603,12 @@ type Platform interface {
 	// force only when the user config trusts it) and the system requirements.
 	ListCodex(ctx context.Context, repoRoots []string) (CodexScan, error)
 
+	// ListGrok reads xAI Grok Build's TOML config layers (BV-140, CTO-16 Grok
+	// §2): the user config, each repository's .grok/config.toml (in force only
+	// when the folder is trusted), the managed config and the requirements,
+	// plus trusted_folders.toml.
+	ListGrok(ctx context.Context, repoRoots []string) (GrokScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -816,4 +822,104 @@ type CodexMCPServer struct {
 	Env        []EnvVar // values wrapped as SecretValue
 	HeaderKeys []string // http_headers names only
 	Headers    []EnvVar // http_headers values wrapped as SecretValue
+}
+
+// GrokScan is what ListGrok read of xAI Grok Build's config (BV-140, CTO-16
+// Grok §2). Like CodexScan, it only reports what each layer says; the graph
+// builder and the overview cells resolve the posture, including Grok's
+// inheritance of Claude Code and Cursor configuration.
+type GrokScan struct {
+	// ConfigDir is GROK_HOME (or <home>/.grok); Exists reports the folder
+	// exists with a config.toml or auth.json (CTO-16 Grok §6 detection signal).
+	ConfigDir string
+	Exists    bool
+
+	// FolderTrustOff reports the folder-trust control is disabled (a §2
+	// exception: GROK_FOLDER_TRUST=0, [folder_trust] enabled = false, or the
+	// binary has no GROK_VERSION). When off, project layers load without a
+	// trusted_folders entry.
+	FolderTrustOff bool
+
+	// Trusted are the repo roots the user trusts (trusted_folders.toml
+	// [folders."<root>"].trusted = true), canonical.
+	Trusted []string
+
+	// Layers are the config layers considered, each with its read outcome.
+	Layers []GrokLayer
+}
+
+// Grok config layer kinds (CTO-16 Grok §2 precedence order, after the CLI
+// flags which leave no trace at rest).
+const (
+	GrokLayerProject      = "project"      // <repo>/.grok/config.toml, only [mcp_servers]/[plugins]/[permission]/[mcp]
+	GrokLayerUser         = "user"         // GROK_HOME/config.toml
+	GrokLayerManaged      = "managed"      // GROK_HOME/managed_config.toml
+	GrokLayerRequirements = "requirements" // GROK_HOME/requirements.toml
+)
+
+// GrokLayer is one Grok config layer and the subset of keys RosmarOps reads
+// from it (CTO-16 Grok §2–§4). Only keys that bear on the posture are kept.
+type GrokLayer struct {
+	Kind   string
+	Path   string
+	Root   string // the repo root, for a project layer
+	Status MCPSourceStatus
+	Reason string
+
+	// Trusted is whether the user trusts this project root (set by the reader
+	// from trusted_folders.toml and the §2 exceptions); only for a project
+	// layer. A project layer that is not trusted is read but not in force.
+	Trusted bool
+
+	// PermissionMode is [ui] permission_mode (default | ask | acceptEdits |
+	// auto | dontAsk | bypassPermissions | always-approve); "" absent. Yolo is
+	// [ui] yolo = true, equivalent to always-approve. Both only from the user
+	// and managed layers (the project layer does not set [ui]).
+	PermissionMode    string
+	HasPermissionMode bool
+	Yolo              bool
+
+	// Allow, Deny, Ask are the [permission] rules of this layer (merged across
+	// layers by the graph; deny > ask > allow). A "*" is the wildcard.
+	Allow []string
+	Deny  []string
+	Ask   []string
+
+	// Compat are the [compat.<vendor>] cells set in this layer: "<vendor>.<surface>"
+	// → enabled. ClaudeImported is [claude_compat] imported = true. Absent
+	// cells are decided elsewhere (compat_cell_remote_unknown).
+	Compat         map[string]bool
+	ClaudeImported bool
+
+	// DisableBypass is [ui] disable_bypass_permissions_mode = true (requirements
+	// layer), which blocks always-approve (mode_not_allowed_in_scope).
+	DisableBypass bool
+
+	// FolderTrustEnabled is [folder_trust] enabled; nil when absent. false turns
+	// the folder-trust control off (a §2 exception).
+	FolderTrustEnabled *bool
+
+	// MCP are the [mcp_servers] of this layer, with their secret env and
+	// headers (CTO-16 Grok §3, credentials by fingerprint only).
+	MCP []GrokMCPServer
+
+	// APIKeys are [model.<id>].api_key and [telemetry].events_api_key values
+	// (CTO-16 Grok §3), secret, by fingerprint only, keyed by the model id or
+	// "telemetry".
+	APIKeys []EnvVar
+
+	// SessionCreds are the plaintext credential files beside this layer
+	// (auth.json, mcp_credentials.json), by fingerprint only (CTO-16 Grok §3).
+	SessionCreds []EnvVar
+}
+
+// GrokMCPServer is one [mcp_servers.<id>] of a Grok config layer.
+type GrokMCPServer struct {
+	ID         string
+	Command    string
+	Args       []string
+	EnvKeys    []string // names only
+	Env        []EnvVar // values wrapped as SecretValue
+	HeaderKeys []string // headers names only
+	Headers    []EnvVar // headers values wrapped as SecretValue
 }
