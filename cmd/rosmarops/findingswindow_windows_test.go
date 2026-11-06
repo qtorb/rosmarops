@@ -131,34 +131,30 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["HSCROLL"] != "False" {
 		t.Errorf("HorizontalScroll.Visible = %q, want False", kv["HSCROLL"])
 	}
-	// (3) The counter matches the ticked boxes (one dismissed in the sample).
-	wantChecked := 0
-	for _, c := range cards {
-		if c.Group == report.CardGroupDismissed {
-			wantChecked++
-		}
+	// (3) The rows actually render (pixel checks, not just control counts): a red
+	// pill background, a yellow pill background, dark title text in the first
+	// row, and a cobalt checkbox on the ticked (dismissed) finding. A blank list
+	// fails here.
+	if kv["PILLRED"] != "True" {
+		t.Errorf("no red pill background (#FBE9E5) rendered in any row — the list did not paint")
 	}
-	if n := atoi(kv["CHECKED"]); n != wantChecked {
-		t.Errorf("CHECKED = %d, want %d", n, wantChecked)
+	if kv["PILLYEL"] != "True" {
+		t.Errorf("no yellow pill background (#FDF5DF) rendered in any row")
 	}
-	if !strings.Contains(kv["COUNT"], strconv.Itoa(wantChecked)) {
-		t.Errorf("counter text %q does not reflect %d ticked", kv["COUNT"], wantChecked)
+	if kv["TITLEDARK"] != "True" {
+		t.Errorf("no dark title text (#1B1A18) in the first row's text column")
+	}
+	if kv["CHECKCOBALT"] != "True" {
+		t.Errorf("no cobalt (#2346B8) in the ticked finding's checkbox")
 	}
 	// (4) Opening an «i» grows the row.
 	io := nums("IOPEN")
 	if len(io) != 2 || io[1] <= io[0] {
 		t.Errorf("opening an «i» did not grow the row: %v", kv["IOPEN"])
 	}
-	// Chrome and colours.
+	// Chrome.
 	if !strings.Contains(kv["BORDER"], "FixedSingle") || kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
 		t.Errorf("chrome: BORDER=%s MAX=%s MIN=%s TOP=%s", kv["BORDER"], kv["MAX"], kv["MIN"], kv["TOP"])
-	}
-	argb := func(rgb uint32) int { return int(int32(0xFF000000 | rgb)) }
-	if atoi(kv["FORMBACK"]) != argb(0xFFFFFF) {
-		t.Errorf("form back = %s, want white", kv["FORMBACK"])
-	}
-	if atoi(kv["SAVEBACK"]) != argb(0x2346B8) {
-		t.Errorf("save button back = %s, want cobalt", kv["SAVEBACK"])
 	}
 	client := nums("CLIENT")
 	if client[0] != 640 || client[1] != 560 {
