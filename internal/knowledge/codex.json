@@ -1,0 +1,93 @@
+{
+  "product": "codex",
+  "version": "2026-11-01",
+  "entries": [
+    {
+      "id": "read_accessible",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "any_path",
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: default preset is workspace-write + on-request (Auto); \"commands allowed by the sandbox can run without approval, read accessible files\" — the read reaches everything the user can read"
+    },
+    {
+      "id": "write_workspace",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "working_directory",
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: \"Codex can read files, make edits, and run commands in the workspace\""
+    },
+    {
+      "id": "write_outside",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "outside_working_directory",
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: \"Codex requires approval to edit outside the workspace or to access network\""
+    },
+    {
+      "id": "shell_workspace_sandbox",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "workspace_sandbox",
+      "source_url": "https://github.com/openai/codex/blob/67f0994/codex-rs/protocol/src/protocol.rs#L1154-L1156",
+      "verified": "CTO-16 §4, 2026-11-01: approval_policy default on-request (protocol.rs:1154-1156); in workspace-write the sandbox runs commands without approval"
+    },
+    {
+      "id": "network_off",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: sandbox_workspace_write.network_access = false by default; the network needs approval"
+    },
+    {
+      "id": "builtin_on_request",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "on-request",
+      "source_url": "https://github.com/openai/codex/blob/67f0994/codex-rs/protocol/src/protocol.rs#L1154-L1156",
+      "verified": "CTO-16 §4, 2026-11-01: approval_policy defaults to on-request in the code (protocol.rs:1154-1156)"
+    },
+    {
+      "id": "protected_paths",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "protected_paths",
+      "source_url": "https://github.com/openai/codex/blob/67f0994/codex-rs/protocol/src/permissions.rs#L40-L43",
+      "verified": "CTO-16 §4, 2026-11-01: \"Protected paths\" recursive within the writable roots (permissions.rs:40-43, :860-863)",
+      "paths": [
+        ".git/",
+        ".agents/",
+        ".codex/",
+        ".aws/"
+      ]
+    }
+  ],
+  "mitigations": [
+    {
+      "id": "codex_workspace_sandbox",
+      "setting": "sandbox_mode",
+      "completeness": "by_cuts",
+      "narrows": [
+        "any_reach"
+      ],
+      "magnitude": 3,
+      "source_url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+      "verified": "CTO-16 §4, 2026-11-01: sandbox_mode = workspace-write + approval_policy = on-request keeps edits and commands to the project and asks before editing outside it or using the network"
+    },
+    {
+      "id": "codex_untrusted_project",
+      "setting": "projects",
+      "completeness": "by_cuts",
+      "narrows": [
+        "any_reach"
+      ],
+      "magnitude": 2,
+      "source_url": "https://learn.chatgpt.com/docs/config-reference",
+      "verified": "CTO-16 §2, 2026-11-01: [projects.<path>] trust_level = \"untrusted\" makes Codex ignore the repository's own .codex settings, hooks, rules and AGENTS.md"
+    }
+  ],
+  "code_launchers": []
+}

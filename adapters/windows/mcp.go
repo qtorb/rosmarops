@@ -65,6 +65,12 @@ type mcpServerEntry struct {
 	// ServerURL is Antigravity's remote endpoint (serverUrl), read like URL
 	// (https://antigravity.google/docs/settings).
 	ServerURL string `json:"serverUrl"`
+
+	// Disabled is Antigravity's per-server switch (BV-140, CTO-16): a server
+	// with "disabled": true is not loaded, so it must not become a node or a
+	// `loads` edge. Only Antigravity's mcp_config.json carries it; other
+	// formats never set it, so this is a no-op for them.
+	Disabled bool `json:"disabled"`
 }
 
 // fileFormat selects how ReadMCPFile parses a config file.
@@ -378,6 +384,13 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 	servers := make([]platform.MCPServer, 0, len(entries))
 	for pointer, ne := range entries {
 		entry := ne.entry
+
+		// A disabled server is not loaded (BV-140): no node, no `loads` edge,
+		// no credential. Before, a disabled Antigravity server counted as
+		// loaded, claiming more than is true.
+		if entry.Disabled {
+			continue
+		}
 
 		// EnvKeys: key names only, for the v1 scanner and baseline.
 		envKeys := sortedKeys(entry.Env)

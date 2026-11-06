@@ -28,6 +28,7 @@ var clientDisplayNames = map[string]string{
 
 	// Detected and not evaluated (decision 2026-10-27, agentes nuevos, N1).
 	agentdirs.Codex:         "Codex",
+	agentdirs.GrokBuild:     "Grok Build",
 	agentdirs.Antigravity:   "Antigravity",
 	agentdirs.Hermes:        "Hermes Agent",
 	agentdirs.ClaudeDesktop: "Claude Desktop",

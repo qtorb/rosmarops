@@ -67,6 +67,31 @@ const AssumeAuxModelPermits = "aux_model_permits"
 // follow-up). The {backend} parameter carries the value, redacted and cut.
 const AssumeHermesBackendUnknown = "hermes_backend_unknown"
 
+// CTO-16 (BV-140) assumptions for Codex and Grok Build. Codes only; no schema
+// change. Their catalog texts are signed by Albert (unknown.<code>).
+const (
+	// AssumeReviewerModelPermits: the step depends on the vendor's reviewer
+	// model allowing it — Codex's auto_review, Antigravity's agentMode:auto and
+	// Copilot's Assisted (CTO-16 §6, point 6). A premise, like
+	// auto_classifier_permits, so it lowers confidence to medium.
+	AssumeReviewerModelPermits = "reviewer_model_permits"
+	// AssumeLaunchFlagsNotReadable: a launch flag such as --yolo, an environment
+	// variable or a choice made during the session is not visible at rest. Used
+	// by Codex and by Grok Build (CTO-16 point 7).
+	AssumeLaunchFlagsNotReadable = "launch_flags_not_readable"
+	// AssumeExecRulesNotEvaluated: Codex's rules\*.rules are not parsed; assume
+	// they can let commands run without asking (CTO-16 point 8).
+	AssumeExecRulesNotEvaluated = "exec_rules_not_evaluated"
+	// AssumeWindowsSandboxUnknown: Codex has no [windows] sandbox set; it picks
+	// an implementation at launch. Assume the least-isolating one (CTO-16
+	// point 9).
+	AssumeWindowsSandboxUnknown = "windows_sandbox_unknown"
+	// AssumeCompatCellRemoteUnknown: a Grok Build compatibility cell has no
+	// value in the file and xAI may set it remotely; assume it is on (CTO-16
+	// point 10).
+	AssumeCompatCellRemoteUnknown = "compat_cell_remote_unknown"
+)
+
 // AllAssumptions lists every assumption a finding can carry: the graph's and
 // code_launcher_rule.
 var AllAssumptions = []string{
@@ -77,6 +102,8 @@ var AllAssumptions = []string{
 	graph.AssumeIDERunModeNotReadable, graph.AssumeThirdPartyImportsNotReadable, graph.AssumeSandboxPlatformUnknown,
 	graph.AssumeConfigFileProtectionUnknown, graph.AssumeTeamPolicyUnknown, AssumeRemoteVisibilityUnknown,
 	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
+	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
+	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -88,6 +115,8 @@ var premiseAssumptions = map[string]bool{
 	graph.AssumeUIModeChoiceUnknown:   true,
 	graph.AssumeIDERunModeNotReadable: true,
 	AssumeAuxModelPermits:             true,
+	// A reviewer model decides the step (CTO-16): a premise, confidence medium.
+	AssumeReviewerModelPermits: true,
 }
 
 // Severities, confidences and radii.
@@ -217,6 +246,17 @@ type Input struct {
 	// unrecognized value treated as local) to scope its read/write/shell
 	// rows. Optional.
 	Hermes platform.HermesScan
+
+	// Codex is the OpenAI Codex scan (BV-140): the overview reads each agent's
+	// layers from it to know when its commands rest on rules it does not parse
+	// (exec_rules_not_evaluated) and when no Windows sandbox is set
+	// (windows_sandbox_unknown). Optional.
+	Codex platform.CodexScan
+
+	// Grok is the xAI Grok Build scan (BV-140): the overview reads its compat
+	// cells to know when a cell has no value in the file and could be decided
+	// remotely (compat_cell_remote_unknown). Optional.
+	Grok platform.GrokScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -686,7 +726,7 @@ func ownsAccountFile(a *agentView, cred graph.Node) bool {
 	}
 	for _, f := range files {
 		base := strings.ToLower(path.Base(strings.ReplaceAll(f, `\`, "/")))
-		if base != ".credentials.json" && base != "auth.json" {
+		if base != ".credentials.json" && base != "auth.json" && base != "mcp_credentials.json" {
 			return false
 		}
 		if !graph.Within(a.node.ConfigPath, f) {
@@ -833,8 +873,96 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 		v.egress = v.hermesEgress()
 		return v
 	}
+	if n.Platform == knowledge.CodexProduct {
+		v.egress = v.codexEgress()
+		return v
+	}
+	if n.Platform == knowledge.GrokBuildProduct {
+		v.egress = v.grokEgress()
+		return v
+	}
 	v.egress = v.egressWays(base, launchers)
 	return v
+}
+
+// grokMode is Grok Build's effective permission mode from its in-force
+// permission_mode capability (its own [ui] or the Claude Code defaultMode it
+// inherits); "default" (ask) when none is in force (CTO-16 Grok §4).
+func grokMode(v *agentView) (mode string, cap *graph.Node) {
+	var fallback *graph.Node
+	for i := range v.inForce {
+		c := &v.inForce[i]
+		if c.Type != graph.CapPermissionMode {
+			continue
+		}
+		if c.Basis == graph.BasisConfigured {
+			return c.TargetScope, c // a configured mode (its own [ui] or inherited) wins
+		}
+		if fallback == nil {
+			fallback = c
+		}
+	}
+	if fallback != nil {
+		return fallback.TargetScope, fallback
+	}
+	return "default", nil
+}
+
+// grokBypassMode reports a Grok mode that approves everything without asking.
+func grokBypassMode(mode string) bool {
+	switch mode {
+	case "bypassPermissions", "always-approve":
+		return true
+	}
+	return false
+}
+
+// grokEgress are Grok Build's ways to send data out without a person (CTO-16
+// Grok §4): with an approve-everything mode (bypassPermissions, always-approve,
+// yolo) the network and shell send without asking; with auto a classifier
+// decides; a wildcard network allow also sends. The default mode asks, so it is
+// no egress. Every Grok way carries launch_flags_not_readable.
+func (v *agentView) grokEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
+	mode, modeCap := grokMode(v)
+	var out []way
+	switch {
+	case grokBypassMode(mode) && modeCap != nil:
+		out = append(out, way{id: modeCap.ID, code: "egress_network", cap: modeCap.ID, assumptions: append([]string{}, baseA...)})
+	case mode == "auto" && modeCap != nil:
+		out = append(out, way{id: modeCap.ID, code: "egress_auto", cap: modeCap.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeAutoClassifierPermits)})
+	}
+	for _, c := range v.inForce {
+		if c.Type == graph.CapNetwork && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		}
+	}
+	return out
+}
+
+// codexEgress are Codex's ways to send data out without a person (CTO-16 §4):
+// the network, off by default (no way), allowed with workspace-write +
+// network_access or with danger-full-access; and the shell when it runs on the
+// machine (danger-full-access, target "*"). A workspace-sandbox shell is no
+// egress of the computer's data. Every Codex way carries launch_flags_not_readable.
+func (v *agentView) codexEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
+	var out []way
+	for _, c := range v.inForce {
+		if c.Approval != graph.ApprovalAllow {
+			continue
+		}
+		switch c.Type {
+		case graph.CapNetwork:
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		case graph.CapExecuteShell:
+			if c.TargetScope != scopeAll {
+				continue // a workspace-sandbox shell stays in its sandbox
+			}
+			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
+		}
+	}
+	return out
 }
 
 // hermesEgress are Hermes Agent's ways to send data out without a person

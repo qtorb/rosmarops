@@ -20,6 +20,8 @@ const (
 	ClaudeCodeProduct = "claude-code"
 	CursorProduct     = "cursor"
 	HermesProduct     = "hermes"
+	CodexProduct      = "codex"      // BV-140: OpenAI Codex (CLI and IDE extension)
+	GrokBuildProduct  = "grok-build" // BV-140: xAI Grok Build (CLI)
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -33,6 +35,13 @@ const CursorVersion = "2026-10-25"
 // HermesVersion is the version of the embedded Hermes base (hermes.json,
 // BV-111).
 const HermesVersion = "2026-10-29"
+
+// CodexVersion is the version of the embedded Codex base (codex.json, BV-140).
+const CodexVersion = "2026-11-01"
+
+// GrokBuildVersion is the version of the embedded Grok Build base
+// (grok-build.json, BV-140).
+const GrokBuildVersion = "2026-11-01"
 
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
@@ -49,7 +58,9 @@ const ReviewedOn = "2026-11-03"
 // agentes, cálculo, T9). A change in any base changes it.
 // The parts are sorted by product (claude-code < cursor < hermes), as
 // CompositeOf sorts them.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CursorProduct + "@" + CursorVersion + ";" + HermesProduct + "@" + HermesVersion
+// The parts are sorted by product (claude-code < codex < cursor < grok-build <
+// hermes), as CompositeOf sorts them.
+const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -69,6 +80,12 @@ var cursorJSON []byte
 
 //go:embed hermes.json
 var hermesJSON []byte
+
+//go:embed codex.json
+var codexJSON []byte
+
+//go:embed grok-build.json
+var grokBuildJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -237,11 +254,49 @@ func Hermes() (Base, error) {
 	return b, nil
 }
 
+// Codex returns the embedded Codex knowledge base (BV-140), with Claude Code's
+// code launcher table (as Cursor and Hermes reuse it) so Codex's shell ways are
+// read for the code launchers too.
+func Codex() (Base, error) {
+	b, err := decode(codexJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != CodexVersion {
+		return Base{}, fmt.Errorf("knowledge base codex: version %q, want %q", b.Version, CodexVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
+// GrokBuild returns the embedded Grok Build knowledge base (BV-140), with
+// Claude Code's code launcher table (as Cursor, Hermes and Codex reuse it).
+func GrokBuild() (Base, error) {
+	b, err := decode(grokBuildJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != GrokBuildVersion {
+		return Base{}, fmt.Errorf("knowledge base grok-build: version %q, want %q", b.Version, GrokBuildVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
-// base is evaluated.
+// base is evaluated. Codex joins the set with its graph builder, inference and
+// overview cells (BV-140 pieces c and d); Grok Build joins the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild} {
 		b, err := load()
 		if err != nil {
 			return nil, err

@@ -157,6 +157,13 @@ type Node struct {
 	// does not change; the rules layer emits n8n_mcp_bridge from it.
 	N8N *N8NMatch `json:"-"`
 
+	// CodexUntrustedRoots, when set on a Codex ai_client node, lists the repo
+	// roots the user config marks trust_level = "untrusted" (BV-140, CTO-16
+	// Codex §4–§5): Codex loads nothing from them and asks before commands
+	// there, so its inference writes nothing inside them. In memory only, set
+	// after Build (MarkCodexUntrusted), like Malicious — never serialized.
+	CodexUntrustedRoots []string `json:"-"`
+
 	// N8NKey, when true on a file resource node for an n8n user folder, marks
 	// that the folder holds n8n's database alongside the config with its
 	// credential encryption key (BV-175). In memory only, like Malicious —

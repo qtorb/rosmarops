@@ -500,7 +500,9 @@
             "remove_from_disk",
             "sandbox_read_boundary_workspace",
             "rotate_credential",
-            "hermes_isolated_backend"
+            "hermes_isolated_backend",
+            "codex_workspace_sandbox",
+            "codex_untrusted_project"
           ]
         },
         "file": {

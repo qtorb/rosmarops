@@ -234,8 +234,45 @@ func mcpDisposition(v *agentView, serverName string) string {
 		return cursorMCPDisposition(v, serverName)
 	case knowledge.HermesProduct:
 		return hermesMCPDisposition(v)
+	case knowledge.CodexProduct:
+		return codexMCPDisposition(v)
+	case knowledge.GrokBuildProduct:
+		return grokMCPDisposition(v)
 	}
 	return ""
+}
+
+// grokMCPDisposition maps Grok Build's effective mode to who approves an MCP
+// tool call (CTO-16 Grok §4): nobody with an approve-everything mode, another
+// model with auto, otherwise the person (the default mode asks).
+func grokMCPDisposition(v *agentView) string {
+	mode, _ := grokMode(v)
+	switch {
+	case grokBypassMode(mode):
+		return MCPApprovalNobody
+	case mode == "auto":
+		return MCPApprovalAnotherModel
+	default:
+		return MCPApprovalPerson
+	}
+}
+
+// codexMCPDisposition maps Codex's escalation decider (its approval policy and
+// sandbox) to who approves an MCP tool call (CTO-16 §4): nobody with
+// danger-full-access or a blanket never, another model with auto_review,
+// otherwise the person (on-request asks). default_tools_approval_mode is not
+// read at rest, so this is the policy's default flow.
+func codexMCPDisposition(v *agentView) string {
+	switch codexEscalationDecider(v) {
+	case DeciderNobody:
+		return MCPApprovalNobody
+	case DeciderModel:
+		return MCPApprovalAnotherModel
+	case DeciderBlocked:
+		return MCPApprovalDeny
+	default:
+		return MCPApprovalPerson
+	}
 }
 
 // claudeMCPDisposition reads Claude Code's invoke_mcp_tool rules

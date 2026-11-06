@@ -14,6 +14,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/jsonc"
 	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
@@ -446,9 +447,10 @@ const vscodeEnvKey = "claudeCode.environmentVariables"
 // readVSCodeMode reads only claudeCode.initialPermissionMode and
 // claudeCode.environmentVariables from VS Code's user settings.json
 // (decision 2026-10-24, D7; T12); every other key is discarded, and the
-// variables' values are kept as secrets. The file is decoded as strict JSON: VS Code allows comments and
-// trailing commas, and such a file goes to coverage as parse_error. nil when
-// the file does not exist.
+// variables' values are kept as secrets. The file is decoded as JSONC
+// (BV-140, CTO-16): VS Code's settings.json normally carries comments and
+// trailing commas, so reading it as strict JSON sent the common case to
+// coverage as parse_error. nil when the file does not exist.
 func readVSCodeMode(path, configDir string) *platform.VSCodeModeSetting {
 	raw, status, reason := readBounded(path)
 	if status == platform.MCPSourceMissing {
@@ -459,7 +461,7 @@ func readVSCodeMode(path, configDir string) *platform.VSCodeModeSetting {
 		return v
 	}
 	var keys map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &keys); err != nil {
+	if err := json.Unmarshal(jsonc.Strip(raw), &keys); err != nil {
 		v.Status, v.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
 		return v
 	}

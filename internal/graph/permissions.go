@@ -485,7 +485,23 @@ func FromScansWithCursor(mcp platform.MCPScan, settings platform.ClaudeSettingsS
 // FromScansWithHermes is FromScansWithRepos with Hermes Agent's config.yaml
 // (BV-111): approvals.mode and terminal.backend drive Hermes's capabilities.
 func FromScansWithHermes(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
-	return fromScans(mcp, settings, cursor, credFiles, repos, hermes, salt, discoveredAt)
+	return fromScans(mcp, settings, cursor, credFiles, repos, hermes, platform.CodexScan{}, platform.GrokScan{}, salt, discoveredAt)
+}
+
+// FromScansWithCodex is FromScansWithHermes with OpenAI Codex's config layers
+// (BV-140): its ai_client, agent_config resources and the configured
+// capabilities of its in-force layers, plus the product defaults of every
+// Codex client (CTO-16 §4–§5).
+func FromScansWithCodex(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, codex platform.CodexScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
+	return fromScans(mcp, settings, cursor, credFiles, repos, hermes, codex, platform.GrokScan{}, salt, discoveredAt)
+}
+
+// FromScansWithGrok is FromScansWithCodex with xAI Grok Build's config layers
+// (BV-140): its ai_client, agent_config resources, the configured capabilities
+// of its in-force layers and the configuration it inherits from Claude Code and
+// Cursor, plus the product defaults of every Grok client (CTO-16 Grok §2–§5).
+func FromScansWithGrok(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, codex platform.CodexScan, grok platform.GrokScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
+	return fromScans(mcp, settings, cursor, credFiles, repos, hermes, codex, grok, salt, discoveredAt)
 }
 
 // Repos is what the repository scan gives the graph (decision 2026-10-24,
@@ -502,12 +518,13 @@ type Repos struct {
 // with the same fingerprint), git_repository resources and committed_in
 // edges; a tracked file is also a location of its credential.
 func FromScansWithRepos(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
-	return fromScans(mcp, settings, cursor, credFiles, repos, platform.HermesScan{}, salt, discoveredAt)
+	return fromScans(mcp, settings, cursor, credFiles, repos, platform.HermesScan{}, platform.CodexScan{}, platform.GrokScan{}, salt, discoveredAt)
 }
 
-func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
+func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, cursor platform.CursorScan, credFiles platform.CredentialFileScan, repos Repos, hermes platform.HermesScan, codex platform.CodexScan, grok platform.GrokScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
 	policy := resolveManaged(settings.Managed)
 	extra := append(settingsCredentialInputs(settings, policy), credentialFileInputsFor(credFiles, mcp.Servers)...)
+	extra = append(extra, grokCredentialInputs(grok)...)      // Grok's config.toml keys and session files (CTO-16 Grok §3)
 	extra = append(extra, committedInputs(repos.Findings)...) // last: the collector's identity of a key wins
 	mcpFrag, err := fromMCPScan(mcp, salt, discoveredAt, extra, repos.Families)
 	if err != nil {
@@ -526,10 +543,13 @@ func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, curso
 	for _, f := range credFiles.Failed {
 		files.failed = append(files.failed, SourceFailed{Path: f.Path, Reason: f.Reason})
 	}
-	merged := Merge(mcpFrag, setFrag, files.fragment(), FromCursor(cursor, settings, discoveredAt))
+	merged := Merge(mcpFrag, setFrag, files.fragment(), FromCursor(cursor, settings, discoveredAt), FromCodex(codex, discoveredAt), FromGrok(grok, settings, cursor, discoveredAt))
 	applyApprovals(&merged, mcp, settings, policy)
 	defaults := []Fragment{merged}
-	for _, product := range []string{knowledge.ClaudeCodeProduct, knowledge.CursorProduct} {
+	// Codex's and Grok Build's product defaults are the generic ones (CTO-16 §4,
+	// Grok §4): their configured capabilities, from FromCodex / FromGrok, sit
+	// beside them, and the inference reconciles them.
+	for _, product := range []string{knowledge.ClaudeCodeProduct, knowledge.CursorProduct, knowledge.CodexProduct, knowledge.GrokBuildProduct} {
 		defaults = append(defaults, ProductDefaults(merged.Nodes, bases[product]))
 	}
 	// Hermes Agent builds its own capabilities (BV-111): product_default

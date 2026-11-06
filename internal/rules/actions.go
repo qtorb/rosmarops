@@ -7,6 +7,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
@@ -27,10 +28,18 @@ const (
 	// isolated backend in its config.yaml, so its terminal, file and code
 	// tools run off the computer (BV-111, point 7).
 	ActionHermesIsolatedBackend = "hermes_isolated_backend"
+
+	// ActionCodexWorkspaceSandbox puts Codex back on sandbox_mode =
+	// "workspace-write" + approval_policy = "on-request" (CTO-16 §4, BV-140).
+	ActionCodexWorkspaceSandbox = "codex_workspace_sandbox"
+	// ActionCodexUntrustedProject marks a project untrusted in Codex's user
+	// config, so a cloned repo's own .codex settings, hooks, rules and
+	// AGENTS.md are ignored (CTO-16 §2, BV-140).
+	ActionCodexUntrustedProject = "codex_untrusted_project"
 )
 
 // AllActions lists every action code.
-var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential, ActionHermesIsolatedBackend}
+var AllActions = []string{ActionAskEditRule, ActionAskReadRule, ActionBlockReadsOutside, ActionManualDefaultMode, ActionRemoveFromDisk, ActionSandboxReadBoundary, ActionRotateCredential, ActionHermesIsolatedBackend, ActionCodexWorkspaceSandbox, ActionCodexUntrustedProject}
 
 // Completeness of an action.
 const (
@@ -168,6 +177,28 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 			act.File = inConfigDir(a.node.ConfigPath, "config.yaml")
 			act.FileExists = configExists(in.Graph, act.File)
 			act.Key, act.Value = "", ""
+		case ActionCodexWorkspaceSandbox:
+			// Only when there is something to revert: danger-full-access, or a
+			// blanket never that stops Codex asking (CTO-16 §4).
+			mode, _ := codexSandbox(a)
+			policy, _ := codexPolicy(a)
+			if mode != codexDanger && policy != "never" {
+				continue
+			}
+			// The change is in Codex's own config.toml (CTO-16 §4): back to
+			// sandbox_mode = workspace-write + approval_policy = on-request.
+			act.File = inConfigDir(a.node.ConfigPath, "config.toml")
+			act.FileExists = configExists(in.Graph, act.File)
+			act.Key, act.Value = "", ""
+		case ActionCodexUntrustedProject:
+			// Marking a project untrusted only helps when there is a trusted
+			// project whose own .codex settings Codex loads (CTO-16 §2).
+			if !codexHasTrustedProject(in.Codex) {
+				continue
+			}
+			act.File = inConfigDir(a.node.ConfigPath, "config.toml")
+			act.FileExists = configExists(in.Graph, act.File)
+			act.Key, act.Value = "", ""
 		}
 		if len(act.Rules) > 0 {
 			act.Rules = sortedUnique(act.Rules)
@@ -237,6 +268,18 @@ func applyCuts(act *Action, m knowledge.Mitigation, f Finding, covered func(way)
 		act.points = 2 // A1: a radius action is complete for any_project
 	}
 	return true
+}
+
+// codexHasTrustedProject reports a trusted project layer in the Codex scan:
+// only then is there a repository whose own .codex settings Codex loads and
+// that marking untrusted would stop (CTO-16 §2).
+func codexHasTrustedProject(scan platform.CodexScan) bool {
+	for _, l := range scan.Layers {
+		if l.Kind == platform.CodexLayerProject && l.Trusted {
+			return true
+		}
+	}
+	return false
 }
 
 // credFilesOf are the distinct files of a credential finding's locations.

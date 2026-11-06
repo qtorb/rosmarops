@@ -291,9 +291,511 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.HermesProduct {
 		return oi.hermesCells(v)
 	}
+	if v.node.Platform == knowledge.CodexProduct {
+		return oi.codexCells(v)
+	}
+	if v.node.Platform == knowledge.GrokBuildProduct {
+		return oi.grokCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
+}
+
+// Codex sandbox modes, by permissiveness (CTO-16 §4).
+const (
+	codexDanger    = "danger-full-access"
+	codexWorkspace = "workspace-write"
+	codexReadOnly  = "read-only"
+)
+
+// codexSandbox is Codex's effective sandbox from the widest write-allow in
+// force, and whether a configured layer set it: any_path is danger-full-access,
+// working_directory is workspace-write, else read-only (the default is
+// workspace-write, a product default).
+func codexSandbox(v *agentView) (mode string, configured bool) {
+	mode = codexReadOnly
+	rank := map[string]int{codexDanger: 3, codexWorkspace: 2, codexReadOnly: 1}
+	for _, c := range v.inForce {
+		if c.Type != graph.CapWriteFiles || c.Approval != graph.ApprovalAllow {
+			continue
+		}
+		var m string
+		switch c.TargetScope {
+		case graph.CodexScopeAnyPath:
+			m = codexDanger
+		case graph.CodexScopeWorkingDir:
+			m = codexWorkspace
+		default:
+			continue
+		}
+		if rank[m] > rank[mode] {
+			mode, configured = m, c.Basis == graph.BasisConfigured
+		}
+	}
+	return mode, configured
+}
+
+// codexPolicy is Codex's approval policy and whether its reviewer is the
+// auto_review model (CTO-16 §4), from the permission_mode capability in force;
+// the default is on-request (a product default).
+func codexPolicy(v *agentView) (policy string, autoReview bool) {
+	policy = "on-request"
+	for _, c := range v.inForce {
+		if c.Type != graph.CapPermissionMode {
+			continue
+		}
+		policy = c.TargetScope
+		if strings.Contains(c.Rule, "auto_review") {
+			autoReview = true
+		}
+	}
+	return policy, autoReview
+}
+
+// codexEscalationDecider is who decides an action that needs escalation beyond
+// the sandbox — writing outside the workspace or using the network (CTO-16 §4):
+// nobody with danger-full-access (nothing escalates), blocked with a blanket
+// never, the reviewer model with auto_review, otherwise the person.
+func codexEscalationDecider(v *agentView) string {
+	if mode, _ := codexSandbox(v); mode == codexDanger {
+		return DeciderNobody
+	}
+	policy, autoReview := codexPolicy(v)
+	switch {
+	case policy == "never":
+		return DeciderBlocked
+	case autoReview:
+		return DeciderModel
+	default:
+		return DeciderYou
+	}
+}
+
+// codexScanFlags reports, for the single Codex client of this run, whether any
+// of its layers carries rules\*.rules (exec_rules_not_evaluated) and whether a
+// [windows] sandbox is set anywhere (else windows_sandbox_unknown).
+func codexScanFlags(scan platform.CodexScan) (rulesFiles, windowsSandboxSet bool) {
+	for _, l := range scan.Layers {
+		rulesFiles = rulesFiles || l.HasRulesFiles
+		windowsSandboxSet = windowsSandboxSet || l.HasWindowsSandbox
+	}
+	return rulesFiles, windowsSandboxSet
+}
+
+// codexExplicitUntrusted reports a project the user config marks
+// trust_level = "untrusted": Codex then asks before commands there, except
+// those a rules file allows (CTO-16 §4, exec_rules_not_evaluated).
+func codexExplicitUntrusted(scan platform.CodexScan) bool {
+	for _, l := range scan.Layers {
+		if l.Kind == platform.CodexLayerProject && l.TrustLevel == "untrusted" {
+			return true
+		}
+	}
+	return false
+}
+
+// codexInForceCap is the in-force capability of type typ with an allow
+// approval, widest scope first (for the cell's finding lookup).
+func (v *agentView) codexInForceCap(typ string) string {
+	for _, c := range v.inForce {
+		if c.Type == typ && c.Approval == graph.ApprovalAllow {
+			return c.ID
+		}
+	}
+	return ""
+}
+
+// codexCells are OpenAI Codex's six rows (BV-140, CTO-16 §4). Codex reads every
+// file the user can read without asking (machine/nobody). Its write and shell
+// rows follow the sandbox: workspace-write keeps writes to the project
+// (same_project) and commands to its sandbox; danger-full-access reaches the
+// whole machine. Sending out and writing outside the workspace escalate, decided
+// by the approval policy (you), the reviewer model (auto_review) or refused
+// (never). Every Codex cell rests on launch_flags_not_readable.
+func (oi overviewInputs) codexCells(v *agentView) []OverviewCell {
+	mode, configured := codexSandbox(v)
+	rulesFiles, windowsSandboxSet := codexScanFlags(oi.in.Codex)
+	untrusted := codexExplicitUntrusted(oi.in.Codex)
+	return []OverviewCell{
+		oi.codexReadsCell(v),
+		oi.codexWritesCell(v, mode, configured),
+		oi.codexRunsCell(v, mode, configured, rulesFiles, windowsSandboxSet, untrusted),
+		oi.codexSendsCell(v),
+		oi.codexChangesCell(v),
+		oi.providerCell(v),
+	}
+}
+
+// codexBaseAssumptions are the assumptions every Codex cell carries.
+func codexBaseAssumptions(extra ...string) []string {
+	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+// grokCompatSurfaces is the count of compat cells Grok has (3 vendors × 6
+// surfaces, CTO-16 Grok §2).
+const grokCompatCells = 18
+
+// grokCompatIncomplete reports that some [compat] cell has no value in the file,
+// so a remote setting could decide it (compat_cell_remote_unknown, CTO-16 Grok
+// §2). With no scan, assume incomplete (the safe default).
+func grokCompatIncomplete(scan platform.GrokScan) bool {
+	set := map[string]bool{}
+	for _, l := range scan.Layers {
+		for k := range l.Compat {
+			set[k] = true
+		}
+	}
+	return len(set) < grokCompatCells
+}
+
+// grokBaseAssumptions are the assumptions every Grok Build cell carries: launch
+// flags are not readable at rest (CTO-16 Grok §4).
+func grokBaseAssumptions(extra ...string) []string {
+	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+// grokWriteDecider is who decides a without-asking write for Grok's mode (CTO-16
+// Grok §4): a wildcard write allow or an approve-everything mode or acceptEdits
+// edits without asking (nobody); auto is the classifier (model); dontAsk refuses
+// what is not pre-approved (blocked); the default mode asks (you).
+func grokWriteDecider(v *agentView, mode string) (decider, scope string, assume []string) {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			return DeciderNobody, ScopeMachine, nil
+		}
+	}
+	switch {
+	case grokBypassMode(mode), mode == "acceptEdits":
+		return DeciderNobody, ScopeMachine, nil
+	case mode == "auto":
+		return DeciderModel, ScopeMachine, []string{graph.AssumeAutoClassifierPermits}
+	case mode == "dontAsk":
+		return DeciderBlocked, ScopeNone, nil
+	default:
+		return DeciderYou, ScopeNone, nil
+	}
+}
+
+// grokEscalationDecider is who decides sending out or running the general shell
+// for Grok's mode: an approve-everything mode (nobody), auto (model), dontAsk
+// (blocked); otherwise the person asks (acceptEdits and the default mode).
+func grokEscalationDecider(mode string) (decider string, assume []string) {
+	switch {
+	case grokBypassMode(mode):
+		return DeciderNobody, nil
+	case mode == "auto":
+		return DeciderModel, []string{graph.AssumeAutoClassifierPermits}
+	case mode == "dontAsk":
+		return DeciderBlocked, nil
+	default:
+		return DeciderYou, nil
+	}
+}
+
+// grokCells are xAI Grok Build's six rows (BV-140, CTO-16 Grok §4). Grok reads
+// every file the user can read without asking (machine/nobody). Writing, sending
+// out and the general shell follow its permission mode — its own or the one it
+// inherits from Claude Code: an approve-everything mode or a wildcard allow acts
+// without asking (nobody), auto hands the step to a classifier (model), the
+// default mode asks (you). Every cell rests on launch_flags_not_readable; the
+// changes row notes compat_cell_remote_unknown when a compat cell is unset.
+func (oi overviewInputs) grokCells(v *agentView) []OverviewCell {
+	mode, _ := grokMode(v)
+	incomplete := grokCompatIncomplete(oi.in.Grok)
+	return []OverviewCell{
+		oi.grokReadsCell(v),
+		oi.grokWritesCell(v, mode),
+		oi.grokRunsCell(v, mode),
+		oi.grokSendsCell(v, mode),
+		oi.grokChangesCell(v, incomplete),
+		oi.providerCell(v),
+	}
+}
+
+func (oi overviewInputs) grokReadsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: OriginProductDefault}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = grokBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) grokWritesCell(v *agentView, mode string) OverviewCell {
+	decider, scope, assume := grokWriteDecider(v, mode)
+	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	edit := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			edit++
+		}
+	}
+	cell.Data.EditAllowRules = intp(edit)
+	cell.Data.Assumptions = sortedUnique(grokBaseAssumptions(assume...))
+	cell.Assumed = contains(assume, graph.AssumeAutoClassifierPermits)
+	if decider == DeciderNobody || decider == DeciderModel {
+		r := NoFindingNotAFinding
+		cell.NoFindingReason = &r
+		cell.Data.Excluded = []string{ExcludedProtectedPaths}
+	}
+	return cell
+}
+
+func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
+	decider, assume := grokEscalationDecider(mode)
+	// A wildcard [permission] allow "*" is «approve everything» and covers the
+	// shell too (CTO-16 Grok §4), so commands run without asking.
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			decider, assume = DeciderNobody, nil
+		}
+	}
+	scope := ScopeMachine
+	if decider == DeciderBlocked {
+		scope = ScopeNone
+	}
+	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	pre := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			pre++
+		}
+	}
+	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(pre), intp(0)
+	cell.Data.Assumptions = sortedUnique(grokBaseAssumptions(assume...))
+	cell.Assumed = contains(assume, graph.AssumeAutoClassifierPermits)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) grokSendsCell(v *agentView, mode string) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginConfigured}
+	assume := grokBaseAssumptions()
+	if len(v.egress) > 0 {
+		cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		for _, w := range v.egress {
+			if contains(w.assumptions, graph.AssumeAutoClassifierPermits) {
+				cell.Decider, cell.Assumed = DeciderModel, true
+				assume = append(assume, graph.AssumeAutoClassifierPermits)
+			}
+		}
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		d, a := grokEscalationDecider(mode)
+		cell.Decider, assume = d, grokBaseAssumptions(a...)
+		cell.Scope = ScopeAnyDestination
+		if d == DeciderBlocked {
+			cell.Scope = ScopeNone
+		}
+		cell.Assumed = contains(a, graph.AssumeAutoClassifierPermits)
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// grokChangesCell is Grok's writes to another agent's resources (CTO-16 Grok
+// §5). It rests on compat_cell_remote_unknown when a compat cell is unset,
+// because the cells decide which of Claude Code's and Cursor's files Grok loads
+// and can change.
+func (oi overviewInputs) grokChangesCell(v *agentView, compatIncomplete bool) OverviewCell {
+	base := grokBaseAssumptions()
+	if compatIncomplete {
+		base = append(base, AssumeCompatCellRemoteUnknown)
+	}
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisConfigured}, assumptions: base})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: sortedUnique(base)}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = sortedUnique(base)
+	return cell
+}
+
+func (oi overviewInputs) codexReadsCell(v *agentView) OverviewCell {
+	origin := OriginProductDefault
+	for _, c := range v.inForce {
+		if c.Type == graph.CapReadFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			origin = OriginMixed
+		}
+	}
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: origin}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = codexBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) codexWritesCell(v *agentView, mode string, configured bool) OverviewCell {
+	scope := ScopeSameProject
+	if mode == codexDanger {
+		scope = ScopeMachine
+	}
+	origin := OriginProductDefault
+	if configured {
+		origin = OriginConfigured
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: DeciderNobody, Scope: scope, Origin: origin}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	edit := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapWriteFiles && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			edit++
+		}
+	}
+	cell.Data.EditAllowRules = intp(edit)
+	assume := codexBaseAssumptions()
+	// Writing outside the workspace is an escalation (CTO-16 §4): with
+	// auto_review the reviewer model decides it (scope machine), so the cell
+	// shows nobody inside the project and, as its second way, the model outside.
+	if _, autoReview := codexPolicy(v); autoReview && mode != codexDanger {
+		cell.Also = &OverviewAlso{Decider: DeciderModel, Scope: ScopeMachine}
+		assume = append(assume, AssumeReviewerModelPermits)
+		cell.Assumed = true
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedProtectedPaths}
+	r := NoFindingNotAFinding
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, rulesFiles, windowsSandboxSet, untrusted bool) OverviewCell {
+	scope, decider := ScopeSandbox, DeciderNobody
+	if mode == codexDanger {
+		scope = ScopeMachine
+	}
+	origin := OriginProductDefault
+	if configured {
+		origin = OriginConfigured
+	}
+	// An explicitly-untrusted project (and no user-level danger-full-access)
+	// makes Codex ask before commands there, except those a rules file allows
+	// (CTO-16 §4): the person decides, with exec_rules_not_evaluated.
+	untrustedAsks := untrusted && mode != codexDanger
+	if untrustedAsks {
+		scope, decider = ScopeNone, DeciderYou
+	}
+	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: origin}
+	pre := 0
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured {
+			pre++
+		}
+	}
+	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(pre), intp(0)
+	assume := codexBaseAssumptions()
+	if rulesFiles || untrustedAsks {
+		// Unparsed rules\*.rules could let commands run without asking (CTO-16 §4).
+		assume = append(assume, AssumeExecRulesNotEvaluated)
+	}
+	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet {
+		// The command runs in a Windows sandbox whose implementation is chosen
+		// at launch; assume the least isolating one (CTO-16 §4, point 9).
+		assume = append(assume, AssumeWindowsSandboxUnknown)
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) codexSendsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginNone}
+	assume := codexBaseAssumptions()
+	if len(v.egress) > 0 {
+		// A network or machine-shell allow sends out without asking.
+		cell.Decider, cell.Scope, cell.Origin = DeciderNobody, ScopeAnyDestination, OriginConfigured
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		// Network off by default: using it escalates, decided by the policy.
+		cell.Decider = codexEscalationDecider(v)
+		cell.Origin = OriginProductDefault
+		switch cell.Decider {
+		case DeciderBlocked:
+			cell.Scope = ScopeNone
+		case DeciderModel:
+			cell.Scope = ScopeAnyDestination
+			assume = append(assume, AssumeReviewerModelPermits)
+			cell.Assumed = true
+		default:
+			cell.Scope = ScopeAnyDestination
+		}
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// codexChangesCell is Codex's writes to another agent's resources (CTO-16 §5):
+// each writes_config_of edge is a write without asking (workspace-write inside
+// the project, danger-full-access anywhere), so decider nobody.
+func (oi overviewInputs) codexChangesCell(v *agentView) OverviewCell {
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisProductDefault}, assumptions: codexBaseAssumptions()})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: codexBaseAssumptions()}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = codexBaseAssumptions()
+	return cell
 }
 
 // hermesCells are Hermes Agent's six rows (BV-111). Its read, write, shell and

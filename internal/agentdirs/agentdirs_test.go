@@ -57,9 +57,11 @@ func TestDetect(t *testing.T) {
 			return none
 		}, map[string]string{Codex: ".codex"}},
 		"codex folder alone": {func(t *testing.T, h string) Env {
+			// CTO-16 §1 (BV-140): the .codex folder alone counts, even with no
+			// config.toml or auth.json (the session may be in the OS keyring).
 			touch(t, filepath.Join(h, ".codex", "history.jsonl"))
 			return none
-		}, map[string]string{}},
+		}, map[string]string{Codex: ".codex"}},
 		"CODEX_HOME": {func(t *testing.T, h string) Env {
 			touch(t, filepath.Join(h, "ch", "config.toml"))
 			touch(t, filepath.Join(h, ".codex", "config.toml")) // not Codex's folder any more
