@@ -344,6 +344,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		mcpErr     error
 		hermesScan platform.HermesScan // BV-111: config.yaml drives Hermes's caps
 		codexScan  platform.CodexScan  // BV-140: TOML layers drive Codex's caps
+		grokScan   platform.GrokScan   // BV-140: TOML layers drive Grok's caps
 		credFiles  platform.CredentialFileScan
 		built      *graph.Graph // the graph written this run, for the v2 report
 		builtSHA   string
@@ -416,7 +417,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			codex, codexErr := plat.ListCodex(ctx, cfg.RepoRoots)
 			scanned.Servers = append(scanned.Servers, graph.CodexMCPServers(codex)...)
 			codexScan = codex
-			listErr = errors.Join(listErr, hermesErr, codexErr)
+			// xAI Grok Build (BV-140, CTO-16 Grok): its in-force MCP servers join
+			// every agent's; the scan is kept for the graph step.
+			grok, grokErr := plat.ListGrok(ctx, cfg.RepoRoots)
+			scanned.Servers = append(scanned.Servers, graph.GrokMCPServers(grok)...)
+			grokScan = grok
+			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -525,7 +531,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -768,7 +774,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, ConfigFile: absPath(cfgPath),
-		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan,
+		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
@@ -953,6 +959,7 @@ func writeGraph(
 	cursor platform.CursorScan,
 	hermes platform.HermesScan,
 	codex platform.CodexScan,
+	grok platform.GrokScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -981,7 +988,7 @@ func writeGraph(
 	if err != nil {
 		return fail(err)
 	}
-	frag, stats, err := graph.FromScansWithCodex(scan, settings, cursor, credFiles, repoGraph, hermes, codex, salt, now)
+	frag, stats, err := graph.FromScansWithGrok(scan, settings, cursor, credFiles, repoGraph, hermes, codex, grok, salt, now)
 	if err != nil {
 		return fail(err)
 	}

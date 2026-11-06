@@ -255,6 +255,39 @@ type credentialInput struct {
 	committed *finding.CommittedSecret
 }
 
+// grokCredentialInputs lists Grok Build's config.toml credentials
+// ([model.<id>].api_key, [telemetry].events_api_key) and its plaintext session
+// files (auth.json, mcp_credentials.json), by fingerprint only (CTO-16 Grok §3).
+// The source states the kind, so the whole value is the secret.
+func grokCredentialInputs(scan platform.GrokScan) []credentialInput {
+	if !scan.Exists {
+		return nil
+	}
+	var out []credentialInput
+	for _, l := range scan.Layers {
+		if l.Status != platform.MCPSourceRead {
+			continue
+		}
+		for _, k := range l.APIKeys {
+			out = append(out, credentialInput{
+				location: l.Path + "#/" + k.Key,
+				kind:     "grok_config_secret",
+				EnvVar:   k,
+			})
+		}
+		for _, c := range l.SessionCreds {
+			// Key is "<filename>:<json path>"; the file sits in the Grok folder.
+			name, jsonPath, _ := strings.Cut(c.Key, ":")
+			out = append(out, credentialInput{
+				location: scan.ConfigDir + "/" + name + "#" + jsonPath,
+				kind:     "grok_session_token",
+				EnvVar:   platform.EnvVar{Key: name, Value: c.Value},
+			})
+		}
+	}
+	return out
+}
+
 // mcpCredentialInputs lists the env and header entries of every server
 // whose client loads it, received by that server.
 func mcpCredentialInputs(servers []platform.MCPServer) []credentialInput {

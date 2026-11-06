@@ -252,6 +252,11 @@ type Input struct {
 	// (exec_rules_not_evaluated) and when no Windows sandbox is set
 	// (windows_sandbox_unknown). Optional.
 	Codex platform.CodexScan
+
+	// Grok is the xAI Grok Build scan (BV-140): the overview reads its compat
+	// cells to know when a cell has no value in the file and could be decided
+	// remotely (compat_cell_remote_unknown). Optional.
+	Grok platform.GrokScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -721,7 +726,7 @@ func ownsAccountFile(a *agentView, cred graph.Node) bool {
 	}
 	for _, f := range files {
 		base := strings.ToLower(path.Base(strings.ReplaceAll(f, `\`, "/")))
-		if base != ".credentials.json" && base != "auth.json" {
+		if base != ".credentials.json" && base != "auth.json" && base != "mcp_credentials.json" {
 			return false
 		}
 		if !graph.Within(a.node.ConfigPath, f) {
