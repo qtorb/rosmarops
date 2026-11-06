@@ -550,16 +550,20 @@ function Fit-Rows {
   foreach ($c in $list.Controls) { $c.Width = $w }
 }
 
-$groups = @(
-  @{ name = 'new'; label = $cfg.group_new },
-  @{ name = 'rest'; label = $cfg.group_rest },
-  @{ name = 'dismissed'; label = $cfg.group_dismissed }
-)
-foreach ($grp in $groups) {
-  $rows = @($cfg.cards | Where-Object { $_.group -eq $grp.name })
-  if ($rows.Count -eq 0) { continue }
-  Add-Header $grp.label
-  foreach ($c in $rows) { Add-Row $c }
+# The cards arrive already ordered (new, then the rest, then dismissed), so we
+# walk them once and add a group header whenever the group changes. This avoids
+# any Where-Object filtering subtlety and guarantees every card gets a row.
+$lastGroup = [char]0
+foreach ($c in $cfg.cards) {
+  if ($c.group -ne $lastGroup) {
+    $label = ''
+    if ($c.group -eq 'new') { $label = $cfg.group_new }
+    elseif ($c.group -eq 'rest') { $label = $cfg.group_rest }
+    elseif ($c.group -eq 'dismissed') { $label = $cfg.group_dismissed }
+    Add-Header $label
+    $lastGroup = $c.group
+  }
+  Add-Row $c
 }
 Update-Count
 $countl.Location = New-Object System.Drawing.Point((Px 28), ($btnY + [int]((((Px 40)) - $countl.Height) / 2)))
@@ -647,6 +651,7 @@ if ($selftest) {
       [Console]::Out.WriteLine('SHOWN')
       [Console]::Out.WriteLine('CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
       [Console]::Out.WriteLine('LISTCLIENT=' + $list.ClientSize.Width + ',' + $list.ClientSize.Height)
+      [Console]::Out.WriteLine('CARDS=' + @($cfg.cards).Count)
       [Console]::Out.WriteLine('ROWS=' + $rowsOnly.Count)
       [Console]::Out.WriteLine('ROWMAXRIGHT=' + $maxRight)
       [Console]::Out.WriteLine('HSCROLL=' + $list.HorizontalScroll.Visible)
@@ -656,7 +661,9 @@ if ($selftest) {
       foreach ($r in $rowsOnly) {
         if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 }
         if (-not $pillYel) { $pillYel = Row-Has $r 253 245 223 6 0 }
-        if (-not $checkCobalt -and $script:checked[$r.Tag.card.id]) { $checkCobalt = Row-Has $r 35 70 184 14 0 }
+        $rid = $null
+        if ($r.Tag -ne $null -and $r.Tag.card -ne $null) { $rid = $r.Tag.card.id }
+        if (-not $checkCobalt -and $rid -and $script:checked[$rid]) { $checkCobalt = Row-Has $r 35 70 184 14 0 }
       }
       if ($rowsOnly.Count -gt 0) { $titleDark = Row-Has $rowsOnly[0] 27 26 24 24 $textX }
       [Console]::Out.WriteLine('PILLRED=' + $pillRed)
