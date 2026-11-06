@@ -179,10 +179,11 @@ func showDismiss(cards []report.FindingCard, cat catalog.Catalog) ([]string, boo
 // an owner-drawn pill and «i» (rounded/elliptical fills drawn in Paint), the
 // title and subtitle Labels, and a read-only borderless RichTextBox for the
 // open detail (left-aligned text with the two Semibold labels inline). Capture
-// (screenshots and the pixel self-test) goes through WM_PRINT, which renders the
-// RichTextBox and the owner-drawn shapes and does not need the window fully
-// on-screen. Non-ASCII text arrives as base64 UTF-8 JSON; the only separator
-// literal is built from a char code.
+// (screenshots and the pixel self-test) is a real screen grab (CopyFromScreen),
+// the same method the connect window uses, so it renders the RichTextBox and the
+// owner-drawn shapes exactly as painted; the window is TopMost and clamped to the
+// working area so it is never occluded or off-screen. Non-ASCII text arrives as
+// base64 UTF-8 JSON; the only separator literal is built from a char code.
 const dismissWindowScript = `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -197,9 +198,6 @@ try {
     [void][RO.Dpi2]::SetProcessDPIAware()
   } catch { }
 }
-try {
-  Add-Type -Namespace RO -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern int SendMessage(System.IntPtr hWnd, int Msg, System.IntPtr wParam, System.IntPtr lParam);'
-} catch { }
 $shot = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT
 $shotScale = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCALE
 $shotOpenI = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I
@@ -603,12 +601,13 @@ foreach ($c in $cfg.cards) {
 Update-Count
 $countl.Location = New-Object System.Drawing.Point((Px 28), ($btnY + [int]((((Px 40)) - $countl.Height) / 2)))
 
-if (-not $shot -and -not $selftest) {
-  try {
-    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
-    if ($form.Height -gt ($wa - 40)) { $form.Height = $wa - 40 }
-  } catch { }
-}
+# Keep the window within the working area. For a real run this stops a tall
+# window overflowing the screen; for a screenshot it keeps the whole window
+# on-screen so CopyFromScreen captures all of it.
+try {
+  $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Height
+  if ($form.Height -gt ($wa - 40)) { $form.Height = $wa - 40 }
+} catch { }
 
 $script:result = 'cancel'
 $save.Add_Click({
@@ -622,22 +621,31 @@ $save.Add_Click({
 })
 $no.Add_Click({ $form.Close() })
 
-# Capture through WM_PRINT (PRF_CLIENT|PRF_ERASEBKGND|PRF_CHILDREN), which renders
-# the RichTextBox and the owner-drawn shapes and does not need the window fully
-# on-screen.
-function Print-Bitmap($ctrl, $w, $h) {
+# Capture with CopyFromScreen (a real screen grab), the same method the connect
+# window uses: it is true WYSIWYG, so it renders the RichTextBox, the owner-drawn
+# shapes and everything else exactly as painted. The window is TopMost and shown
+# modally, and for shots it is clamped to fit the working area, so it is never
+# occluded or off-screen.
+function Grab-Rect($x, $y, $w, $h) {
   $bmp = New-Object System.Drawing.Bitmap($w, $h)
   $g = [System.Drawing.Graphics]::FromImage($bmp)
-  $g.Clear($cWhite)
-  $hdc = $g.GetHdc()
-  try { [void][RO.Win]::SendMessage($ctrl.Handle, 0x0317, $hdc, [System.IntPtr](28)) } catch { }
-  $g.ReleaseHdc($hdc)
+  $g.CopyFromScreen((New-Object System.Drawing.Point($x, $y)), [System.Drawing.Point]::Empty, (New-Object System.Drawing.Size($w, $h)))
   $g.Dispose()
   return $bmp
 }
+function Grab-Control($ctrl) {
+  # Bring the control into the list viewport first: a screen grab can only read
+  # pixels that are actually on-screen, so a row scrolled out of view must be
+  # scrolled in before it is captured.
+  try { $list.ScrollControlIntoView($ctrl); $form.Refresh(); [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 100 } catch { }
+  $pt = $ctrl.PointToScreen([System.Drawing.Point]::Empty)
+  return Grab-Rect $pt.X $pt.Y $ctrl.Width $ctrl.Height
+}
 function Capture-Form($path) {
   $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-  $bmp = Print-Bitmap $form $form.ClientSize.Width $form.ClientSize.Height
+  Start-Sleep -Milliseconds 400
+  $pt = $form.PointToScreen([System.Drawing.Point]::Empty)
+  $bmp = Grab-Rect $pt.X $pt.Y $form.ClientSize.Width $form.ClientSize.Height
   $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
   $bmp.Dispose()
 }
@@ -649,7 +657,7 @@ function Row-Has($row, $r, $g, $b, $tol, $xmin, $ymin, $ymax) {
     $w = $row.Width; $h = $row.Height
     if ($ymax -le 0 -or $ymax -gt $h) { $ymax = $h }
     if ($w -le 0 -or $h -le 0) { return $false }
-    $bmp = Print-Bitmap $row $w $h
+    $bmp = Grab-Control $row
     $found = $false
     for ($y = $ymin; $y -lt $ymax -and -not $found; $y += 3) {
       for ($x = $xmin; $x -lt $w -and -not $found; $x += 3) {
@@ -664,7 +672,7 @@ function Row-Has($row, $r, $g, $b, $tol, $xmin, $ymin, $ymax) {
 }
 function Pixel-Near($row, $x, $y, $r, $g, $b, $tol) {
   try {
-    $bmp = Print-Bitmap $row $row.Width $row.Height
+    $bmp = Grab-Control $row
     $ok = Near $bmp.GetPixel($x, $y) $r $g $b $tol
     $bmp.Dispose()
     return $ok
@@ -709,6 +717,9 @@ if ($selftest) {
       [Console]::Out.WriteLine('DATEDE=' + $dateDe)
       [Console]::Out.WriteLine('BORDER=' + $form.FormBorderStyle + ' MAX=' + $form.MaximizeBox + ' MIN=' + $form.MinimizeBox + ' TOP=' + $form.TopMost)
       [Console]::Out.Flush()
+      # Let the window settle on screen before grabbing pixels from it.
+      Start-Sleep -Milliseconds 400
+      $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
       $pillRed = $false; $pillYel = $false; $checkCobalt = $false; $titleDark = $false; $pillCorner = $false
       foreach ($r in $rowsOnly) {
         if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 0 0 }
@@ -733,7 +744,8 @@ if ($selftest) {
         $r0 = $rowsOnly[0]
         $hbefore = $r0.Height
         Open-Detail $r0
-        $r0.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+        $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
+        Start-Sleep -Milliseconds 300
         $hafter = $r0.Height
         $detailText = Row-Has $r0 27 26 24 30 $textX ($r0.Tag.subtop + $subH + (Px 4)) 0
         $ic = $r0.Tag.icon
