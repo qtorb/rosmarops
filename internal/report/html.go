@@ -389,8 +389,13 @@ func (c htmlCtx) scored() (*index.AgentIndex, bool) {
 // unknownBody is the key of an evaluated agent's «What we don't know»
 // paragraph (v3 §3 point 6): Cursor has its own.
 func unknownBody(agent string) string {
-	if agent == graph.ClientDisplayName(knowledge.CursorProduct) {
+	switch agent {
+	case graph.ClientDisplayName(knowledge.CursorProduct):
 		return "html.unknown.body.cursor"
+	case graph.ClientDisplayName(knowledge.GrokBuildProduct):
+		// Grok Build inherits Claude Code's and Cursor's configuration
+		// (BV-140, CTO-16 Grok §5).
+		return "html.unknown.body.grok-build"
 	}
 	return "html.unknown.body"
 }
@@ -1424,7 +1429,7 @@ func HTMLKeys() []string {
 	// v3
 	keys = append(keys, "html.step.1", "html.step.1.counts", "html.step.2", "html.step.2.hint", "html.step.3",
 		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.rest.incomplete", "html.today.fixes", "html.today.incomplete",
-		"html.step.1.other", "html.unknown.body.cursor", "html.today.projection.agent")
+		"html.step.1.other", "html.unknown.body.cursor", "html.unknown.body.grok-build", "html.today.projection.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",

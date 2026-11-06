@@ -490,6 +490,7 @@
   "html.unattended.pending": "Esta revisión programada no se ha hecho: RosmarOps necesita que confirmes un cambio. Abre tú rosmarops.exe para confirmarlo.",
   "html.unknown.body": "Suponemos que {agent} funciona como dice su documentación, con tus permisos de usuario, y que nada lo bloquea. Lo que depende del modo «auto» lo decide otro modelo de IA, no una persona, y no podemos saber de antemano qué decidirá.",
   "html.unknown.body.cursor": "Suponemos que {agent} funciona como dice su documentación, con tus permisos de usuario, en modo Auto-review, y que nada lo bloquea. Lo que depende de Auto-review lo decide otro modelo de IA, no una persona, y no podemos saber de antemano qué decidirá.",
+  "html.unknown.body.grok-build": "Suponemos que {agent} funciona como dice su documentación, con tus permisos de usuario, y que nada lo bloquea. De serie carga también los servidores MCP, hooks, reglas e instrucciones de Claude Code y Cursor, así que también los contamos para {agent}. Lo que depende del modo «auto» lo decide otro modelo de IA, no una persona, y no podemos saber de antemano qué decidirá.",
   "html.unknown.title": "Lo que no sabemos",
   "html.verdict.again": "ha vuelto",
   "html.verdict.new": "nuevo",
