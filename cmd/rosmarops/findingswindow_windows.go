@@ -450,27 +450,30 @@ function Add-Row($card) {
   $row.Controls.Add($title)
 
   # Subtitle. For a dated finding the whole line is one muted label joined by
-  # « · »; for a new finding «New» is cobalt-bold and the agent muted.
-  $subStatus = New-Object System.Windows.Forms.Label
-  $subStatus.AutoSize = $true; $subStatus.BackColor = $cWhite
-  $subStatus.Location = New-Object System.Drawing.Point($textX, $rowSubTop); $subStatus.Anchor = $aTL
+  # « · ». For a new finding «New» is cobalt-bold and the agent muted — drawn
+  # owner-draw in one Paint, «New» then « · <agent>», each measured NoPadding so
+  # the «·» sits between two equal spaces and the gaps match (BV-184 point 3).
+  # A Label's trailing padding made the left gap larger, so no Label is used.
   $subAgent = $null
   if ($card.new) {
-    $subStatus.Font = $fSubB; $subStatus.ForeColor = $cCobalt; $subStatus.Text = $cfg.sub_new
-    if ($card.agent) {
-      $subAgent = New-Object System.Windows.Forms.Label
-      $subAgent.AutoSize = $true; $subAgent.BackColor = $cWhite; $subAgent.Font = $fSub; $subAgent.ForeColor = $cSub
-      $subAgent.Text = $mid + $card.agent; $subAgent.Anchor = $aTL
-      # Sit the agent label flush against the end of «New», using «New»'s own
-      # rendered width, so the gap before the «·» equals the gap after it
-      # (BV-184 polish, point 3). PreferredSize is the AutoSize label's real
-      # width, which TextRenderer.MeasureText did not match.
-      $subStatus.Margin = New-Object System.Windows.Forms.Padding(0)
-      $swid = $subStatus.PreferredSize.Width
-      $subAgent.Location = New-Object System.Drawing.Point(($textX + $swid), $rowSubTop)
-      $row.Controls.Add($subAgent)
-    }
+    $subStatus = New-Object System.Windows.Forms.Panel
+    $subStatus.Width = $colW; $subStatus.Height = $subH
+    $subStatus.Location = New-Object System.Drawing.Point($textX, $rowSubTop); $subStatus.Anchor = $aTL
+    $subStatus.BackColor = $cWhite
+    $subStatus.Tag = @{ lead = $cfg.sub_new; agent = $card.agent }
+    $subStatus.Add_Paint({
+      param($s, $e)
+      $t = $s.Tag; $g = $e.Graphics
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point(0, 0)), $cCobalt, $noPad)
+      if ($t.agent) {
+        $w1 = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point($w1, 0)), $cSub, $noPad)
+      }
+    })
   } else {
+    $subStatus = New-Object System.Windows.Forms.Label
+    $subStatus.AutoSize = $true; $subStatus.BackColor = $cWhite
+    $subStatus.Location = New-Object System.Drawing.Point($textX, $rowSubTop); $subStatus.Anchor = $aTL
     $parts = @()
     if ($card.since) { $parts += $card.since }
     if ($card.agent) { $parts += $card.agent }
@@ -692,6 +695,36 @@ function Pixel-Near($row, $x, $y, $r, $g, $b, $tol) {
     return $false
   }
 }
+# Measure-SubGaps returns the two empty-column runs around the «·» in a «new»
+# row's subtitle, read from the ink on screen (BV-184 point 3): the gap between
+# the last pixel of «New» and the first of «·», and between «·» and the agent.
+# They must be equal. It measures tint, not control boxes.
+function Measure-SubGaps($row, $bg) {
+  $st = $row.Tag
+  $y0 = $st.subtop; $y1 = $y0 + $subH
+  $xEnd = [math]::Min($row.Width, $textX + (Px 260))
+  $bmp = Grab-Control $row
+  $ink = New-Object 'bool[]' ($xEnd - $textX)
+  for ($x = $textX; $x -lt $xEnd; $x++) {
+    $f = $false
+    for ($y = $y0; $y -lt $y1 -and -not $f; $y++) {
+      $p = $bmp.GetPixel($x, $y)
+      if ((([math]::Abs([int]$p.R - [int]$bg.R)) + ([math]::Abs([int]$p.G - [int]$bg.G)) + ([math]::Abs([int]$p.B - [int]$bg.B))) -gt 60) { $f = $true }
+    }
+    $ink[$x - $textX] = $f
+  }
+  $bmp.Dispose()
+  $n = $ink.Length
+  $s1 = -1; for ($k = 0; $k -lt $n; $k++) { if ($ink[$k]) { $s1 = $k; break } }
+  $e1 = -1; if ($s1 -ge 0) { for ($k = $s1; $k -lt $n; $k++) { if (-not $ink[$k]) { $e1 = $k; break } } }
+  $s2 = -1; if ($e1 -ge 0) { for ($k = $e1; $k -lt $n; $k++) { if ($ink[$k]) { $s2 = $k; break } } }
+  $e2 = -1; if ($s2 -ge 0) { for ($k = $s2; $k -lt $n; $k++) { if (-not $ink[$k]) { $e2 = $k; break } } }
+  $s3 = -1; if ($e2 -ge 0) { for ($k = $e2; $k -lt $n; $k++) { if ($ink[$k]) { $s3 = $k; break } } }
+  $gap1 = -1; $gap2 = -1
+  if ($s2 -ge 0 -and $e1 -ge 0) { $gap1 = $s2 - $e1 }
+  if ($s3 -ge 0 -and $e2 -ge 0) { $gap2 = $s3 - $e2 }
+  return @($gap1, $gap2)
+}
 
 if ($shot) {
   $form.Add_Shown({
@@ -770,13 +803,14 @@ if ($selftest) {
       [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
       [Console]::Out.WriteLine('PILLCORNER=' + $pillCorner)
       $hbefore = 0; $hafter = 0; $detailText = $false; $iconFill = $false
-      $gapFlush = $false; $detailBgRest = $false; $detailBgHover = $false; $pillCornerHover = $false
+      $gapFlush = $false; $gap1 = -1; $gap2 = -1; $detailBgRest = $false; $detailBgHover = $false; $pillCornerHover = $false
       if ($rowsOnly.Count -gt 0) {
         $r0 = $rowsOnly[0]
-        # Point 3: the agent label sits flush at the end of «New», so the gap
-        # before the «·» equals the gap after it (1 px margin).
-        $ss = $r0.Tag.subStatus; $sa = $r0.Tag.subAgent
-        if ($ss -ne $null -and $sa -ne $null) { $gapFlush = ([math]::Abs($sa.Left - ($ss.Left + $ss.Width)) -le 1) }
+        # Point 3 (pixel): the empty-column run before the «·» equals the one
+        # after it (1 px margin), read from the ink on the row at rest.
+        $gaps = Measure-SubGaps $r0 $r0.BackColor
+        $gap1 = $gaps[0]; $gap2 = $gaps[1]
+        $gapFlush = ($gap1 -gt 0 -and $gap2 -gt 0 -and ([math]::Abs($gap1 - $gap2) -le 1))
         $hbefore = $r0.Height
         Open-Detail $r0
         $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
@@ -800,7 +834,7 @@ if ($selftest) {
       [Console]::Out.WriteLine('IOPEN=' + $hbefore + ',' + $hafter)
       [Console]::Out.WriteLine('DETAILTEXT=' + $detailText)
       [Console]::Out.WriteLine('ICONFILL=' + $iconFill)
-      [Console]::Out.WriteLine('GAPFLUSH=' + $gapFlush)
+      [Console]::Out.WriteLine('GAPFLUSH=' + $gapFlush + ' GAP1=' + $gap1 + ' GAP2=' + $gap2)
       [Console]::Out.WriteLine('DETAILBGREST=' + $detailBgRest)
       [Console]::Out.WriteLine('DETAILBGHOVER=' + $detailBgHover)
       [Console]::Out.WriteLine('PILLCORNERHOVER=' + $pillCornerHover)
