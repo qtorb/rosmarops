@@ -87,6 +87,15 @@ func runRun(inv cli.Invocation) error {
 		// a notification and the run_failed exit code. Never returns.
 		abortRun(abortOptions{lang: inv.Flags["lang"], unattended: true}, err)
 	}
+	// BV-184 point 3: from an interactive terminal (never a scheduled review),
+	// offer to dismiss findings after the review when at least one is new.
+	if err == nil && !unattended && runCanAsk() {
+		if cfgPath, e := config.ResolveConfigPath(); e == nil {
+			if stPath, e := state.StatePath(); e == nil {
+				offerDismissAfterReport(inv.Flags["lang"], cfgPath, stPath, true, time.Now())
+			}
+		}
+	}
 	return err
 }
 
@@ -758,7 +767,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
-		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, ConfigFile: absPath(cfgPath),
+		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,

@@ -42,6 +42,12 @@ type V2 struct {
 	Memory        memory.Root     `json:"memory"`
 	Findings      []rules.Finding `json:"findings"`
 	Posture       []rules.Posture `json:"posture"`
+	// Dismissed are the findings the person marked «No me afecta» (BV-184,
+	// allow_list.dismissed) that still appeared this run: moved out of
+	// Findings so they do not count in the score, kept here (structured, no
+	// prose) so the report lists them and `rosmarops findings` can recover
+	// them. A dismissed id that no longer appears is simply absent.
+	Dismissed []rules.Finding `json:"dismissed,omitempty"`
 	// AgentsOverview is «how your agents work» (decision 2026-10-25, cómo
 	// trabajan tus agentes, cálculo, T10): one element per detected agent.
 	AgentsOverview []rules.OverviewAgent `json:"agents_overview"`
@@ -283,8 +289,11 @@ type V2Input struct {
 	// Rotated and Fixtures are allow_list.rotated_credentials and
 	// test_fixtures; ConfigFile the configuration file as the report shows
 	// it (decision 2026-10-24, memoria, M9–M10).
-	Rotated    []config.AllowEntryRotated
-	Fixtures   []config.AllowEntryTestFixture
+	Rotated  []config.AllowEntryRotated
+	Fixtures []config.AllowEntryTestFixture
+	// Dismissed is allow_list.dismissed (BV-184): findings the person marked
+	// «No me afecta», moved out of the scored findings.
+	Dismissed  []config.AllowEntryDismissed
 	ConfigFile string
 
 	// VSCodeFirstRun is set on the first run of the VS Code extensions
@@ -401,7 +410,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.Provenance.Graph, v.Provenance.GraphSHA256 = &prov, &sha
 		res = rules.Evaluate(rules.Input{
 			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
-			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
+			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures, Dismissed: in.Dismissed,
 			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home, Hermes: in.Hermes, Codex: in.Codex,
 		})
 		v.Silenced, v.TestData = res.Silenced, res.TestData
@@ -412,6 +421,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 			}
 		}
 		v.Findings, v.Today, v.Posture = res.Findings, res.Today, res.Posture
+		v.Dismissed = res.Dismissed // BV-184: kept out of the score, shown and recoverable
 		if v.Findings == nil {
 			v.Findings = []rules.Finding{}
 		}
@@ -522,8 +532,11 @@ func applyMemory(v *V2, in V2Input) {
 	if in.Graph != nil {
 		run.Seen = seenAgents(*in.Graph)
 	}
-	cur := make([]memory.Finding, 0, len(v.Findings))
-	for _, f := range v.Findings {
+	// BV-184: the dismissed findings that appeared this run are still observed
+	// (only hidden from the score), so the memory tracks them too; this keeps
+	// their «open since» date and stops a recovered finding from looking new.
+	cur := make([]memory.Finding, 0, len(v.Findings)+len(v.Dismissed))
+	for _, f := range append(append([]rules.Finding{}, v.Findings...), v.Dismissed...) {
 		// MemoryUntracked rules are not tracked in the findings memory (F0a,
 		// BV-107b); they carry a not_comparable verdict instead (see the
 		// verdict loop).
@@ -544,18 +557,24 @@ func applyMemory(v *V2, in V2Input) {
 	}
 	next, verdicts, root := memory.Update(in.Memory, run, cur, in.Salt)
 	root.Reset = in.MemoryReset
-	for i := range v.Findings {
-		if m, ok := verdicts[v.Findings[i].ID]; ok {
-			v.Findings[i].Memory = &m
-			continue
+	setVerdict := func(f *rules.Finding) {
+		if m, ok := verdicts[f.ID]; ok {
+			f.Memory = &m
+			return
 		}
 		// A MemoryUntracked rule (F0a, BV-107b): a not_comparable verdict
 		// satisfies report.v2's required memory object and renders no memory
 		// badge, while nothing is persisted to the memory file.
-		v.Findings[i].Memory = &rules.FindingMemory{
+		f.Memory = &rules.FindingMemory{
 			Verdict: memory.VerdictNotComparable, OpenSince: run.Date,
 			FirstSeen: run.Date, Reappeared: 0,
 		}
+	}
+	for i := range v.Findings {
+		setVerdict(&v.Findings[i])
+	}
+	for i := range v.Dismissed {
+		setVerdict(&v.Dismissed[i])
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
 	v.memoryLost = run.MemoryLost

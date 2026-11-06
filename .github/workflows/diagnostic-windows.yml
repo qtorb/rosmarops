@@ -23,6 +23,7 @@ on:
   pull_request:
     paths:
       - "cmd/rosmarops/connectwindow*.go"
+      - "cmd/rosmarops/findingswindow*.go"
       - "tools/winres/**"
       - "assets/windows/**"
       - ".github/workflows/diagnostic-windows.yml"
@@ -97,6 +98,46 @@ jobs:
         with:
           name: connect-window-screenshots
           path: connect-shots/*.png
+          if-no-files-found: warn
+
+  # BV-184: the «No me afecta» window on a real Windows desktop. The self-test
+  # checks the window's geometry and colours (§4); the screenshots render it in
+  # EN and ES at 100 % and 150 %, closed and with an «i» open. Gated behind the
+  # run env vars so the normal verify-windows job never launches a GUI; runs by
+  # hand and, via the pull_request trigger above, on a PR that touches
+  # findingswindow*.go.
+  findings-window:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Findings window self-test
+        env:
+          ROSMAROPS_FINDINGS_WINDOW_SELFTEST_RUN: "1"
+        run: go test ./cmd/rosmarops -run '^TestDismissWindowSelfTest$' -count=1 -v
+      # BV-184 point 2: all eight captures must land; a failed capture fails the
+      # job (no continue-on-error). The upload runs even on failure so whatever
+      # was captured is still available for diagnosis.
+      - name: Findings window screenshots (EN/ES, 100% and 150%, closed and i-open)
+        env:
+          ROSMAROPS_FINDINGS_WINDOW_SHOT_DIR: ${{ github.workspace }}\findings-shots
+        run: |
+          New-Item -ItemType Directory -Force -Path findings-shots | Out-Null
+          go test ./cmd/rosmarops -run '^TestDismissWindowScreenshots$' -count=1 -v
+      - name: Upload findings window screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: findings-window-screenshots
+          path: findings-shots/*.png
           if-no-files-found: warn
 
   # BV-149: on a real Windows build, the .exe must show the rosemary icon and a
