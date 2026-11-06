@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 // Registry hives of Claude Code policy settings.
@@ -26,6 +28,11 @@ type RegistryReader interface {
 	// StringValue reads one REG_SZ/REG_EXPAND_SZ value under hive\keyPath.
 	// keyPath and valueName are fixed, code-supplied names (no user input).
 	StringValue(ctx context.Context, hive, keyPath, valueName string) (value string, exists bool, err error)
+	// Uint32Value reads one REG_DWORD value under hive\keyPath (BV-140: VS Code
+	// policies such as ChatToolsAutoApprove are DWORDs). keyPath and valueName
+	// are fixed, code-supplied names. exists is false when the key or value is
+	// absent. Implementations only read.
+	Uint32Value(ctx context.Context, hive, keyPath, valueName string) (value uint32, exists bool, err error)
 }
 
 // safeRegistryToken reports a registry key path or value name that is safe to
@@ -112,5 +119,38 @@ if ($null -eq $v) { [Console]::Out.Write('` + psNoValue + `'); exit 0 }
 		return string(out[len(psValue):]), true, nil
 	default:
 		return "", false, fmt.Errorf("unexpected PowerShell output for %s\\%s", keyPath, valueName)
+	}
+}
+
+func (psRegistry) Uint32Value(ctx context.Context, hive, keyPath, valueName string) (uint32, bool, error) {
+	if hive != HiveHKLM && hive != HiveHKCU {
+		return 0, false, fmt.Errorf("unknown hive %q", hive)
+	}
+	if !safeRegistryToken(keyPath) || !safeRegistryToken(valueName) {
+		return 0, false, fmt.Errorf("unsafe registry token")
+	}
+	// A REG_DWORD prints as its decimal digits via [string]$v; the same
+	// read-only Get-ItemProperty snippet as StringValue.
+	script := `[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$p = '` + hive + `:\` + keyPath + `'
+if (-not (Test-Path -LiteralPath $p)) { [Console]::Out.Write('` + psNoKey + `'); exit 0 }
+$v = (Get-ItemProperty -LiteralPath $p -Name '` + valueName + `' -ErrorAction SilentlyContinue).'` + valueName + `'
+if ($null -eq $v) { [Console]::Out.Write('` + psNoValue + `'); exit 0 }
+[Console]::Out.Write("` + "ROSMAROPS:VALUE`n" + `" + [string]$v)`
+	out, err := runPS(ctx, script)
+	if err != nil {
+		return 0, false, err
+	}
+	switch {
+	case out == nil, bytes.Equal(out, []byte(psNoKey)), bytes.Equal(out, []byte(psNoValue)):
+		return 0, false, nil
+	case bytes.HasPrefix(out, []byte(psValue)):
+		n, perr := strconv.ParseUint(strings.TrimSpace(string(out[len(psValue):])), 10, 32)
+		if perr != nil {
+			return 0, false, fmt.Errorf("registry value %s\\%s is not a DWORD: %w", keyPath, valueName, perr)
+		}
+		return uint32(n), true, nil
+	default:
+		return 0, false, fmt.Errorf("unexpected PowerShell output for %s\\%s", keyPath, valueName)
 	}
 }

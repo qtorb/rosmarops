@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,6 +27,15 @@ func (codexFakeReg) PolicySettings(context.Context, string) ([]byte, bool, error
 func (r codexFakeReg) StringValue(_ context.Context, hive, keyPath, valueName string) (string, bool, error) {
 	v, ok := r[hive+"|"+keyPath+"|"+valueName]
 	return v, ok, nil
+}
+
+func (r codexFakeReg) Uint32Value(_ context.Context, hive, keyPath, valueName string) (uint32, bool, error) {
+	v, ok := r[hive+"|"+keyPath+"|"+valueName]
+	if !ok {
+		return 0, false, nil
+	}
+	n, err := strconv.ParseUint(v, 10, 32)
+	return uint32(n), err == nil, err
 }
 
 func writeFileCodex(t *testing.T, path, body string) {
