@@ -27,6 +27,15 @@ func (r fakeRegistry) PolicySettings(_ context.Context, hive string) ([]byte, bo
 	return []byte(v), ok, nil
 }
 
+// StringValue serves a value keyed "<hive>|<keyPath>|<valueName>" (BV-140).
+func (r fakeRegistry) StringValue(_ context.Context, hive, keyPath, valueName string) (string, bool, error) {
+	v, ok := r[hive+"|"+keyPath+"|"+valueName]
+	if v == "ERROR" {
+		return "", false, errors.New("access denied")
+	}
+	return v, ok, nil
+}
+
 const (
 	hklmSettings = `registry:HKLM\SOFTWARE\Policies\ClaudeCode\Settings`
 	hkcuSettings = `registry:HKCU\SOFTWARE\Policies\ClaudeCode\Settings`

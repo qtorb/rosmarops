@@ -733,3 +733,82 @@ type HermesConfig struct {
 	// local with a note. Empty when the file was not read.
 	TerminalBackend string
 }
+
+// CodexScan is what ListCodex read of OpenAI Codex's TOML config layers
+// (BV-140, CTO-16 §2). Like CursorScan for Cursor, it only reports what each
+// layer says; the graph builder and the overview cells resolve the posture.
+type CodexScan struct {
+	// ConfigDir is CODEX_HOME (or <home>/.codex); Exists reports the folder
+	// exists, so the Codex ai_client exists (CTO-16 §1, as detection does).
+	ConfigDir string
+	Exists    bool
+
+	// Layers are the config layers considered, each with its read outcome.
+	Layers []CodexLayer
+}
+
+// Codex config layer kinds, in CTO-16 §2 precedence order after the CLI flags
+// (which leave no trace at rest).
+const (
+	CodexLayerProject      = "project"      // <repo>/.codex/config.toml, only in force when trusted
+	CodexLayerProfile      = "profile"      // CODEX_HOME/<name>.config.toml
+	CodexLayerUser         = "user"         // CODEX_HOME/config.toml
+	CodexLayerRequirements = "requirements" // %ProgramData%\OpenAI\Codex\requirements.toml or the HKLM RequirementsPath
+)
+
+// CodexLayer is one Codex config layer and the subset of keys RosmarOps reads
+// from it (CTO-16 §4, §6). Only keys that bear on the posture are kept; a Has*
+// flag or a pointer tells absent from a zero value.
+type CodexLayer struct {
+	Kind   string
+	Path   string
+	Root   string // the repo root, for a project layer
+	Status MCPSourceStatus
+	Reason string
+
+	// Trusted is whether the user config trusts this project root
+	// ([projects."<root>"].trust_level = "trusted"); only for a project layer.
+	// A project layer that is not trusted is read but not in force: its .codex
+	// settings, hooks and rules do not load (CTO-16 §2).
+	Trusted bool
+
+	ApprovalPolicy     string // on-request | never | on-failure (alias); "" for a granular table or absent
+	HasApprovalPolicy  bool
+	ApprovalsReviewer  string // user | auto_review
+	SandboxMode        string // read-only | workspace-write | danger-full-access
+	DefaultPermissions string // :read-only | :workspace | :danger-full-access
+	NetworkAccess      *bool  // [sandbox_workspace_write].network_access
+	WindowsSandbox     string // [windows].sandbox: mxc | elevated | unelevated; "" absent
+	HasWindowsSandbox  bool
+
+	// Projects is the user layer's [projects] trust map: repo path →
+	// trust_level, used to gate the project layers.
+	Projects map[string]string
+
+	// IgnoreDefaultExcludes is shell_environment_policy.ignore_default_excludes
+	// (reads_env, CTO-16 §3); nil when absent.
+	IgnoreDefaultExcludes *bool
+
+	// HasRulesFiles reports a .codex/rules/*.rules file beside this layer
+	// (exec_rules_not_evaluated, CTO-16 §4).
+	HasRulesFiles bool
+
+	// MCP are the [mcp_servers] of this layer, with their secret env and
+	// headers (CTO-16 §3, credentials by fingerprint only).
+	MCP []CodexMCPServer
+
+	// BearerTokens are model_providers.<id>.experimental_bearer_token values
+	// (CTO-16 §3), secret, by fingerprint only.
+	BearerTokens []EnvVar
+}
+
+// CodexMCPServer is one [mcp_servers.<id>] of a Codex config layer.
+type CodexMCPServer struct {
+	ID         string
+	Command    string
+	Args       []string
+	EnvKeys    []string // names only
+	Env        []EnvVar // values wrapped as SecretValue
+	HeaderKeys []string // http_headers names only
+	Headers    []EnvVar // http_headers values wrapped as SecretValue
+}

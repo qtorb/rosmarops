@@ -18,10 +18,33 @@ const (
 const policyKey = `SOFTWARE\Policies\ClaudeCode`
 
 // RegistryReader reads the Settings value of HKLM or HKCU
-// \SOFTWARE\Policies\ClaudeCode. exists is false when the key or the value is
-// absent. Implementations only read.
+// \SOFTWARE\Policies\ClaudeCode, and a single string value under a policy key
+// (BV-140: Codex's RequirementsPath). exists is false when the key or the value
+// is absent. Implementations only read.
 type RegistryReader interface {
 	PolicySettings(ctx context.Context, hive string) (value []byte, exists bool, err error)
+	// StringValue reads one REG_SZ/REG_EXPAND_SZ value under hive\keyPath.
+	// keyPath and valueName are fixed, code-supplied names (no user input).
+	StringValue(ctx context.Context, hive, keyPath, valueName string) (value string, exists bool, err error)
+}
+
+// safeRegistryToken reports a registry key path or value name that is safe to
+// embed in the read-only PowerShell snippet: letters, digits and the few
+// punctuation characters a policy key uses. Callers pass constants; this is a
+// guard against ever drifting to anything with a quote or newline.
+func safeRegistryToken(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case r == '\\' || r == '_' || r == '-' || r == '.' || r == ' ':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // registryPath is the coverage path of a hive's Settings value.
@@ -62,5 +85,32 @@ if ($null -eq $v) { [Console]::Out.Write('` + psNoValue + `'); exit 0 }
 		return out[len(psValue):], true, nil
 	default:
 		return nil, false, fmt.Errorf("unexpected PowerShell output for %s", registryPath(hive))
+	}
+}
+
+func (psRegistry) StringValue(ctx context.Context, hive, keyPath, valueName string) (string, bool, error) {
+	if hive != HiveHKLM && hive != HiveHKCU {
+		return "", false, fmt.Errorf("unknown hive %q", hive)
+	}
+	if !safeRegistryToken(keyPath) || !safeRegistryToken(valueName) {
+		return "", false, fmt.Errorf("unsafe registry token")
+	}
+	script := `[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$p = '` + hive + `:\` + keyPath + `'
+if (-not (Test-Path -LiteralPath $p)) { [Console]::Out.Write('` + psNoKey + `'); exit 0 }
+$v = (Get-ItemProperty -LiteralPath $p -Name '` + valueName + `' -ErrorAction SilentlyContinue).'` + valueName + `'
+if ($null -eq $v) { [Console]::Out.Write('` + psNoValue + `'); exit 0 }
+[Console]::Out.Write("` + "ROSMAROPS:VALUE`n" + `" + [string]$v)`
+	out, err := runPS(ctx, script)
+	if err != nil {
+		return "", false, err
+	}
+	switch {
+	case out == nil, bytes.Equal(out, []byte(psNoKey)), bytes.Equal(out, []byte(psNoValue)):
+		return "", false, nil
+	case bytes.HasPrefix(out, []byte(psValue)):
+		return string(out[len(psValue):]), true, nil
+	default:
+		return "", false, fmt.Errorf("unexpected PowerShell output for %s\\%s", keyPath, valueName)
 	}
 }
