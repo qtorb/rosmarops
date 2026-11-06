@@ -347,6 +347,35 @@ $subH = [int][math]::Ceiling($fSub.GetHeight())
 $textX = (Px 16) + (Px 18) + (Px 12) + (Px 76) + (Px 12)
 $rightInset = (Px 16) + (Px 20) + (Px 12)
 $pillH = Px 22
+# Calibrate the «new» subtitle's left inset once (BV-184 point 3): the pixel gap
+# between where a default-rendered «New» (as a Label draws it, lined up with the
+# title) and a NoPadding «New» put their first ink. The subtitle draws its two
+# pieces NoPadding (so the «·» gaps stay equal) shifted by this offset, so «New»
+# still lines up with the title at any scale.
+function Sub-FirstInk($bmp, $h) {
+  for ($x = 0; $x -lt $bmp.Width; $x++) {
+    for ($y = 0; $y -lt $h; $y++) {
+      $p = $bmp.GetPixel($x, $y)
+      if (($p.R + $p.G + $p.B) -lt 720) { return $x }
+    }
+  }
+  return 0
+}
+$subOff = 0
+try {
+  $cw = (Px 120); $ch = $subH + (Px 6)
+  $cb = New-Object System.Drawing.Bitmap($cw, $ch)
+  $cg = [System.Drawing.Graphics]::FromImage($cb)
+  $cg.Clear([System.Drawing.Color]::White)
+  [System.Windows.Forms.TextRenderer]::DrawText($cg, $cfg.sub_new, $fSubB, (New-Object System.Drawing.Point(0, 0)), [System.Drawing.Color]::Black)
+  $dL = Sub-FirstInk $cb $ch
+  $cg.Clear([System.Drawing.Color]::White)
+  [System.Windows.Forms.TextRenderer]::DrawText($cg, $cfg.sub_new, $fSubB, (New-Object System.Drawing.Point(0, 0)), [System.Drawing.Color]::Black, $noPad)
+  $nL = Sub-FirstInk $cb $ch
+  $cg.Dispose(); $cb.Dispose()
+  $subOff = $dL - $nL
+  if ($subOff -lt 0) { $subOff = 0 }
+} catch { $subOff = 0 }
 
 function Update-Count {
   $n = 0
@@ -469,12 +498,10 @@ function Add-Row($card) {
       # «·» thus sits between two equal spaces (gap before = gap after). $off is
       # the GlyphOverhangPadding a Label would add, so «New»'s first ink lines up
       # with the title's (BV-184 point 3).
-      $full = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB).Width
-      $ink = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
-      $off = $full - $ink
-      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point($off, 0)), $cCobalt, $noPad)
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point($subOff, 0)), $cCobalt, $noPad)
       if ($t.agent) {
-        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($off + $ink), 0)), $cSub, $noPad)
+        $ink = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($subOff + $ink), 0)), $cSub, $noPad)
       }
     })
   } else {
