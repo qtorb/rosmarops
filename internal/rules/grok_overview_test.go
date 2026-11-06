@@ -186,6 +186,11 @@ func TestGrok_T3_ProjectTrust(t *testing.T) {
 	if c := grokCell(t, res, client, rules.RowWritesFiles); c.Decider != rules.DeciderNobody {
 		t.Errorf("trusted wildcard: writes should be nobody: %+v", c)
 	}
+	// The wildcard allow covers the shell too (CTO-16 Grok §4), so commands
+	// also run without asking.
+	if c := grokCell(t, res, client, rules.RowRunsCommands); c.Decider != rules.DeciderNobody {
+		t.Errorf("trusted wildcard: runs should be nobody: %+v", c)
+	}
 }
 
 // T4 — credentials in clear (CTO-16 Grok §7 T4): yolo sends them out.
@@ -245,5 +250,11 @@ func TestGrok_T5_AutoMode(t *testing.T) {
 	}
 	if !contains(c.Data.Assumptions, "auto_classifier_permits") {
 		t.Errorf("auto writes cell missing auto_classifier_permits: %+v", c.Data.Assumptions)
+	}
+	// GRAVE (§7 T5): a classifier decides writes, so Grok's own config is
+	// writable — own_config_writable must fire on ~/.grok/config.toml.
+	rs := grokRules(res, client)
+	if !rs[rules.RuleOwnConfigWritable] {
+		t.Errorf("T5: auto mode should give own_config_writable on ~/.grok/config.toml: %v", rs)
 	}
 }

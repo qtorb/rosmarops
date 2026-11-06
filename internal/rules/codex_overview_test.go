@@ -50,7 +50,9 @@ func codexEvaluate(t *testing.T, scan platform.CodexScan, creds []entry) (graph.
 		{Product: "claude-code", ConfigDir: claudeDir, Path: repoWeb + "/CLAUDE.md"},
 		{Product: "codex", ConfigDir: codexDir, Path: repoWeb + "/AGENTS.md"},
 	}}, now)
-	g, err := graph.Infer(graph.Build(f, graph.Provenance{EngineVersion: "t", RulesVersion: "0", KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(salt)}, now), roots, home)
+	g := graph.Build(f, graph.Provenance{EngineVersion: "t", RulesVersion: "0", KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(salt)}, now)
+	graph.MarkCodexUntrusted(&g, scan)
+	g, err = graph.Infer(g, roots, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,6 +231,18 @@ func TestCodex_CaseC_AutoReview(t *testing.T) {
 	if !contains(c.Data.Assumptions, rules.AssumeReviewerModelPermits) {
 		t.Errorf("sends cell missing reviewer_model_permits: %+v", c.Data.Assumptions)
 	}
+	// Writing is nobody inside the project, and the reviewer model decides the
+	// escalation outside it (CTO-16 §7 C: «escribir fuera» → model).
+	w := codexOvCell(t, res, client, rules.RowWritesFiles)
+	if w.Decider != rules.DeciderNobody || w.Scope != rules.ScopeSameProject {
+		t.Errorf("writes under auto_review: want same_project/nobody primary, got %+v", w)
+	}
+	if w.Also == nil || w.Also.Decider != rules.DeciderModel || w.Also.Scope != rules.ScopeMachine {
+		t.Errorf("writes under auto_review: want Also model/machine (outside-project escalation), got %+v", w.Also)
+	}
+	if !w.Assumed || !contains(w.Data.Assumptions, rules.AssumeReviewerModelPermits) {
+		t.Errorf("writes cell missing reviewer_model_permits/assumed: %+v", w)
+	}
 }
 
 // D. Secret in an MCP server (CTO-16 §7 D): the config.toml credential is
@@ -268,49 +282,95 @@ func TestCodex_CaseD_MCPSecret(t *testing.T) {
 	}
 }
 
-// E. Untrusted project with a trap (CTO-16 §7 E): without a [projects] entry
-// the project's MCP server does not load; AGENTS.md still loads. With trust it
-// loads.
-func TestCodex_CaseE_UntrustedProject(t *testing.T) {
+// mcpLoaded reports an mcp_server node of the given name in the graph.
+func mcpLoaded(g graph.Graph, name string) bool {
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindAgent && n.Type == graph.AgentMCPServer && n.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// hasUntrustedCap reports a not-in-force capability with reason
+// workspace_untrusted.
+func hasUntrustedCap(g graph.Graph) bool {
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindCapability && n.NotInForceReason == graph.ReasonWorkspaceUntrusted {
+			return true
+		}
+	}
+	return false
+}
+
+// codexEProject builds the §7 E scan with the repo's trap config at the given
+// trust_level ("" = no [projects] entry, "untrusted", "trusted").
+func codexEProject(trustLevel string) platform.CodexScan {
 	proj := codexLayer(platform.CodexLayerProject, codexProjCfg, repoWeb)
 	proj.ApprovalPolicy, proj.HasApprovalPolicy = "never", true
 	proj.MCP = []platform.CodexMCPServer{{ID: "x", Command: "evil.exe"}}
-	proj.Trusted = false
-	scan := platform.CodexScan{
+	proj.TrustLevel = trustLevel
+	proj.Trusted = trustLevel == "trusted"
+	user := codexLayer(platform.CodexLayerUser, codexConfig, "")
+	if trustLevel != "" {
+		user.Projects = map[string]string{graph.CanonicalPath(repoWeb): trustLevel}
+	}
+	return platform.CodexScan{
 		ConfigDir: codexDir, Exists: true,
-		Layers: []platform.CodexLayer{codexLayer(platform.CodexLayerUser, codexConfig, ""), proj},
+		Layers: []platform.CodexLayer{user, proj},
 	}
-	g, _, client := codexEvaluate(t, scan, []entry{{claudeCred, 1, "SUPABASE_SECRET_KEY", sbSecret}})
+}
 
-	// The untrusted project's MCP server does not load.
-	for _, n := range g.Nodes {
-		if n.Kind == graph.KindAgent && n.Type == graph.AgentMCPServer && n.Name == "x" {
-			t.Errorf("untrusted project MCP server x must not be in the graph")
-		}
-	}
-	// The project config's capabilities are not in force, reason workspace_untrusted.
-	var sawUntrusted bool
-	for _, n := range g.Nodes {
-		if n.Kind == graph.KindCapability && n.NotInForceReason == graph.ReasonWorkspaceUntrusted {
-			sawUntrusted = true
-		}
-	}
-	if !sawUntrusted {
-		t.Errorf("no workspace_untrusted capability for the untrusted project")
-	}
-	_ = client
+// E. Untrusted project with a trap (CTO-16 §7 E), the three states:
+//   - no [projects] entry: the project MCP does not load; its capabilities read
+//     workspace_untrusted; but AGENTS.md still loads (own_instructions), and
+//     commands keep the user default (sandbox/nobody);
+//   - trust_level = "untrusted": the project MCP does not load; AGENTS.md does
+//     not load (no own_instructions) and Codex writes nothing in the project
+//     (no foreign config either); commands ask (you, exec_rules_not_evaluated);
+//   - trust_level = "trusted": the project MCP loads.
+func TestCodex_CaseE_ProjectTrustStates(t *testing.T) {
+	creds := []entry{{claudeCred, 1, "SUPABASE_SECRET_KEY", sbSecret}}
 
-	// With trust, the MCP server loads.
-	proj.Trusted = true
-	scan.Layers[1] = proj
-	g2, _, _ := codexEvaluate(t, scan, []entry{{claudeCred, 1, "SUPABASE_SECRET_KEY", sbSecret}})
-	var loaded bool
-	for _, n := range g2.Nodes {
-		if n.Kind == graph.KindAgent && n.Type == graph.AgentMCPServer && n.Name == "x" {
-			loaded = true
-		}
+	// No entry: AGENTS.md loads, commands sandbox/nobody.
+	g, res, client := codexEvaluate(t, codexEProject(""), creds)
+	if mcpLoaded(g, "x") {
+		t.Errorf("no-entry: the project MCP must not load")
 	}
-	if !loaded {
-		t.Errorf("trusted project MCP server x should load")
+	if !hasUntrustedCap(g) {
+		t.Errorf("no-entry: no workspace_untrusted capability")
+	}
+	rs := codexRules(res, client)
+	if !rs[rules.RuleOwnInstructionsWritable] {
+		t.Errorf("no-entry: AGENTS.md should load and be own-instructions-writable: %v", rs)
+	}
+	if c := codexOvCell(t, res, client, rules.RowRunsCommands); c.Decider != rules.DeciderNobody || c.Scope != rules.ScopeSandbox {
+		t.Errorf("no-entry: runs should be sandbox/nobody: %+v", c)
+	}
+
+	// Explicit untrusted: AGENTS.md does not load, commands ask.
+	g, res, client = codexEvaluate(t, codexEProject("untrusted"), creds)
+	if mcpLoaded(g, "x") {
+		t.Errorf("untrusted: the project MCP must not load")
+	}
+	rs = codexRules(res, client)
+	if rs[rules.RuleOwnInstructionsWritable] {
+		t.Errorf("untrusted: AGENTS.md must not load, so no own_instructions: %v", rs)
+	}
+	if rs[rules.RuleForeignAgentConfigWritable] {
+		t.Errorf("untrusted: Codex is read-only in the project, so no foreign config write: %v", rs)
+	}
+	c := codexOvCell(t, res, client, rules.RowRunsCommands)
+	if c.Decider != rules.DeciderYou || c.Scope != rules.ScopeNone {
+		t.Errorf("untrusted: runs should be you/none: %+v", c)
+	}
+	if !contains(c.Data.Assumptions, rules.AssumeExecRulesNotEvaluated) {
+		t.Errorf("untrusted: runs cell missing exec_rules_not_evaluated: %+v", c.Data.Assumptions)
+	}
+
+	// Trusted: the project MCP loads.
+	g, _, _ = codexEvaluate(t, codexEProject("trusted"), creds)
+	if !mcpLoaded(g, "x") {
+		t.Errorf("trusted: the project MCP should load")
 	}
 }

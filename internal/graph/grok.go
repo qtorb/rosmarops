@@ -247,14 +247,16 @@ func grokCapID(client, kind, path, typ, scope string) string {
 // wildcard allow is in force (bypassPermissions / always-approve / yolo /
 // [permission] allow "*"); otherwise editing asks the user.
 type grokInference struct {
-	client   Node
-	readCap  *Node // read_files allow, in force
-	writeCap *Node // the capability a without-asking write goes through, if any
+	client      Node
+	readCap     *Node    // read_files allow, in force
+	writeCap    *Node    // the capability a write goes through, if any
+	writeAssume []string // extra assumptions of a write edge (auto mode's classifier)
 }
 
 func (p prepared) grokInference(client Node) grokInference {
 	in := grokInference{client: client}
-	bypassMode := false
+	var modeCap *Node
+	bypassMode, autoMode, wildcardWrite := false, false, false
 	for i := range p.caps[client.ID] {
 		c := p.caps[client.ID][i]
 		if !c.InForce {
@@ -263,29 +265,40 @@ func (p prepared) grokInference(client Node) grokInference {
 		if c.Type == CapReadFiles && c.Approval == ApprovalAllow && in.readCap == nil {
 			in.readCap = &p.caps[client.ID][i]
 		}
-		if c.Type == CapPermissionMode && grokBypassModes(c.TargetScope) {
-			bypassMode = true
-			if in.writeCap == nil {
-				in.writeCap = &p.caps[client.ID][i]
+		if c.Type == CapPermissionMode {
+			switch {
+			case grokBypassModes(c.TargetScope):
+				bypassMode = true
+				modeCap = &p.caps[client.ID][i]
+			case c.TargetScope == "auto":
+				autoMode = true
+				if modeCap == nil {
+					modeCap = &p.caps[client.ID][i]
+				}
 			}
 		}
 		// A configured wildcard write allow (from [permission] allow "*") writes
 		// without asking.
 		if c.Type == CapWriteFiles && c.Approval == ApprovalAllow && c.Basis == BasisConfigured && c.TargetScope == scopeAll {
+			wildcardWrite = true
 			if in.writeCap == nil {
 				in.writeCap = &p.caps[client.ID][i]
 			}
 		}
 	}
-	// A bypass mode writes through the write capability it implies; if no write
-	// cap was found but the mode bypasses, use the mode capability itself.
-	if bypassMode && in.writeCap == nil {
-		for i := range p.caps[client.ID] {
-			if c := p.caps[client.ID][i]; c.InForce && c.Type == CapPermissionMode && grokBypassModes(c.TargetScope) {
-				in.writeCap = &p.caps[client.ID][i]
-				break
-			}
-		}
+	// Grok writes another agent's configuration when an approve-everything mode
+	// or a wildcard allow is in force (without asking), or in auto mode, where
+	// the classifier decides (CTO-16 Grok §4, like Claude Code's auto mode). A
+	// bypass or auto write with no write-allow capability goes through the mode
+	// capability itself.
+	switch {
+	case wildcardWrite:
+		// in.writeCap already set to the wildcard write cap.
+	case bypassMode || autoMode:
+		in.writeCap = modeCap
+	}
+	if autoMode && !bypassMode && !wildcardWrite {
+		in.writeAssume = []string{AssumeAutoClassifierPermits}
 	}
 	return in
 }
@@ -327,6 +340,10 @@ func (in grokInference) writes(all []Node) []Edge {
 }
 
 func (in grokInference) edge(typ, to string, cap Node) Edge {
+	assume := baseAssumptions(AssumeLaunchFlagsNotReadable)
+	if typ == EdgeWritesConfigOf {
+		assume = append(assume, in.writeAssume...)
+	}
 	e := Edge{
 		ID:          "edge_" + typ + "_" + keyHash(typ, in.client.ID, to, cap.ID),
 		Type:        typ,
@@ -335,7 +352,7 @@ func (in grokInference) edge(typ, to string, cap Node) Edge {
 		Source:      cap.Source,
 		Certainty:   CertaintyInferred,
 		DerivedFrom: []string{in.client.ID, cap.ID, to},
-		Assumptions: baseAssumptions(AssumeLaunchFlagsNotReadable),
+		Assumptions: assume,
 	}
 	if typ == EdgeReaches {
 		e.Via = cap.ID

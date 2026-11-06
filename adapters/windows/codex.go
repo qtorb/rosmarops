@@ -85,7 +85,8 @@ func ReadCodex(home string, env agentdirs.Env, repoRoots []string, requirementsP
 	for _, root := range repoRoots {
 		cdir := filepath.Join(root, ".codex")
 		layer := readCodexLayer(filepath.Join(cdir, "config.toml"), platform.CodexLayerProject, root, cdir)
-		layer.Trusted = user.Projects[codexTrustKey(root)] == "trusted"
+		layer.TrustLevel = user.Projects[codexTrustKey(root)]
+		layer.Trusted = layer.TrustLevel == "trusted"
 		scan.Layers = append(scan.Layers, layer)
 	}
 

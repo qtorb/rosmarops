@@ -219,14 +219,43 @@ const kbCodexProtected = "protected_paths"
 type codexInference struct {
 	client    Node
 	roots     []string
-	protected []string // kbCodexProtected, relative to a workspace root
-	readCap   *Node    // read_files allow, in force (any_path)
-	writeCap  *Node    // write_files allow, in force; widest scope
-	writeAny  bool     // writeCap reaches any path (danger-full-access)
+	protected []string        // kbCodexProtected, relative to a workspace root
+	untrusted map[string]bool // explicitly-untrusted roots: Codex writes nothing there
+	readCap   *Node           // read_files allow, in force (any_path)
+	writeCap  *Node           // write_files allow, in force; widest scope
+	writeAny  bool            // writeCap reaches any path (danger-full-access)
+}
+
+// MarkCodexUntrusted records on the Codex ai_client, after Build, the repo
+// roots the user config marks trust_level = "untrusted" (BV-140, CTO-16 §5): in
+// those projects Codex loads nothing and asks before commands, so the inference
+// writes nothing inside them. Called like CrossIntel, on the built graph.
+func MarkCodexUntrusted(g *Graph, scan platform.CodexScan) {
+	if !scan.Exists {
+		return
+	}
+	var roots []string
+	for _, l := range scan.Layers {
+		if l.Kind == platform.CodexLayerProject && l.TrustLevel == "untrusted" && l.Root != "" {
+			roots = append(roots, canonicalPath(l.Root))
+		}
+	}
+	if len(roots) == 0 {
+		return
+	}
+	client := clientID(knowledge.CodexProduct, scan.ConfigDir)
+	for i := range g.Nodes {
+		if g.Nodes[i].ID == client {
+			g.Nodes[i].CodexUntrustedRoots = roots
+		}
+	}
 }
 
 func (p prepared) codexInference(client Node, repoRoots []string) codexInference {
-	in := codexInference{client: client, roots: append([]string{}, repoRoots...)}
+	in := codexInference{client: client, roots: append([]string{}, repoRoots...), untrusted: map[string]bool{}}
+	for _, r := range client.CodexUntrustedRoots {
+		in.untrusted[r] = true
+	}
 	if e, ok := p.codex.Entry(kbCodexProtected); ok {
 		in.protected = e.Paths
 	}
@@ -286,12 +315,26 @@ func (in codexInference) writes(all []Node) []Edge {
 		if !ok {
 			continue
 		}
+		if in.inUntrusted(file) {
+			continue // an explicitly-untrusted project is read-only for Codex (CTO-16 §5)
+		}
 		if !in.writeAny && !in.writableWorkspace(file) {
 			continue
 		}
 		out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.writeCap))
 	}
 	return out
+}
+
+// inUntrusted reports a file inside a repo root the user marked
+// trust_level = "untrusted": Codex loads nothing and writes nothing there.
+func (in codexInference) inUntrusted(file string) bool {
+	for r := range in.untrusted {
+		if within(r, file) {
+			return true
+		}
+	}
+	return false
 }
 
 // writableWorkspace reports a file inside a workspace root and outside the

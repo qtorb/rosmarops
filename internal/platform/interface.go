@@ -783,6 +783,12 @@ type CodexLayer struct {
 	// settings, hooks and rules do not load (CTO-16 §2).
 	Trusted bool
 
+	// TrustLevel is the raw [projects."<root>"].trust_level value: "trusted",
+	// "untrusted", or "" when there is no entry. The asymmetry of CTO-16 §5:
+	// with no entry the project's AGENTS.md still loads, but an explicit
+	// "untrusted" stops it and makes commands ask (CTO-16 §4).
+	TrustLevel string
+
 	ApprovalPolicy     string // on-request | never | on-failure (alias); "" for a granular table or absent
 	HasApprovalPolicy  bool
 	ApprovalsReviewer  string // user | auto_review

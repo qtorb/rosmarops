@@ -383,6 +383,18 @@ func codexScanFlags(scan platform.CodexScan) (rulesFiles, windowsSandboxSet bool
 	return rulesFiles, windowsSandboxSet
 }
 
+// codexExplicitUntrusted reports a project the user config marks
+// trust_level = "untrusted": Codex then asks before commands there, except
+// those a rules file allows (CTO-16 §4, exec_rules_not_evaluated).
+func codexExplicitUntrusted(scan platform.CodexScan) bool {
+	for _, l := range scan.Layers {
+		if l.Kind == platform.CodexLayerProject && l.TrustLevel == "untrusted" {
+			return true
+		}
+	}
+	return false
+}
+
 // codexInForceCap is the in-force capability of type typ with an allow
 // approval, widest scope first (for the cell's finding lookup).
 func (v *agentView) codexInForceCap(typ string) string {
@@ -404,10 +416,11 @@ func (v *agentView) codexInForceCap(typ string) string {
 func (oi overviewInputs) codexCells(v *agentView) []OverviewCell {
 	mode, configured := codexSandbox(v)
 	rulesFiles, windowsSandboxSet := codexScanFlags(oi.in.Codex)
+	untrusted := codexExplicitUntrusted(oi.in.Codex)
 	return []OverviewCell{
 		oi.codexReadsCell(v),
 		oi.codexWritesCell(v, mode, configured),
-		oi.codexRunsCell(v, mode, configured, rulesFiles, windowsSandboxSet),
+		oi.codexRunsCell(v, mode, configured, rulesFiles, windowsSandboxSet, untrusted),
 		oi.codexSendsCell(v),
 		oi.codexChangesCell(v),
 		oi.providerCell(v),
@@ -543,6 +556,13 @@ func (oi overviewInputs) grokWritesCell(v *agentView, mode string) OverviewCell 
 
 func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
 	decider, assume := grokEscalationDecider(mode)
+	// A wildcard [permission] allow "*" is «approve everything» and covers the
+	// shell too (CTO-16 Grok §4), so commands run without asking.
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			decider, assume = DeciderNobody, nil
+		}
+	}
 	scope := ScopeMachine
 	if decider == DeciderBlocked {
 		scope = ScopeNone
@@ -666,14 +686,23 @@ func (oi overviewInputs) codexWritesCell(v *agentView, mode string, configured b
 		}
 	}
 	cell.Data.EditAllowRules = intp(edit)
-	cell.Data.Assumptions = codexBaseAssumptions()
+	assume := codexBaseAssumptions()
+	// Writing outside the workspace is an escalation (CTO-16 §4): with
+	// auto_review the reviewer model decides it (scope machine), so the cell
+	// shows nobody inside the project and, as its second way, the model outside.
+	if _, autoReview := codexPolicy(v); autoReview && mode != codexDanger {
+		cell.Also = &OverviewAlso{Decider: DeciderModel, Scope: ScopeMachine}
+		assume = append(assume, AssumeReviewerModelPermits)
+		cell.Assumed = true
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
 	cell.Data.Excluded = []string{ExcludedProtectedPaths}
 	r := NoFindingNotAFinding
 	cell.NoFindingReason = &r
 	return cell
 }
 
-func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, rulesFiles, windowsSandboxSet bool) OverviewCell {
+func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, rulesFiles, windowsSandboxSet, untrusted bool) OverviewCell {
 	scope, decider := ScopeSandbox, DeciderNobody
 	if mode == codexDanger {
 		scope = ScopeMachine
@@ -681,6 +710,13 @@ func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, ru
 	origin := OriginProductDefault
 	if configured {
 		origin = OriginConfigured
+	}
+	// An explicitly-untrusted project (and no user-level danger-full-access)
+	// makes Codex ask before commands there, except those a rules file allows
+	// (CTO-16 §4): the person decides, with exec_rules_not_evaluated.
+	untrustedAsks := untrusted && mode != codexDanger
+	if untrustedAsks {
+		scope, decider = ScopeNone, DeciderYou
 	}
 	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: origin}
 	pre := 0
@@ -691,10 +727,11 @@ func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, ru
 	}
 	cell.Data.PreapprovedRules, cell.Data.LauncherRules = intp(pre), intp(0)
 	assume := codexBaseAssumptions()
-	if rulesFiles {
+	if rulesFiles || untrustedAsks {
+		// Unparsed rules\*.rules could let commands run without asking (CTO-16 §4).
 		assume = append(assume, AssumeExecRulesNotEvaluated)
 	}
-	if mode != codexDanger && !windowsSandboxSet {
+	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet {
 		// The command runs in a Windows sandbox whose implementation is chosen
 		// at launch; assume the least isolating one (CTO-16 §4, point 9).
 		assume = append(assume, AssumeWindowsSandboxUnknown)

@@ -1004,6 +1004,9 @@ func writeGraph(
 		KnowledgeVersion: graph.KnowledgeVersion,
 		HostID:           graph.HostID(salt),
 	}, now)
+	// Codex's explicitly-untrusted repo roots, recorded on the built graph
+	// before inference so Codex writes nothing inside them (BV-140, CTO-16 §5).
+	graph.MarkCodexUntrusted(&g, codex)
 	// reaches and writes_config_of are inferred on the built graph.
 	g, err = graph.Infer(g, repoRoots, home)
 	if err != nil {
