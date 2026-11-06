@@ -112,6 +112,11 @@ func runNoArgs() int {
 	// connection failure changes nothing here (the report and exit code stand).
 	offerConnect(stPath)
 
+	// BV-184 point 3: after the connect window, offer to dismiss findings when
+	// at least one is new. Double click uses the home configuration (U2), like
+	// the run. A failure to show or save changes nothing here.
+	offerDismissAfterReport(lang, cfgPath, stPath, true, time.Now())
+
 	if reportOpened {
 		if isTerminal(os.Stdout) {
 			time.Sleep(closeDelay)

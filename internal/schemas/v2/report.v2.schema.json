@@ -42,6 +42,13 @@
         "$ref": "#/definitions/finding"
       }
     },
+    "dismissed": {
+      "type": "array",
+      "description": "Findings the person marked «No me afecta» (BV-184, allow_list.dismissed) that still appeared this run: kept out of the score and of «findings», listed so they can be recovered. Same shape as a finding.",
+      "items": {
+        "$ref": "#/definitions/finding"
+      }
+    },
     "posture": {
       "type": "array",
       "items": {

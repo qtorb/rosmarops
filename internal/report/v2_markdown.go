@@ -71,6 +71,25 @@ var staticKeys = []string{
 	"connect.q", "connect.text", "connect.yes", "connect.no",
 	"connect.ok", "connect.done", "connect.expired", "connect.failed",
 	"disconnect.done",
+	// BV-184: the «No me afecta» window and the console list (chrome), the
+	// per-rule «when it doesn't apply» texts, and the report's dismissed
+	// section and score-line note.
+	"findings.q", "findings.text",
+	"findings.group.new", "findings.group.rest", "findings.group.dismissed",
+	"findings.red", "findings.yellow",
+	"findings.sub.new", "findings.sub.since",
+	"findings.what", "findings.when",
+	"findings.count.zero", "findings.count.one", "findings.count.other",
+	"findings.no", "findings.save",
+	"findings.console.dismissed", "findings.console.prompt",
+	"findings.when.cred_in_git", "findings.when.cred_readable", "findings.when.cred_read_and_send",
+	"findings.when.foreign_agent_config_writable", "findings.when.foreign_agent_instructions_writable",
+	"findings.when.own_config_writable", "findings.when.own_instructions_writable",
+	"findings.when.n8n_mcp_bridge", "findings.when.n8n_key_with_data",
+	"findings.when.project_hook_runs_repo_script", "findings.when.package_known_malicious",
+	"findings.when.own_task_changed", "findings.when.config_key_case_conflict",
+	"findings.when.default",
+	"report.dismissed.title", "report.dismissed.note",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/

@@ -196,11 +196,18 @@ func svCounts(c htmlCtx) string {
 	return c.cat.Text(key, map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)})
 }
 
-// svMeta is the projects-checked line (html.meta.projects).
+// svMeta is the projects-checked line (html.meta.projects). BV-184: when the
+// person has dismissed findings this run, the same note the local report shows
+// is appended, so the space says the score leaves them out — without changing
+// the space-view schema.
 func svMeta(c htmlCtx) string {
-	return c.cat.Plural("html.meta.projects", c.v.repos, map[string]string{
+	meta := c.cat.Plural("html.meta.projects", c.v.repos, map[string]string{
 		"projects": strconv.Itoa(c.v.repos), "minutes": strconv.Itoa(c.v.limitMinutes),
 	})
+	if len(c.v.Dismissed) > 0 {
+		meta += " · " + c.cat.Text("report.dismissed.note", nil)
+	}
+	return meta
 }
 
 // svWarnings are the step-1 warning lines, each only when it fires (html.go
