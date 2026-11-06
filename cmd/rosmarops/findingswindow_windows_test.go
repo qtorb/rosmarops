@@ -201,6 +201,11 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["GAPFLUSH"] != "True" {
 		t.Errorf("GAPFLUSH = %q, want True (the agent label is not flush with «New»; the gaps around «·» differ)", kv["GAPFLUSH"])
 	}
+	// The subtitle's first ink column lines up with the title's, for a «new» row
+	// and a dated row (BV-184 point 3 follow-up).
+	if kv["ALIGNSUB"] != "True" {
+		t.Errorf("ALIGNSUB = %q, want True (the small line does not start in the title's ink column; ANEW=%s AREST=%s)", kv["ALIGNSUB"], kv["ANEW"], kv["AREST"])
+	}
 	// Chrome.
 	if !strings.Contains(kv["BORDER"], "FixedSingle") || kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {
 		t.Errorf("chrome: BORDER=%s MAX=%s MIN=%s TOP=%s", kv["BORDER"], kv["MAX"], kv["MIN"], kv["TOP"])

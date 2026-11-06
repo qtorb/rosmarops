@@ -347,6 +347,12 @@ $subH = [int][math]::Ceiling($fSub.GetHeight())
 $textX = (Px 16) + (Px 18) + (Px 12) + (Px 76) + (Px 12)
 $rightInset = (Px 16) + (Px 20) + (Px 12)
 $pillH = Px 22
+# The title and the dated subtitles are Labels, whose text is inset from the
+# left by TextRenderer's GlyphOverhangPadding. The owner-drawn «new» subtitle
+# uses NoPadding (no inset), so it is shifted right by this much to line its
+# first ink up with the title's (BV-184 point 3 follow-up). Measured as half the
+# padding TextRenderer adds without NoPadding, for the title font.
+$subInkPad = [int][math]::Round(([System.Windows.Forms.TextRenderer]::MeasureText('Ag', $fRow).Width - [System.Windows.Forms.TextRenderer]::MeasureText('Ag', $fRow, [System.Drawing.Size]::Empty, $noPad).Width) / 2.0)
 
 function Update-Count {
   $n = 0
@@ -464,10 +470,10 @@ function Add-Row($card) {
     $subStatus.Add_Paint({
       param($s, $e)
       $t = $s.Tag; $g = $e.Graphics
-      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point(0, 0)), $cCobalt, $noPad)
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point($subInkPad, 0)), $cCobalt, $noPad)
       if ($t.agent) {
         $w1 = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
-        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point($w1, 0)), $cSub, $noPad)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($subInkPad + $w1), 0)), $cSub, $noPad)
       }
     })
   } else {
@@ -725,6 +731,23 @@ function Measure-SubGaps($row, $bg) {
   if ($s3 -ge 0 -and $e2 -ge 0) { $gap2 = $s3 - $e2 }
   return @($gap1, $gap2)
 }
+# First-InkCol is the first column (row-relative x) that has tint in the band
+# y0..y1, scanning from just left of the text column (BV-184 point 3 follow-up:
+# the subtitle must start in the same ink column as the title).
+function First-InkCol($row, $bg, $y0, $y1) {
+  $bmp = Grab-Control $row
+  $xStart = [math]::Max(0, $textX - (Px 8))
+  $xEnd = [math]::Min($row.Width, $textX + (Px 220))
+  $col = -1
+  for ($x = $xStart; $x -lt $xEnd -and $col -lt 0; $x++) {
+    for ($y = $y0; $y -lt $y1; $y++) {
+      $p = $bmp.GetPixel($x, $y)
+      if ((([math]::Abs([int]$p.R - [int]$bg.R)) + ([math]::Abs([int]$p.G - [int]$bg.G)) + ([math]::Abs([int]$p.B - [int]$bg.B))) -gt 60) { $col = $x; break }
+    }
+  }
+  $bmp.Dispose()
+  return $col
+}
 
 if ($shot) {
   $form.Add_Shown({
@@ -804,6 +827,7 @@ if ($selftest) {
       [Console]::Out.WriteLine('PILLCORNER=' + $pillCorner)
       $hbefore = 0; $hafter = 0; $detailText = $false; $iconFill = $false
       $gapFlush = $false; $gap1 = -1; $gap2 = -1; $detailBgRest = $false; $detailBgHover = $false; $pillCornerHover = $false
+      $alignSub = $false; $alignNewT = -1; $alignNewS = -1; $alignRestT = -1; $alignRestS = -1
       if ($rowsOnly.Count -gt 0) {
         $r0 = $rowsOnly[0]
         # Point 3 (pixel): the empty-column run before the «·» equals the one
@@ -811,6 +835,20 @@ if ($selftest) {
         $gaps = Measure-SubGaps $r0 $r0.BackColor
         $gap1 = $gaps[0]; $gap2 = $gaps[1]
         $gapFlush = ($gap1 -gt 0 -and $gap2 -gt 0 -and ([math]::Abs($gap1 - $gap2) -le 1))
+        # ALIGNSUB: the subtitle's first ink column equals the title's, for a
+        # «new» row (r0) and a dated «rest» row (rowsOnly[2] = f_3).
+        $tY0 = (Px 12); $tY1 = (Px 12) + $titleLineH
+        $alignNewT = First-InkCol $r0 $r0.BackColor $tY0 $tY1
+        $alignNewS = First-InkCol $r0 $r0.BackColor $r0.Tag.subtop ($r0.Tag.subtop + $subH)
+        $alignNew = ($alignNewT -ge 0 -and $alignNewS -ge 0 -and ([math]::Abs($alignNewT - $alignNewS) -le 1))
+        $alignRest = $true
+        if ($rowsOnly.Count -ge 3) {
+          $rD = $rowsOnly[2]
+          $alignRestT = First-InkCol $rD $rD.BackColor $tY0 $tY1
+          $alignRestS = First-InkCol $rD $rD.BackColor $rD.Tag.subtop ($rD.Tag.subtop + $subH)
+          $alignRest = ($alignRestT -ge 0 -and $alignRestS -ge 0 -and ([math]::Abs($alignRestT - $alignRestS) -le 1))
+        }
+        $alignSub = ($alignNew -and $alignRest)
         $hbefore = $r0.Height
         Open-Detail $r0
         $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
@@ -835,6 +873,7 @@ if ($selftest) {
       [Console]::Out.WriteLine('DETAILTEXT=' + $detailText)
       [Console]::Out.WriteLine('ICONFILL=' + $iconFill)
       [Console]::Out.WriteLine('GAPFLUSH=' + $gapFlush + ' GAP1=' + $gap1 + ' GAP2=' + $gap2)
+      [Console]::Out.WriteLine('ALIGNSUB=' + $alignSub + ' ANEW=' + $alignNewT + ',' + $alignNewS + ' AREST=' + $alignRestT + ',' + $alignRestS)
       [Console]::Out.WriteLine('DETAILBGREST=' + $detailBgRest)
       [Console]::Out.WriteLine('DETAILBGHOVER=' + $detailBgHover)
       [Console]::Out.WriteLine('PILLCORNERHOVER=' + $pillCornerHover)
