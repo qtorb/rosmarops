@@ -195,3 +195,24 @@ func (c Catalog) DayLabel(t time.Time) string {
 	}
 	return fmt.Sprintf("%d %s %d", t.Day(), m[t.Month()-1], t.Year())
 }
+
+// longMonths are the full month names, in the catalog's languages (calendar
+// names, like the abbreviated months above).
+var longMonths = map[string][12]string{
+	"en": {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"},
+	"es": {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"},
+}
+
+// LongDate is the day of t in the language's long form (BV-184): "25 October
+// 2026" in English, "25 de octubre de 2026" in Spanish. A language with no
+// long months falls back to the English form.
+func (c Catalog) LongDate(t time.Time) string {
+	m, ok := longMonths[c.lang]
+	if !ok {
+		return fmt.Sprintf("%d %s %d", t.Day(), longMonths[DefaultLang][t.Month()-1], t.Year())
+	}
+	if c.lang == "es" {
+		return fmt.Sprintf("%d de %s de %d", t.Day(), m[t.Month()-1], t.Year())
+	}
+	return fmt.Sprintf("%d %s %d", t.Day(), m[t.Month()-1], t.Year())
+}

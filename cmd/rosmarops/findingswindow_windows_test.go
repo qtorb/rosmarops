@@ -122,9 +122,17 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["CLIENT"] == "" {
 		t.Fatalf("no CLIENT emitted; collected: %v", kv)
 	}
+	// (0) The config carried every card, and each became a row.
+	if n := atoi(kv["CARDS"]); n != len(cards) {
+		t.Errorf("CARDS = %d, want %d (cards lost in the pipeline)", n, len(cards))
+	}
 	// (1) One visible row per finding.
 	if n := atoi(kv["ROWS"]); n != len(cards) {
 		t.Errorf("ROWS = %d, want %d (one row per finding)", n, len(cards))
+	}
+	// Non-ASCII text (·, á, ñ) survives the base64 UTF-8 pipeline to the window.
+	if kv["ENCOK"] != "True" {
+		t.Errorf("ENCOK = %q, want True (UTF-8 text is garbled)", kv["ENCOK"])
 	}
 	// (2) Every row inside the panel's visible width; no horizontal scrollbar.
 	listClient := nums("LISTCLIENT")
@@ -150,10 +158,13 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["CHECKCOBALT"] != "True" {
 		t.Errorf("no cobalt (#2346B8) in the ticked finding's checkbox")
 	}
-	// (4) Opening an «i» grows the row.
+	// (4) Opening an «i» grows the row and draws the detail text.
 	io := nums("IOPEN")
 	if len(io) != 2 || io[1] <= io[0] {
 		t.Errorf("opening an «i» did not grow the row: %v", kv["IOPEN"])
+	}
+	if kv["DETAILTEXT"] != "True" {
+		t.Errorf("opening an «i» drew no detail text (owner-draw did not render)")
 	}
 	// Chrome.
 	if !strings.Contains(kv["BORDER"], "FixedSingle") || kv["MAX"] != "False" || kv["MIN"] != "False" || kv["TOP"] != "True" {

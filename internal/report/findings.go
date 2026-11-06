@@ -60,7 +60,7 @@ func FindingCards(v V2, cat catalog.Catalog, home string) []FindingCard {
 			if f.Memory.Verdict == memory.VerdictNew {
 				fc.New = true
 			} else if d, err := time.Parse("2006-01-02", f.Memory.OpenSince); err == nil {
-				fc.Since = cat.DayMonthLabel(d)
+				fc.Since = cat.LongDate(d)
 			}
 		}
 		return fc
