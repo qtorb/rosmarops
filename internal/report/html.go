@@ -333,6 +333,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.renderStep1()
 	c.renderStep2(today, hasToday)
 	c.renderStep3(today.ID)
+	c.renderDismissed()
 	c.w(`</div>`)
 
 	// BV-158 part 3: below the flow, in this order.
@@ -558,8 +559,14 @@ func (c htmlCtx) renderStep1() {
 	// coverage, the score comparison, the other agents, knowledge-reviewed, the
 	// silenced and history notes) leaves step 1: what the report keeps now lives
 	// in «More information» (and in your space), the rest is gone.
-	c.w(`<br>%s`, html.EscapeString(c.cat.Plural("html.meta.projects", v.repos,
-		map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})))
+	projects := c.cat.Plural("html.meta.projects", v.repos,
+		map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})
+	// BV-184: when the person has dismissed findings, the score meta line says
+	// so, right after the projects line: « · sin los avisos que descartaste».
+	if len(v.Dismissed) > 0 {
+		projects += " · " + c.cat.Text("report.dismissed.note", nil)
+	}
+	c.w(`<br>%s`, html.EscapeString(projects))
 	c.w(`</p>`)
 	// BV-158: the silenced counts are not dropped — they are warnings after the
 	// two-line meta block, like the others (never in the block). Test data first,
@@ -846,6 +853,22 @@ func (c htmlCtx) renderStep3(todayID string) {
 		c.w(`</details>`)
 	}
 	c.w(`</section>`)
+}
+
+// renderDismissed is the folded «Dismissed by you» section (BV-184), after
+// «what remains»: only when there is at least one dismissed finding this run,
+// with its title and the list of their titles. The person removes them from
+// the list with the «No me afecta» window, not from the report.
+func (c htmlCtx) renderDismissed() {
+	if len(c.v.Dismissed) == 0 {
+		return
+	}
+	c.w(`<section aria-labelledby="dismissed"><details class="rest"><summary><span class="chev" aria-hidden="true">›</span><span id="dismissed">%s</span></summary><ul>`,
+		html.EscapeString(c.cat.Text("report.dismissed.title", map[string]string{"n": strconv.Itoa(len(c.v.Dismissed))})))
+	for _, f := range c.v.Dismissed {
+		c.w(`<li>%s</li>`, c.title(f))
+	}
+	c.w(`</ul></details></section>`)
 }
 
 // renderRow is one row of step 3 (v3 §5): the title and the memory's

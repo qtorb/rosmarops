@@ -200,6 +200,12 @@ type Input struct {
 	ConfigFile string
 	Now        time.Time
 
+	// Dismissed are allow_list.dismissed (BV-184): findings the person
+	// marked «No me afecta». A finding whose id is here is moved out of the
+	// scored findings into Result.Dismissed, so it no longer counts in the
+	// score nor reaches the report's «what remains» or the space package.
+	Dismissed []config.AllowEntryDismissed
+
 	// ClaudeSettings is the Claude Code settings scan, for the model
 	// provider's variables (T12); Home the user's home folder, for the
 	// probe's target outside the roots (annex 2). Both optional.
@@ -230,6 +236,13 @@ type Result struct {
 	Findings []Finding
 	Today    Today
 	Posture  []Posture
+
+	// Dismissed are the findings the person dismissed (BV-184,
+	// allow_list.dismissed) that still appeared in this run: moved out of
+	// Findings so they do not count in the score, but kept so the report can
+	// list them and the person can recover them. A dismissed id that no
+	// longer appears is simply absent here.
+	Dismissed []Finding
 
 	// Launchers are the execute_shell allow rules counted as an
 	// unrestricted shell through the launcher table, for the run log.
@@ -570,10 +583,31 @@ func Evaluate(in Input) Result {
 		}
 	}
 	res.Silenced, res.TestData = silenced, testData
+	// BV-184: move the dismissed findings out of the scored set, in one place,
+	// so the score, the report's «what remains» and the space package all see
+	// only the findings that still count; the dismissed ones that appeared are
+	// kept in res.Dismissed so the report can list them and the person can
+	// recover them. A dismissed id that no longer appears is simply not here.
+	if len(in.Dismissed) > 0 {
+		dismissed := make(map[string]bool, len(in.Dismissed))
+		for _, d := range in.Dismissed {
+			dismissed[d.ID] = true
+		}
+		kept := res.Findings[:0:0]
+		for _, f := range res.Findings {
+			if dismissed[f.ID] {
+				res.Dismissed = append(res.Dismissed, f)
+				continue
+			}
+			kept = append(kept, f)
+		}
+		res.Findings = kept
+	}
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
 	}
 	sortFindings(res.Findings)
+	sortFindings(res.Dismissed)
 	res.Today = pickToday(res.Findings)
 	for _, code := range AllPostures {
 		p := Posture{Code: code, ByClass: map[string]int{}}
