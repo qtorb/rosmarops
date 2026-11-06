@@ -22,6 +22,11 @@ const (
 	HermesProduct     = "hermes"
 	CodexProduct      = "codex"      // BV-140: OpenAI Codex (CLI and IDE extension)
 	GrokBuildProduct  = "grok-build" // BV-140: xAI Grok Build (CLI)
+
+	// GitHubCopilotProduct is the single product code for GitHub Copilot
+	// (BV-140, decision 3): the ai_client, the VS Code extension and the
+	// skills attribution all use it. The old "copilot" code is gone.
+	GitHubCopilotProduct = "github-copilot"
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -467,8 +472,8 @@ func checkPaths(e Entry) error {
 var AgentExtensions = map[string]AgentExtension{
 	"saoudrizwan.claude-dev": {Name: "Cline", Product: "cline"},
 	"continue.continue":      {Name: "Continue", Product: "continue"},
-	"github.copilot":         {Name: "GitHub Copilot", Product: "github-copilot"},
-	"github.copilot-chat":    {Name: "GitHub Copilot", Product: "github-copilot"},
+	"github.copilot":         {Name: "GitHub Copilot", Product: GitHubCopilotProduct},
+	"github.copilot-chat":    {Name: "GitHub Copilot", Product: GitHubCopilotProduct},
 }
 
 // AgentExtension is an agent extension's name for the reports and product

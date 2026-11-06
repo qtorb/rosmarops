@@ -117,14 +117,14 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		"cline repo/.clinerules/skills/c2/SKILL.md",
 		"codex home/.agents/skills/shared/SKILL.md",
 		"codex repo/.agents/skills/deploy/SKILL.md",
-		"copilot home/.agents/skills/shared/SKILL.md",
-		"copilot repo/.agents/skills/deploy/SKILL.md",
-		"copilot repo/.claude/skills/fmt/SKILL.md",
-		"copilot repo/.github/skills/gh/SKILL.md",
 		"cursor home/.agents/skills/shared/SKILL.md",
 		"cursor repo/.agents/skills/deploy/SKILL.md",
 		"cursor repo/.claude/skills/fmt/SKILL.md",
 		"cursor repo/.cursor/skills/cu/SKILL.md",
+		"github-copilot home/.agents/skills/shared/SKILL.md",
+		"github-copilot repo/.agents/skills/deploy/SKILL.md",
+		"github-copilot repo/.claude/skills/fmt/SKILL.md",
+		"github-copilot repo/.github/skills/gh/SKILL.md",
 		"hermes hermes-home/skills/hm/SKILL.md",
 		"hermes repo/.agents/skills/deploy/SKILL.md",
 		"hermes repo/.hermes/skills/h2/SKILL.md",
@@ -135,10 +135,10 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		"cline repo/.agents/skills/deploy/scripts/deploy.sh",
 		"codex home/.agents/skills/shared/scripts/lib/run.py",
 		"codex repo/.agents/skills/deploy/scripts/deploy.sh",
-		"copilot home/.agents/skills/shared/scripts/lib/run.py",
-		"copilot repo/.agents/skills/deploy/scripts/deploy.sh",
 		"cursor home/.agents/skills/shared/scripts/lib/run.py",
 		"cursor repo/.agents/skills/deploy/scripts/deploy.sh",
+		"github-copilot home/.agents/skills/shared/scripts/lib/run.py",
+		"github-copilot repo/.agents/skills/deploy/scripts/deploy.sh",
 		"hermes repo/.agents/skills/deploy/scripts/deploy.sh",
 	})
 	equal(t, "failed", failures(tmp, scan.Failed), nil)
@@ -149,13 +149,13 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		dirs[f.Product] = f.ConfigDir
 	}
 	for product, want := range map[string]string{
-		"claude-code": filepath.Join(home, ".claude"),
-		"cursor":      filepath.Join(home, ".cursor"),
-		"codex":       filepath.Join(home, ".codex"),
-		"antigravity": filepath.Join(home, ".gemini"),
-		"hermes":      hermes,
-		"cline":       filepath.Join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings"),
-		"copilot":     filepath.Join(home, ".copilot"),
+		"claude-code":    filepath.Join(home, ".claude"),
+		"cursor":         filepath.Join(home, ".cursor"),
+		"codex":          filepath.Join(home, ".codex"),
+		"antigravity":    filepath.Join(home, ".gemini"),
+		"hermes":         hermes,
+		"cline":          filepath.Join(home, "AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings"),
+		"github-copilot": filepath.Join(home, ".copilot"),
 	} {
 		if dirs[product] != want {
 			t.Errorf("%s config dir = %q, want %q", product, dirs[product], want)
@@ -259,9 +259,9 @@ func TestDiscover_LinksNotFollowed(t *testing.T) {
 	})
 	equal(t, "executables", listed(tmp, scan.Executables), []string{"cline repo/.clinerules/skills/h/scripts/t.sh"})
 	equal(t, "failed", failures(tmp, scan.Failed), []string{
-		"copilot repo/.github/skills " + graph.ReasonSourceUnsupported,
 		"cursor repo/.cursor/skills/linked " + graph.ReasonSourceUnsupported,
 		"cursor repo/.cursor/skills/own/scripts " + graph.ReasonSourceUnsupported,
+		"github-copilot repo/.github/skills " + graph.ReasonSourceUnsupported,
 	})
 }
 

@@ -347,7 +347,7 @@ type InstructionScan struct {
 // InstructionFile is one existing instruction file and the agent that loads
 // it, identified as its ai_client is: product and configuration folder.
 type InstructionFile struct {
-	Product   string // "claude-code", "cursor", "codex", "antigravity", "hermes", "cline" or "copilot"
+	Product   string // "claude-code", "cursor", "codex", "antigravity", "hermes", "cline" or "github-copilot"
 	ConfigDir string
 	Path      string
 

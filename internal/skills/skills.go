@@ -28,12 +28,13 @@ import (
 )
 
 // Product codes of the agents that load skills and have no other constant
-// (graph.clientDisplayNames). Copilot has no ai_client yet: its skills are
-// listed and the graph leaves them out.
+// (graph.clientDisplayNames). GitHub Copilot uses the single knowledge code
+// github-copilot (BV-140, decision 3), shared with its ai_client and
+// extension.
 const (
 	cursorProduct  = "cursor"
 	clineProduct   = "cline"
-	copilotProduct = "copilot"
+	copilotProduct = knowledge.GitHubCopilotProduct
 )
 
 // Limits (decision K1, item 4): skills listed per skills folder and files
