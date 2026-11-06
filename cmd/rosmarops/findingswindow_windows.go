@@ -464,17 +464,17 @@ function Add-Row($card) {
     $subStatus.Add_Paint({
       param($s, $e)
       $t = $s.Tag; $g = $e.Graphics
-      # «New» is drawn with the default padding (GlyphOverhangPadding), exactly
-      # as a Label renders it, so its first ink lines up with the title's. The
-      # agent piece is drawn NoPadding at «New»'s ink-right edge (full width
-      # minus the right overhang), so the gap before the «·» equals the gap
-      # after it (BV-184 point 3).
-      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point(0, 0)), $cCobalt)
+      # Both pieces are drawn NoPadding and flush: «New» at the left inset $off,
+      # then « · <agent>» at «New»'s ink-right ($off + its NoPadding width). The
+      # «·» thus sits between two equal spaces (gap before = gap after). $off is
+      # the GlyphOverhangPadding a Label would add, so «New»'s first ink lines up
+      # with the title's (BV-184 point 3).
+      $full = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB).Width
+      $ink = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
+      $off = $full - $ink
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.lead, $fSubB, (New-Object System.Drawing.Point($off, 0)), $cCobalt, $noPad)
       if ($t.agent) {
-        $full = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB).Width
-        $ink = [System.Windows.Forms.TextRenderer]::MeasureText($g, $t.lead, $fSubB, [System.Drawing.Size]::Empty, $noPad).Width
-        $pad = [int][math]::Round(($full - $ink) / 2.0)
-        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($pad + $ink), 0)), $cSub, $noPad)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ($mid + $t.agent), $fSub, (New-Object System.Drawing.Point(($off + $ink), 0)), $cSub, $noPad)
       }
     })
   } else {
