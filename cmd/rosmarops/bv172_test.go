@@ -107,8 +107,13 @@ func TestBV172_RejectForgetsAndReoffers(t *testing.T) {
 			if strings.Contains(page, "Open your space") {
 				t.Error("the report still shows the connected «Open your space» button")
 			}
-			if !strings.Contains(page, "Create your space") {
-				t.Error("the report does not show the unconnected «Create your space» button")
+			// BV-196: not connected shows the signed card and the text link, no
+			// «Create your space» button.
+			if strings.Contains(page, "Create your space") {
+				t.Error("the report still shows the removed «Create your space» button")
+			}
+			if !strings.Contains(page, "I already have a space: open it") {
+				t.Error("the report does not show the unconnected «I already have a space» link")
 			}
 			if !strings.Contains(page, "couldn&#39;t be sent to your space") {
 				t.Error("the report does not say the check could not be sent (report.space_rejected)")
