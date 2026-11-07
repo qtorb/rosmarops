@@ -615,6 +615,12 @@ type Platform interface {
 	// policy layer, the MCP files and the Copilot CLI credentials.
 	ListCopilot(ctx context.Context, repoRoots []string) (CopilotScan, error)
 
+	// ListAntigravity reads Google Antigravity's CLI configuration (BV-140,
+	// CTO-16 Antigravity §4): ~/.gemini/antigravity-cli/settings.json, the
+	// hooks, and the credential files by fingerprint. Its MCP servers come
+	// through ListMCPServers (client antigravity-cli).
+	ListAntigravity(ctx context.Context, repoRoots []string) (AntigravityScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -1035,4 +1041,41 @@ type CopilotMCPServer struct {
 	Env        []EnvVar // values wrapped as SecretValue
 	HeaderKeys []string // headers names only
 	Headers    []EnvVar // headers values wrapped as SecretValue
+}
+
+// AntigravityScan is Google Antigravity's CLI at-rest configuration (BV-140,
+// CTO-16 Antigravity §4), read only. Its MCP servers come through the shared
+// MCP pipeline (client antigravity-cli); this scan carries its settings.json,
+// its hooks and its credentials by fingerprint. The ai_client exists when
+// Present. ConfigDir is ~/.gemini (shared with the App and IDE).
+type AntigravityScan struct {
+	ConfigDir string
+	Present   bool
+	Settings  AntigravitySettings
+	Hooks     []AntigravityHook
+	Creds     []EnvVar
+}
+
+// AntigravitySettings is the CLI's ~/.gemini/antigravity-cli/settings.json
+// (CTO-16 Antigravity §4). Empty strings mean the key is absent (the default
+// applies). Allow/Ask/Deny are the permissions rules, each "action(target)".
+type AntigravitySettings struct {
+	Path                    string
+	Status                  MCPSourceStatus
+	Reason                  string
+	ToolPermission          string // request-review | proceed-in-sandbox | strict | always-proceed
+	AgentMode               string // default | accept-edits | auto | plan
+	ArtifactReviewPolicy    string // asks-for-review | agent-decides | always-proceed
+	AllowNonWorkspaceAccess bool
+	Allow                   []string
+	Ask                     []string
+	Deny                    []string
+}
+
+// AntigravityHook is one PreToolUse/other hook (CTO-16 Antigravity §4): an
+// agent_executable resource. Root is the repo root for a project hook, "" for
+// a user hook.
+type AntigravityHook struct {
+	Path string
+	Root string
 }

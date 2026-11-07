@@ -340,15 +340,16 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Each step scans under ctx and returns a function that records its
 	// results; scan.Run calls it on this goroutine (see scan.Step).
 	var (
-		mcpScan     platform.MCPScan
-		mcpErr      error
-		hermesScan  platform.HermesScan  // BV-111: config.yaml drives Hermes's caps
-		codexScan   platform.CodexScan   // BV-140: TOML layers drive Codex's caps
-		grokScan    platform.GrokScan    // BV-140: TOML layers drive Grok's caps
-		copilotScan platform.CopilotScan // BV-140: VS Code settings drive Copilot's caps
-		credFiles   platform.CredentialFileScan
-		built       *graph.Graph // the graph written this run, for the v2 report
-		builtSHA    string
+		mcpScan         platform.MCPScan
+		mcpErr          error
+		hermesScan      platform.HermesScan      // BV-111: config.yaml drives Hermes's caps
+		codexScan       platform.CodexScan       // BV-140: TOML layers drive Codex's caps
+		grokScan        platform.GrokScan        // BV-140: TOML layers drive Grok's caps
+		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
+		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
+		credFiles       platform.CredentialFileScan
+		built           *graph.Graph // the graph written this run, for the v2 report
+		builtSHA        string
 		// builtSettings is the Claude Code settings scan the graph was built
 		// from, for the model provider row (T12).
 		builtSettings *platform.ClaudeSettingsScan
@@ -428,7 +429,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			copilot, copilotErr := plat.ListCopilot(ctx, cfg.RepoRoots)
 			scanned.Servers = append(scanned.Servers, graph.CopilotMCPServers(copilot)...)
 			copilotScan = copilot
-			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr)
+			// Google Antigravity CLI (BV-140, decision 2): its settings drive its
+			// caps; its MCP servers already joined above as antigravity-cli.
+			antigravity, antigravityErr := plat.ListAntigravity(ctx, cfg.RepoRoots)
+			antigravityScan = antigravity
+			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -537,7 +542,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -980,6 +985,7 @@ func writeGraph(
 	codex platform.CodexScan,
 	grok platform.GrokScan,
 	copilot platform.CopilotScan,
+	antigravity platform.AntigravityScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -1019,6 +1025,10 @@ func writeGraph(
 	// capabilities (BV-140, CTO-16 Copilot). The VS Code extension, already a
 	// node via AddExtensions, is the other presence signal.
 	frag = graph.Merge(frag, graph.FromCopilot(copilot, copilotExtensionPresent(exts), now))
+	// Google Antigravity CLI's ai_client, its agent_config/hooks and its
+	// configured capabilities (BV-140, CTO-16 Antigravity). Its MCP servers and
+	// their config resources come through the shared pipeline.
+	frag = graph.Merge(frag, graph.FromAntigravityCLI(antigravity, now))
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
 	}

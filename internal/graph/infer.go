@@ -89,6 +89,9 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case knowledge.GitHubCopilotProduct:
 			in := p.copilotInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+		case knowledge.AntigravityCLIProduct:
+			in := p.antigravityInference(client, repoRoots)
+			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {
 			if _, dup := edges[e.ID]; !dup {

@@ -27,6 +27,10 @@ const (
 	// (BV-140, decision 3): the ai_client, the VS Code extension and the
 	// skills attribution all use it. The old "copilot" code is gone.
 	GitHubCopilotProduct = "github-copilot"
+
+	// AntigravityCLIProduct is Google Antigravity's CLI, scored (BV-140,
+	// decision 2); the App and IDE stay detected under "antigravity".
+	AntigravityCLIProduct = "antigravity-cli"
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -52,6 +56,10 @@ const GrokBuildVersion = "2026-11-01"
 // (github-copilot.json, BV-140).
 const GitHubCopilotVersion = "2026-11-01"
 
+// AntigravityCLIVersion is the version of the embedded Antigravity CLI base
+// (antigravity-cli.json, BV-140).
+const AntigravityCLIVersion = "2026-11-01"
+
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
 // Observatory findings move into these bases and a version goes out. The
@@ -69,7 +77,7 @@ const ReviewedOn = "2026-11-03"
 // CompositeOf sorts them.
 // The parts are sorted by product (claude-code < codex < cursor <
 // github-copilot < grok-build < hermes), as CompositeOf sorts them.
-const Composite = ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
+const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -98,6 +106,9 @@ var grokBuildJSON []byte
 
 //go:embed github-copilot.json
 var gitHubCopilotJSON []byte
+
+//go:embed antigravity-cli.json
+var antigravityCLIJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -321,13 +332,31 @@ func GitHubCopilot() (Base, error) {
 	return b, nil
 }
 
+// AntigravityCLI returns the embedded Antigravity CLI base (BV-140), with
+// Claude Code's code launcher table (shared as the others do).
+func AntigravityCLI() (Base, error) {
+	b, err := decode(antigravityCLIJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != AntigravityCLIVersion {
+		return Base{}, fmt.Errorf("knowledge base antigravity-cli: version %q, want %q", b.Version, AntigravityCLIVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated. Codex joins the set with its graph builder, inference and
 // overview cells (BV-140 pieces c and d); Grok Build and GitHub Copilot join
 // the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI} {
 		b, err := load()
 		if err != nil {
 			return nil, err

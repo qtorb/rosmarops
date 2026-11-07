@@ -102,7 +102,7 @@ func TestCursor_CommandLists(t *testing.T) {
 		t.Errorf("network commands %q", got)
 	}
 	all, err := knowledge.All()
-	if err != nil || len(all) != 6 || all["cursor"].Product != "cursor" || all["claude-code"].Product != "claude-code" || all["hermes"].Product != "hermes" || all["codex"].Product != "codex" || all["grok-build"].Product != "grok-build" || all["github-copilot"].Product != "github-copilot" {
+	if err != nil || len(all) != 7 || all["cursor"].Product != "cursor" || all["claude-code"].Product != "claude-code" || all["hermes"].Product != "hermes" || all["codex"].Product != "codex" || all["grok-build"].Product != "grok-build" || all["github-copilot"].Product != "github-copilot" || all["antigravity-cli"].Product != "antigravity-cli" {
 		t.Errorf("All: %v %v", all, err)
 	}
 }

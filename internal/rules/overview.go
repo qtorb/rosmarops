@@ -315,6 +315,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.GitHubCopilotProduct {
 		return oi.copilotCells(v)
 	}
+	if v.node.Platform == knowledge.AntigravityCLIProduct {
+		return oi.antigravityCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
@@ -855,6 +858,179 @@ func (oi overviewInputs) copilotChangesCell(v *agentView, level string) Overview
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
 	cell.Data.Assumptions = sortedUnique(base)
 	cell.Assumed = level == copilotAssisted
+	return cell
+}
+
+// Antigravity CLI effective levels and file scopes (graph tokens, CTO-16 §4).
+const (
+	agRequestReview = "request-review"
+	agAlwaysProceed = "always-proceed"
+	agAuto          = "auto"
+	agScopeMachine  = "machine"
+)
+
+// antigravityMode is the CLI's effective level from its in-force configured
+// permission_mode capability (always-proceed or auto); request-review when none.
+func antigravityMode(v *agentView) string {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapPermissionMode && c.Basis == graph.BasisConfigured {
+			switch c.TargetScope {
+			case agAlwaysProceed, agAuto:
+				return c.TargetScope
+			}
+		}
+	}
+	return agRequestReview
+}
+
+// antigravityMachine reports allowNonWorkspaceAccess: the read/write capability
+// reaches the whole machine (its product-default scope is machine, not workspace).
+func antigravityMachine(v *agentView) bool {
+	for _, c := range v.inForce {
+		if (c.Type == graph.CapReadFiles || c.Type == graph.CapWriteFiles) && c.TargetScope == agScopeMachine {
+			return true
+		}
+	}
+	return false
+}
+
+func antigravityBaseAssumptions(extra ...string) []string {
+	return append([]string{AssumeLaunchFlagsNotReadable}, extra...)
+}
+
+// antigravityCells are the Antigravity CLI's six rows (BV-140, CTO-16 §4). It
+// reads and writes inside the workspace without asking (nobody), the whole
+// machine with allowNonWorkspaceAccess; every command, URL and MCP call asks
+// (you) by default, nothing asks under always-proceed (nobody), and agentMode
+// auto hands each escalation to a reviewer model (model, reviewer_model_permits).
+func (oi overviewInputs) antigravityCells(v *agentView) []OverviewCell {
+	level := antigravityMode(v)
+	machine := antigravityMachine(v)
+	return []OverviewCell{
+		oi.antigravityReadsCell(v, machine),
+		oi.antigravityWritesCell(v, level, machine),
+		oi.antigravityRunsCell(v, level),
+		oi.antigravitySendsCell(v, level),
+		oi.antigravityChangesCell(v, level),
+		oi.providerCell(v),
+	}
+}
+
+func (oi overviewInputs) antigravityReadsCell(v *agentView, machine bool) OverviewCell {
+	scope := ScopeSameProject
+	if machine {
+		scope = ScopeMachine
+	}
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: scope, Origin: OriginProductDefault}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = antigravityBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) antigravityWritesCell(v *agentView, level string, machine bool) OverviewCell {
+	scope := ScopeSameProject
+	if machine {
+		scope = ScopeMachine
+	}
+	decider, assume := DeciderNobody, []string(nil)
+	if level == agAuto {
+		decider, assume = DeciderModel, []string{AssumeReviewerModelPermits}
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.Assumptions = sortedUnique(antigravityBaseAssumptions(assume...))
+	cell.Assumed = level == agAuto
+	r := NoFindingNotAFinding
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) antigravityRunsCell(v *agentView, level string) OverviewCell {
+	cell := OverviewCell{Row: RowRunsCommands, Scope: ScopeMachine, Origin: OriginConfigured}
+	assume := antigravityBaseAssumptions()
+	switch level {
+	case agAlwaysProceed:
+		cell.Decider = DeciderNobody
+	case agAuto:
+		cell.Decider, cell.Assumed = DeciderModel, true
+		assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
+	default: // request-review: every command asks
+		cell.Decider = DeciderYou
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) antigravitySendsCell(v *agentView, level string) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginConfigured}
+	assume := antigravityBaseAssumptions()
+	if len(v.egress) > 0 {
+		cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		if level == agAuto {
+			cell.Decider, cell.Assumed = DeciderModel, true
+			assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
+		}
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		switch level {
+		case agAlwaysProceed:
+			cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		case agAuto:
+			cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeAnyDestination, true
+			assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
+		default:
+			cell.Decider, cell.Scope = DeciderYou, ScopeAnyDestination
+		}
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+func (oi overviewInputs) antigravityChangesCell(v *agentView, level string) OverviewCell {
+	base := antigravityBaseAssumptions()
+	decider := DeciderNobody
+	if level == agAuto {
+		decider, base = DeciderModel, antigravityBaseAssumptions(AssumeReviewerModelPermits)
+	}
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: decider, scope: scope, basis: []string{graph.BasisConfigured}, assumptions: base})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: sortedUnique(base)}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = sortedUnique(base)
+	cell.Assumed = level == agAuto
 	return cell
 }
 
