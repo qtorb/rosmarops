@@ -621,6 +621,10 @@ var MemoryUntracked = map[string]bool{
 	// them to it would be a memory-schema change.
 	rules.RuleN8NMCPBridge:   true,
 	rules.RuleN8NKeyWithData: true,
+	// BV-193: computer_use_app_allowed is re-derived each run from Codex's
+	// computer-use config; it is not in the memory schema's rule enum, so
+	// adding it there would be a memory-schema change (owner sign-off).
+	rules.RuleComputerUseAppAllowed: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

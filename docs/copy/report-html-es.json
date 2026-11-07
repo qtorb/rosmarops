@@ -96,6 +96,8 @@
   "coverage.binary_skipped.one": "{n} fichero de tus repositorios no se abrió porque es una imagen, un documento u otro fichero binario.",
   "coverage.binary_skipped.other": "{n} ficheros de tus repositorios no se abrieron porque son imágenes, documentos u otros ficheros binarios.",
   "disconnect.done": "Este ordenador ya no está conectado a tu espacio.",
+  "finding.computer_use_app_allowed.red": "Puede usar {app} en tu escritorio sin preguntarte, que es lo mismo que ejecutar comandos sin preguntarte.",
+  "finding.computer_use_app_allowed.yellow": "Puede usar {apps} en tu escritorio sin preguntarte, con las sesiones que tienes abiertas.",
   "finding.config_key_case_conflict.action": "Abre el fichero y escribe el ajuste con el nombre exacto que indica la documentación de su agente; si hay dos copias, deja solo una.",
   "finding.config_key_case_conflict.title": "Un ajuste de un fichero de configuración está escrito con mayúsculas distintas de las esperadas",
   "finding.config_key_case_conflict.why": "Puede que el agente no lo lea, o que lea otra copia, mientras RosmarOps sí lo lee: este informe podría describir una configuración que no es la que se usa. Alguien podría hacerlo a propósito para esconder un cambio.",

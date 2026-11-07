@@ -126,6 +126,8 @@
   "coverage.none": "Everything RosmarOps looks for was read.",
   "disconnect.done": "This computer is no longer connected to your space.",
   "evidence.edges": "Graph edges behind this",
+  "finding.computer_use_app_allowed.red": "Can use {app} on your desktop without asking, which is the same as running commands without asking.",
+  "finding.computer_use_app_allowed.yellow": "Can use {apps} on your desktop without asking, with your signed-in sessions.",
   "finding.config_key_case_conflict.action": "Open the file and write the setting with the exact name its agent documents; if there are two copies, keep only one.",
   "finding.config_key_case_conflict.title": "A setting in a configuration file is written with unexpected capital letters",
   "finding.config_key_case_conflict.why": "The agent may not read it, or may read a different copy of it, while RosmarOps does read it: this report could be describing a configuration that is not the one in use. Someone could do this on purpose to hide a change.",

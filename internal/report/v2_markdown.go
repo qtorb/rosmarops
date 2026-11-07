@@ -144,6 +144,11 @@ func CatalogKeys() []string {
 			keys = append(keys, "finding."+r+".title", "finding."+r+".what", "finding."+r+".step1")
 			continue
 		}
+		if r == rules.RuleComputerUseAppAllowed {
+			// BV-193: one signed sentence per colour, no generic what/why.
+			keys = append(keys, "finding."+r+".red", "finding."+r+".yellow")
+			continue
+		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
 		if r == rules.RuleCredInGit {
 			keys = append(keys, "finding."+r+".why.remote", "finding."+r+".why.local")
@@ -374,6 +379,28 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding."+f.Rule+".what", p))
 			w("#### %s\n\n%s", t("finding.part.todo", p), n8nMarkdownSteps(t, f, p))
+			continue
+		}
+		if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: one signed sentence (the title), no generic what/why
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), cat.Text(computerUseKey(f), computerUseParams(f)))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			var own []string
+			for _, a := range f.Evidence.Assumptions {
+				if !sharedAssumption[a] {
+					own = append(own, t("unknown."+a, p))
+				}
+			}
+			if len(own) > 0 {
+				w("#### %s\n\n", t("finding.part.unknown", p))
+				for _, l := range own {
+					w("- %s\n", l)
+				}
+				w("\n")
+			}
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))

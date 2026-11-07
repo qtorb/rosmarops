@@ -842,6 +842,31 @@ type CodexLayer struct {
 	// BearerTokens are model_providers.<id>.experimental_bearer_token values
 	// (CTO-16 §3), secret, by fingerprint only.
 	BearerTokens []EnvVar
+
+	// ComputerUse is the [computer_use] section of this layer (BV-193, CTO-22
+	// Computer Use); nil when absent. Legacy is set when it came from the old
+	// $CODEX_HOME/computer-use/config.toml.
+	ComputerUse *CodexComputerUse
+
+	// CUFeatureDisabled (requirements: [features] computer_use=false or
+	// allow_browser_and_computer_use=false) and CUPersistentApprovalDisabled
+	// (requirements: allow_persistent_approval=false) are the admin requirement
+	// toggles that turn Computer Use off or forbid "Always allow" (BV-193,
+	// CTO-22 Computer Use §2). Only meaningful on the requirements layer.
+	CUFeatureDisabled            bool
+	CUPersistentApprovalDisabled bool
+}
+
+// CodexComputerUse is Codex/ChatGPT desktop's Computer Use configuration
+// (BV-193, CTO-22 Computer Use): the apps allowed to be operated without asking.
+type CodexComputerUse struct {
+	// DefaultAppAccess is [computer_use].default_app_access ("allow" | "deny" | "").
+	DefaultAppAccess string
+	// Allowed are the app ids set to "allow": windows.aumids and macos.bundle_ids
+	// keys, windows.exes binary_names, and the documented always_allowed_app_ids.
+	Allowed []string
+	// Legacy marks the old $CODEX_HOME/computer-use/config.toml source.
+	Legacy bool
 }
 
 // CodexMCPServer is one [mcp_servers.<id>] of a Codex config layer.

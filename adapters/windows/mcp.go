@@ -131,12 +131,6 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		return platform.MCPScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
 
-	// %APPDATA% is normally set on Windows. If unset, derive from home as fallback.
-	appData := os.Getenv("APPDATA")
-	if appData == "" {
-		appData = filepath.Join(home, "AppData", "Roaming")
-	}
-
 	var scan platform.MCPScan
 	// add reads one source. Its spec fixes, per source, whether the client
 	// really loads the MCP servers of that file, the client's configuration

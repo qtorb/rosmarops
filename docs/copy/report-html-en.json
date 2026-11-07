@@ -67,6 +67,8 @@
   "finding.n8n_mcp_bridge.what": "{agent} has an n8n instance configured as an MCP server ({server}). From there it can run n8n workflows and, through them, use the accounts n8n is connected to, such as email, payments or databases. RosmarOps can't see which accounts those are: check in n8n which credentials it stores and which workflows it exposes over MCP.",
   "finding.project_hook_runs_repo_script.fix": "Open {script} and check what it does. If you do not trust it, remove the hook from {file} before you open the project in {agent} again.",
   "finding.project_hook_runs_repo_script.impact": "Opening this project in {agent} runs that script with your permissions.",
+  "finding.computer_use_app_allowed.red": "Can use {app} on your desktop without asking, which is the same as running commands without asking.",
+  "finding.computer_use_app_allowed.yellow": "Can use {apps} on your desktop without asking, with your signed-in sessions.",
   "finding.project_hook_runs_repo_script.title": "A project makes {agent} run one of its own scripts",
   "finding.project_hook_runs_repo_script.title.large": "A project makes {agent} run a large script of its own",
   "finding.project_hook_runs_repo_script.what": "{file} tells {agent} to run {script}, a file inside this project, when a hook fires (for example, when a session starts). Whoever can change this project can change what runs on your computer.",

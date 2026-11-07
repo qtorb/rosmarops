@@ -141,7 +141,9 @@ experimental_bearer_token = "sk-FAKEbearerTOKEN9876"
 func TestReadCodex_InvalidTOML(t *testing.T) {
 	home := t.TempDir()
 	codex := filepath.Join(home, ".codex")
-	writeFileCodex(t, filepath.Join(codex, "config.toml"), "[[array_of_tables]]\nx = 1\n") // refused by the subset
+	// BV-193: arrays of tables now parse, so use genuinely invalid TOML — an
+	// unterminated string — to exercise the parse-error path.
+	writeFileCodex(t, filepath.Join(codex, "config.toml"), "x = \"unterminated\n")
 	scan := ReadCodex(home, envOf(map[string]string{"CODEX_HOME": codex}), nil, "")
 	user, _ := layerByKindRoot(scan, platform.CodexLayerUser, "")
 	if user.Status != platform.MCPSourceFailed || !strings.Contains(user.Reason, "parse_error") {

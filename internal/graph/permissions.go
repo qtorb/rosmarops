@@ -21,6 +21,10 @@ const (
 	CapNetwork        = "network"
 	CapInvokeMCPTool  = "invoke_mcp_tool"
 	CapPermissionMode = "permission_mode"
+	// CapOperateApp: operate a desktop application as the user (BV-193, CTO-22
+	// Computer Use §6). target_scope is the app id (.exe, AUMID, bundle id, or
+	// "*" for default_app_access).
+	CapOperateApp = "operate_app"
 )
 
 // Capability bases and approvals.
