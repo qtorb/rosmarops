@@ -33,6 +33,7 @@ var clientDisplayNames = map[string]string{
 	agentdirs.Antigravity:      "Antigravity",     // App and IDE, detected only (BV-140, decision 2)
 	agentdirs.AntigravityCLI:   "Antigravity CLI", // BV-140: the CLI, scored
 	agentdirs.GeminiCLI:        "Gemini CLI",      // BV-193: scored (CTO-22 decision 2)
+	agentdirs.ClineCLI:         "Cline CLI",       // BV-193: detected only (CTO-22 decision 3)
 	agentdirs.CopilotJetBrains: "GitHub Copilot (JetBrains)",
 	agentdirs.Hermes:           "Hermes Agent",
 	agentdirs.ClaudeDesktop:    "Claude Desktop",

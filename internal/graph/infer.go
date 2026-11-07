@@ -95,6 +95,9 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case knowledge.GeminiCLIProduct:
 			in := p.geminiInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+		case knowledge.ClineProduct:
+			in := p.clineInference(client, repoRoots)
+			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {
 			if _, dup := edges[e.ID]; !dup {

@@ -348,6 +348,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
 		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
 		geminiScan      platform.GeminiScan      // BV-193: gemini-cli settings drive its caps
+		clineScan       platform.ClineScan       // BV-193: cline globalState drives its caps
 		credFiles       platform.CredentialFileScan
 		built           *graph.Graph // the graph written this run, for the v2 report
 		builtSHA        string
@@ -439,7 +440,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			gemini, geminiErr := plat.ListGemini(ctx, cfg.RepoRoots)
 			scanned.Servers = append(scanned.Servers, graph.GeminiMCPServers(gemini)...)
 			geminiScan = gemini
-			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr)
+			// Cline VS Code extension (BV-193, CTO-22 Cline): its globalState
+			// drives its caps; its MCP servers already joined above as client cline.
+			cline, clineErr := plat.ListCline(ctx, cfg.RepoRoots)
+			clineScan = cline
+			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr, clineErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -548,7 +553,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -791,7 +796,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, ConfigFile: absPath(cfgPath),
-		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan,
+		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan,
 		IntegrityNotChecked: integrityNotChecked,
 		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
@@ -982,6 +987,17 @@ func copilotExtensionPresent(exts []platform.VSCodeExtension) bool {
 	return false
 }
 
+// clineExtensionPresent reports the Cline VS Code extension (BV-193) among the
+// listed VS Code extensions, a presence signal for its ai_client.
+func clineExtensionPresent(exts []platform.VSCodeExtension) bool {
+	for _, e := range exts {
+		if strings.EqualFold(e.ID, "saoudrizwan.claude-dev") {
+			return true
+		}
+	}
+	return false
+}
+
 func writeGraph(
 	scan platform.MCPScan,
 	listErr error,
@@ -993,6 +1009,7 @@ func writeGraph(
 	copilot platform.CopilotScan,
 	antigravity platform.AntigravityScan,
 	gemini platform.GeminiScan,
+	cline platform.ClineScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -1040,6 +1057,11 @@ func writeGraph(
 	// configured capabilities (BV-193, CTO-22 Gemini). Its MCP servers and their
 	// config resources come through the shared pipeline.
 	frag = graph.Merge(frag, graph.FromGeminiCLI(gemini, now))
+	// The Cline VS Code extension's ai_client (identified by ~/.cline/data), its
+	// globalState agent_config, its auto-approval capabilities and its repo
+	// hooks (BV-193, CTO-22 Cline). The VS Code extension is the other presence
+	// signal. Its MCP servers come through the shared pipeline.
+	frag = graph.Merge(frag, graph.FromCline(cline, clineExtensionPresent(exts), now))
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
 	}

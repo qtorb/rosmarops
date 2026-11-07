@@ -90,6 +90,10 @@ const (
 	// value in the file and xAI may set it remotely; assume it is on (CTO-16
 	// point 10).
 	AssumeCompatCellRemoteUnknown = "compat_cell_remote_unknown"
+	// AssumeAgentModelJudgesCommandSafety: in old Cline versions the agent's own
+	// model decided which command was "safe"; RosmarOps cannot check that
+	// judgement at rest (BV-193, CTO-22 Cline §4, signed point 5). A premise.
+	AssumeAgentModelJudgesCommandSafety = "agent_model_judges_command_safety"
 )
 
 // AllAssumptions lists every assumption a finding can carry: the graph's and
@@ -103,7 +107,7 @@ var AllAssumptions = []string{
 	graph.AssumeConfigFileProtectionUnknown, graph.AssumeTeamPolicyUnknown, AssumeRemoteVisibilityUnknown,
 	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
 	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
-	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown,
+	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown, AssumeAgentModelJudgesCommandSafety,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -257,6 +261,12 @@ type Input struct {
 	// cells to know when a cell has no value in the file and could be decided
 	// remotely (compat_cell_remote_unknown). Optional.
 	Grok platform.GrokScan
+
+	// Cline is the Cline extension scan (BV-193): the overview reads its
+	// migration version to tell whether a pre-migration version let the agent's
+	// own model judge command safety (agent_model_judges_command_safety).
+	// Optional.
+	Cline platform.ClineScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no

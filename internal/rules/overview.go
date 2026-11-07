@@ -81,6 +81,7 @@ const (
 	NotEvaluatedNoInference      = "no_inference"
 	NotEvaluatedAntigravityApp   = "antigravity_app"   // BV-140: Antigravity App/IDE keep the preset in the app, not a readable file
 	NotEvaluatedCopilotJetBrains = "copilot_jetbrains" // BV-140: Copilot in JetBrains keeps approvals in the IDE's storage, not read yet
+	NotEvaluatedClineCLI         = "cline_cli"         // BV-193: the Cline CLI approves every tool by default; launch flags are not readable
 	NotEvaluatedCoverage         = "coverage"
 	NotEvaluatedGraphMissing     = "graph_missing"
 
@@ -276,6 +277,8 @@ func notEvaluatedReasonFor(product string) string {
 		return NotEvaluatedAntigravityApp
 	case "github-copilot-jetbrains":
 		return NotEvaluatedCopilotJetBrains
+	case "cline-cli": // the CLI stays detected; the extension is scored as cline
+		return NotEvaluatedClineCLI
 	}
 	return NotEvaluatedNoInference
 }
@@ -320,6 +323,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	}
 	if v.node.Platform == knowledge.GeminiCLIProduct {
 		return oi.geminiCells(v)
+	}
+	if v.node.Platform == knowledge.ClineProduct {
+		return oi.clineCells(v)
 	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
@@ -1150,6 +1156,129 @@ func (oi overviewInputs) geminiChangesCell(v *agentView) OverviewCell {
 	cell.Data.TargetAgents = sortedUnique(targets)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
 	cell.Data.Assumptions = sortedUnique(base)
+	return cell
+}
+
+// clineAllow reports an in-force allow capability of the given type for Cline
+// (regardless of basis: its defaults are product_default, its overrides
+// configured).
+func clineAllow(v *agentView, typ string) bool {
+	for _, c := range v.inForce {
+		if c.Type == typ && c.Approval == graph.ApprovalAllow {
+			return true
+		}
+	}
+	return false
+}
+
+// clineOldModelJudges reports a pre-migration Cline whose executeSafeCommands
+// let the agent's own model judge command safety (CTO-22 Cline §4): commands
+// run, but a model decided, not a person.
+func clineOldModelJudges(in Input) bool {
+	c := in.Cline
+	return c.Present && c.HasAutoApproval && c.ExecuteSafeCommands && !c.Yolo && c.MigrationVersion < 3
+}
+
+// clineCells are the Cline VS Code extension's six rows (BV-193, CTO-22 Cline
+// §4). By default it reads, edits, browses and calls MCP without asking
+// (nobody) and asks before commands (you); its auto-approval settings can turn
+// any of these on or off. A pre-migration version let the agent's own model
+// judge command safety (model, agent_model_judges_command_safety).
+func (oi overviewInputs) clineCells(v *agentView) []OverviewCell {
+	return []OverviewCell{
+		oi.clineReadsCell(v),
+		oi.clineWritesCell(v),
+		oi.clineRunsCell(v),
+		oi.clineSendsCell(v),
+		oi.clineChangesCell(v),
+		oi.providerCell(v),
+	}
+}
+
+func (oi overviewInputs) clineReadsCell(v *agentView) OverviewCell {
+	decider := DeciderYou
+	if clineAllow(v, graph.CapReadFiles) {
+		decider = DeciderNobody
+	}
+	cell := OverviewCell{Row: RowReadsFiles, Decider: decider, Scope: ScopeMachine, Origin: OriginConfigured}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", "")
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) clineWritesCell(v *agentView) OverviewCell {
+	decider := DeciderYou
+	if clineAllow(v, graph.CapWriteFiles) {
+		decider = DeciderNobody
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: ScopeMachine, Origin: OriginConfigured}
+	r := NoFindingNotAFinding
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) clineRunsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowRunsCommands, Scope: ScopeMachine, Origin: OriginConfigured}
+	switch {
+	case clineOldModelJudges(oi.in):
+		cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeMachine, true
+		cell.Data.Assumptions = []string{AssumeAgentModelJudgesCommandSafety}
+	case clineAllow(v, graph.CapExecuteShell):
+		cell.Decider = DeciderNobody
+	default:
+		cell.Decider, cell.Scope = DeciderYou, ScopeNone
+	}
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) clineSendsCell(v *agentView) OverviewCell {
+	decider, scope := DeciderYou, ScopeAnyDestination
+	if clineAllow(v, graph.CapNetwork) || clineAllow(v, graph.CapInvokeMCPTool) {
+		decider = DeciderNobody
+	}
+	cell := OverviewCell{Row: RowSendsOut, Decider: decider, Scope: scope, Origin: OriginConfigured}
+	if len(v.egress) > 0 {
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", "")
+	}
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) clineChangesCell(v *agentView) OverviewCell {
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: DeciderNobody, scope: scope, basis: []string{graph.BasisConfigured}})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable, RuleProjectHookRunsRepoScript}, "", "")
 	return cell
 }
 

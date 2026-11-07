@@ -52,6 +52,7 @@ const (
 	formatHermesAuth                      // Hermes Agent auth.json: providers.* and credential_pool.* tokens and keys (BV-96)
 	formatClaudeCredentials               // Claude Code .credentials.json: claudeAiOauth.{accessToken,refreshToken} (BV-111)
 	formatGeminiCreds                     // Gemini CLI JSON credential files: every string leaf, by fingerprint (BV-193, CTO-22 §3)
+	formatClineCreds                      // Cline JSON credential files (secrets.json, providers.json): every string leaf (BV-193, CTO-22 §3)
 )
 
 // userFile is one of the user's credential files.
@@ -176,6 +177,12 @@ func userFiles(l agentdirs.Layout, home string, env Env) []userFile {
 	}
 	out = append(out, userFile{filepath.Join(gemini, ".env"), formatEnv})
 	out = append(out, userFile{filepath.Join(home, ".env"), formatEnv})
+	// Cline's plaintext credential files (BV-193, CTO-22 Cline §3, signed
+	// point 10): ~/.cline/data/secrets.json and
+	// ~/.cline/data/settings/providers.json, by fingerprint only.
+	clineData := agentdirs.ClineDataDir(home, adEnv)
+	out = append(out, userFile{filepath.Join(clineData, "secrets.json"), formatClineCreds})
+	out = append(out, userFile{filepath.Join(clineData, "settings", "providers.json"), formatClineCreds})
 	return out
 }
 
@@ -328,7 +335,7 @@ func readFile(scan *platform.CredentialFileScan, path string, f format) bool {
 		}
 		return true
 	}
-	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth || f == formatGeminiCreds {
+	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth || f == formatGeminiCreds || f == formatClineCreds {
 		parse := parseRailway
 		switch f {
 		case formatVSCodeSettings:
@@ -337,6 +344,8 @@ func readFile(scan *platform.CredentialFileScan, path string, f format) bool {
 			parse = parseCodexAuth
 		case formatGeminiCreds:
 			parse = parseGeminiCreds
+		case formatClineCreds:
+			parse = parseClineCreds
 		}
 		entries, err := parse(path, raw)
 		if err != nil {
@@ -431,6 +440,20 @@ func parseRailway(path string, raw []byte) ([]platform.CredentialEntry, error) {
 // gemini-credentials.json), by fingerprint only (BV-193, CTO-22 Gemini §3). The
 // JSON Pointer locates each leaf; the error text never holds file content.
 func parseGeminiCreds(path string, raw []byte) ([]platform.CredentialEntry, error) {
+	return jsonLeafCreds(path, raw, "gemini_cli_credential")
+}
+
+// parseClineCreds reads every non-empty string leaf of a Cline JSON credential
+// file (secrets.json, providers.json), by fingerprint only (BV-193, CTO-22
+// Cline §3, signed point 10).
+func parseClineCreds(path string, raw []byte) ([]platform.CredentialEntry, error) {
+	return jsonLeafCreds(path, raw, "cline_credential")
+}
+
+// jsonLeafCreds reads every non-empty string leaf of a JSON file, by
+// fingerprint only, located by JSON Pointer; the error text never holds file
+// content.
+func jsonLeafCreds(path string, raw []byte, kind string) ([]platform.CredentialEntry, error) {
 	var root any
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return nil, errors.New("not JSON")
@@ -448,7 +471,7 @@ func parseGeminiCreds(path string, raw []byte) ([]platform.CredentialEntry, erro
 				key = ptr[i+1:]
 			}
 			out = append(out, platform.CredentialEntry{
-				Path: path, Key: key, Pointer: ptr, Kind: "gemini_cli_credential",
+				Path: path, Key: key, Pointer: ptr, Kind: kind,
 				Value: secrets.NewSecretValue(t),
 			})
 		case map[string]any:

@@ -110,7 +110,7 @@ func resolve(l agentdirs.Layout, home string, env agentdirs.Env) agents {
 		codex:       agent{agentdirs.Codex, agentdirs.CodexHome(home, env)},
 		antigravity: agent{agentdirs.Antigravity, agentdirs.AntigravityDir(home)},
 		hermes:      agent{agentdirs.Hermes, l.HermesHome(home, env)},
-		cline:       agent{clineProduct, l.ClineDir(home, env)},
+		cline:       agent{clineProduct, agentdirs.ClineDataDir(home, env)},
 		copilot:     agent{copilotProduct, filepath.Join(home, ".copilot")},
 		gemini:      agent{knowledge.GeminiCLIProduct, agentdirs.AntigravityDir(home)},
 	}
@@ -130,7 +130,7 @@ func userFolders(home string, a agents) []folder {
 	return []folder{
 		{path: filepath.Join(a.claude.configDir, "skills"), agents: []agent{a.claude}},
 		{path: filepath.Join(home, ".cursor", "skills"), agents: []agent{a.cursor}},
-		{path: filepath.Join(home, ".agents", "skills"), agents: []agent{a.cursor, a.codex, a.copilot, a.gemini}},
+		{path: filepath.Join(home, ".agents", "skills"), agents: []agent{a.cursor, a.codex, a.copilot, a.gemini, a.cline}},
 		{path: filepath.Join(home, ".gemini", "skills"), agents: []agent{a.gemini}},
 		{path: filepath.Join(home, ".gemini", "antigravity", "skills"), agents: []agent{a.antigravity}},
 		{path: filepath.Join(home, ".gemini", "antigravity-cli", "skills"), agents: []agent{a.antigravity}},

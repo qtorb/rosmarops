@@ -405,25 +405,28 @@ func mustDate(t *testing.T, s string) time.Time {
 // A3).
 func TestOverview_NotEvaluatedOnce(t *testing.T) {
 	g, _ := ovEvaluate(t, ovFixture{roots: allRoots})
+	// A detected-only product (no knowledge base) with both an ai_client and an
+	// extension node must appear once, not evaluated (BV-193: cline is now
+	// scored, so this uses an unknown product instead).
 	g.Nodes = append(g.Nodes,
-		graph.Node{ID: "agent_client_c1c1c1c1c1c1c1c1", Kind: graph.KindAgent, Type: graph.AgentAIClient, Platform: "cline", Name: "Cline"},
-		graph.Node{ID: "agent_ext_c1c1c1c1c1c1c1c1", Kind: graph.KindAgent, Type: graph.AgentExtension, Platform: "cline", Name: "Cline"},
+		graph.Node{ID: "agent_client_c1c1c1c1c1c1c1c1", Kind: graph.KindAgent, Type: graph.AgentAIClient, Platform: "unknownagent", Name: "Unknown Agent"},
+		graph.Node{ID: "agent_ext_c1c1c1c1c1c1c1c1", Kind: graph.KindAgent, Type: graph.AgentExtension, Platform: "unknownagent", Name: "Unknown Agent"},
 	)
 	bases, _ := knowledge.All()
 	res := rules.Evaluate(rules.Input{Graph: g, Base: bases[knowledge.ClaudeCodeProduct], Bases: bases, RepoRoots: allRoots, Home: home, Now: now})
-	var cline []rules.OverviewAgent
+	var unknown []rules.OverviewAgent
 	for _, a := range res.AgentsOverview {
-		if a.Agent == "Cline" {
-			cline = append(cline, a)
+		if a.Agent == "Unknown Agent" {
+			unknown = append(unknown, a)
 		}
 	}
-	if len(cline) != 1 || cline[0].Evaluated || cline[0].NotEvaluatedReason == nil || *cline[0].NotEvaluatedReason != rules.NotEvaluatedNoInference ||
-		cline[0].AgentID != "agent_client_c1c1c1c1c1c1c1c1" || cline[0].Knowledge.Date != nil {
-		t.Fatalf("Cline: %+v", cline)
+	if len(unknown) != 1 || unknown[0].Evaluated || unknown[0].NotEvaluatedReason == nil || *unknown[0].NotEvaluatedReason != rules.NotEvaluatedNoInference ||
+		unknown[0].AgentID != "agent_client_c1c1c1c1c1c1c1c1" || unknown[0].Knowledge.Date != nil {
+		t.Fatalf("Unknown Agent: %+v", unknown)
 	}
-	for _, c := range cline[0].Rows {
+	for _, c := range unknown[0].Rows {
 		if c.Decider != rules.DeciderNotEvaluated || c.Scope != rules.ScopeNone || c.Origin != rules.OriginNone {
-			t.Errorf("Cline %s: %+v", c.Row, c)
+			t.Errorf("Unknown Agent %s: %+v", c.Row, c)
 		}
 	}
 }

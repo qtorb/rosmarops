@@ -36,6 +36,11 @@ const (
 	// decision 2). It shares ~/.gemini with Antigravity but is a distinct
 	// ai_client (its id carries the product).
 	GeminiCLIProduct = "gemini-cli"
+
+	// ClineProduct is the Cline VS Code extension, scored (BV-193, CTO-22
+	// decision 2); the Cline CLI stays detected. Its ai_client is identified by
+	// ~/.cline/data (decision 9).
+	ClineProduct = "cline"
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -69,6 +74,10 @@ const AntigravityCLIVersion = "2026-11-01"
 // (gemini-cli.json, BV-193). Not after ReviewedOn.
 const GeminiCLIVersion = "2026-11-03"
 
+// ClineVersion is the version of the embedded Cline base (cline.json, BV-193).
+// Not after ReviewedOn.
+const ClineVersion = "2026-11-03"
+
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
 // Observatory findings move into these bases and a version goes out. The
@@ -86,7 +95,7 @@ const ReviewedOn = "2026-11-03"
 // CompositeOf sorts them.
 // The parts are sorted by product (claude-code < codex < cursor <
 // github-copilot < grok-build < hermes), as CompositeOf sorts them.
-const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
+const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -121,6 +130,9 @@ var antigravityCLIJSON []byte
 
 //go:embed gemini-cli.json
 var geminiCLIJSON []byte
+
+//go:embed cline.json
+var clineJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -380,13 +392,31 @@ func GeminiCLI() (Base, error) {
 	return b, nil
 }
 
+// Cline returns the embedded Cline base (BV-193), with Claude Code's code
+// launcher table (shared as the others do).
+func Cline() (Base, error) {
+	b, err := decode(clineJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != ClineVersion {
+		return Base{}, fmt.Errorf("knowledge base cline: version %q, want %q", b.Version, ClineVersion)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated. Codex joins the set with its graph builder, inference and
-// overview cells (BV-140 pieces c and d); Grok Build, GitHub Copilot and
-// Gemini CLI join the same way.
+// overview cells (BV-140 pieces c and d); Grok Build, GitHub Copilot, Gemini
+// CLI and Cline join the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline} {
 		b, err := load()
 		if err != nil {
 			return nil, err

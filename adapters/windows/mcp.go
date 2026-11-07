@@ -190,10 +190,11 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 	// copy whenever the new file is present (loadsMCP false: its servers neither
 	// load nor double-count, but its env/headers are still credentials on disk).
 	// Only a pre-migration install with no new file lets a legacy copy load.
-	// The ai_client identity stays the legacy globalStorage folder here; BV-193
-	// step 2 moves it to ~/.cline/data with the report-memory migration.
-	clineConfigDir := w.layout.ClineDir(home, nil)
-	clineNewMCP := filepath.Join(agentdirs.ClineDataDir(home, nil), "settings", "cline_mcp_settings.json")
+	// The ai_client identity is ~/.cline/data (BV-193 decision 9): the MCP
+	// servers, the skills and FromCline all share that configDir, so they are
+	// one Cline ai_client.
+	clineConfigDir := agentdirs.ClineDataDir(home, nil)
+	clineNewMCP := filepath.Join(clineConfigDir, "settings", "cline_mcp_settings.json")
 	if v := os.Getenv("CLINE_MCP_SETTINGS_PATH"); v != "" {
 		clineNewMCP = v
 	}
@@ -203,7 +204,7 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		format: formatMCPServers, loadsMCP: true, configDir: clineConfigDir, scope: platform.MCPScopeUser,
 	})
 	for _, legacy := range []string{
-		filepath.Join(clineConfigDir, "cline_mcp_settings.json"),                               // vscodeGlobalStorage
+		filepath.Join(w.layout.ClineDir(home, nil), "cline_mcp_settings.json"),                 // vscodeGlobalStorage
 		filepath.Join(agentdirs.DocumentsDir(home), "Cline", "MCP", "cline_mcp_settings.json"), // documentsClineMcp
 	} {
 		if legacy == clineNewMCP {

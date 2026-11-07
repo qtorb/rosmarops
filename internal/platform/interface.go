@@ -627,6 +627,13 @@ type Platform interface {
 	// credentials by fingerprint come through credfiles.
 	ListGemini(ctx context.Context, repoRoots []string) (GeminiScan, error)
 
+	// ListCline reads the Cline VS Code extension's configuration (BV-193,
+	// CTO-22 Cline §2): ~/.cline/data/globalState.json (the auto-approval
+	// actions, the migration marker and hooksEnabled), the installed version,
+	// and the repository hook files. Its MCP servers come through ListMCPServers
+	// (client cline) and its credentials through credfiles.
+	ListCline(ctx context.Context, repoRoots []string) (ClineScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -1150,6 +1157,47 @@ type GeminiLayer struct {
 	// MCP are this layer's mcpServers, with their per-server trust and secrets
 	// by fingerprint (CTO-22 Gemini §3).
 	MCP []GeminiMCPServer
+}
+
+// ClineScan is the Cline VS Code extension's at-rest configuration (BV-193,
+// CTO-22 Cline §2–§5), read only. Its MCP servers come through the shared MCP
+// pipeline (client cline); its credentials by fingerprint through credfiles.
+// The ai_client exists when Present. ConfigDir is ~/.cline/data (decision 9).
+type ClineScan struct {
+	ConfigDir string
+	Present   bool
+
+	// GlobalStateStatus is the read outcome of ~/.cline/data/globalState.json.
+	GlobalStateStatus MCPSourceStatus
+
+	// HasAutoApproval reports that autoApprovalSettings is present; its actions
+	// then override the product defaults. When absent, a fresh install's
+	// defaults apply (read/edit/browser/mcp without asking, commands asking).
+	HasAutoApproval                                               bool
+	ReadFiles, EditFiles, ExecuteSafeCommands, UseBrowser, UseMcp bool
+
+	// MigrationVersion is __vscodeMigrationVersion (0 when absent). Below 3,
+	// executeSafeCommands=true means the agent's own model judged command
+	// safety (assumption agent_model_judges_command_safety, CTO-22 Cline §4).
+	MigrationVersion int
+	// Yolo reports a legacy yoloModeToggled / autoApproveAllToggled true (an
+	// approve-everything install, CTO-22 Cline §4).
+	Yolo bool
+	// HooksEnabled is hooksEnabled (true by default, CTO-22 Cline §5).
+	HooksEnabled bool
+	// Version is the installed extension version (from the extension folder
+	// name), "" when unknown.
+	Version string
+	// Hooks are the repository hook files Cline runs as processes (CTO-22 Cline
+	// §5): project_hook_runs_repo_script targets.
+	Hooks []ClineHook
+}
+
+// ClineHook is one repository hook file Cline runs (CTO-22 Cline §5).
+type ClineHook struct {
+	Path string
+	Root string
+	Size int64
 }
 
 // GeminiMCPServer is one mcpServers entry of a Gemini layer (CTO-22 Gemini §4).

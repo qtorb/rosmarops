@@ -76,6 +76,7 @@ const (
 	AntigravityCLI   = "antigravity-cli"          // BV-140: the CLI, scored (decision 2)
 	CopilotJetBrains = "github-copilot-jetbrains" // BV-140: Copilot in JetBrains, detected only
 	GeminiCLI        = "gemini-cli"               // BV-193: Google Gemini CLI, scored (CTO-22 decision 2)
+	ClineCLI         = "cline-cli"                // BV-193: the Cline CLI, detected only (CTO-22 decision 3)
 	Hermes           = "hermes"
 	ClaudeDesktop    = "claude-desktop"
 	N8N              = "n8n" // BV-175: detected by its user folder
@@ -374,6 +375,13 @@ func (l Layout) Detect(home string, env Env) []Present {
 		if marker != "" {
 			out = append(out, Present{ClaudeDesktop, desktop, marker})
 		}
+	}
+	// Cline CLI (detected only, BV-193 / CTO-22 decision 3): the CLI writes
+	// ~/.cline/data/settings/global-settings.json (the extension uses
+	// globalState.json), so that file is its presence signal. ConfigDir is the
+	// shared data folder.
+	if data := ClineDataDir(home, env); exists(filepath.Join(data, "settings", "global-settings.json")) {
+		out = append(out, Present{ClineCLI, data, filepath.Join(data, "settings", "global-settings.json")})
 	}
 	// n8n (BV-175): its user folder, ~/.n8n on every OS, or $N8N_USER_FOLDER/.n8n.
 	if n8n := N8NDir(home, env); isDir(n8n) {
