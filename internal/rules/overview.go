@@ -297,6 +297,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.GrokBuildProduct {
 		return oi.grokCells(v)
 	}
+	if v.node.Platform == knowledge.GitHubCopilotProduct {
+		return oi.copilotCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
@@ -639,6 +642,204 @@ func (oi overviewInputs) grokChangesCell(v *agentView, compatIncomplete bool) Ov
 	cell.Data.TargetAgents = sortedUnique(targets)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
 	cell.Data.Assumptions = sortedUnique(base)
+	return cell
+}
+
+// GitHub Copilot effective permission levels (graph tokens, CTO-16 Copilot §4).
+const (
+	copilotManual   = "manual"
+	copilotAllowAll = "allow_all"
+	copilotAssisted = "assisted"
+	copilotBlocked  = "blocked"
+)
+
+// copilotBaseAssumptions are the assumptions every Copilot cell carries: the
+// session's permission-level dropdown is not readable at rest (CTO-16 Copilot
+// §4), so the cell assumes the configured level.
+func copilotBaseAssumptions(extra ...string) []string {
+	return append([]string{graph.AssumeUIModeChoiceUnknown}, extra...)
+}
+
+// copilotMode is Copilot's effective level from its in-force configured
+// permission_mode capability (allow_all, assisted or blocked); manual when none
+// is configured (Manual permissions is the product default).
+func copilotMode(v *agentView) string {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapPermissionMode && c.Basis == graph.BasisConfigured {
+			switch c.TargetScope {
+			case copilotAllowAll, copilotAssisted, copilotBlocked:
+				return c.TargetScope
+			}
+		}
+	}
+	return copilotManual
+}
+
+// copilotTerminalAll reports a terminal catch-all execute_shell capability in
+// force (chat.tools.terminal.autoApprove /.*/: true) and its scope: same_project
+// when it came from a project layer, else the machine.
+func copilotTerminalAll(v *agentView) (bool, string) {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == "terminal_all" {
+			if strings.HasPrefix(c.AppliesIn, platform.MCPScopeProject+":") {
+				return true, ScopeSameProject
+			}
+			return true, ScopeMachine
+		}
+	}
+	return false, ScopeMachine
+}
+
+// copilotCells are GitHub Copilot's six rows in VS Code (BV-140, CTO-16 Copilot
+// §4). Built-in tools read and write only inside the workspace. Manual
+// permissions (the default) apply edits without asking (nobody) and run only
+// the terminal rule list (rule); Allow all / global auto-approve / Autopilot act
+// without asking everywhere (nobody); Assisted hands each call to a reviewer
+// model (model, reviewer_model_permits). Every cell rests on
+// ui_mode_choice_unknown.
+func (oi overviewInputs) copilotCells(v *agentView) []OverviewCell {
+	level := copilotMode(v)
+	return []OverviewCell{
+		oi.copilotReadsCell(v),
+		oi.copilotWritesCell(v, level),
+		oi.copilotRunsCell(v, level),
+		oi.copilotSendsCell(v, level),
+		oi.copilotChangesCell(v, level),
+		oi.providerCell(v),
+	}
+}
+
+func (oi overviewInputs) copilotReadsCell(v *agentView) OverviewCell {
+	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeSameProject, Origin: OriginProductDefault}
+	creds, high := 0, 0
+	for cred := range oi.reaches[v.node.ID] {
+		creds++
+		if classOf(oi.nodes[cred], oi.scopes[cred]) == ClassHigh {
+			high++
+		}
+	}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
+	cell.Data.Assumptions = copilotBaseAssumptions()
+	if len(cell.Data.FindingIDs) == 0 {
+		r := NoFindingNoTargets
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) copilotWritesCell(v *agentView, level string) OverviewCell {
+	decider, scope, assume := DeciderNobody, ScopeSameProject, []string(nil)
+	origin := OriginConfigured
+	switch level {
+	case copilotAssisted:
+		decider, assume = DeciderModel, []string{AssumeReviewerModelPermits}
+	case copilotBlocked:
+		decider, scope = DeciderYou, ScopeNone
+	case copilotManual:
+		origin = OriginProductDefault // edits auto-apply in the workspace by default
+	}
+	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: scope, Origin: origin}
+	cell.Data.Projects = intp(len(oi.in.RepoRoots))
+	cell.Data.Assumptions = sortedUnique(copilotBaseAssumptions(assume...))
+	cell.Assumed = level == copilotAssisted
+	if decider == DeciderNobody || decider == DeciderModel {
+		r := NoFindingNotAFinding
+		cell.NoFindingReason = &r
+	}
+	return cell
+}
+
+func (oi overviewInputs) copilotRunsCell(v *agentView, level string) OverviewCell {
+	cell := OverviewCell{Row: RowRunsCommands, Origin: OriginConfigured}
+	assume := copilotBaseAssumptions()
+	switch level {
+	case copilotAllowAll:
+		cell.Decider, cell.Scope = DeciderNobody, ScopeMachine
+	case copilotAssisted:
+		cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeMachine, true
+		assume = copilotBaseAssumptions(AssumeReviewerModelPermits)
+	case copilotBlocked:
+		cell.Decider, cell.Scope = DeciderYou, ScopeNone
+	default: // manual
+		if all, scope := copilotTerminalAll(v); all {
+			cell.Decider, cell.Scope = DeciderNobody, scope
+		} else {
+			// Manual permissions: the user approves commands; the product's
+			// read-only terminal list runs automatically (CTO-16 Copilot §4
+			// "rule"). The engine has no "rule" decider — like Codex and Grok,
+			// a product rule list that auto-runs a safe subset while the user
+			// approves the rest is the «you» decider, product default.
+			cell.Decider, cell.Scope, cell.Origin = DeciderYou, ScopeMachine, OriginProductDefault
+		}
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	r := NoFindingFeedsOtherFindings
+	cell.NoFindingReason = &r
+	return cell
+}
+
+func (oi overviewInputs) copilotSendsCell(v *agentView, level string) OverviewCell {
+	cell := OverviewCell{Row: RowSendsOut, Origin: OriginConfigured}
+	assume := copilotBaseAssumptions()
+	if len(v.egress) > 0 {
+		cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		if level == copilotAssisted {
+			cell.Decider, cell.Assumed = DeciderModel, true
+			assume = copilotBaseAssumptions(AssumeReviewerModelPermits)
+		}
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", v.codexInForceCap(graph.CapNetwork))
+		if len(oi.reaches[v.node.ID]) == 0 {
+			r := NoFindingNoTargets
+			cell.NoFindingReason = &r
+		}
+	} else {
+		switch level {
+		case copilotAllowAll:
+			cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
+		case copilotAssisted:
+			cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeAnyDestination, true
+			assume = copilotBaseAssumptions(AssumeReviewerModelPermits)
+		case copilotBlocked:
+			cell.Decider, cell.Scope = DeciderYou, ScopeNone
+		default: // manual: URLs use a two-step approval (CTO-16 Copilot §4)
+			cell.Decider, cell.Scope = DeciderYou, ScopeAnyDestination
+		}
+	}
+	cell.Data.Assumptions = sortedUnique(assume)
+	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
+	return cell
+}
+
+// copilotChangesCell is Copilot's writes to another agent's resources inside the
+// workspace (CTO-16 Copilot §5): nobody by default (edits auto), the reviewer
+// model under Assisted.
+func (oi overviewInputs) copilotChangesCell(v *agentView, level string) OverviewCell {
+	base := copilotBaseAssumptions()
+	decider := DeciderNobody
+	if level == copilotAssisted {
+		decider, base = DeciderModel, copilotBaseAssumptions(AssumeReviewerModelPermits)
+	}
+	var cs []candidate
+	var targets []string
+	for _, e := range oi.foreign[v.node.ID] {
+		r := oi.nodes[e.To]
+		scope := ScopeInstructions
+		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
+			scope = ScopeConfig
+		}
+		targets = append(targets, r.Configures)
+		cs = append(cs, candidate{decider: decider, scope: scope, basis: []string{graph.BasisConfigured}, assumptions: base})
+	}
+	if len(cs) == 0 {
+		return OverviewCell{Row: RowChangesOtherAgents, Decider: DeciderYou, Scope: ScopeNone, Origin: OriginNone, Data: OverviewData{Assumptions: sortedUnique(base)}}
+	}
+	cell := pick(RowChangesOtherAgents, cs)
+	cell.Data.TargetAgents = sortedUnique(targets)
+	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
+	cell.Data.Assumptions = sortedUnique(base)
+	cell.Assumed = level == copilotAssisted
 	return cell
 }
 

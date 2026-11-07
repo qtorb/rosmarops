@@ -21,6 +21,13 @@ const (
 	AssumeAutoModeAvailable      = "auto_mode_available"
 	AssumeUIModeChoiceUnknown    = "ui_mode_choice_unknown"
 
+	// AssumeReviewerModelPermits mirrors rules.AssumeReviewerModelPermits (the
+	// shared reviewer_model_permits code, BV-140 decision 6: a vendor reviewer
+	// model decides the escalation — Codex auto-review, Antigravity agentMode
+	// auto, Copilot Assisted). Defined here too because graph cannot import
+	// rules; the string is the contract and a test keeps them equal.
+	AssumeReviewerModelPermits = "reviewer_model_permits"
+
 	// Cursor (capacidades de Cursor, K3 with the annex).
 	AssumeIDERunModeNotReadable        = "ide_run_mode_not_readable"
 	AssumeThirdPartyImportsNotReadable = "third_party_imports_setting_not_readable"
@@ -78,6 +85,9 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		case knowledge.GrokBuildProduct:
 			in := p.grokInference(client)
+			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+		case knowledge.GitHubCopilotProduct:
+			in := p.copilotInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		}
 		for _, e := range inferred {

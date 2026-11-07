@@ -22,9 +22,10 @@ const (
 // clientDisplayNames maps a client product to the name shown in reports.
 // Products not listed fall back to the product label itself.
 var clientDisplayNames = map[string]string{
-	"claude-code": "Claude Code",
-	"cline":       "Cline",
-	"cursor":      "Cursor",
+	"claude-code":    "Claude Code",
+	"cline":          "Cline",
+	"cursor":         "Cursor",
+	"github-copilot": "GitHub Copilot", // BV-140: scored ai_client in VS Code
 
 	// Detected and not evaluated (decision 2026-10-27, agentes nuevos, N1).
 	agentdirs.Codex:         "Codex",

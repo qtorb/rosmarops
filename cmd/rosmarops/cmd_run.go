@@ -340,14 +340,15 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Each step scans under ctx and returns a function that records its
 	// results; scan.Run calls it on this goroutine (see scan.Step).
 	var (
-		mcpScan    platform.MCPScan
-		mcpErr     error
-		hermesScan platform.HermesScan // BV-111: config.yaml drives Hermes's caps
-		codexScan  platform.CodexScan  // BV-140: TOML layers drive Codex's caps
-		grokScan   platform.GrokScan   // BV-140: TOML layers drive Grok's caps
-		credFiles  platform.CredentialFileScan
-		built      *graph.Graph // the graph written this run, for the v2 report
-		builtSHA   string
+		mcpScan     platform.MCPScan
+		mcpErr      error
+		hermesScan  platform.HermesScan  // BV-111: config.yaml drives Hermes's caps
+		codexScan   platform.CodexScan   // BV-140: TOML layers drive Codex's caps
+		grokScan    platform.GrokScan    // BV-140: TOML layers drive Grok's caps
+		copilotScan platform.CopilotScan // BV-140: VS Code settings drive Copilot's caps
+		credFiles   platform.CredentialFileScan
+		built       *graph.Graph // the graph written this run, for the v2 report
+		builtSHA    string
 		// builtSettings is the Claude Code settings scan the graph was built
 		// from, for the model provider row (T12).
 		builtSettings *platform.ClaudeSettingsScan
@@ -422,7 +423,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			grok, grokErr := plat.ListGrok(ctx, cfg.RepoRoots)
 			scanned.Servers = append(scanned.Servers, graph.GrokMCPServers(grok)...)
 			grokScan = grok
-			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr)
+			// GitHub Copilot in VS Code (BV-140, CTO-16 Copilot): its MCP servers
+			// join every agent's; the scan is kept for the graph step.
+			copilot, copilotErr := plat.ListCopilot(ctx, cfg.RepoRoots)
+			scanned.Servers = append(scanned.Servers, graph.CopilotMCPServers(copilot)...)
+			copilotScan = copilot
+			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -531,7 +537,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -952,6 +958,19 @@ func compileExtraPattern(spec config.SecretPattern) (secrets.Pattern, error) {
 // fingerprints and host_id are keyed with the state's local salt. If the sources could not be listed, or
 // the salt is unusable, there is nothing trustworthy to build, so no graph is
 // written and any previous one is removed.
+// copilotExtensionPresent reports the GitHub Copilot VS Code extension among
+// the installed extensions (BV-140): it is a presence signal for the Copilot
+// ai_client even when no chat.* configuration is set.
+func copilotExtensionPresent(exts []platform.VSCodeExtension) bool {
+	for _, e := range exts {
+		switch strings.ToLower(e.ID) {
+		case "github.copilot", "github.copilot-chat":
+			return true
+		}
+	}
+	return false
+}
+
 func writeGraph(
 	scan platform.MCPScan,
 	listErr error,
@@ -960,6 +979,7 @@ func writeGraph(
 	hermes platform.HermesScan,
 	codex platform.CodexScan,
 	grok platform.GrokScan,
+	copilot platform.CopilotScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -995,6 +1015,10 @@ func writeGraph(
 	frag = graph.AddInstructions(frag, instructions, now)
 	frag = graph.AddSkills(frag, skillScan, now)
 	frag = graph.AddExtensions(frag, exts, filepath.Join(home, ".vscode", "extensions"), now)
+	// GitHub Copilot's ai_client, its agent_config resources and its configured
+	// capabilities (BV-140, CTO-16 Copilot). The VS Code extension, already a
+	// node via AddExtensions, is the other presence signal.
+	frag = graph.Merge(frag, graph.FromCopilot(copilot, copilotExtensionPresent(exts), now))
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
 	}
