@@ -485,6 +485,7 @@
   "html.ov.head.knowledge": "knowledge checked on {date}",
   "html.ov.head.knowledge.stale": "over 90 days old: update RosmarOps",
   "html.ov.head.not_evaluated.antigravity_app": "Antigravity (app and IDE) keeps its permission preset (Request Review, Default, Auto or Turbo) inside the app, not in a settings file RosmarOps can read. RosmarOps lists it as detected and does not score it, so that it never guesses how much it can do without asking.",
+  "html.ov.head.not_evaluated.claude_desktop": "Claude Desktop detected, not evaluated yet: it keeps its tool approvals and computer-use permissions inside the app, where RosmarOps cannot read them. Its MCP servers and any keys in its config file are listed below.",
   "html.ov.head.not_evaluated.cline_cli": "Cline CLI detected, not evaluated yet: by default it approves every tool unless a setting or launch flag says otherwise, and RosmarOps cannot see launch flags.",
   "html.ov.head.not_evaluated.copilot_jetbrains": "Detected, not evaluated yet: GitHub Copilot in JetBrains IDEs keeps its approval settings in the IDE's own storage, which RosmarOps does not read yet.",
   "html.ov.head.not_evaluated.coverage": "its settings could not be read",

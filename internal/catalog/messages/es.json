@@ -381,6 +381,7 @@
   "html.ov.head.knowledge.stale": "más de 90 días: actualiza RosmarOps",
   "html.ov.head.not_evaluated.antigravity_app": "Antigravity (app e IDE) guarda su modo de permisos (Request Review, Default, Auto o Turbo) dentro de la aplicación, no en un fichero de ajustes que RosmarOps pueda leer. RosmarOps lo muestra como detectado y no le pone nota, para no adivinar nunca cuánto puede hacer sin preguntar.",
   "html.ov.head.not_evaluated.cline_cli": "CLI de Cline detectado, aún sin evaluar: de serie aprueba todas las herramientas, salvo que un ajuste o una opción de arranque diga lo contrario, y RosmarOps no puede ver las opciones de arranque.",
+  "html.ov.head.not_evaluated.claude_desktop": "Claude Desktop detectado, aún sin evaluar: guarda las aprobaciones de herramientas y los permisos de uso del ordenador dentro de la app, donde RosmarOps no puede leerlos. Abajo aparecen sus servidores MCP y las claves de su fichero de configuración.",
   "html.ov.head.not_evaluated.copilot_jetbrains": "Detectado, aún sin evaluar: GitHub Copilot en los IDE de JetBrains guarda sus aprobaciones en el almacenamiento propio del IDE, que RosmarOps todavía no lee.",
   "html.ov.head.not_evaluated.coverage": "no se pudo leer su configuración",
   "html.ov.head.not_evaluated.no_inference": "aún sin evaluar",

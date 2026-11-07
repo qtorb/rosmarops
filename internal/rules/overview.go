@@ -82,6 +82,7 @@ const (
 	NotEvaluatedAntigravityApp   = "antigravity_app"   // BV-140: Antigravity App/IDE keep the preset in the app, not a readable file
 	NotEvaluatedCopilotJetBrains = "copilot_jetbrains" // BV-140: Copilot in JetBrains keeps approvals in the IDE's storage, not read yet
 	NotEvaluatedClineCLI         = "cline_cli"         // BV-193: the Cline CLI approves every tool by default; launch flags are not readable
+	NotEvaluatedClaudeDesktop    = "claude_desktop"    // BV-193: Claude Desktop keeps tool approvals and computer-use permissions inside the app
 	NotEvaluatedCoverage         = "coverage"
 	NotEvaluatedGraphMissing     = "graph_missing"
 
@@ -279,6 +280,8 @@ func notEvaluatedReasonFor(product string) string {
 		return NotEvaluatedCopilotJetBrains
 	case "cline-cli": // the CLI stays detected; the extension is scored as cline
 		return NotEvaluatedClineCLI
+	case "claude-desktop": // keeps its approvals inside the app (BV-193, CTO-22 decision 3)
+		return NotEvaluatedClaudeDesktop
 	}
 	return NotEvaluatedNoInference
 }
