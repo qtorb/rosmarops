@@ -621,6 +621,12 @@ type Platform interface {
 	// through ListMCPServers (client antigravity-cli).
 	ListAntigravity(ctx context.Context, repoRoots []string) (AntigravityScan, error)
 
+	// ListGemini reads Google Gemini CLI's configuration (BV-193, CTO-22
+	// Gemini §2): the system-defaults, user, project and system settings.json
+	// layers, ~/.gemini/trustedFolders.json, and the per-layer mcpServers. Its
+	// credentials by fingerprint come through credfiles.
+	ListGemini(ctx context.Context, repoRoots []string) (GeminiScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -1078,4 +1084,85 @@ type AntigravitySettings struct {
 type AntigravityHook struct {
 	Path string
 	Root string
+}
+
+// Gemini CLI settings layer kinds (BV-193, CTO-22 Gemini §2), in precedence
+// order (the last wins): the program defaults, system-defaults.json, the user
+// file, the project file, and the system file.
+const (
+	GeminiLayerSystemDefaults = "system-defaults"
+	GeminiLayerUser           = "user"
+	GeminiLayerProject        = "project"
+	GeminiLayerSystem         = "system"
+)
+
+// GeminiScan is Google Gemini CLI's at-rest configuration (BV-193, CTO-22
+// Gemini §2–§4), read only. It shares ~/.gemini with Antigravity but is a
+// distinct ai_client. The MCP servers it carries go through the shared MCP
+// pipeline (client gemini-cli); its credentials by fingerprint come through the
+// credential pipeline (credfiles). The ai_client exists when Present.
+type GeminiScan struct {
+	ConfigDir string // ~/.gemini
+	Present   bool
+
+	// Layers are the settings files considered, in precedence order; the system
+	// file wins, then the project file, then the user file, then
+	// system-defaults (settings.ts:273-288).
+	Layers []GeminiLayer
+
+	// TrustedFolders is ~/.gemini/trustedFolders.json: path → TRUST_FOLDER |
+	// TRUST_PARENT | DO_NOT_TRUST (trust.ts). FolderTrustEnabled is
+	// security.folderTrust.enabled, true by default in the code
+	// (settingsSchema.ts); when it is off, every folder is trusted.
+	TrustedFolders       map[string]string
+	TrustedFoldersStatus MCPSourceStatus
+	FolderTrustEnabled   bool
+}
+
+// GeminiLayer is one settings.json layer (JSONC), with the keys that bear on
+// posture (CTO-22 Gemini §4). Empty values mean the key is absent in this
+// layer.
+type GeminiLayer struct {
+	Kind   string // GeminiLayer* constant
+	Path   string
+	Root   string // repo root, for a project layer
+	Status MCPSourceStatus
+	Reason string
+
+	// SecurePermError marks a system-scope file that failed Gemini's
+	// isFileAndDirectorySecureSync check (CTO-22 Gemini §2): the file is
+	// ignored with a warning, so BV treats the layer as not applied and shows
+	// it in coverage. Only the Windows reader can set it.
+	SecurePermError bool
+
+	// DefaultApprovalMode is general.defaultApprovalMode ("", "auto_edit",
+	// "plan" or "yolo"; yolo in the file is ignored, CTO-22 Gemini §4).
+	DefaultApprovalMode string
+	// ToolsAllowed is tools.allowed (e.g. "run_shell_command",
+	// "run_shell_command(git)"); DisableYoloMode is security.disableYoloMode.
+	ToolsAllowed    []string
+	DisableYoloMode bool
+	// FolderTrust is security.folderTrust.enabled when this layer sets it; nil
+	// when absent. The scan's FolderTrustEnabled is resolved from the layers.
+	FolderTrust *bool
+	// ContextFileNames is context.fileName (one name or a list); "" absent.
+	ContextFileNames []string
+	// MCP are this layer's mcpServers, with their per-server trust and secrets
+	// by fingerprint (CTO-22 Gemini §3).
+	MCP []GeminiMCPServer
+}
+
+// GeminiMCPServer is one mcpServers entry of a Gemini layer (CTO-22 Gemini §4).
+// Trust is the per-server trust:true (that server runs without asking). Env and
+// Headers are by fingerprint only (CTO-22 Gemini §3).
+type GeminiMCPServer struct {
+	ID         string
+	Command    string
+	Args       []string
+	URL        string // remote endpoint (httpUrl/url), in clear for the graph to parse
+	Trust      bool
+	EnvKeys    []string
+	Env        []EnvVar
+	HeaderKeys []string
+	Headers    []EnvVar
 }

@@ -164,6 +164,13 @@ type Node struct {
 	// after Build (MarkCodexUntrusted), like Malicious — never serialized.
 	CodexUntrustedRoots []string `json:"-"`
 
+	// GeminiUntrustedRoots, when set on a Gemini CLI ai_client node, lists the
+	// repo roots that are not trusted folders (BV-193, CTO-22 Gemini §2): Gemini
+	// loads nothing from them, so its inference reaches no credential and writes
+	// no config inside them. In memory only, set after Build
+	// (MarkGeminiUntrusted), like Malicious — never serialized.
+	GeminiUntrustedRoots []string `json:"-"`
+
 	// N8NKey, when true on a file resource node for an n8n user folder, marks
 	// that the folder holds n8n's database alongside the config with its
 	// credential encryption key (BV-175). In memory only, like Malicious —

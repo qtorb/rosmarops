@@ -347,6 +347,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		grokScan        platform.GrokScan        // BV-140: TOML layers drive Grok's caps
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
 		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
+		geminiScan      platform.GeminiScan      // BV-193: gemini-cli settings drive its caps
 		credFiles       platform.CredentialFileScan
 		built           *graph.Graph // the graph written this run, for the v2 report
 		builtSHA        string
@@ -433,7 +434,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			// caps; its MCP servers already joined above as antigravity-cli.
 			antigravity, antigravityErr := plat.ListAntigravity(ctx, cfg.RepoRoots)
 			antigravityScan = antigravity
-			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr)
+			// Google Gemini CLI (BV-193, CTO-22 Gemini): its in-force MCP servers
+			// join every agent's; the scan is kept for the graph step.
+			gemini, geminiErr := plat.ListGemini(ctx, cfg.RepoRoots)
+			scanned.Servers = append(scanned.Servers, graph.GeminiMCPServers(gemini)...)
+			geminiScan = gemini
+			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -542,7 +548,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -986,6 +992,7 @@ func writeGraph(
 	grok platform.GrokScan,
 	copilot platform.CopilotScan,
 	antigravity platform.AntigravityScan,
+	gemini platform.GeminiScan,
 	instructions platform.InstructionScan,
 	skillScan platform.SkillScan,
 	credFiles platform.CredentialFileScan,
@@ -1029,6 +1036,10 @@ func writeGraph(
 	// configured capabilities (BV-140, CTO-16 Antigravity). Its MCP servers and
 	// their config resources come through the shared pipeline.
 	frag = graph.Merge(frag, graph.FromAntigravityCLI(antigravity, now))
+	// Google Gemini CLI's ai_client, its agent_config resources and its
+	// configured capabilities (BV-193, CTO-22 Gemini). Its MCP servers and their
+	// config resources come through the shared pipeline.
+	frag = graph.Merge(frag, graph.FromGeminiCLI(gemini, now))
 	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
 		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
 	}
@@ -1041,6 +1052,9 @@ func writeGraph(
 	// Codex's explicitly-untrusted repo roots, recorded on the built graph
 	// before inference so Codex writes nothing inside them (BV-140, CTO-16 §5).
 	graph.MarkCodexUntrusted(&g, codex)
+	// Gemini CLI's untrusted repo roots, recorded before inference so Gemini
+	// reaches no credential and writes no config inside them (BV-193, CTO-22 §2).
+	graph.MarkGeminiUntrusted(&g, gemini, repoRoots)
 	// reaches and writes_config_of are inferred on the built graph.
 	g, err = graph.Infer(g, repoRoots, home)
 	if err != nil {

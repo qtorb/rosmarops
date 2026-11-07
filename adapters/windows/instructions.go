@@ -84,6 +84,9 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 	codex := instructionLister{scan: &scan, product: agentdirs.Codex, configDir: codexDir, off: !has[agentdirs.Codex]}
 	geminiDir := agentdirs.AntigravityDir(home)
 	antigravity := instructionLister{scan: &scan, product: agentdirs.Antigravity, configDir: geminiDir, off: !has[agentdirs.Antigravity]}
+	// Gemini CLI shares ~/.gemini/GEMINI.md and each repo's GEMINI.md with
+	// Antigravity (BV-193, CTO-22 Gemini §5, signed point 6): one entry per agent.
+	gemini := instructionLister{scan: &scan, product: knowledge.GeminiCLIProduct, configDir: geminiDir, off: !has[agentdirs.GeminiCLI]}
 	hermes := instructionLister{scan: &scan, product: agentdirs.Hermes, configDir: w.layout.HermesHome(home, nil), off: !has[agentdirs.Hermes]}
 
 	if override := filepath.Join(codexDir, "AGENTS.override.md"); anyExists(override) {
@@ -92,6 +95,7 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 		codex.file(filepath.Join(codexDir, "AGENTS.md"))
 	}
 	antigravity.file(filepath.Join(geminiDir, "GEMINI.md"))
+	gemini.file(filepath.Join(geminiDir, "GEMINI.md"))
 
 	claude.file(filepath.Join(claudeDir, "CLAUDE.md"))
 	claude.tree(filepath.Join(claudeDir, "rules"), isMarkdown)
@@ -131,6 +135,8 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 		antigravity.file(filepath.Join(root, "GEMINI.md"))
 		antigravity.shared(agents)
 		antigravity.tree(filepath.Join(root, ".agents", "rules"), anyFile)
+
+		gemini.file(filepath.Join(root, "GEMINI.md"))
 
 		for _, c := range []struct {
 			name   string

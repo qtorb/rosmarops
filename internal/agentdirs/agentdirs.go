@@ -75,6 +75,7 @@ const (
 	Antigravity      = "antigravity"              // BV-140: App and IDE, detected only (decision 2)
 	AntigravityCLI   = "antigravity-cli"          // BV-140: the CLI, scored (decision 2)
 	CopilotJetBrains = "github-copilot-jetbrains" // BV-140: Copilot in JetBrains, detected only
+	GeminiCLI        = "gemini-cli"               // BV-193: Google Gemini CLI, scored (CTO-22 decision 2)
 	Hermes           = "hermes"
 	ClaudeDesktop    = "claude-desktop"
 	N8N              = "n8n" // BV-175: detected by its user folder
@@ -329,6 +330,22 @@ func (l Layout) Detect(home string, env Env) []Present {
 		out = append(out, Present{Antigravity, gemini, AntigravityIDEDataDir(home)})
 	case isDir(l.AntigravityUserDir(home, env)):
 		out = append(out, Present{Antigravity, gemini, l.AntigravityUserDir(home, env)})
+	}
+	// Gemini CLI (scored, BV-193 / CTO-22 decision 2): any of its own files in
+	// ~/.gemini — settings.json, oauth_creds.json, google_accounts.json,
+	// trustedFolders.json, or the tmp folder (storage.ts). All are exclusive to
+	// the CLI; ~/.gemini/antigravity-cli/* is Antigravity's and does not count.
+	// It can appear alongside Antigravity; ConfigDir is ~/.gemini.
+	for _, sig := range []string{"settings.json", "oauth_creds.json", "google_accounts.json", "trustedFolders.json"} {
+		if p := filepath.Join(gemini, sig); exists(p) {
+			out = append(out, Present{GeminiCLI, gemini, p})
+			break
+		}
+	}
+	if !Products(out)[GeminiCLI] {
+		if p := filepath.Join(gemini, "tmp"); isDir(p) {
+			out = append(out, Present{GeminiCLI, gemini, p})
+		}
 	}
 	// GitHub Copilot in JetBrains (detected only, decision 1): its intellij
 	// folder; RosmarOps does not read its approvals yet (decision 9).

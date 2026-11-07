@@ -191,6 +191,7 @@ func TestDarwin_Skills(t *testing.T) {
 	want := []string{
 		"codex ~/.agents/skills/demo/scripts/run.sh",
 		"cursor ~/.agents/skills/demo/scripts/run.sh",
+		"gemini-cli ~/.agents/skills/demo/scripts/run.sh",
 		"github-copilot ~/.agents/skills/demo/scripts/run.sh",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

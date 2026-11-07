@@ -91,7 +91,7 @@ type folder struct {
 // agents are the configuration folders of every agent that loads skills,
 // resolved as their ai_clients are.
 type agents struct {
-	claude, cursor, codex, antigravity, hermes, cline, copilot agent
+	claude, cursor, codex, antigravity, hermes, cline, copilot, gemini agent
 }
 
 // resolve is the configuration folder of every agent, on layout l: Cline's
@@ -112,6 +112,7 @@ func resolve(l agentdirs.Layout, home string, env agentdirs.Env) agents {
 		hermes:      agent{agentdirs.Hermes, l.HermesHome(home, env)},
 		cline:       agent{clineProduct, l.ClineDir(home, env)},
 		copilot:     agent{copilotProduct, filepath.Join(home, ".copilot")},
+		gemini:      agent{knowledge.GeminiCLIProduct, agentdirs.AntigravityDir(home)},
 	}
 }
 
@@ -129,7 +130,8 @@ func userFolders(home string, a agents) []folder {
 	return []folder{
 		{path: filepath.Join(a.claude.configDir, "skills"), agents: []agent{a.claude}},
 		{path: filepath.Join(home, ".cursor", "skills"), agents: []agent{a.cursor}},
-		{path: filepath.Join(home, ".agents", "skills"), agents: []agent{a.cursor, a.codex, a.copilot}},
+		{path: filepath.Join(home, ".agents", "skills"), agents: []agent{a.cursor, a.codex, a.copilot, a.gemini}},
+		{path: filepath.Join(home, ".gemini", "skills"), agents: []agent{a.gemini}},
 		{path: filepath.Join(home, ".gemini", "antigravity", "skills"), agents: []agent{a.antigravity}},
 		{path: filepath.Join(home, ".gemini", "antigravity-cli", "skills"), agents: []agent{a.antigravity}},
 		{path: filepath.Join(a.hermes.configDir, "skills"), agents: []agent{a.hermes}},
@@ -143,7 +145,7 @@ func userFolders(home string, a agents) []folder {
 // trusted (hermesTrust); otherwise they are not attributed to it, and when
 // its trust is unknown the folders go to its coverage.
 func repoFolders(root string, a agents, trust hermesTrust) []folder {
-	agentsFolder := []agent{a.cursor, a.codex, a.antigravity, a.copilot, a.cline}
+	agentsFolder := []agent{a.cursor, a.codex, a.antigravity, a.copilot, a.cline, a.gemini}
 	var hermesFolder []agent
 	if trust.trusts(root) {
 		agentsFolder = append(agentsFolder, a.hermes)

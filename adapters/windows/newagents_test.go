@@ -114,13 +114,23 @@ func TestListMCPServers_NewAgents(t *testing.T) {
 func TestListMCPServers_NewAgentsAbsent(t *testing.T) {
 	e := newNewAgentsEnv(t)
 	writeFile(t, filepath.Join(e.repo, ".agents", "mcp_config.json"), `{"mcpServers": {"proj": {"command": "npx"}}}`)
-	writeFile(t, filepath.Join(e.home, ".gemini", "settings.json"), `{}`) // Gemini CLI
+	// A lone ~/.gemini/settings.json is Gemini CLI's, not Antigravity's
+	// (BV-193): Gemini is detected, Antigravity is not, and the repo's
+	// .agents/mcp_config.json (Antigravity's) is still no source.
+	writeFile(t, filepath.Join(e.home, ".gemini", "settings.json"), `{}`)
 	scan, err := windows.New().ListMCPServers(context.Background(), []string{e.repo})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scan.Present) != 0 || len(scan.Servers) != 0 {
-		t.Errorf("present %v, servers %v", scan.Present, scan.Servers)
+	present := map[string]bool{}
+	for _, p := range scan.Present {
+		present[p.Platform] = true
+	}
+	if !present["gemini-cli"] || present["antigravity"] || present["antigravity-cli"] {
+		t.Errorf("present %v, want gemini-cli only", scan.Present)
+	}
+	if len(scan.Servers) != 0 {
+		t.Errorf("servers %v, want none (settings.json has no mcpServers)", scan.Servers)
 	}
 	for _, s := range scan.Sources {
 		if s.Platform == "antigravity" || s.Platform == "antigravity-cli" || s.Platform == "claude-desktop" {
