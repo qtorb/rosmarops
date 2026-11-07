@@ -105,6 +105,7 @@
   "coverage.none": "Everything RosmarOps looks for was read.",
   "coverage.binary_skipped.one": "{n} file in your repositories was not opened because it is an image, a document or another binary file.",
   "coverage.binary_skipped.other": "{n} files in your repositories were not opened because they are images, documents or other binary files.",
+  "coverage.claude_desktop_two_configs": "Claude Desktop has two configuration files with different MCP servers: one from the standard install and one from the Microsoft Store install. RosmarOps lists both and does not guess which one the app uses.",
   "evidence.edges": "Graph edges behind this",
   "finding.config_key_case_conflict.action": "Open the file and write the setting with the exact name its agent documents; if there are two copies, keep only one.",
   "finding.config_key_case_conflict.title": "A setting in a configuration file is written with unexpected capital letters",

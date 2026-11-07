@@ -207,6 +207,10 @@ type V2Coverage struct {
 	// BinarySkipped is how many tracked files were not opened because they are
 	// images, documents or other binary files (BV-186). Omitted when zero.
 	BinarySkipped int `json:"binary_skipped,omitempty"`
+	// Notes are informational coverage notes as stable catalog codes (BV-193
+	// D3): the engine saw something it reports without it being a failure.
+	// Omitted when empty.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // V2Legacy is the v1 findings, grouped (§3, E7).
@@ -440,6 +444,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 			SourcesRead:       len(g.Coverage.SourcesRead),
 			SourcesFailed:     g.Coverage.SourcesFailed,
 			AgentsUnsupported: g.Coverage.AgentsUnsupported,
+			Notes:             coverageNotes(g),
 		}
 		v2Status = reduceV2(v.Findings, g.Coverage.SourcesFailed)
 	} else {
@@ -595,6 +600,68 @@ func applyMemory(v *V2, in V2Input) {
 		v.NewMCP = mcpServerLines(*in.Graph, root.NewMCP, in.Home)
 		v.MCPChanged = mcpServerLines(*in.Graph, root.MCPChanged, in.Home)
 	}
+}
+
+// CoverageNoteClaudeDesktopTwoConfigs is the stable catalog code for the
+// coverage note of BV-193 D3: Claude Desktop has two configuration files (the
+// standard install and the Microsoft Store/MSIX install) with different MCP
+// servers, and RosmarOps lists both without guessing which the app uses.
+const CoverageNoteClaudeDesktopTwoConfigs = "coverage.claude_desktop_two_configs"
+
+// coverageNotes derives the informational coverage notes from the graph
+// (BV-193 D3). Today that is the one Claude Desktop two-configurations note.
+func coverageNotes(g graph.Graph) []string {
+	var notes []string
+	if claudeDesktopTwoConfigs(g) {
+		notes = append(notes, CoverageNoteClaudeDesktopTwoConfigs)
+	}
+	return notes
+}
+
+// claudeDesktopTwoConfigs reports whether Claude Desktop loads MCP servers from
+// two configuration files whose server sets differ (CTO-22 Claude Desktop §2,
+// D3): the standard-install config and the Microsoft Store (MSIX) config. Each
+// mcp_server node carries its own config file in ConfigPath, so the servers are
+// grouped by file and compared by name; two files with the same servers are not
+// a note.
+func claudeDesktopTwoConfigs(g graph.Graph) bool {
+	byFile := map[string]map[string]bool{}
+	for _, n := range g.Nodes {
+		if n.Kind != graph.KindAgent || n.Type != graph.AgentMCPServer || n.Platform != "claude-desktop" {
+			continue
+		}
+		if byFile[n.ConfigPath] == nil {
+			byFile[n.ConfigPath] = map[string]bool{}
+		}
+		byFile[n.ConfigPath][n.Name] = true
+	}
+	if len(byFile) < 2 {
+		return false
+	}
+	// Two or more config files: a note unless every file lists the same servers.
+	var first map[string]bool
+	for _, set := range byFile {
+		if first == nil {
+			first = set
+			continue
+		}
+		if !sameStringSet(first, set) {
+			return true
+		}
+	}
+	return false
+}
+
+func sameStringSet(a, b map[string]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+	return true
 }
 
 // MemoryUntracked are the rules the findings memory does not track: their

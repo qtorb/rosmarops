@@ -445,10 +445,14 @@ func (c htmlCtx) renderCoverage() {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
+	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs)+len(cov.Notes) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
 		return
 	}
 	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
+	// BV-193 D3: informational coverage notes render their full signed sentence.
+	for _, n := range cov.Notes {
+		c.w(`<li>%s</li>`, html.EscapeString(c.t(n, nil)))
+	}
 	for _, f := range cov.SourcesFailed {
 		code, _, _ := strings.Cut(f.Reason, ": ")
 		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))

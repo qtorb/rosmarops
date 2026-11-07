@@ -95,6 +95,7 @@
   "console.title.running": "RosmarOps · revisando este equipo",
   "coverage.binary_skipped.one": "{n} fichero de tus repositorios no se abrió porque es una imagen, un documento u otro fichero binario.",
   "coverage.binary_skipped.other": "{n} ficheros de tus repositorios no se abrieron porque son imágenes, documentos u otros ficheros binarios.",
+  "coverage.claude_desktop_two_configs": "Claude Desktop tiene dos ficheros de configuración con servidores MCP distintos: el de la instalación normal y el de la Microsoft Store. RosmarOps muestra los dos y no adivina cuál usa la app.",
   "disconnect.done": "Este ordenador ya no está conectado a tu espacio.",
   "finding.computer_use_app_allowed.red": "Puede usar {app} en tu escritorio sin preguntarte, que es lo mismo que ejecutar comandos sin preguntarte.",
   "finding.computer_use_app_allowed.yellow": "Puede usar {apps} en tu escritorio sin preguntarte, con las sesiones que tienes abiertas.",

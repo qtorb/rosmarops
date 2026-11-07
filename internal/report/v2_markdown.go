@@ -37,7 +37,7 @@ var staticKeys = []string{
 	"evidence.edges",
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
-	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "legacy.none",
+	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "coverage.claude_desktop_two_configs", "legacy.none",
 	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
@@ -211,7 +211,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs)
+	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs) + len(v.Coverage.Notes)
 	if !v.Coverage.GraphBuilt {
 		gaps++
 	}
@@ -594,6 +594,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	if v.Coverage.BinarySkipped > 0 { // BV-186
 		w("- %s\n", cat.Plural("coverage.binary_skipped", v.Coverage.BinarySkipped, map[string]string{"n": strconv.Itoa(v.Coverage.BinarySkipped)}))
+	}
+	for _, n := range v.Coverage.Notes { // BV-193 D3: informational notes, full signed sentence
+		w("- %s\n", t(n, nil))
 	}
 	w("\n")
 	// What this system does not check yet: shown here, not a gap (decision
