@@ -189,8 +189,10 @@ func TestDarwin_Skills(t *testing.T) {
 	}
 	sort.Strings(got)
 	want := []string{
+		"cline ~/.agents/skills/demo/scripts/run.sh",
 		"codex ~/.agents/skills/demo/scripts/run.sh",
 		"cursor ~/.agents/skills/demo/scripts/run.sh",
+		"gemini-cli ~/.agents/skills/demo/scripts/run.sh",
 		"github-copilot ~/.agents/skills/demo/scripts/run.sh",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
@@ -297,22 +299,31 @@ func TestDarwin_GraphAndFindings(t *testing.T) {
 	// Claude Code has Bash allowed; Cursor's defaults. The skill is
 	// Cursor's: Claude Code can rewrite it (instructions and script), and
 	// Cursor its own.
+	// BV-193: Cline is now attributed to the shared ~/.agents/skills, so its
+	// skill SKILL.md and scripts are agent_instructions and agent_executable
+	// resources the machine-writing agents can rewrite (more Cline targets).
 	wantFindings := []string{
 		"foreign_agent_config_writable red Claude Code -> Claude Desktop agent_config",
 		"foreign_agent_config_writable red Claude Code -> Cline agent_config",
+		"foreign_agent_config_writable red Claude Code -> Cline agent_executable",
 		"foreign_agent_config_writable red Claude Code -> Cursor agent_config",
 		"foreign_agent_config_writable red Claude Code -> Cursor agent_executable",
 		"foreign_agent_config_writable red Claude Code -> Hermes Agent agent_config",
 		"foreign_agent_config_writable red Cursor -> Claude Code agent_config",
 		"foreign_agent_config_writable red Cursor -> Claude Desktop agent_config",
 		"foreign_agent_config_writable red Cursor -> Cline agent_config",
+		"foreign_agent_config_writable red Cursor -> Cline agent_executable",
 		"foreign_agent_config_writable red Cursor -> Hermes Agent agent_config",
 		"foreign_agent_config_writable red Hermes Agent -> Claude Code agent_config",
 		"foreign_agent_config_writable red Hermes Agent -> Claude Desktop agent_config",
 		"foreign_agent_config_writable red Hermes Agent -> Cline agent_config",
+		"foreign_agent_config_writable red Hermes Agent -> Cline agent_executable",
 		"foreign_agent_config_writable red Hermes Agent -> Cursor agent_config",
 		"foreign_agent_config_writable red Hermes Agent -> Cursor agent_executable",
+		"foreign_agent_instructions_writable yellow Claude Code -> Cline agent_instructions",
 		"foreign_agent_instructions_writable yellow Claude Code -> Cursor agent_instructions",
+		"foreign_agent_instructions_writable yellow Cursor -> Cline agent_instructions",
+		"foreign_agent_instructions_writable yellow Hermes Agent -> Cline agent_instructions",
 		"foreign_agent_instructions_writable yellow Hermes Agent -> Cursor agent_instructions",
 		"own_config_writable red Claude Code -> Claude Code agent_config",
 		"own_config_writable red Cursor -> Cursor agent_config",

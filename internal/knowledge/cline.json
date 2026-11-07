@@ -1,0 +1,48 @@
+{
+  "product": "cline",
+  "version": "2026-11-03",
+  "entries": [
+    {
+      "id": "read_default",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "machine",
+      "source_url": "https://docs.cline.bot/features/auto-approve",
+      "verified": "CTO-22 Cline §4, read 2026-11-07: AutoApprovalSettings.ts DEFAULT_AUTO_APPROVAL_SETTINGS.actions.readFiles=true — a fresh install reads files without asking."
+    },
+    {
+      "id": "edit_default",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "machine",
+      "source_url": "https://docs.cline.bot/features/auto-approve",
+      "verified": "CTO-22 Cline §4, read 2026-11-07: DEFAULT_AUTO_APPROVAL_SETTINGS.actions.editFiles=true — a fresh install edits files without asking."
+    },
+    {
+      "id": "commands_default",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "any_path",
+      "source_url": "https://docs.cline.bot/features/auto-approve",
+      "verified": "CTO-22 Cline §4, read 2026-11-07: DEFAULT_AUTO_APPROVAL_SETTINGS.actions.executeSafeCommands=false — commands ask by default; set true, isToolAutoApproved approves any command (sdk-tool-policies.ts:56-58)."
+    },
+    {
+      "id": "browser_default",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://docs.cline.bot/features/auto-approve",
+      "verified": "CTO-22 Cline §4, read 2026-11-07: DEFAULT_AUTO_APPROVAL_SETTINGS.actions.useBrowser=true — the browser tool runs without asking by default."
+    },
+    {
+      "id": "mcp_default",
+      "type": "invoke_mcp_tool",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://docs.cline.bot/features/auto-approve",
+      "verified": "CTO-22 Cline §4, read 2026-11-07: DEFAULT_AUTO_APPROVAL_SETTINGS.actions.useMcp=true — one toggle approves every MCP tool (sdk-tool-policies.ts:62-64)."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

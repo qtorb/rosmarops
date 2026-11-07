@@ -1319,7 +1319,9 @@
               "enum": [
                 "no_inference",
                 "coverage",
-                "graph_missing"
+                "graph_missing",
+                "cline_cli",
+                "claude_desktop"
               ]
             }
           ]

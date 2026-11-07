@@ -52,7 +52,8 @@ func (e identityEnv) writeAll(t *testing.T, withCline bool) {
 	writeFile(t, filepath.Join(e.repoB, ".mcp.json"), `{"mcpServers": {"shared": {"command": "npx"}}}`)
 	writeFile(t, filepath.Join(e.home, ".cursor", "mcp.json"), `{"mcpServers": {"github": {"command": "npx"}}}`)
 	if withCline {
-		writeFile(t, filepath.Join(e.appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json"),
+		// BV-193 decision 9: Cline's live MCP (and its identity) is ~/.cline/data.
+		writeFile(t, filepath.Join(e.home, ".cline", "data", "settings", "cline_mcp_settings.json"),
 			`{"mcpServers": {"browser": {"command": "npx"}}}`)
 	}
 }
@@ -113,7 +114,7 @@ func TestIdentity_OneClientPerProductWithConfigsAndScopes(t *testing.T) {
 	wantDirs := map[string]string{
 		cc.ID:     filepath.Join(e.home, ".claude"),
 		cursor.ID: filepath.Join(e.home, ".cursor"),
-		cline.ID:  filepath.Join(e.appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings"),
+		cline.ID:  filepath.Join(e.home, ".cline", "data"),
 	}
 	for id, dir := range wantDirs {
 		if byID[id].ConfigPath != dir {

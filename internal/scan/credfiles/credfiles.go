@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
@@ -50,6 +51,8 @@ const (
 	formatCodexCredentials                // Codex .credentials.json: <key>.access_token, <key>.refresh_token (BV-96)
 	formatHermesAuth                      // Hermes Agent auth.json: providers.* and credential_pool.* tokens and keys (BV-96)
 	formatClaudeCredentials               // Claude Code .credentials.json: claudeAiOauth.{accessToken,refreshToken} (BV-111)
+	formatGeminiCreds                     // Gemini CLI JSON credential files: every string leaf, by fingerprint (BV-193, CTO-22 §3)
+	formatClineCreds                      // Cline JSON credential files (secrets.json, providers.json): every string leaf (BV-193, CTO-22 §3)
 )
 
 // userFile is one of the user's credential files.
@@ -163,6 +166,23 @@ func userFiles(l agentdirs.Layout, home string, env Env) []userFile {
 	// (CLAUDE.md: %USERPROFILE%\.claude). Read with exact keys; redacted like
 	// every secret.
 	out = append(out, userFile{filepath.Join(home, ".claude", ".credentials.json"), formatClaudeCredentials})
+	// Gemini CLI's plaintext credential files (BV-193, CTO-22 Gemini §3, signed
+	// point 11): the Google OAuth, the MCP and A2A OAuth tokens, the keyring
+	// fallback (gemini-credentials.json, counted even though encrypted — its key
+	// derives from the machine, point 7), and ~/.gemini/.env and ~/.env. Every
+	// string leaf is read by fingerprint only.
+	gemini := filepath.Join(home, ".gemini")
+	for _, f := range []string{"oauth_creds.json", "mcp-oauth-tokens.json", "a2a-oauth-tokens.json", "gemini-credentials.json"} {
+		out = append(out, userFile{filepath.Join(gemini, f), formatGeminiCreds})
+	}
+	out = append(out, userFile{filepath.Join(gemini, ".env"), formatEnv})
+	out = append(out, userFile{filepath.Join(home, ".env"), formatEnv})
+	// Cline's plaintext credential files (BV-193, CTO-22 Cline §3, signed
+	// point 10): ~/.cline/data/secrets.json and
+	// ~/.cline/data/settings/providers.json, by fingerprint only.
+	clineData := agentdirs.ClineDataDir(home, adEnv)
+	out = append(out, userFile{filepath.Join(clineData, "secrets.json"), formatClineCreds})
+	out = append(out, userFile{filepath.Join(clineData, "settings", "providers.json"), formatClineCreds})
 	return out
 }
 
@@ -315,13 +335,17 @@ func readFile(scan *platform.CredentialFileScan, path string, f format) bool {
 		}
 		return true
 	}
-	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth {
+	if f == formatRailway || f == formatVSCodeSettings || f == formatCodexAuth || f == formatGeminiCreds || f == formatClineCreds {
 		parse := parseRailway
 		switch f {
 		case formatVSCodeSettings:
 			parse = parseVSCodeSettings
 		case formatCodexAuth:
 			parse = parseCodexAuth
+		case formatGeminiCreds:
+			parse = parseGeminiCreds
+		case formatClineCreds:
+			parse = parseClineCreds
 		}
 		entries, err := parse(path, raw)
 		if err != nil {
@@ -409,6 +433,70 @@ func parseRailway(path string, raw []byte) ([]platform.CredentialEntry, error) {
 		})
 	}
 	return out, nil
+}
+
+// parseGeminiCreds reads every non-empty string leaf of a Gemini CLI JSON
+// credential file (oauth_creds.json, mcp-oauth-tokens.json, a2a-oauth-tokens.json,
+// gemini-credentials.json), by fingerprint only (BV-193, CTO-22 Gemini §3). The
+// JSON Pointer locates each leaf; the error text never holds file content.
+func parseGeminiCreds(path string, raw []byte) ([]platform.CredentialEntry, error) {
+	return jsonLeafCreds(path, raw, "gemini_cli_credential")
+}
+
+// parseClineCreds reads every non-empty string leaf of a Cline JSON credential
+// file (secrets.json, providers.json), by fingerprint only (BV-193, CTO-22
+// Cline §3, signed point 10).
+func parseClineCreds(path string, raw []byte) ([]platform.CredentialEntry, error) {
+	return jsonLeafCreds(path, raw, "cline_credential")
+}
+
+// jsonLeafCreds reads every non-empty string leaf of a JSON file, by
+// fingerprint only, located by JSON Pointer; the error text never holds file
+// content.
+func jsonLeafCreds(path string, raw []byte, kind string) ([]platform.CredentialEntry, error) {
+	var root any
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return nil, errors.New("not JSON")
+	}
+	var out []platform.CredentialEntry
+	var walk func(ptr string, v any)
+	walk = func(ptr string, v any) {
+		switch t := v.(type) {
+		case string:
+			if strings.TrimSpace(t) == "" {
+				return
+			}
+			key := ptr
+			if i := strings.LastIndex(ptr, "/"); i >= 0 {
+				key = ptr[i+1:]
+			}
+			out = append(out, platform.CredentialEntry{
+				Path: path, Key: key, Pointer: ptr, Kind: kind,
+				Value: secrets.NewSecretValue(t),
+			})
+		case map[string]any:
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				walk(ptr+"/"+jsonPointerEscape(k), t[k])
+			}
+		case []any:
+			for i, e := range t {
+				walk(ptr+"/"+strconv.Itoa(i), e)
+			}
+		}
+	}
+	walk("", root)
+	return out, nil
+}
+
+// jsonPointerEscape escapes a key for a JSON Pointer (RFC 6901): ~ → ~0, / → ~1.
+func jsonPointerEscape(k string) string {
+	k = strings.ReplaceAll(k, "~", "~0")
+	return strings.ReplaceAll(k, "/", "~1")
 }
 
 // codexAuthKeys are the secrets read from Codex's auth.json, by JSON

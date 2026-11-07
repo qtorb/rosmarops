@@ -319,6 +319,11 @@ type V2Input struct {
 	// assumption. Optional.
 	Grok platform.GrokScan
 
+	// Cline is the Cline extension scan (BV-193): the overview reads its
+	// migration version for the agent_model_judges_command_safety assumption.
+	// Optional.
+	Cline platform.ClineScan
+
 	// IntegrityNotChecked: the state could not be read, so this run checked
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).
@@ -416,7 +421,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		res = rules.Evaluate(rules.Input{
 			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
 			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures, Dismissed: in.Dismissed,
-			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home, Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok,
+			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home, Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline,
 		})
 		v.Silenced, v.TestData = res.Silenced, res.TestData
 		v.agentNames = map[string]string{}
@@ -616,6 +621,10 @@ var MemoryUntracked = map[string]bool{
 	// them to it would be a memory-schema change.
 	rules.RuleN8NMCPBridge:   true,
 	rules.RuleN8NKeyWithData: true,
+	// BV-193: computer_use_app_allowed is re-derived each run from Codex's
+	// computer-use config; it is not in the memory schema's rule enum, so
+	// adding it there would be a memory-schema change (owner sign-off).
+	rules.RuleComputerUseAppAllowed: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

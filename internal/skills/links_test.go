@@ -46,6 +46,7 @@ func TestDiscover_NpxSkillsAddLink(t *testing.T) {
 			"cline repo/.agents/skills/demo/SKILL.md",
 			"codex repo/.agents/skills/demo/SKILL.md",
 			"cursor repo/.agents/skills/demo/SKILL.md",
+			"gemini-cli repo/.agents/skills/demo/SKILL.md",
 			"github-copilot repo/.agents/skills/demo/SKILL.md",
 		})
 		equal(t, "executables", listed(tmp, scan.Executables), []string{
@@ -54,6 +55,7 @@ func TestDiscover_NpxSkillsAddLink(t *testing.T) {
 			"cline repo/.agents/skills/demo/scripts/run.ps1",
 			"codex repo/.agents/skills/demo/scripts/run.ps1",
 			"cursor repo/.agents/skills/demo/scripts/run.ps1",
+			"gemini-cli repo/.agents/skills/demo/scripts/run.ps1",
 			"github-copilot repo/.agents/skills/demo/scripts/run.ps1",
 		})
 		equal(t, "failed", failures(tmp, scan.Failed), nil)
@@ -72,8 +74,10 @@ func TestDiscover_LinkToUserSkill(t *testing.T) {
 	scan := skills.Discover(context.Background(), home, envOf(nil), []string{repo})
 	equal(t, "instructions", listed(tmp, scan.Instructions), []string{
 		"claude-code home/.agents/skills/u/SKILL.md",
+		"cline home/.agents/skills/u/SKILL.md",
 		"codex home/.agents/skills/u/SKILL.md",
 		"cursor home/.agents/skills/u/SKILL.md",
+		"gemini-cli home/.agents/skills/u/SKILL.md",
 		"github-copilot home/.agents/skills/u/SKILL.md",
 	})
 	equal(t, "failed", failures(tmp, scan.Failed), nil)

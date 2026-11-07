@@ -77,7 +77,7 @@ func TestDetect(t *testing.T) {
 			touch(t, filepath.Join(h, ".gemini", "GEMINI.md"))
 			mkdir(t, filepath.Join(h, ".gemini", "config"))
 			return none
-		}, map[string]string{}},
+		}, map[string]string{GeminiCLI: ".gemini"}}, // BV-193: a lone ~/.gemini is Gemini CLI's
 		"antigravity-cli shared config": {func(t *testing.T, h string) Env {
 			touch(t, filepath.Join(h, ".gemini", "config", "mcp_config.json"))
 			return none

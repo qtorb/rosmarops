@@ -137,7 +137,9 @@ func TestListMCPServers_ReportsEverySource(t *testing.T) {
 		{"claude-code-project", filepath.Join(".claude", "settings.json"), platform.MCPSourceMissing},
 		{"claude-code-project", filepath.Join(".claude", "settings.local.json"), platform.MCPSourceFailed},
 		{"claude-code-project", ".mcp.json", platform.MCPSourceMissing},
-		{"cline", "cline_mcp_settings.json", platform.MCPSourceMissing},
+		{"cline", "cline_mcp_settings.json", platform.MCPSourceMissing}, // ~/.cline/data (live)
+		{"cline", "cline_mcp_settings.json", platform.MCPSourceMissing}, // legacy globalStorage
+		{"cline", "cline_mcp_settings.json", platform.MCPSourceMissing}, // legacy Documents
 		{"cursor", filepath.Join(".cursor", "mcp.json"), platform.MCPSourceRead},
 		{"cursor", filepath.Join(".cursor", "mcp.json"), platform.MCPSourceMissing}, // the repo's (K10)
 	}
@@ -170,3 +172,92 @@ func TestListMCPServers_ReportsEverySource(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// clineEnv sets a clean home with no Cline path overrides (BV-193 step 0).
+func clineEnv(t *testing.T) (home, appData string) {
+	t.Helper()
+	home = t.TempDir()
+	appData = filepath.Join(home, "AppData", "Roaming")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("APPDATA", appData)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
+	for _, v := range []string{"CLINE_DATA_DIR", "CLINE_DIR", "CLINE_MCP_SETTINGS_PATH"} {
+		t.Setenv(v, "")
+	}
+	return home, appData
+}
+
+func clineServers(scan platform.MCPScan) (loaded, dead []string) {
+	for _, s := range scan.Servers {
+		if s.Client != "cline" {
+			continue
+		}
+		if s.LoadsMCP {
+			loaded = append(loaded, s.Name)
+		} else {
+			dead = append(dead, s.Name)
+		}
+	}
+	return loaded, dead
+}
+
+// BV-193 step 0 / CTO-22 Cline §2: the live MCP file is ~/.cline/data; the
+// legacy globalStorage copy is a dead copy when the new file exists, and loads
+// only when it does not.
+func TestListMCPServers_ClineDataPathDedup(t *testing.T) {
+	oneServer := `{"mcpServers": {"a": {"command": "npx"}}}`
+	twoNamed := `{"mcpServers": {"a": {"command": "npx"}, "b": {"command": "npx"}}}`
+	legacyRel := filepath.Join("AppData", "Roaming", "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings", "cline_mcp_settings.json")
+
+	t.Run("new present, legacy is a dead copy", func(t *testing.T) {
+		home, _ := clineEnv(t)
+		writeFile(t, filepath.Join(home, ".cline", "data", "settings", "cline_mcp_settings.json"), oneServer)
+		writeFile(t, filepath.Join(home, legacyRel), twoNamed)
+		scan, err := windows.New().ListMCPServers(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		loaded, dead := clineServers(scan)
+		if len(loaded) != 1 || loaded[0] != "a" {
+			t.Errorf("loaded: got %v, want [a] (new only)", loaded)
+		}
+		if len(dead) != 2 {
+			t.Errorf("dead copies: got %v, want a and b from the legacy file", dead)
+		}
+	})
+
+	t.Run("no new file, legacy loads", func(t *testing.T) {
+		home, _ := clineEnv(t)
+		writeFile(t, filepath.Join(home, legacyRel), twoNamed)
+		scan, err := windows.New().ListMCPServers(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		loaded, _ := clineServers(scan)
+		if len(loaded) != 2 {
+			t.Errorf("loaded: got %v, want a and b (legacy loads, pre-migration)", loaded)
+		}
+	})
+}
+
+// BV-193 step 0 / CTO-22 Claude Desktop §2: the MSIX install is detected and
+// its config loads even when the installer path is absent.
+func TestListMCPServers_ClaudeDesktopMSIX(t *testing.T) {
+	home, _ := clineEnv(t)
+	msix := filepath.Join(home, "AppData", "Local", "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude", "claude_desktop_config.json")
+	writeFile(t, msix, `{"mcpServers": {"brave": {"command": "npx"}}}`)
+	scan, err := windows.New().ListMCPServers(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got int
+	for _, s := range scan.Servers {
+		if s.Client == "claude-desktop" && s.LoadsMCP {
+			got++
+		}
+	}
+	if got != 1 {
+		t.Errorf("Claude Desktop MSIX servers loaded: got %d, want 1", got)
+	}
+}
