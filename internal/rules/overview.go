@@ -78,9 +78,11 @@ const (
 	NoFindingNotAFinding        = "not_a_finding"
 	NoFindingFeedsOtherFindings = "feeds_other_findings"
 
-	NotEvaluatedNoInference  = "no_inference"
-	NotEvaluatedCoverage     = "coverage"
-	NotEvaluatedGraphMissing = "graph_missing"
+	NotEvaluatedNoInference      = "no_inference"
+	NotEvaluatedAntigravityApp   = "antigravity_app"   // BV-140: Antigravity App/IDE keep the preset in the app, not a readable file
+	NotEvaluatedCopilotJetBrains = "copilot_jetbrains" // BV-140: Copilot in JetBrains keeps approvals in the IDE's storage, not read yet
+	NotEvaluatedCoverage         = "coverage"
+	NotEvaluatedGraphMissing     = "graph_missing"
 
 	PendingModelProviderResearch = "model_provider_research" // reserved (T1)
 )
@@ -245,7 +247,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		seen[n.Platform] = len(out)
 		a := OverviewAgent{Agent: n.Name, AgentID: n.ID, Product: n.Platform, Rows: []OverviewCell{}}
 		if base.Product == "" || n.Type != graph.AgentAIClient {
-			r := NotEvaluatedNoInference
+			r := notEvaluatedReasonFor(n.Platform)
 			a.NotEvaluatedReason = &r
 			a.Rows = notEvaluatedRows()
 			out = append(out, a)
@@ -263,6 +265,19 @@ func overview(oi overviewInputs) []OverviewAgent {
 		out = []OverviewAgent{}
 	}
 	return out
+}
+
+// notEvaluatedReasonFor is a detected agent's not-evaluated reason: a
+// per-product one for Antigravity App/IDE and Copilot in JetBrains (BV-140,
+// decisions 1–2), else the generic no_inference.
+func notEvaluatedReasonFor(product string) string {
+	switch product {
+	case "antigravity": // App and IDE (the CLI is scored as antigravity-cli)
+		return NotEvaluatedAntigravityApp
+	case "github-copilot-jetbrains":
+		return NotEvaluatedCopilotJetBrains
+	}
+	return NotEvaluatedNoInference
 }
 
 // stale reports a knowledge date StaleDays or more before now.

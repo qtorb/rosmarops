@@ -28,12 +28,14 @@ var clientDisplayNames = map[string]string{
 	"github-copilot": "GitHub Copilot", // BV-140: scored ai_client in VS Code
 
 	// Detected and not evaluated (decision 2026-10-27, agentes nuevos, N1).
-	agentdirs.Codex:         "Codex",
-	agentdirs.GrokBuild:     "Grok Build",
-	agentdirs.Antigravity:   "Antigravity",
-	agentdirs.Hermes:        "Hermes Agent",
-	agentdirs.ClaudeDesktop: "Claude Desktop",
-	agentdirs.N8N:           "n8n", // BV-175: detected by its user folder
+	agentdirs.Codex:            "Codex",
+	agentdirs.GrokBuild:        "Grok Build",
+	agentdirs.Antigravity:      "Antigravity",     // App and IDE, detected only (BV-140, decision 2)
+	agentdirs.AntigravityCLI:   "Antigravity CLI", // BV-140: the CLI, scored
+	agentdirs.CopilotJetBrains: "GitHub Copilot (JetBrains)",
+	agentdirs.Hermes:           "Hermes Agent",
+	agentdirs.ClaudeDesktop:    "Claude Desktop",
+	agentdirs.N8N:              "n8n", // BV-175: detected by its user folder
 }
 
 // clientDisplayName returns the display name for a client product, never

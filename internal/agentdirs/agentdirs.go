@@ -70,12 +70,14 @@ func (l Layout) configBase(home string, env Env) string {
 
 // Product codes (graph.clientDisplayNames).
 const (
-	Codex         = "codex"
-	GrokBuild     = "grok-build" // BV-140: xAI Grok Build
-	Antigravity   = "antigravity"
-	Hermes        = "hermes"
-	ClaudeDesktop = "claude-desktop"
-	N8N           = "n8n" // BV-175: detected by its user folder
+	Codex            = "codex"
+	GrokBuild        = "grok-build"               // BV-140: xAI Grok Build
+	Antigravity      = "antigravity"              // BV-140: App and IDE, detected only (decision 2)
+	AntigravityCLI   = "antigravity-cli"          // BV-140: the CLI, scored (decision 2)
+	CopilotJetBrains = "github-copilot-jetbrains" // BV-140: Copilot in JetBrains, detected only
+	Hermes           = "hermes"
+	ClaudeDesktop    = "claude-desktop"
+	N8N              = "n8n" // BV-175: detected by its user folder
 )
 
 // Env reads environment variables; os.LookupEnv outside tests.
@@ -179,6 +181,32 @@ func (l Layout) AntigravityUserDir(home string, env Env) string {
 	return filepath.Join(l.configBase(home, env), "Antigravity", "User")
 }
 
+// AntigravityCLIDir is the Antigravity CLI's data folder, <home>\.gemini\antigravity-cli
+// (CTO-16 Antigravity §1), on both layouts. Its settings.json is the scored
+// product's configuration.
+func AntigravityCLIDir(home string) string { return filepath.Join(home, ".gemini", "antigravity-cli") }
+
+// AntigravityIDEDataDir is the IDE's data folder, <home>\.gemini\antigravity-ide
+// (CTO-16 Antigravity §1); an App/IDE presence signal.
+func AntigravityIDEDataDir(home string) string {
+	return filepath.Join(home, ".gemini", "antigravity-ide")
+}
+
+// AntigravityAppDataDir is the App's data folder, <home>\.gemini\antigravity
+// (CTO-16 Antigravity §1); an App presence signal.
+func AntigravityAppDataDir(home string) string { return filepath.Join(home, ".gemini", "antigravity") }
+
+// CopilotJetBrainsDir is GitHub Copilot's JetBrains folder: %LOCALAPPDATA%\github-copilot
+// on Windows, $XDG_CONFIG_HOME/github-copilot or ~/.config/github-copilot on
+// macOS and Linux (CTO-16 Copilot §2). Its intellij subfolder is the JetBrains
+// presence signal; RosmarOps does not read it yet (decision 9).
+func (l Layout) CopilotJetBrainsDir(home string, env Env) string {
+	if l == WindowsLayout {
+		return filepath.Join(localAppData(home, env), "github-copilot")
+	}
+	return filepath.Join(xdgConfig(home, env), "github-copilot")
+}
+
 // ClaudeDesktopDir is Claude Desktop's folder on the Windows layout.
 func ClaudeDesktopDir(home string, env Env) string { return WindowsLayout.ClaudeDesktopDir(home, env) }
 
@@ -255,13 +283,29 @@ func (l Layout) Detect(home string, env Env) []Present {
 		}
 	}
 	gemini := AntigravityDir(home)
+	// Antigravity CLI (scored, decision 2): its own data folder, or the shared
+	// ~/.gemini/config it reads (CTO-16 Antigravity §1–§2). ConfigDir is ~/.gemini.
 	switch {
+	case isDir(AntigravityCLIDir(home)):
+		out = append(out, Present{AntigravityCLI, gemini, AntigravityCLIDir(home)})
 	case exists(filepath.Join(gemini, "config", "mcp_config.json")):
-		out = append(out, Present{Antigravity, gemini, filepath.Join(gemini, "config", "mcp_config.json")})
-	case isDir(filepath.Join(gemini, "antigravity")):
-		out = append(out, Present{Antigravity, gemini, filepath.Join(gemini, "antigravity")})
+		out = append(out, Present{AntigravityCLI, gemini, filepath.Join(gemini, "config", "mcp_config.json")})
+	}
+	// Antigravity App and IDE (detected only, decision 2): their data folders or
+	// the IDE's VS Code layer. A .gemini folder alone is Gemini CLI's and does
+	// not count.
+	switch {
+	case isDir(AntigravityAppDataDir(home)):
+		out = append(out, Present{Antigravity, gemini, AntigravityAppDataDir(home)})
+	case isDir(AntigravityIDEDataDir(home)):
+		out = append(out, Present{Antigravity, gemini, AntigravityIDEDataDir(home)})
 	case isDir(l.AntigravityUserDir(home, env)):
 		out = append(out, Present{Antigravity, gemini, l.AntigravityUserDir(home, env)})
+	}
+	// GitHub Copilot in JetBrains (detected only, decision 1): its intellij
+	// folder; RosmarOps does not read its approvals yet (decision 9).
+	if cj := l.CopilotJetBrainsDir(home, env); isDir(filepath.Join(cj, "intellij")) {
+		out = append(out, Present{CopilotJetBrains, cj, filepath.Join(cj, "intellij")})
 	}
 	hermes := l.HermesHome(home, env)
 	if p := filepath.Join(hermes, "config.yaml"); exists(p) {
