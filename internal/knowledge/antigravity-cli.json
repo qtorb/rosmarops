@@ -1,0 +1,64 @@
+{
+  "product": "antigravity-cli",
+  "version": "2026-11-01",
+  "entries": [
+    {
+      "id": "read_workspace",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: by default the agent reads and writes files inside the project without asking; allowNonWorkspaceAccess is off by default."
+    },
+    {
+      "id": "write_workspace",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: writing in the workspace decides nobody (no asking) by default."
+    },
+    {
+      "id": "write_outside",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "outside_workspace",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: allowNonWorkspaceAccess defaults off, so writing outside the workspace is not allowed without it."
+    },
+    {
+      "id": "shell_request_review",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "any_path",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: toolPermission default request-review — every command asks for approval (decider user)."
+    },
+    {
+      "id": "network_request_review",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: read_url, execute_url and MCP ask by default."
+    },
+    {
+      "id": "mcp_request_review",
+      "type": "invoke_mcp_tool",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://antigravity.google/docs/mcp",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: MCP tool calls ask by default."
+    },
+    {
+      "id": "mode_request_review",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "request-review",
+      "source_url": "https://www.antigravity.google/docs/permissions",
+      "verified": "CTO-16 Antigravity §4, read 2026-11-01: toolPermission default request-review; agentMode default; artifactReviewPolicy asks-for-review."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

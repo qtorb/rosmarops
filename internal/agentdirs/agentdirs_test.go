@@ -78,14 +78,22 @@ func TestDetect(t *testing.T) {
 			mkdir(t, filepath.Join(h, ".gemini", "config"))
 			return none
 		}, map[string]string{}},
-		"antigravity mcp_config.json": {func(t *testing.T, h string) Env {
+		"antigravity-cli shared config": {func(t *testing.T, h string) Env {
 			touch(t, filepath.Join(h, ".gemini", "config", "mcp_config.json"))
 			return none
-		}, map[string]string{Antigravity: ".gemini"}},
-		"antigravity folder": {func(t *testing.T, h string) Env {
+		}, map[string]string{AntigravityCLI: ".gemini"}},
+		"antigravity-cli folder": {func(t *testing.T, h string) Env {
+			mkdir(t, filepath.Join(h, ".gemini", "antigravity-cli"))
+			return none
+		}, map[string]string{AntigravityCLI: ".gemini"}},
+		"antigravity app folder": {func(t *testing.T, h string) Env {
 			mkdir(t, filepath.Join(h, ".gemini", "antigravity"))
 			return none
 		}, map[string]string{Antigravity: ".gemini"}},
+		"copilot jetbrains": {func(t *testing.T, h string) Env {
+			mkdir(t, filepath.Join(h, "local", "github-copilot", "intellij"))
+			return envOf(map[string]string{"LOCALAPPDATA": filepath.Join(h, "local")})
+		}, map[string]string{CopilotJetBrains: filepath.Join("local", "github-copilot")}},
 		"antigravity a file, not a folder": {func(t *testing.T, h string) Env {
 			touch(t, filepath.Join(h, ".gemini", "antigravity"))
 			return none

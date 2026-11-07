@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,6 +35,19 @@ func (r fakeRegistry) StringValue(_ context.Context, hive, keyPath, valueName st
 		return "", false, errors.New("access denied")
 	}
 	return v, ok, nil
+}
+
+// Uint32Value serves a DWORD keyed "<hive>|<keyPath>|<valueName>" (BV-140).
+func (r fakeRegistry) Uint32Value(_ context.Context, hive, keyPath, valueName string) (uint32, bool, error) {
+	v, ok := r[hive+"|"+keyPath+"|"+valueName]
+	if v == "ERROR" {
+		return 0, false, errors.New("access denied")
+	}
+	if !ok {
+		return 0, false, nil
+	}
+	n, err := strconv.ParseUint(v, 10, 32)
+	return uint32(n), err == nil, err
 }
 
 const (

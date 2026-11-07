@@ -209,6 +209,22 @@ if ($enHTML -notmatch 'Detected, not evaluated yet: [^<]*Claude Desktop') { $fai
 $gaps = @($v2.coverage.sources_failed) + @($v2.coverage.agents_unsupported) + @($v2.coverage.scan_errors) | Where-Object { $_ }
 if ($gaps | Where-Object { ($_ | ConvertTo-Json -Compress) -match 'Claude' }) { $failures.Add('a coverage note names Claude Desktop') }
 
+# 1d. The Antigravity CLI is scored (BV-140, CTO-16 Antigravity §7): its
+# settings.json puts it in always-proceed with allowNonWorkspaceAccess, so it
+# can rewrite its own and other agents' configuration across the whole
+# machine. Its ai_client is in graph.v2.json, it carries an
+# own_config_writable finding, the English HTML shows that risk, and it is
+# not listed among the detected-only agents.
+$agClient = @($graph.nodes | Where-Object { $_.type -eq 'ai_client' -and $_.platform -eq 'antigravity-cli' } | ForEach-Object { $_.id })
+if ($agClient.Count -ne 1) { $failures.Add("want exactly one antigravity-cli ai_client in graph.v2.json, got $($agClient.Count)") }
+$agOwn = $v2.findings | Where-Object {
+    $f = $_
+    $f.rule -eq 'own_config_writable' -and @($f.evidence.nodes | Where-Object { $agClient -contains $_ }).Count -gt 0
+}
+if (-not $agOwn) { $failures.Add('no own_config_writable finding on the Antigravity CLI') }
+if ($enHTML -notmatch 'Antigravity CLI can change its own configuration') { $failures.Add('the English HTML does not show the Antigravity CLI own-config risk') }
+if (@($v2.index.scope.not_evaluated) -contains 'Antigravity CLI') { $failures.Add('the Antigravity CLI is listed as not evaluated') }
+
 # 2. No generated secret in full in anything RosmarOps wrote or in dist/.
 $outputs = @(Get-ChildItem -Path (Join-Path $SampleHome '.rosmarops') -Recurse -File) + @(Get-Item $published.en, $published.es)
 foreach ($f in $outputs) {

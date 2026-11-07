@@ -1,0 +1,64 @@
+{
+  "product": "github-copilot",
+  "version": "2026-11-01",
+  "entries": [
+    {
+      "id": "read_workspace",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://code.visualstudio.com/docs/agents/run/security",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: \"Built-in agent tools can only read and write files within the current workspace folder\" (Scope and isolation). Read-only access to more folders only via chat.additionalReadAccessFolders."
+    },
+    {
+      "id": "write_workspace",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://code.visualstudio.com/docs/agents/reference/ai-settings",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: chat.tools.edits.autoApprove default {} = no file requires approval, so workspace edits apply without asking (the map lists files that REQUIRE approval; security baseline adds globs like \"**/.env\": false to protect files). Edits are written to disk and reviewed after with Keep/Undo, not approved before."
+    },
+    {
+      "id": "write_outside",
+      "type": "write_files",
+      "approval": "deny",
+      "target_scope": "outside_workspace",
+      "source_url": "https://code.visualstudio.com/docs/agents/run/security",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: built-in agent tools cannot write outside the current workspace folder (Workspace-limited file access)."
+    },
+    {
+      "id": "terminal_default_rules",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "terminal_auto_approve_rules",
+      "source_url": "https://code.visualstudio.com/docs/agents/reference/ai-settings",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: chat.tools.terminal.enableAutoApprove default true; chat.tools.terminal.autoApprove defaults deny rm/rmdir/del/kill/curl/wget/eval/chmod/chown and /^Remove-Item\\b/i, and common read-only commands run automatically — the product's rule list decides."
+    },
+    {
+      "id": "network_two_step",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://code.visualstudio.com/docs/agents/run/approvals",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: chat.tools.urls.autoApprove default []; URL fetches use a two-step approval (trust the domain, then review the fetched content)."
+    },
+    {
+      "id": "mcp_ask",
+      "type": "invoke_mcp_tool",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://code.visualstudio.com/docs/agents/run/approvals",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: \"MCP tool invocations require explicit user approval\" by default (Tool approval)."
+    },
+    {
+      "id": "level_manual",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "manual",
+      "source_url": "https://code.visualstudio.com/docs/agents/reference/ai-settings",
+      "verified": "CTO-16 Copilot §4, read 2026-11-06: chat.permissions.default default \"default\" = Manual permissions; chat.agent.enabled default true; what is not auto-approved asks the user."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

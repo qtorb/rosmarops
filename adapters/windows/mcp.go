@@ -224,16 +224,18 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		})
 	}
 
-	// 6. Antigravity: global and per project.
-	if has[agentdirs.Antigravity] {
+	// 6. Antigravity: global and per project. The shared ~/.gemini/config and the
+	// repo .agents/mcp_config.json load for the scored CLI (BV-140, decision 2),
+	// so they are attributed to antigravity-cli.
+	if has[agentdirs.AntigravityCLI] {
 		geminiDir := agentdirs.AntigravityDir(home)
 		add(sourceSpec{
-			path: filepath.Join(geminiDir, "config", "mcp_config.json"), client: agentdirs.Antigravity,
+			path: filepath.Join(geminiDir, "config", "mcp_config.json"), client: agentdirs.AntigravityCLI,
 			format: formatMCPServers, loadsMCP: true, configDir: geminiDir, scope: platform.MCPScopeUser,
 		})
 		for _, root := range repoRoots {
 			add(sourceSpec{
-				path: filepath.Join(root, ".agents", "mcp_config.json"), client: agentdirs.Antigravity,
+				path: filepath.Join(root, ".agents", "mcp_config.json"), client: agentdirs.AntigravityCLI,
 				format: formatMCPServers, loadsMCP: true, configDir: geminiDir, scope: platform.MCPScopeProject, scopePath: root,
 			})
 		}
@@ -413,7 +415,7 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		var headers []platform.EnvVar
 		switch {
 		case classify && remoteTypes[entry.Type],
-			client == agentdirs.Antigravity && url != "",
+			client == agentdirs.AntigravityCLI && url != "",
 			client == "cursor", client == "cline", client == agentdirs.ClaudeDesktop:
 			headers = secretVars(entry.Headers, sortedKeys(entry.Headers))
 		}

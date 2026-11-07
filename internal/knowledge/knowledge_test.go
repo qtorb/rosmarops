@@ -223,7 +223,7 @@ func TestComposite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := knowledge.CompositeOf(bases); got != knowledge.Composite || !strings.HasPrefix(got, "claude-code@") || !strings.Contains(got, ";cursor@") {
+	if got := knowledge.CompositeOf(bases); got != knowledge.Composite || !strings.HasPrefix(got, "antigravity-cli@") || !strings.Contains(got, ";cursor@") {
 		t.Fatalf("composite %q, const %q", got, knowledge.Composite)
 	}
 	c := bases[knowledge.CursorProduct]

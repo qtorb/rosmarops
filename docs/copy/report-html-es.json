@@ -379,6 +379,8 @@
   "html.ov.foot": "Cómo leerlo: «lo decide otro modelo» significa que ninguna persona aprueba el paso; un modelo de IA lo juzga, y puede equivocarse o ser engañado. «De fábrica» es lo que hace el agente si no lo cambias.",
   "html.ov.head.knowledge": "conocimiento verificado el {date}",
   "html.ov.head.knowledge.stale": "más de 90 días: actualiza RosmarOps",
+  "html.ov.head.not_evaluated.antigravity_app": "Antigravity (app e IDE) guarda su modo de permisos (Request Review, Default, Auto o Turbo) dentro de la aplicación, no en un fichero de ajustes que RosmarOps pueda leer. RosmarOps lo muestra como detectado y no le pone nota, para no adivinar nunca cuánto puede hacer sin preguntar.",
+  "html.ov.head.not_evaluated.copilot_jetbrains": "Detectado, aún sin evaluar: GitHub Copilot en los IDE de JetBrains guarda sus aprobaciones en el almacenamiento propio del IDE, que RosmarOps todavía no lee.",
   "html.ov.head.not_evaluated.coverage": "no se pudo leer su configuración",
   "html.ov.head.not_evaluated.no_inference": "aún sin evaluar",
   "html.ov.head.score": "{score}/100 · {band}",

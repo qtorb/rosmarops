@@ -347,7 +347,7 @@ type InstructionScan struct {
 // InstructionFile is one existing instruction file and the agent that loads
 // it, identified as its ai_client is: product and configuration folder.
 type InstructionFile struct {
-	Product   string // "claude-code", "cursor", "codex", "antigravity", "hermes", "cline" or "copilot"
+	Product   string // "claude-code", "cursor", "codex", "antigravity", "hermes", "cline" or "github-copilot"
 	ConfigDir string
 	Path      string
 
@@ -608,6 +608,18 @@ type Platform interface {
 	// when the folder is trusted), the managed config and the requirements,
 	// plus trusted_folders.toml.
 	ListGrok(ctx context.Context, repoRoots []string) (GrokScan, error)
+
+	// ListCopilot reads GitHub Copilot's VS Code configuration (BV-140, CTO-16
+	// Copilot §2): the user and profile settings.json, each repository's
+	// .vscode/settings.json, the Software\Policies\Microsoft\VSCode registry
+	// policy layer, the MCP files and the Copilot CLI credentials.
+	ListCopilot(ctx context.Context, repoRoots []string) (CopilotScan, error)
+
+	// ListAntigravity reads Google Antigravity's CLI configuration (BV-140,
+	// CTO-16 Antigravity §4): ~/.gemini/antigravity-cli/settings.json, the
+	// hooks, and the credential files by fingerprint. Its MCP servers come
+	// through ListMCPServers (client antigravity-cli).
+	ListAntigravity(ctx context.Context, repoRoots []string) (AntigravityScan, error)
 
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
@@ -928,4 +940,142 @@ type GrokMCPServer struct {
 	Env        []EnvVar // values wrapped as SecretValue
 	HeaderKeys []string // headers names only
 	Headers    []EnvVar // headers values wrapped as SecretValue
+}
+
+// Copilot layer kinds (BV-140, CTO-16 Copilot §2): the VS Code settings layers
+// in precedence order, user < profile < project < managed (policy, registry).
+const (
+	CopilotLayerUser    = "user"
+	CopilotLayerProfile = "profile"
+	CopilotLayerProject = "project"
+	CopilotLayerManaged = "managed"
+)
+
+// CopilotScan is GitHub Copilot's at-rest configuration in VS Code (BV-140,
+// CTO-16 Copilot §2–§5), read only. The ai_client exists when Present; the VS
+// Code extension stays as evidence of presence (knowledge.AgentExtensions).
+type CopilotScan struct {
+	// ConfigDir is the VS Code user folder (%APPDATA%\Code\User); it is the
+	// Copilot ai_client's identity. Present reports Copilot is on the machine.
+	ConfigDir string
+	Present   bool
+
+	// Layers are the settings layers considered, each with its read outcome,
+	// in precedence order (user < profile < project < managed policy).
+	Layers []CopilotLayer
+
+	// MCP are the MCP configuration files read: the VS Code `servers` format
+	// (user-profile mcp.json and <repo>\.vscode\mcp.json) and the portable
+	// Copilot `mcpServers` format (~/.copilot/mcp-config.json). Credentials by
+	// fingerprint only (CTO-16 Copilot §3).
+	MCP []CopilotMCPSource
+
+	// Creds are plaintext credentials beside Copilot CLI / harness
+	// (~/.copilot/config.json), by fingerprint only (CTO-16 Copilot §3).
+	Creds []EnvVar
+}
+
+// CopilotLayer is one VS Code settings layer, with the chat.* keys that bear on
+// posture (CTO-16 Copilot §4). A nil pointer means the key is absent in this
+// layer; the graph merges the layers by precedence.
+type CopilotLayer struct {
+	Kind   string // CopilotLayerUser | Profile | Project | Managed
+	Path   string // settings.json path, or "registry:<hive>\<key>" for the policy layer
+	Root   string // repo root, for a project layer
+	Status MCPSourceStatus
+	Reason string
+
+	// GlobalAutoApprove is chat.tools.global.autoApprove (or the policy
+	// ChatToolsAutoApprove): auto-approve all tools ("Allow all"). Honored at
+	// user/managed scope (CTO-16 Copilot §4: "auto-approve tools across all
+	// workspaces"); a project layer that sets it is not in force.
+	GlobalAutoApprove *bool
+
+	// TerminalEnableAutoApprove is chat.tools.terminal.enableAutoApprove and
+	// TerminalIgnoreDefaults is chat.tools.terminal.ignoreDefaultAutoApproveRules.
+	// TerminalAutoApproveAll reports a catch-all true entry in
+	// chat.tools.terminal.autoApprove (e.g. "/.*/": true), which auto-approves
+	// every command (CTO-16 Copilot §7 case 3).
+	TerminalEnableAutoApprove *bool
+	TerminalIgnoreDefaults    *bool
+	TerminalAutoApproveAll    *bool
+
+	// EditsProtect reports chat.tools.edits.autoApprove set to a non-empty map:
+	// some workspace files then require approval before edits (CTO-16 Copilot
+	// §4; the default {} protects nothing, so edits apply without asking).
+	EditsProtect *bool
+
+	// AgentEnabled is chat.agent.enabled (or the policy ChatAgentMode): false
+	// turns agent mode off.
+	AgentEnabled *bool
+
+	// PermissionsDefault is chat.permissions.default: "default" (Manual),
+	// "autoApprove" (Allow all) or "autopilot"; "" absent. Approvals and Mode
+	// are the policy ChatDefaultConfiguration's "approvals"
+	// (manual/assisted/allowAll) and "mode" (interactive/plan/autopilot); ""
+	// absent (CTO-16 Copilot §2, §4).
+	PermissionsDefault string
+	Approvals          string
+	Mode               string
+}
+
+// CopilotMCPSource is one MCP configuration file Copilot reads (CTO-16 Copilot
+// §2): the VS Code `servers` format or the portable `mcpServers` format.
+type CopilotMCPSource struct {
+	Path    string
+	Root    string // repo root for a project file; "" for a user file
+	Format  string // "servers" (VS Code) | "mcpServers" (portable Copilot)
+	Status  MCPSourceStatus
+	Reason  string
+	Servers []CopilotMCPServer
+}
+
+// CopilotMCPServer is one MCP server of a Copilot MCP file, with its secret env
+// and headers by fingerprint only (CTO-16 Copilot §3).
+type CopilotMCPServer struct {
+	ID         string
+	Command    string
+	Args       []string
+	URL        string   // remote server url (VS Code `servers`) — in clear for the graph to parse
+	EnvKeys    []string // names only
+	Env        []EnvVar // values wrapped as SecretValue
+	HeaderKeys []string // headers names only
+	Headers    []EnvVar // headers values wrapped as SecretValue
+}
+
+// AntigravityScan is Google Antigravity's CLI at-rest configuration (BV-140,
+// CTO-16 Antigravity §4), read only. Its MCP servers come through the shared
+// MCP pipeline (client antigravity-cli); this scan carries its settings.json,
+// its hooks and its credentials by fingerprint. The ai_client exists when
+// Present. ConfigDir is ~/.gemini (shared with the App and IDE).
+type AntigravityScan struct {
+	ConfigDir string
+	Present   bool
+	Settings  AntigravitySettings
+	Hooks     []AntigravityHook
+	Creds     []EnvVar
+}
+
+// AntigravitySettings is the CLI's ~/.gemini/antigravity-cli/settings.json
+// (CTO-16 Antigravity §4). Empty strings mean the key is absent (the default
+// applies). Allow/Ask/Deny are the permissions rules, each "action(target)".
+type AntigravitySettings struct {
+	Path                    string
+	Status                  MCPSourceStatus
+	Reason                  string
+	ToolPermission          string // request-review | proceed-in-sandbox | strict | always-proceed
+	AgentMode               string // default | accept-edits | auto | plan
+	ArtifactReviewPolicy    string // asks-for-review | agent-decides | always-proceed
+	AllowNonWorkspaceAccess bool
+	Allow                   []string
+	Ask                     []string
+	Deny                    []string
+}
+
+// AntigravityHook is one PreToolUse/other hook (CTO-16 Antigravity §4): an
+// agent_executable resource. Root is the repo root for a project hook, "" for
+// a user hook.
+type AntigravityHook struct {
+	Path string
+	Root string
 }

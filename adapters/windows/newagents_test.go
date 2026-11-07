@@ -81,9 +81,9 @@ func TestListMCPServers_NewAgents(t *testing.T) {
 	gemini := filepath.Join(e.home, ".gemini")
 	for name, w := range map[string]got{
 		"fs":     {"claude-desktop", platform.MCPScopeUser, "", filepath.Join(e.appData, "Claude"), []string{"TOKEN"}, nil, "npx"},
-		"local":  {"antigravity", platform.MCPScopeUser, "", gemini, []string{"API_KEY"}, nil, "npx"},
-		"remote": {"antigravity", platform.MCPScopeUser, "", gemini, nil, []string{"Authorization"}, ""},
-		"proj":   {"antigravity", platform.MCPScopeProject, e.repo, gemini, nil, nil, "./bin/srv"},
+		"local":  {"antigravity-cli", platform.MCPScopeUser, "", gemini, []string{"API_KEY"}, nil, "npx"},
+		"remote": {"antigravity-cli", platform.MCPScopeUser, "", gemini, nil, []string{"Authorization"}, ""},
+		"proj":   {"antigravity-cli", platform.MCPScopeProject, e.repo, gemini, nil, nil, "./bin/srv"},
 	} {
 		g := servers[name]
 		if g.client != w.client || g.scope != w.scope || g.scopePath != w.scopePath || g.configDir != w.configDir ||
@@ -96,7 +96,7 @@ func TestListMCPServers_NewAgents(t *testing.T) {
 		present[p.Platform] = p.ConfigDir
 	}
 	want := map[string]string{
-		"codex": filepath.Join(e.home, ".codex"), "antigravity": gemini,
+		"codex": filepath.Join(e.home, ".codex"), "antigravity-cli": gemini,
 		"hermes": filepath.Join(e.localAppData, "hermes"), "claude-desktop": filepath.Join(e.appData, "Claude"),
 	}
 	if len(present) != len(want) {
@@ -123,7 +123,7 @@ func TestListMCPServers_NewAgentsAbsent(t *testing.T) {
 		t.Errorf("present %v, servers %v", scan.Present, scan.Servers)
 	}
 	for _, s := range scan.Sources {
-		if s.Platform == "antigravity" || s.Platform == "claude-desktop" {
+		if s.Platform == "antigravity" || s.Platform == "antigravity-cli" || s.Platform == "claude-desktop" {
 			t.Errorf("source %+v", s)
 		}
 	}

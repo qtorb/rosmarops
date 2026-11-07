@@ -507,7 +507,7 @@ func TestNoSecretInGraph(t *testing.T) {
 			clients[n.Platform] = true
 		}
 	}
-	for _, p := range []string{"codex", "hermes", "antigravity", "claude-desktop"} {
+	for _, p := range []string{"codex", "hermes", "antigravity-cli", "claude-desktop"} {
 		if !clients[p] {
 			t.Fatalf("no %s ai_client — agent not detected", p)
 		}

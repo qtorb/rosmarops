@@ -306,6 +306,8 @@
   "html.ov.foot": "How to read it: «another AI model decides» means no person approves the step; an AI model judges it, and it can be wrong or be tricked. «Factory setting» is what the agent does unless you change it.",
   "html.ov.head.knowledge": "knowledge checked on {date}",
   "html.ov.head.knowledge.stale": "over 90 days old: update RosmarOps",
+  "html.ov.head.not_evaluated.antigravity_app": "Antigravity (app and IDE) keeps its permission preset (Request Review, Default, Auto or Turbo) inside the app, not in a settings file RosmarOps can read. RosmarOps lists it as detected and does not score it, so that it never guesses how much it can do without asking.",
+  "html.ov.head.not_evaluated.copilot_jetbrains": "Detected, not evaluated yet: GitHub Copilot in JetBrains IDEs keeps its approval settings in the IDE's own storage, which RosmarOps does not read yet.",
   "html.ov.head.not_evaluated.coverage": "its settings could not be read",
   "html.ov.head.not_evaluated.no_inference": "not evaluated yet",
   "html.ov.head.score": "{score}/100 · {band}",
