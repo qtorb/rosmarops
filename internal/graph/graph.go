@@ -171,6 +171,11 @@ type Node struct {
 	// (MarkGeminiUntrusted), like Malicious — never serialized.
 	GeminiUntrustedRoots []string `json:"-"`
 
+	// GeminiEnvDenied, when set on a Gemini CLI ai_client node, lists the ".env"
+	// credential locations ("<path>:<line>") Gemini does not load, so its
+	// inference does not reach them (BV-194, CTO-22 Gemini §3). In memory only.
+	GeminiEnvDenied []string `json:"-"`
+
 	// N8NKey, when true on a file resource node for an n8n user folder, marks
 	// that the folder holds n8n's database alongside the config with its
 	// credential encryption key (BV-175). In memory only, like Malicious —
