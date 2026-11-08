@@ -69,7 +69,6 @@ jobs:
 
       - name: Install ${{ matrix.agent }} (no login, no launch)
         id: install
-        continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -88,7 +87,16 @@ jobs:
               code --install-extension saoudrizwan.claude-dev
             }
             "grok-build"      { Invoke-RestMethod https://x.ai/cli/install.ps1 | Invoke-Expression }
-            "hermes"          { Invoke-Expression (Invoke-RestMethod https://hermes-agent.nousresearch.com/install.ps1) }
+            "hermes"          {
+              # Hermes's official scripts/install.ps1 is a staged bootstrap; its
+              # non-interactive mode is the -NonInteractive switch ("skip stages
+              # that need input", scripts/install.ps1:6,33,55). A switch can't be
+              # passed through `irm | iex`, so run the script as a file. It is the
+              # official installer, native Windows (no WSL); no login, no launch.
+              $hermesPs1 = Join-Path $env:RUNNER_TEMP 'hermes-install.ps1'
+              Invoke-RestMethod https://hermes-agent.nousresearch.com/install.ps1 | Set-Content -LiteralPath $hermesPs1 -Encoding utf8
+              & $hermesPs1 -NonInteractive
+            }
             "antigravity-cli" { Invoke-RestMethod https://antigravity.google/cli/install.ps1 | Invoke-Expression }
           }
 
@@ -124,6 +132,99 @@ jobs:
             "what a product writes only on first use does not appear here."
           ) | Set-Content -Encoding utf8 "$out\summary.txt"
           Write-Host "added paths: $($added.Count)"
+
+          # BV-200: the install must leave what its official installer should
+          # create. An installer that leaves nothing counts as a failure.
+          #
+          # Two groups need more than a fixed path (reconciled on the branch
+          # against a real windows-latest run, 2026-11-08):
+          #  - npm CLIs (claude-code, codex, gemini-cli): the hosted runner sets
+          #    npm's global prefix away from %APPDATA%\npm, so the shim is
+          #    resolved through the tool name (and `npm prefix -g` as a fallback)
+          #    rather than a hard-coded path.
+          #  - github-copilot: Copilot and Copilot Chat now ship BUILT IN to
+          #    current VS Code (the install log shows github.copilot-chat as a
+          #    built-in extension), so no github.copilot-* folder is created
+          #    under %USERPROFILE%\.vscode\extensions. What the installer leaves
+          #    is the VS Code host itself; presence is confirmed there and the
+          #    built-in status is recorded for the R2 footprint.
+          $agent = "${{ matrix.agent }}"
+          $expected = ""
+          $present = $false
+          switch ($agent) {
+            { $_ -in @("claude-code", "codex", "gemini-cli") } {
+              $bin = @{ "claude-code" = "claude"; "codex" = "codex"; "gemini-cli" = "gemini" }[$agent]
+              $cmd = Get-Command $bin -ErrorAction SilentlyContinue
+              if ($cmd) {
+                $present = $true
+                $expected = $cmd.Source
+              } else {
+                $prefix = (& npm prefix -g 2>$null)
+                if ($prefix) {
+                  $prefix = ("$prefix").Trim()
+                  $hit = Get-ChildItem -Path (Join-Path $prefix "$bin.*") -ErrorAction SilentlyContinue | Select-Object -First 1
+                  $present = [bool]$hit
+                  $expected = if ($hit) { $hit.FullName } else { (Join-Path $prefix "$bin.*") }
+                } else {
+                  $expected = "$bin (npm global bin not found)"
+                }
+              }
+              break
+            }
+            "cursor" {
+              $expected = "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "github-copilot" {
+              $code = Get-Command code -ErrorAction SilentlyContinue
+              if (-not $code) {
+                foreach ($c in @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
+                                 "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd")) {
+                  if (Test-Path $c) { $code = Get-Command $c; break }
+                }
+              }
+              $vscode = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+                          "$env:ProgramFiles\Microsoft VS Code\Code.exe") |
+                        Where-Object { Test-Path $_ } | Select-Object -First 1
+              $present = [bool]$vscode -or [bool]$code
+              $expected = if ($vscode) { $vscode } elseif ($code) { $code.Source } else { "Microsoft VS Code (host for the built-in Copilot extensions)" }
+              if ($code) {
+                $exts = & $code.Source --list-extensions 2>$null
+                $copilot = @($exts | Where-Object { $_ -like 'github.copilot*' })
+                Add-Content -Encoding utf8 "$out\summary.txt" "code --list-extensions (github.copilot*): $([string]::Join(', ', $copilot))"
+              }
+              Add-Content -Encoding utf8 "$out\summary.txt" "NOTE: Copilot and Copilot Chat ship built in to current VS Code; no github.copilot-* folder is created under .vscode\extensions."
+              break
+            }
+            "cline" {
+              $expected = "$env:USERPROFILE\.vscode\extensions\saoudrizwan.claude-dev-*"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "grok-build" {
+              $expected = "$env:USERPROFILE\.grok\bin\grok.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "antigravity-cli" {
+              $expected = "$env:LOCALAPPDATA\agy\bin\agy.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "hermes" {
+              $expected = "$env:LOCALAPPDATA\hermes"
+              $present = Test-Path -Path $expected
+              break
+            }
+          }
+          Add-Content -Encoding utf8 "$out\summary.txt" "expected artifact: $expected"
+          Add-Content -Encoding utf8 "$out\summary.txt" "artifact present: $present"
+          if (-not $present) {
+            Add-Content -Encoding utf8 "$out\summary.txt" "MISSING: the installer left no expected artifact"
+            Write-Error "install of $agent left no expected artifact: $expected"
+            exit 1
+          }
 
       - name: Upload artifact
         if: always()
