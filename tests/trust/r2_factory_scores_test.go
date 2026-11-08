@@ -1,8 +1,12 @@
 package trust_test
 
 import (
+	"encoding/json"
+	"os"
+	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -63,28 +67,6 @@ func r2BuildV2(t *testing.T, g *graph.Graph, settings *platform.ClaudeSettingsSc
 	}
 	v, _ := report.BuildV2(in)
 	return v
-}
-
-// r2Score returns the score of the one evaluated scored agent in v (R2 installs
-// exactly one), and whether it has a value.
-func r2Score(t *testing.T, v report.V2, product string) (int, string) {
-	t.Helper()
-	for _, a := range v.Index.Agents {
-		if a.AgentID == "" {
-			continue
-		}
-		// Match by the product behind the agent id via the overview.
-		for _, o := range v.AgentsOverview {
-			if o.AgentID == a.AgentID && o.Product == product {
-				if a.Value == nil {
-					t.Fatalf("%s has no score: %+v", product, a)
-				}
-				return *a.Value, a.Band
-			}
-		}
-	}
-	t.Fatalf("no evaluated %s in R2 report", product)
-	return 0, ""
 }
 
 func r2Instr(product, configDir string) []platform.InstructionFile {
@@ -255,16 +237,18 @@ func r2Prov() graph.Provenance {
 	return graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}
 }
 
-// TestR2FactoryScores fixes the nine factory scores of the reference computer.
-// A change here without a code or knowledge-base change is a regression (CTO-23
-// §5); a deliberate change updates the pinned values in the same commit.
-func TestR2FactoryScores(t *testing.T) {
-	cases := []struct {
-		product string
-		build   func(*testing.T) report.V2
-		score   int
-		band    string
-	}{
+// r2Case is one agent's build and its pinned factory score.
+type r2Case struct {
+	product string
+	build   func(*testing.T) report.V2
+	score   int
+	band    string
+}
+
+// r2Cases are the nine scored agents of the reference computer, in the order
+// factory-scores.json lists them.
+func r2Cases() []r2Case {
+	return []r2Case{
 		{"claude-code", r2ClaudeCode, 31, "exposed"},
 		{"cursor", r2Cursor, 31, "exposed"},
 		{"codex", r2Codex, 73, "open_gaps"},
@@ -275,14 +259,229 @@ func TestR2FactoryScores(t *testing.T) {
 		{"hermes", r2Hermes, 32, "exposed"},
 		{"antigravity-cli", r2Antigravity, 76, "open_gaps"},
 	}
-	for _, c := range cases {
-		t.Run(c.product, func(t *testing.T) {
-			v := c.build(t)
-			got, band := r2Score(t, v, c.product)
-			t.Logf("R2 %s = %d (%s)", c.product, got, band)
-			if got != c.score || band != c.band {
-				t.Errorf("R2 %s = %d (%s), want %d (%s) — a score moved; if intended, update the pin", c.product, got, band, c.score, c.band)
+}
+
+// Factory-scores file (BV-200, CTO-23 §5): only ids, enums, stable codes,
+// numbers, versions and dates — no user-facing prose. Field order here IS the
+// file's key order.
+type fsFinding struct {
+	Code   string  `json:"code"`
+	Weight float64 `json:"weight"`
+}
+
+type fsAgent struct {
+	Product     string      `json:"product"`
+	Score       int         `json:"score"`
+	Band        string      `json:"band"`
+	Findings    []fsFinding `json:"findings"`
+	Assumptions []string    `json:"assumptions"`
+}
+
+type factoryScores struct {
+	Format            string    `json:"format"`
+	RosmaropsVersion  string    `json:"rosmarops_version"`
+	Commit            string    `json:"commit"`
+	GeneratedAt       string    `json:"generated_at"`
+	ReferenceComputer string    `json:"reference_computer"`
+	IndexVersion      int       `json:"index_version"`
+	RulesVersion      string    `json:"rules_version"`
+	KnowledgeVersion  string    `json:"knowledge_version"`
+	Agents            []fsAgent `json:"agents"`
+}
+
+// r2AgentIndexID finds the evaluated agent of the given product and returns its
+// score, band and ai_client id (R2 installs exactly one scored agent).
+func r2AgentIndexID(t *testing.T, v report.V2, product string) (score int, band, id string) {
+	t.Helper()
+	for _, a := range v.Index.Agents {
+		if a.AgentID == "" {
+			continue
+		}
+		for _, o := range v.AgentsOverview {
+			if o.AgentID == a.AgentID && o.Product == product {
+				if a.Value == nil {
+					t.Fatalf("%s has no score: %+v", product, a)
+				}
+				return *a.Value, a.Band, a.AgentID
 			}
-		})
+		}
+	}
+	t.Fatalf("no evaluated %s in R2 report", product)
+	return 0, "", ""
+}
+
+// r2Detail returns the agent's findings as {code, weight} sorted by weight
+// descending then code, and its assumption codes sorted unique.
+func r2Detail(v report.V2, agentID string) ([]fsFinding, []string) {
+	rule := map[string]string{}
+	assume := map[string]bool{}
+	for _, f := range v.Findings {
+		if len(f.Evidence.Nodes) == 0 || f.Evidence.Nodes[0] != agentID {
+			continue
+		}
+		rule[f.ID] = f.Rule
+		for _, a := range f.Evidence.Assumptions {
+			assume[a] = true
+		}
+	}
+	var findings []fsFinding
+	for _, a := range v.Index.Agents {
+		if a.AgentID != agentID {
+			continue
+		}
+		for _, w := range a.Weights {
+			findings = append(findings, fsFinding{Code: rule[w.FindingID], Weight: w.Weight})
+		}
+	}
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Weight != findings[j].Weight {
+			return findings[i].Weight > findings[j].Weight
+		}
+		return findings[i].Code < findings[j].Code
+	})
+	assumptions := make([]string, 0, len(assume))
+	for a := range assume {
+		assumptions = append(assumptions, a)
+	}
+	sort.Strings(assumptions)
+	if findings == nil {
+		findings = []fsFinding{}
+	}
+	return findings, assumptions
+}
+
+// r2Collect builds the nine R2 reports, checks each against its pinned score,
+// and returns the factory-scores document, the index version, and whether all
+// nine matched. A mismatch is reported with t.Errorf (CTO-23 §5).
+func r2Collect(t *testing.T) (doc factoryScores, allMatch bool) {
+	t.Helper()
+	allMatch = true
+	idxVer := 0
+	for _, c := range r2Cases() {
+		v := c.build(t)
+		got, band, id := r2AgentIndexID(t, v, c.product)
+		idxVer = v.Index.IndexVersion
+		t.Logf("R2 %s = %d (%s)", c.product, got, band)
+		if got != c.score || band != c.band {
+			allMatch = false
+			t.Errorf("R2 %s = %d (%s), want %d (%s) — a score moved; if intended, update the pin", c.product, got, band, c.score, c.band)
+		}
+		findings, assumptions := r2Detail(v, id)
+		doc.Agents = append(doc.Agents, fsAgent{Product: c.product, Score: got, Band: band, Findings: findings, Assumptions: assumptions})
+	}
+	doc.Format = "rosmarops.factory-scores/1"
+	doc.RosmaropsVersion = envOr("ROSMAROPS_VERSION", "dev")
+	doc.Commit = os.Getenv("GITHUB_SHA")
+	doc.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	doc.ReferenceComputer = "R2"
+	doc.IndexVersion = idxVer
+	doc.RulesVersion = graph.RulesVersion
+	doc.KnowledgeVersion = knowledge.Composite
+	return doc, allMatch
+}
+
+func envOr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
+}
+
+// TestR2FactoryScores fixes the nine factory scores of the reference computer
+// (CTO-23 §5). A change here without a code or knowledge-base change is a
+// regression; a deliberate change updates the pinned values in the same commit.
+// With ROSMAROPS_FACTORY_SCORES_OUT set, and only when all nine match, it also
+// writes factory-scores.json to that path (BV-200): the binary is untouched,
+// this lives only in the test, and with no variable nothing is written.
+func TestR2FactoryScores(t *testing.T) {
+	doc, allMatch := r2Collect(t)
+	out := os.Getenv("ROSMAROPS_FACTORY_SCORES_OUT")
+	if out == "" || !allMatch {
+		return
+	}
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, '\n')
+	if err := os.WriteFile(out, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", out, err)
+	}
+	t.Logf("wrote factory-scores to %s (%d bytes)", out, len(data))
+}
+
+// TestFactoryScoresJSON validates the generated file: the top-level and
+// per-agent keys in the order BV-200 fixes, and that no value carries catalog
+// prose (every value is an id, enum, code, number, version or date — none has
+// a space, which any catalog sentence would).
+func TestFactoryScoresJSON(t *testing.T) {
+	doc, allMatch := r2Collect(t)
+	if !allMatch {
+		t.Fatal("factory scores did not match the pins; cannot validate the file")
+	}
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+
+	// Top-level keys, in order.
+	topKeys := []string{"format", "rosmarops_version", "commit", "generated_at", "reference_computer", "index_version", "rules_version", "knowledge_version", "agents"}
+	assertKeyOrder(t, s, topKeys, "top-level")
+	// Per-agent keys, in order (check the first agent block).
+	assertKeyOrder(t, s[strings.Index(s, "\"agents\""):], []string{"product", "score", "band", "findings", "assumptions"}, "agent")
+
+	// Re-parse and walk every string value: none may contain a space, so no
+	// catalog sentence can have slipped in.
+	var generic any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		t.Fatal(err)
+	}
+	walkStrings(generic, func(v string) {
+		if strings.ContainsRune(v, ' ') {
+			t.Errorf("factory-scores value contains a space (possible catalog text): %q", v)
+		}
+	})
+
+	// Shape sanity: nine agents, the format tag, R2.
+	if len(doc.Agents) != 9 {
+		t.Errorf("want 9 agents, got %d", len(doc.Agents))
+	}
+	if doc.Format != "rosmarops.factory-scores/1" || doc.ReferenceComputer != "R2" {
+		t.Errorf("format/reference_computer: %q / %q", doc.Format, doc.ReferenceComputer)
+	}
+}
+
+// assertKeyOrder checks that the given JSON keys appear in s in the given order.
+func assertKeyOrder(t *testing.T, s string, keys []string, where string) {
+	t.Helper()
+	prev := -1
+	for _, k := range keys {
+		i := strings.Index(s, "\""+k+"\"")
+		if i < 0 {
+			t.Errorf("%s: key %q missing", where, k)
+			continue
+		}
+		if i <= prev {
+			t.Errorf("%s: key %q out of order", where, k)
+		}
+		prev = i
+	}
+}
+
+// walkStrings calls fn on every string value in a decoded JSON value, skipping
+// object keys.
+func walkStrings(v any, fn func(string)) {
+	switch x := v.(type) {
+	case string:
+		fn(x)
+	case []any:
+		for _, e := range x {
+			walkStrings(e, fn)
+		}
+	case map[string]any:
+		for _, e := range x {
+			walkStrings(e, fn)
+		}
 	}
 }
