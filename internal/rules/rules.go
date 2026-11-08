@@ -1235,19 +1235,40 @@ func (v *agentView) cursorWayCode(c graph.Node, base knowledge.Base) string {
 	return "other"
 }
 
+// readScopeOutsideProject reports whether a read capability reaches beyond the
+// project — the whole machine (antigravity/cline allowNonWorkspaceAccess),
+// any_path (Codex danger-full-access, Grok and Hermes approve-all) or
+// everything. Such a read gives its reaches edge the any_project radius
+// whatever the product or the way (M2, CTO-23 §0).
+func readScopeOutsideProject(c graph.Node) bool {
+	if c.Type != graph.CapReadFiles {
+		return false
+	}
+	switch c.TargetScope {
+	case graph.CodexScopeAnyPath, "machine", scopeAll:
+		return true
+	}
+	return false
+}
+
 // edgeWay builds the way of an inferred edge. A reaches edge has radius
 // any_project when its way does not depend on the working directory: the
-// Bash read-only commands or bypassPermissions, without
+// Bash read-only commands or bypassPermissions, or a read capability whose
+// scope is outside the project (M2), without
 // blockReadsOutsideWorkingDirectories in force (§1 b).
 func (v *agentView) edgeWay(e graph.Edge, nodes map[string]graph.Node, base knowledge.Base) way {
 	capID := e.Via
 	if capID == "" && len(e.DerivedFrom) > 1 {
 		capID = e.DerivedFrom[1] // writes_config_of: client, capability, resource
 	}
-	w := way{id: e.ID, cap: capID, target: e.To, code: v.wayCode(nodes[capID], base), assumptions: e.Assumptions}
+	capNode := nodes[capID]
+	w := way{id: e.ID, cap: capID, target: e.To, code: v.wayCode(capNode, base), assumptions: e.Assumptions}
 	if e.Type == graph.EdgeReaches {
 		w.radius = RadiusSameProject
-		if (w.code == "bash_read_only" || w.code == "mode_bypass" || w.code == "mode_auto_review" || w.code == "allowlist_shell") && !v.blockReads {
+		outside := w.code == "bash_read_only" || w.code == "mode_bypass" ||
+			w.code == "mode_auto_review" || w.code == "allowlist_shell" ||
+			readScopeOutsideProject(capNode)
+		if outside && !v.blockReads {
 			w.radius = RadiusAnyProject
 		}
 	}
