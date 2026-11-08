@@ -88,6 +88,15 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 	// Antigravity (BV-193, CTO-22 Gemini §5, signed point 6): one entry per agent.
 	gemini := instructionLister{scan: &scan, product: knowledge.GeminiCLIProduct, configDir: geminiDir, off: !has[agentdirs.GeminiCLI]}
 	hermes := instructionLister{scan: &scan, product: agentdirs.Hermes, configDir: w.layout.HermesHome(home, nil), off: !has[agentdirs.Hermes]}
+	// Scored agents that also load <repo>/AGENTS.md (BV-198 M4): GitHub Copilot
+	// (chat.useAgentsMdFile is true by default, CTO-16 Copilot §5), Cline (CTO-22
+	// Cline §5) and Grok Build (CTO-16 Grok §4–§5). Their config folders match
+	// their ai_clients; AddInstructions attributes the file only when the agent
+	// is present. Like Cursor and Claude Code, they are not gated on detection.
+	env := agentdirs.Env(os.LookupEnv)
+	copilot := instructionLister{scan: &scan, product: knowledge.GitHubCopilotProduct, configDir: copilotVSCodeUserDir(w.layout, home, env)}
+	cline := instructionLister{scan: &scan, product: knowledge.ClineProduct, configDir: agentdirs.ClineDataDir(home, env)}
+	grok := instructionLister{scan: &scan, product: knowledge.GrokBuildProduct, configDir: agentdirs.GrokHome(home, env)}
 
 	if override := filepath.Join(codexDir, "AGENTS.override.md"); anyExists(override) {
 		codex.file(override)
@@ -131,6 +140,9 @@ func (w *WindowsPlatform) ListAgentInstructions(_ context.Context, repoRoots []s
 		}
 
 		codex.shared(agents)
+		copilot.shared(agents)
+		cline.shared(agents)
+		grok.shared(agents)
 
 		antigravity.file(filepath.Join(root, "GEMINI.md"))
 		antigravity.shared(agents)

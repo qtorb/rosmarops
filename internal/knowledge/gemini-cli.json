@@ -1,6 +1,7 @@
 {
   "product": "gemini-cli",
-  "version": "2026-11-03",
+  "version": "2026-11-08",
+  "session_files": ["oauth_creds.json"],
   "entries": [
     {
       "id": "read_workspace",
@@ -32,7 +33,15 @@
       "approval": "ask",
       "target_scope": "any_destination",
       "source_url": "https://geminicli.com/docs/reference/configuration",
-      "verified": "CTO-22 Gemini §4, read 2026-11-07: web_fetch asks by default; google_web_search is a read-only search, not egress."
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: web_fetch asks by default."
+    },
+    {
+      "id": "web_search_default",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: google_web_search runs without asking by default. BV-198 M3 (firma 2): a web tool allowed by default is internet egress — the query can carry the content of a request off the computer."
     },
     {
       "id": "mcp_ask",

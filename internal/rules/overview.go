@@ -1128,6 +1128,9 @@ func (oi overviewInputs) geminiRunsCell(v *agentView) OverviewCell {
 func (oi overviewInputs) geminiSendsCell(v *agentView) OverviewCell {
 	cell := OverviewCell{Row: RowSendsOut, Decider: DeciderYou, Scope: ScopeAnyDestination, Origin: OriginProductDefault}
 	if len(v.egress) > 0 {
+		// google_web_search sends without asking (BV-198 M3): the row decides
+		// nobody, and the reachable credential is read-and-send.
+		cell.Decider = DeciderNobody
 		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend}, "", "")
 	}
 	cell.Data.Assumptions = geminiBaseAssumptions()
@@ -1890,7 +1893,7 @@ func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 	for _, w := range v.egress {
 		launcher := contains(w.assumptions, AssumeCodeLauncherRule)
 		switch {
-		case w.code == "egress_mcp_allowlist", w.code == "egress_allowlist" && !launcher:
+		case w.code == "egress_mcp_allowlist", w.code == "egress_network", w.code == "egress_allowlist" && !launcher:
 			continue
 		}
 		if launcher {

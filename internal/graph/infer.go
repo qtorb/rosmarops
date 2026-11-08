@@ -56,6 +56,25 @@ const (
 //
 // repoRoots are the configured repository roots; home is the user's home
 // folder ("~/" in permission patterns and protected paths).
+// credFileInWorkspace reports whether any file a credential node lives in is
+// under a repo root (BV-198 M1). A credential carries its files in Locations as
+// "<path>:<line>" or "<path>#<pointer>" (Path is empty), so filtering by
+// cred.Path never matches — the bug M1 fixes in copilot.go and antigravity.go.
+func credFileInWorkspace(cred Node, inWorkspace func(string) bool) bool {
+	for _, loc := range cred.Locations {
+		file := loc
+		if i := strings.LastIndex(file, ":"); i > 0 {
+			file = file[:i]
+		} else if i := strings.IndexByte(file, '#'); i > 0 {
+			file = file[:i]
+		}
+		if inWorkspace(file) {
+			return true
+		}
+	}
+	return false
+}
+
 func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 	p, err := prepare(g)
 	if err != nil {

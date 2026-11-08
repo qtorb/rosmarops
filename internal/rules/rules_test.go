@@ -43,6 +43,23 @@ var (
 
 func seg(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
 
+// reachesACredential reports whether the graph has a reaches edge from the
+// client to a credential node (BV-198 M1).
+func reachesACredential(g graph.Graph, client string) bool {
+	cred := map[string]bool{}
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindCredential {
+			cred[n.ID] = true
+		}
+	}
+	for _, e := range g.Edges {
+		if e.Type == graph.EdgeReaches && e.From == client && cred[e.To] {
+			return true
+		}
+	}
+	return false
+}
+
 func jwt(role string) string {
 	return seg(`{"alg":"HS256","typ":"JWT"}`) + "." +
 		seg(`{"iss":"supabase","ref":"abcdefghijklmnopqrst","role":"`+role+`"}`) + ".ZmFrZS1zaWduYXR1cmUtZmlsbGVy"
@@ -353,8 +370,10 @@ func TestEvaluate_NoEgress(t *testing.T) {
 	}
 }
 
-// The ways out (§0): bypassPermissions, a shell "*" allow, a launcher rule;
-// a deny without specifier overrides the allow; WebFetch and ask are none.
+// The ways out (§0, BV-198 M3): bypassPermissions, a shell "*" allow, a
+// launcher rule, a broad WebFetch allow (a web tool usable without asking); a
+// deny without specifier overrides the allow; a domain-scoped WebFetch and ask
+// are none.
 func TestEvaluate_Egress(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -368,7 +387,8 @@ func TestEvaluate_Egress(t *testing.T) {
 		{"launcher", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"Bash(node -e ' *)"}}, true, rules.ConfidenceHigh},
 		{"launcher denied", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"Bash(node -e ' *)"}, Deny: []string{"Bash"}}, false, ""},
 		{"not a launcher", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"Bash(npx eslint *)"}}, false, ""},
-		{"webfetch and ask", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"WebFetch"}, Ask: []string{"Bash"}}, false, ""},
+		{"webfetch broad", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"WebFetch"}}, true, rules.ConfidenceHigh},
+		{"webfetch domain and ask", platform.ClaudePermissions{DefaultMode: "default", Allow: []string{"WebFetch(domain:example.com)"}, Ask: []string{"Bash"}}, false, ""},
 	}
 	for _, c := range cases {
 		res := evaluate(t, scenario(t, c.perms, []entry{{dashEnv, 4, "SUPABASE_SERVICE_ROLE_KEY", serviceRole}}))

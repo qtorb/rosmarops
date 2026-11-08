@@ -131,8 +131,10 @@ func TestGrok_T1_InheritsClaudeBypass(t *testing.T) {
 }
 
 // T2 — compat off, mode ask (CTO-16 Grok §7 T2): no loads to Claude/Cursor MCP;
-// reads any path (a high-privilege credential readable); write and shell the
-// user decides.
+// reads any path; write and shell the user decides. BV-198 M3: web_search is
+// allowed without asking, so it is internet egress — the high-privilege
+// credential is read and sendable (cred_read_and_send), and the sends row
+// decides nobody even though write and shell still ask.
 func TestGrok_T2_CompatOffAsk(t *testing.T) {
 	scan := platform.GrokScan{ConfigDir: grokDir, Exists: true, Layers: []platform.GrokLayer{grokUserLayer(func(l *platform.GrokLayer) {
 		l.PermissionMode, l.HasPermissionMode = "ask", true
@@ -147,15 +149,15 @@ func TestGrok_T2_CompatOffAsk(t *testing.T) {
 	if c := grokCell(t, res, client, rules.RowWritesFiles); c.Decider != rules.DeciderYou {
 		t.Errorf("writes under ask should be you: %+v", c)
 	}
-	if c := grokCell(t, res, client, rules.RowSendsOut); c.Decider != rules.DeciderYou {
-		t.Errorf("sends under ask should be you: %+v", c)
+	if c := grokCell(t, res, client, rules.RowSendsOut); c.Decider != rules.DeciderNobody {
+		t.Errorf("sends under ask: web_search is egress, want nobody: %+v", c)
 	}
 	rs := grokRules(res, client)
-	if !rs[rules.RuleCredReadable] {
-		t.Errorf("T2: the high-privilege credential should be readable: %v", rs)
+	if !rs[rules.RuleCredReadAndSend] {
+		t.Errorf("T2: web_search egress makes the high-privilege credential read-and-send: %v", rs)
 	}
-	if rs[rules.RuleCredReadAndSend] {
-		t.Errorf("T2: ask mode must not send out, so no cred_read_and_send: %v", rs)
+	if rs[rules.RuleCredReadable] {
+		t.Errorf("T2: with egress the high credential is cred_read_and_send, not cred_readable: %v", rs)
 	}
 }
 

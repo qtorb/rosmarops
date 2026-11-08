@@ -10,10 +10,11 @@ import (
 
 // Gemini CLI effective approval modes and scopes (BV-193, CTO-22 Gemini §4).
 const (
-	geminiModeAutoEdit = "auto_edit"
-	geminiModeYolo     = "yolo"
-	geminiScopeWork    = "workspace"
-	geminiScopeSystem  = "system" // applies_in for the system settings layer (CTO-22 Gemini §2, G5)
+	geminiModeAutoEdit   = "auto_edit"
+	geminiModeYolo       = "yolo"
+	geminiScopeWork      = "workspace"
+	geminiScopeSystem    = "system"          // applies_in for the system settings layer (CTO-22 Gemini §2, G5)
+	geminiScopeWebSearch = "any_destination" // google_web_search reaches the network (BV-198 M3)
 )
 
 // FromGeminiCLI builds Google Gemini CLI's fragment (BV-193, CTO-22 Gemini
@@ -48,6 +49,16 @@ func FromGeminiCLI(scan platform.GeminiScan, discoveredAt time.Time) Fragment {
 		Approval: ApprovalAllow, TargetScope: geminiScopeWork, Source: readSrc,
 	})
 	b.edge(Edge{ID: edgeID(EdgeHas, client, readID), Type: EdgeHas, From: client, To: readID, Source: readSrc})
+
+	// Product default: google_web_search runs without asking (CTO-22 Gemini §4).
+	// BV-198 M3 (firma 2): a web tool allowed by default is internet egress.
+	webID := "cap_" + keyHash(KindCapability, BasisProductDefault, client, CapNetwork, geminiScopeWebSearch)
+	webSrc := "kb:" + knowledge.GeminiCLIProduct + "/web_search_default@" + knowledge.GeminiCLIVersion
+	b.node(Node{
+		ID: webID, Kind: KindCapability, Type: CapNetwork, Basis: BasisProductDefault, InForce: true,
+		Approval: ApprovalAllow, TargetScope: geminiScopeWebSearch, Source: webSrc,
+	})
+	b.edge(Edge{ID: edgeID(EdgeHas, client, webID), Type: EdgeHas, From: client, To: webID, Source: webSrc})
 
 	for _, l := range scan.Layers {
 		switch l.Status {

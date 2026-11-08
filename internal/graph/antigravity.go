@@ -159,7 +159,7 @@ func (in antigravityInference) reaches(all []Node) []Edge {
 		if cred.Kind != KindCredential {
 			continue
 		}
-		if !in.machine && !in.inWorkspace(cred.Path) {
+		if !in.machine && !credFileInWorkspace(cred, in.inWorkspace) {
 			continue
 		}
 		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))

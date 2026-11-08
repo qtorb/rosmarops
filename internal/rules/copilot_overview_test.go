@@ -126,6 +126,17 @@ func TestCopilot_CaseDefault(t *testing.T) {
 	}
 }
 
+// M1 (BV-198, CTO-23 §0): Copilot reaches a credential whose .env is inside the
+// workspace. Before the fix it filtered on the empty cred.Path (copilot.go) and
+// reached nothing, so a Copilot-only computer scored 100 even over a project .env.
+func TestCopilot_M1_ReachesWorkspaceCred(t *testing.T) {
+	scan := platform.CopilotScan{ConfigDir: copilotDir, Present: true, Layers: []platform.CopilotLayer{copilotUserLayer(nil)}}
+	g, _, client := copilotEvaluate(t, scan, true, nil, nil, []entry{{repoWeb + "/.env", 1, "OPENAI_API_KEY", openAIKey}})
+	if !reachesACredential(g, client) {
+		t.Errorf("M1: Copilot does not reach the workspace .env credential")
+	}
+}
+
 // 2. YOLO global (CTO-16 Copilot §7 case 2): chat.tools.global.autoApprove true
 // in user settings — every row decides nobody.
 func TestCopilot_CaseYoloGlobal(t *testing.T) {

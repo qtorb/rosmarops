@@ -10,6 +10,42 @@ import (
 	"github.com/qtorb/rosmarops/internal/schemas"
 )
 
+// BV-198 M5: each product's session_files list carries its own account files,
+// including the ones added in M5 (Cline secrets.json, Gemini oauth_creds.json).
+func TestSessionFilesPerProduct(t *testing.T) {
+	bases, err := knowledge.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		knowledge.ClaudeCodeProduct: ".credentials.json",
+		knowledge.CodexProduct:      "auth.json",
+		knowledge.GrokBuildProduct:  "auth.json",
+		knowledge.ClineProduct:      "secrets.json",
+		knowledge.GeminiCLIProduct:  "oauth_creds.json",
+	}
+	for product, file := range want {
+		b, ok := bases[product]
+		if !ok {
+			t.Errorf("no base for %s", product)
+			continue
+		}
+		found := false
+		for _, s := range b.SessionFiles {
+			if s == file {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s session_files = %v, want to include %q", product, b.SessionFiles, file)
+		}
+	}
+	// An agent that keeps no on-disk session file lists none.
+	if sf := bases[knowledge.CursorProduct].SessionFiles; len(sf) != 0 {
+		t.Errorf("Cursor should list no session files, got %v", sf)
+	}
+}
+
 // capabilityEnums reads the capability type and approval enums from the
 // embedded graph schema, so the base cannot drift from the contract.
 func capabilityEnums(t *testing.T) (types, approvals map[string]bool) {
@@ -67,8 +103,8 @@ func TestGrokBuild_LoadsStrictly(t *testing.T) {
 	if b.Product != knowledge.GrokBuildProduct || b.Version != knowledge.GrokBuildVersion {
 		t.Errorf("product/version: got %q/%q, want %q/%q", b.Product, b.Version, knowledge.GrokBuildProduct, knowledge.GrokBuildVersion)
 	}
-	if len(b.Entries) != 6 {
-		t.Errorf("entries: got %d, want 6", len(b.Entries))
+	if len(b.Entries) != 7 {
+		t.Errorf("entries: got %d, want 7", len(b.Entries))
 	}
 	if len(b.CodeLaunchers) == 0 {
 		t.Error("Grok Build base lacks the shared code launcher table")

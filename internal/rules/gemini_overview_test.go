@@ -102,7 +102,10 @@ func geUser(mode string, allowed ...string) platform.GeminiLayer {
 }
 
 // G1. Default (CTO-22 Gemini §7 G1): empty user settings; a credential in the
-// workspace. Reads nobody, writes and runs you; cred_readable; band not red.
+// workspace. Reads nobody, writes and runs you. BV-198 M3: google_web_search is
+// allowed without asking, so it is internet egress — the sends row decides
+// nobody and the workspace credential is read-and-send (cred_read_and_send),
+// not merely readable.
 func TestGemini_CaseDefault(t *testing.T) {
 	scan := geScan(geUser(""))
 	_, res, client := geminiEvaluate(t, scan, nil, []entry{{repoWeb + "/.env", 1, "SUPABASE_SECRET_KEY", sbSecret}})
@@ -116,8 +119,15 @@ func TestGemini_CaseDefault(t *testing.T) {
 	if c := geCell(t, res, client, rules.RowRunsCommands); c.Decider != rules.DeciderYou {
 		t.Errorf("default runs: want you, got %+v", c)
 	}
-	if !geRules(res, client)[rules.RuleCredReadable] {
-		t.Errorf("default: missing cred_readable (have %v)", geRules(res, client))
+	if c := geCell(t, res, client, rules.RowSendsOut); c.Decider != rules.DeciderNobody {
+		t.Errorf("default sends: web_search is egress, want nobody, got %+v", c)
+	}
+	rs := geRules(res, client)
+	if !rs[rules.RuleCredReadAndSend] {
+		t.Errorf("default: web_search egress makes the workspace credential read-and-send (have %v)", rs)
+	}
+	if rs[rules.RuleCredReadable] {
+		t.Errorf("default: with egress the credential is cred_read_and_send, not cred_readable (have %v)", rs)
 	}
 }
 

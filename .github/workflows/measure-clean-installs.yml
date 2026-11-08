@@ -1,0 +1,135 @@
+# Measure clean installs (BV-198 point 7, CTO-23 §3): a MANUAL workflow that, on
+# a fresh windows-latest runner, installs each of the nine scored agents with its
+# official installer and records the files and folders the install creates under
+# %USERPROFILE%, %APPDATA% and %LOCALAPPDATA% — PATHS AND NAMES ONLY, never file
+# content. One matrix job per agent, each on its own clean runner, so the lists
+# do not cross-contaminate. It NEVER logs in and NEVER launches an agent: what a
+# product writes only on first use therefore does not appear, and is marked
+# "sin verificar" when the R2 fixture is built from these lists.
+#
+# This is a measurement tool, not part of a release. Run it from the Actions tab
+# (Run workflow). The artifacts feed the reference-computer fixture
+# (internal/report/testdata/r2) and let Albert confirm each agent's at-rest
+# footprint on a real Windows machine.
+#
+# The installer commands are the official ones documented 2026-11-08:
+#   - npm:   @anthropic-ai/claude-code, @openai/codex, @google/gemini-cli
+#   - winget: Anysphere.Cursor, Microsoft.VisualStudioCode (the host for the two
+#     VS Code extensions)
+#   - code --install-extension: github.copilot(+ -chat), saoudrizwan.claude-dev
+#   - PowerShell one-liners: grok (x.ai), hermes (nousresearch.com),
+#     antigravity (antigravity.google)
+# Installing a CLI or an extension needs no account; none of these log in.
+# A step that fails (installer offline, id changed) does not abort the matrix:
+# its artifact records the failure so the gap is visible.
+
+name: measure-clean-installs
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  measure:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        agent:
+          - claude-code
+          - codex
+          - gemini-cli
+          - cursor
+          - github-copilot
+          - cline
+          - grok-build
+          - hermes
+          - antigravity-cli
+    steps:
+      - name: Baseline snapshot (names only)
+        shell: pwsh
+        run: |
+          # List every path under the three roots, names only, excluding volatile
+          # or bulky directories so the diff stays legible. No file is opened.
+          $roots = @($env:USERPROFILE, $env:APPDATA, $env:LOCALAPPDATA) |
+            Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $excl = @('node_modules', '.git', 'Temp', 'Cache', 'Cache2', 'CachedData',
+                    'Code Cache', 'GPUCache', 'ShaderCache', 'logs', 'crashpad',
+                    '.npm', 'DawnCache', 'Service Worker')
+          function Snapshot {
+            Get-ChildItem -LiteralPath $roots -Recurse -Force -ErrorAction SilentlyContinue |
+              Where-Object {
+                $p = $_.FullName
+                -not ($excl | Where-Object { $p -like "*\$_\*" -or $p -like "*\$_" })
+              } | Select-Object -ExpandProperty FullName | Sort-Object
+          }
+          Snapshot | Set-Content -Encoding utf8 "$env:RUNNER_TEMP\before.txt"
+          Write-Host "baseline paths: $((Get-Content "$env:RUNNER_TEMP\before.txt").Count)"
+
+      - name: Install ${{ matrix.agent }} (no login, no launch)
+        id: install
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          switch ("${{ matrix.agent }}") {
+            "claude-code"     { npm install -g @anthropic-ai/claude-code }
+            "codex"           { npm install -g @openai/codex }
+            "gemini-cli"      { npm install -g @google/gemini-cli }
+            "cursor"          { winget install --id Anysphere.Cursor --silent --accept-package-agreements --accept-source-agreements --disable-interactivity }
+            "github-copilot"  {
+              winget install --id Microsoft.VisualStudioCode --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+              code --install-extension github.copilot
+              code --install-extension github.copilot-chat
+            }
+            "cline"           {
+              winget install --id Microsoft.VisualStudioCode --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+              code --install-extension saoudrizwan.claude-dev
+            }
+            "grok-build"      { Invoke-RestMethod https://x.ai/cli/install.ps1 | Invoke-Expression }
+            "hermes"          { Invoke-Expression (Invoke-RestMethod https://hermes-agent.nousresearch.com/install.ps1) }
+            "antigravity-cli" { Invoke-RestMethod https://antigravity.google/cli/install.ps1 | Invoke-Expression }
+          }
+
+      - name: After snapshot and diff (names only)
+        if: always()
+        shell: pwsh
+        run: |
+          $roots = @($env:USERPROFILE, $env:APPDATA, $env:LOCALAPPDATA) |
+            Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $excl = @('node_modules', '.git', 'Temp', 'Cache', 'Cache2', 'CachedData',
+                    'Code Cache', 'GPUCache', 'ShaderCache', 'logs', 'crashpad',
+                    '.npm', 'DawnCache', 'Service Worker')
+          $after = Get-ChildItem -LiteralPath $roots -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object {
+              $p = $_.FullName
+              -not ($excl | Where-Object { $p -like "*\$_\*" -or $p -like "*\$_" })
+            } | Select-Object -ExpandProperty FullName | Sort-Object
+          $out = "$env:RUNNER_TEMP\clean-install"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $after | Set-Content -Encoding utf8 "$out\after.txt"
+          $before = Get-Content "$env:RUNNER_TEMP\before.txt"
+          $added = Compare-Object -ReferenceObject $before -DifferenceObject $after |
+            Where-Object { $_.SideIndicator -eq '=>' } |
+            Select-Object -ExpandProperty InputObject | Sort-Object
+          $added | Set-Content -Encoding utf8 "$out\added.txt"
+          @(
+            "agent: ${{ matrix.agent }}"
+            "installer outcome: ${{ steps.install.outcome }}"
+            "measured: $(Get-Date -Format o)"
+            "roots: $($roots -join '; ')"
+            "added paths: $($added.Count)"
+            "NOTE: names/paths only, no content was read. No login, no launch:"
+            "what a product writes only on first use does not appear here."
+          ) | Set-Content -Encoding utf8 "$out\summary.txt"
+          Write-Host "added paths: $($added.Count)"
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: clean-install-${{ matrix.agent }}
+          path: ${{ runner.temp }}/clean-install
+          if-no-files-found: error
+          retention-days: 30

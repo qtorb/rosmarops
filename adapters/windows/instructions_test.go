@@ -123,6 +123,34 @@ func TestListAgentInstructions_ExistingFilesAreResources(t *testing.T) {
 	}
 }
 
+// BV-198 M4: <repo>/AGENTS.md is attributed, as a shared instruction file, to
+// GitHub Copilot, Cline and Grok Build too — each loads it per its docs — in
+// addition to Cursor (and Codex, Antigravity, Hermes, Claude Code).
+func TestListAgentInstructions_AgentsMdM4(t *testing.T) {
+	e := newIdentityEnv(t)
+	agents := filepath.Join(e.repoA, "AGENTS.md")
+	writeFile(t, agents, "# shared instructions\n")
+	ins, err := windows.New().ListAgentInstructions(context.Background(), []string{e.repoA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, f := range ins.Files {
+		if canon(f.Path) != canon(agents) {
+			continue
+		}
+		got[f.Product] = true
+		if !f.Shared {
+			t.Errorf("AGENTS.md for %s should be Shared", f.Product)
+		}
+	}
+	for _, p := range []string{"github-copilot", "cline", "grok-build", "cursor"} {
+		if !got[p] {
+			t.Errorf("AGENTS.md not attributed to %s (have %v)", p, got)
+		}
+	}
+}
+
 func TestListAgentInstructions_NoFilesNoResources(t *testing.T) {
 	e := newIdentityEnv(t)
 	e.writeAll(t, false)
