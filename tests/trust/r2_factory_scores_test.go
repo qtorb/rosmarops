@@ -3,6 +3,7 @@ package trust_test
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -396,7 +397,16 @@ func envOr(name, def string) string {
 func TestR2FactoryScores(t *testing.T) {
 	doc, allMatch := r2Collect(t)
 	out := os.Getenv("ROSMAROPS_FACTORY_SCORES_OUT")
-	if out == "" || !allMatch {
+	if out == "" {
+		return
+	}
+	// `go test` runs in the package directory (tests/trust), so a relative path
+	// does not point at the repo root (BV-200 fix): demand an absolute path and
+	// do not resolve it here.
+	if !filepath.IsAbs(out) {
+		t.Fatalf("ROSMAROPS_FACTORY_SCORES_OUT must be an absolute path, got %q: go test runs in the package directory, not the repo root", out)
+	}
+	if !allMatch {
 		return
 	}
 	data, err := json.MarshalIndent(doc, "", "  ")

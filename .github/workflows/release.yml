@@ -250,7 +250,7 @@ jobs:
           go-version: "1.24.7"
       - name: Generate factory-scores.json
         env:
-          ROSMAROPS_FACTORY_SCORES_OUT: dist/factory-scores.json
+          ROSMAROPS_FACTORY_SCORES_OUT: ${{ github.workspace }}/dist/factory-scores.json
           ROSMAROPS_VERSION: ${{ env.TAG }}
         run: |
           mkdir -p dist
