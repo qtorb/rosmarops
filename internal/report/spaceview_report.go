@@ -81,6 +81,7 @@ const (
 	svMaxFix    = 6
 	svMaxCov    = 50
 	svMaxSignal = 20
+	svMaxPaste  = 16000 // finding_text.paste_block
 )
 
 // buildReport builds the `report` field from the per-language htmlCtx the

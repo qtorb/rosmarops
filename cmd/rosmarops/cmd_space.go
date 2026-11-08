@@ -49,6 +49,7 @@ const (
 	sendError        = "error"        // unexpected status
 	sendDeferred     = "deferred"     // no connection, 429 or 5xx: try again next run
 	sendSkipped      = "skipped"      // not a closed package with our key_id, or over 2 MB
+	sendFailed       = "failed"       // BV-201: the package could not be built/sealed this run
 )
 
 // terminalResults are the results that mean "do not send this package again".
@@ -522,14 +523,20 @@ func terminalFilenames(reportsDir string) map[string]bool {
 }
 
 // appendSendLog writes one line to the sends log: the UTC time, the size in
-// bytes, the destination host, the result, and the package filename. Never
-// content (BV-137 point 6).
-func appendSendLog(path string, now time.Time, filename string, size int, result string) {
+// bytes, the destination host, the result, and the package filename. An optional
+// detail is appended as a final whitespace-free field (BV-201: the schema field
+// path of a "failed" build). Never content (BV-137 point 6): the reader uses
+// only the first five fields, and the detail carries field paths, never values.
+func appendSendLog(path string, now time.Time, filename string, size int, result string, detail ...string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		slog.Warn("sends log: create dir", "err", err)
 		return
 	}
-	line := fmt.Sprintf("%s %d %s %s %s\n", now.UTC().Format(time.RFC3339), size, spacenet.Host, result, filename)
+	tail := ""
+	if len(detail) > 0 && detail[0] != "" {
+		tail = " " + detail[0]
+	}
+	line := fmt.Sprintf("%s %d %s %s %s%s\n", now.UTC().Format(time.RFC3339), size, spacenet.Host, result, filename, tail)
 	// Keep the log to its last maxSendLogLines (CTO-15 PR5). It grows a few
 	// lines a week, so a read-trim-rewrite on each append is cheap; the rename
 	// stays inside the reports directory (invariant 2).
