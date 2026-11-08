@@ -1149,6 +1149,21 @@ type GeminiScan struct {
 	TrustedFolders       map[string]string
 	TrustedFoldersStatus MCPSourceStatus
 	FolderTrustEnabled   bool
+
+	// Extensions are ~/.gemini/extensions/<n> (BV-194, CTO-22 Gemini §5).
+	Extensions []GeminiExtension
+	// Policies are the admin and user TOML policy tiers (BV-194, CTO-22 Gemini
+	// §6). Project policies are disabled in the CLI and not represented.
+	Policies []GeminiPolicyLayer
+
+	// EnvDenied are the ".env" credential locations ("<path>:<line>") that
+	// Gemini CLI does NOT load, so its inference must not reach them (BV-194,
+	// CTO-22 Gemini §3): the non-winning .env files of each repo root's chain,
+	// and, in a repo root that is not a trusted folder, every variable of the
+	// winning .env except GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_CLOUD_PROJECT
+	// and GOOGLE_CLOUD_LOCATION. The winning .env of a trusted root and the
+	// home .env are never denied.
+	EnvDenied []string
 }
 
 // GeminiLayer is one settings.json layer (JSONC), with the keys that bear on
@@ -1182,6 +1197,11 @@ type GeminiLayer struct {
 	// MCP are this layer's mcpServers, with their per-server trust and secrets
 	// by fingerprint (CTO-22 Gemini §3).
 	MCP []GeminiMCPServer
+	// Hooks are this layer's hooks.<Event>[].hooks[] commands (BV-194, CTO-22
+	// Gemini §5/§6), enabled unless hooks.enabled is false. HooksDisabled marks
+	// that this layer turned hooks off.
+	Hooks         []GeminiHook
+	HooksDisabled bool
 }
 
 // ClineScan is the Cline VS Code extension's at-rest configuration (BV-193,
@@ -1239,3 +1259,70 @@ type GeminiMCPServer struct {
 	HeaderKeys []string
 	Headers    []EnvVar
 }
+
+// GeminiExtension is one ~/.gemini/extensions/<n> directory (BV-194, CTO-22
+// Gemini §5): its gemini-extension.json (name, version, mcpServers,
+// contextFileName, excludeTools), its policies/*.toml, its hooks, and whether
+// it ships a skills/ directory. The CLI loads an extension's MCP servers like
+// settings.json's, with the extension's own config_path.
+type GeminiExtension struct {
+	Name       string
+	Dir        string // ~/.gemini/extensions/<n>
+	ConfigPath string // <Dir>/gemini-extension.json
+	Status     MCPSourceStatus
+	Reason     string
+	// Version is the extension's declared version; HasSkills marks a skills/
+	// directory in the extension.
+	Version   string
+	HasSkills bool
+	// MCP are the extension's mcpServers; ContextFileNames its contextFileName.
+	MCP              []GeminiMCPServer
+	ContextFileNames []string
+	// Policies are the extension's policies/*.toml rules; Hooks its hooks.
+	Policies []GeminiPolicyRule
+	Hooks    []GeminiHook
+}
+
+// GeminiPolicyLayer is one tier of Gemini CLI's TOML policy files (BV-194,
+// CTO-22 Gemini §6): admin (<system>/policies) wins over user
+// (~/.gemini/policies); project policies are disabled in the CLI
+// (disableWorkspacePolicies), so BV does not apply them (read with case G4).
+type GeminiPolicyLayer struct {
+	Kind   string // GeminiPolicyAdmin | GeminiPolicyUser
+	Dir    string // the policies directory
+	Status MCPSourceStatus
+	Reason string
+	Rules  []GeminiPolicyRule
+}
+
+// GeminiPolicyRule is one [[rules]] entry of a policy TOML (toml-loader.ts):
+// the tool, its decision, and an optional command prefix. Only the fields that
+// bear on the posture are kept.
+type GeminiPolicyRule struct {
+	ToolNames     []string // toolName (one or a list)
+	Decision      string   // "allow" | "deny" | "ask_user"
+	CommandPrefix []string // commandPrefix (one or a list); empty = any command
+	Path          string   // the TOML file, for the source and config_path
+}
+
+// GeminiHook is one hooks.<Event>[].hooks[] command of a settings.json layer or
+// an extension (BV-194, CTO-22 Gemini §5/§6): a command that runs on an event,
+// enabled by default. Root is the repo root when the hook comes from a project
+// layer (its command may run a repo script → project_hook_runs_repo_script).
+type GeminiHook struct {
+	Event   string
+	Command string
+	Path    string // the settings.json or extension file that defines it
+	Root    string // repo root for a project-layer hook; "" otherwise
+	// ScriptPath and ScriptSize are set when a project-layer hook's command
+	// names a regular file inside the repo (BV-107/BV-194): the script's
+	// repo-relative path (slash-separated) and its size in bytes.
+	ScriptPath string
+	ScriptSize int64
+}
+
+// Gemini policy tiers (BV-194, CTO-22 Gemini §6).
+const (
+	GeminiPolicyAdmin = "admin"
+	GeminiPolicyUser  = "user"
+)
