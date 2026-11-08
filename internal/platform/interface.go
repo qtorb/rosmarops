@@ -754,8 +754,9 @@ type HermesConfig struct {
 	Status    MCPSourceStatus
 	Reason    string
 
-	// ApprovalMode is approvals.mode as Hermes reads it: "manual" (also
-	// when absent, true or unknown), "smart" or "off" (also the YAML 1.1
+	// ApprovalMode is approvals.mode as Hermes reads it: "smart" (also when
+	// absent — the default, NousResearch hermes config_defaults.py @ 8acb7f6),
+	// "manual" (also true or an unknown string) or "off" (also the YAML 1.1
 	// boolean false, «mode: off»). Empty when the file was not read.
 	ApprovalMode string
 

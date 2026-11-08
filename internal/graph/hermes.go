@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"strings"
+
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
@@ -20,6 +22,28 @@ func IsolatedBackend(b string) bool { return isolatedBackends[b] }
 // isolated backend: it does not reach the files of the computer (BV-111).
 const HermesScopeIsolated = "isolated_backend"
 
+// HermesScopeProtectedInstructions marks Hermes Agent's write tool as gated for
+// instruction files (BV-198 §0): with security.protected_instruction_files on
+// (true by default), writing AGENTS.md, CLAUDE.md, SOUL.md or .cursorrules
+// always needs human approval, even under --yolo (NousResearch hermes
+// tools/file_tools_write_guards.py @ 8acb7f6; config_defaults.py
+// security.protected_instruction_files true). So those writes are not a
+// without-asking finding against Hermes.
+const HermesScopeProtectedInstructions = "protected_instructions"
+
+// hermesProtectedBasenames are the instruction-file basenames Hermes Agent's
+// write guard always gates behind human approval (file_tools_write_guards.py
+// _PROTECTED_INSTRUCTION_BASENAMES @ 8acb7f6). Matched case-insensitively.
+var hermesProtectedBasenames = map[string]bool{
+	"agents.md": true, "claude.md": true, "soul.md": true, ".cursorrules": true,
+}
+
+// HermesProtectsInstruction reports whether path is an instruction file Hermes
+// gates behind approval when protected_instruction_files is on.
+func HermesProtectsInstruction(path string) bool {
+	return hermesProtectedBasenames[strings.ToLower(baseName(path))]
+}
+
 // HermesDefaults builds the capability nodes of every Hermes Agent ai_client
 // in nodes from its knowledge base and its config.yaml (BV-111): the
 // product_default read/write/shell/network/invoke_mcp_tool capabilities — read,
@@ -38,8 +62,17 @@ func HermesDefaults(nodes []Node, base knowledge.Base, scan platform.HermesScan)
 		}
 		cfg := byDir[canonicalPath(n.ConfigPath)]
 		isolated := isolatedBackends[cfg.TerminalBackend]
+		// security.protected_instruction_files (true by default, BV-198 §0):
+		// Hermes's write tool gates AGENTS.md, CLAUDE.md, SOUL.md and
+		// .cursorrules behind human approval, so those writes are not a
+		// without-asking finding. An explicit false turns the gate off, so its
+		// product-default write_protected_instructions capability is skipped.
+		protectInstr := cfg.ProtectedInstructionFiles == nil || *cfg.ProtectedInstructionFiles
 		for _, e := range base.Entries {
 			if !e.IsCapability() {
+				continue
+			}
+			if e.ID == "write_protected_instructions" && !protectInstr {
 				continue
 			}
 			basis, scope, rule := BasisProductDefault, e.TargetScope, ""
@@ -81,16 +114,24 @@ func hermesCapID(client, basis, typ, entry string) string {
 // it reaches every credential and writes every agent resource — unless its
 // terminal backend is isolated, which keeps the tools off the computer.
 type hermesInference struct {
-	client   Node
-	readCap  *Node // read_files any_path, in force
-	writeCap *Node // write_files any_path, in force
+	client       Node
+	readCap      *Node // read_files any_path, in force
+	writeCap     *Node // write_files any_path, in force
+	protectInstr bool  // security.protected_instruction_files on (gates instruction writes)
 }
 
 func (p prepared) hermesInference(client Node) hermesInference {
 	in := hermesInference{client: client}
 	for i := range p.caps[client.ID] {
 		c := p.caps[client.ID][i]
-		if !c.InForce || c.Approval != ApprovalAllow || c.TargetScope != "any_path" {
+		if !c.InForce {
+			continue
+		}
+		if c.Type == CapWriteFiles && c.Approval == ApprovalAsk && c.TargetScope == HermesScopeProtectedInstructions {
+			in.protectInstr = true
+			continue
+		}
+		if c.Approval != ApprovalAllow || c.TargetScope != "any_path" {
 			continue
 		}
 		switch c.Type {
@@ -136,6 +177,12 @@ func (in hermesInference) writes(all []Node) []Edge {
 			continue // its own config.yaml is blocked
 		}
 		if _, ok := resourceFile(res.Path); !ok {
+			continue
+		}
+		// With protected_instruction_files on, writing AGENTS.md, CLAUDE.md,
+		// SOUL.md or .cursorrules needs human approval, so it is not a
+		// without-asking write (BV-198 §0).
+		if in.protectInstr && res.Type == ResourceAgentInstructions && HermesProtectsInstruction(res.Path) {
 			continue
 		}
 		out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.writeCap))
