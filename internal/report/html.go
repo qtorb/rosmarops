@@ -115,6 +115,9 @@ button.wide{display:flex;width:100%;justify-content:center;align-items:center;mi
 .space p{margin:0 0 14px;font-size:15px;color:var(--ink)}
 .space code{background:var(--code);padding:2px 6px;border-radius:6px;font-size:13px;word-break:break-all}
 a.spacebtn{display:inline-flex;align-items:center;min-height:44px;padding:8px 14px;border-radius:8px;background:var(--ink);color:var(--bg);font-family:inherit;font-size:14px;font-weight:600;text-decoration:none}
+.spacecard{background:var(--ink);color:var(--bg);border-radius:12px;padding:16px 18px;font-size:15px;line-height:1.5;font-weight:600;margin:0 0 12px}
+p.spacelinkp{margin:0}
+a.spacelink{color:var(--ink);font-size:14px;font-weight:600;text-decoration:underline}
 .live{margin-left:10px;font-size:14px}
 .how{font-size:14px;color:var(--mut);margin:10px 0 0}
 .tbox details.manual{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
@@ -1493,7 +1496,7 @@ func HTMLKeys() []string {
 	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_rejected", "report.space_button")
 	// BV-158 part 3: the always-shown «Your space» copy (connected and not) and
 	// the folded «More information» (not connected).
-	keys = append(keys, "report.space_has", "report.space_pitch", "report.space_next", "report.space_create",
+	keys = append(keys, "report.space_has", "report.space_keep", "report.space_open_link",
 		"html.more.title", "html.more.agents", "html.more.analysis")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")

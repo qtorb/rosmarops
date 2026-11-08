@@ -48,19 +48,25 @@ func TestBV164_OfferButtonText(t *testing.T) {
 	}
 }
 
-// BV-164 point 4/6: report.space_next is the new text in EN and ES.
-func TestBV164_SpaceNextText(t *testing.T) {
+// BV-196 (signed): the not-connected «Your space» card is a single paragraph,
+// report.space_keep, in EN and ES. (Supersedes BV-164's report.space_next,
+// removed with report.space_pitch and the «Create your space» button.)
+func TestBV196_SpaceKeepText(t *testing.T) {
 	want := map[string]string{
-		"es": "Al terminar la próxima revisión, RosmarOps te ofrecerá guardarla en tu espacio. Si aún no tienes cuenta, la creas en ese momento con tu correo y una contraseña.",
-		"en": "When the next check finishes, RosmarOps will offer to save it to your space. If you don't have an account yet, you create it then with your email and a password.",
+		"es": "Guarda este informe y mira cómo cambia tu nota con el tiempo: vuelve a abrir RosmarOps y, al terminar la revisión, pulsa «Guardar en mi espacio». Si no tienes espacio, lo creas en ese momento.",
+		"en": "Keep this report and see how your score changes over time: open RosmarOps again and, when the check finishes, click «Save to my space». If you don't have a space, you create it right then.",
 	}
+	link := map[string]string{"es": "Ya tengo espacio: abrirlo", "en": "I already have a space: open it"}
 	for lang, w := range want {
 		cat, err := catalog.Load(lang)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := cat.Text("report.space_next", nil); got != w {
-			t.Errorf("%s: report.space_next = %q, want %q", lang, got, w)
+		if got := cat.Text("report.space_keep", nil); got != w {
+			t.Errorf("%s: report.space_keep = %q, want %q", lang, got, w)
+		}
+		if got := cat.Text("report.space_open_link", nil); got != link[lang] {
+			t.Errorf("%s: report.space_open_link = %q, want %q", lang, got, link[lang])
 		}
 	}
 }

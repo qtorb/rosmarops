@@ -69,8 +69,9 @@ func (c htmlCtx) renderHowFix(local time.Time) {
 // renderYourSpace is «Your space» (BV-137 point 7; BV-158 part 3b): always
 // shown. Connected, it says whether this run's results were sent, points to the
 // space (report.space_has), and — when the automatic review is another copy's —
-// warns about it with the copy block. Not connected, it pitches the space and
-// says the next check will offer to connect (report.space_pitch/next), with a
+// warns about it with the copy block. Not connected, it shows the one path to
+// the space (BV-196, signed): a single highlighted card (report.space_keep) and
+// a plain text link for whoever already has one (report.space_open_link); no
 // «Create your space» button. Its only external URL is the exact
 // https://app.rosmarops.com/space the trust test allows, at most once, here.
 func (c htmlCtx) renderYourSpace() {
@@ -92,12 +93,16 @@ func (c htmlCtx) renderYourSpace() {
 	} else {
 		// BV-172: a 409/401 during the send forgets the space mid-run, so this
 		// report is not connected; still say the check could not be sent before
-		// the pitch to reconnect, so the rejection is never silent.
+		// the invitation to reconnect, so the rejection is never silent.
 		if c.v.SpaceRejected {
 			c.w(`<p class="warn">%s</p>`, c.t("report.space_rejected", nil))
 		}
-		c.w(`<p>%s</p><p class="mut">%s</p><a class="spacebtn" href="https://app.rosmarops.com/space">%s</a>`,
-			c.t("report.space_pitch", nil), c.t("report.space_next", nil), c.t("report.space_create", nil))
+		// BV-196 (signed): one path to the space. A single highlighted card tells
+		// the person the only way in — run RosmarOps again and «Save to my space» —
+		// and below it a plain text link, for whoever already has a space. No
+		// «Create your space» button: there is no second door.
+		c.w(`<div class="spacecard">%s</div><p class="spacelinkp"><a class="spacelink" href="https://app.rosmarops.com/space">%s</a></p>`,
+			c.t("report.space_keep", nil), c.t("report.space_open_link", nil))
 	}
 	c.w(`</section>`)
 }

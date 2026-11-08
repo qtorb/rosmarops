@@ -254,15 +254,18 @@ func TestRenderHTML_YourSpaceAlways(t *testing.T) {
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
-		// Not connected: the pitch and the «Create your space» button.
+		// Not connected (BV-196): the one signed card and the plain text link; no
+		// «Create your space» button.
 		notConnected := renderHTML(t, lang, v)
 		if !strings.Contains(notConnected, `class="space"`) {
 			t.Errorf("%s: not connected, but no «Your space» section", lang)
 		}
+		if strings.Contains(notConnected, htmlEscape(cat.Text("report.space_create", nil))) {
+			t.Errorf("%s: not connected, the «Create your space» button is still present", lang)
+		}
 		for _, want := range []string{
-			htmlEscape(cat.Text("report.space_pitch", nil)),
-			htmlEscape(cat.Text("report.space_next", nil)),
-			`href="https://app.rosmarops.com/space">` + htmlEscape(cat.Text("report.space_create", nil)),
+			`<div class="spacecard">` + htmlEscape(cat.Text("report.space_keep", nil)) + `</div>`,
+			`href="https://app.rosmarops.com/space">` + htmlEscape(cat.Text("report.space_open_link", nil)),
 		} {
 			if !strings.Contains(notConnected, want) {
 				t.Errorf("%s: not connected, missing %q", lang, want)
