@@ -186,7 +186,7 @@ func TestListAgentInstructions_NewAgents(t *testing.T) {
 	want := map[string][]listed{
 		filepath.Join(codexDir, "AGENTS.override.md"):             {{"codex", false}},
 		filepath.Join(e.home, ".gemini", "GEMINI.md"):             {{"antigravity", false}},
-		filepath.Join(e.repo, "AGENTS.md"):                        {{"antigravity", true}, {"codex", true}, {"cursor", true}},
+		filepath.Join(e.repo, "AGENTS.md"):                        {{"antigravity", true}, {"cline", true}, {"codex", true}, {"cursor", true}, {"github-copilot", true}, {"grok-build", true}},
 		filepath.Join(e.repo, "GEMINI.md"):                        {{"antigravity", false}},
 		filepath.Join(e.repo, "HERMES.md"):                        {{"hermes", false}},
 		filepath.Join(e.repo, "CLAUDE.md"):                        {{"claude-code", false}},
@@ -232,10 +232,18 @@ func TestListAgentInstructions_NewAgentsOrderAndAbsence(t *testing.T) {
 	if l := got[filepath.Join(e.repo, "HERMES.md")]; len(l) != 0 {
 		t.Errorf("HERMES.md: %v", l)
 	}
-	// Claude Code and Cursor list it whether or not they are present (the
-	// graph keeps it only for an agent there); not the absent new agents.
-	if l := got[filepath.Join(e.repo, "AGENTS.md")]; len(l) != 2 || l[0].product != "claude-code" || l[1].product != "cursor" {
-		t.Errorf("AGENTS.md: %v", l)
+	// Claude Code, Cursor and (BV-198 M4) Copilot, Cline and Grok Build list it
+	// whether or not they are present (the graph keeps it only for an agent
+	// there); not the gated new agents (Codex, Antigravity, Gemini, Hermes).
+	wantAgents := []string{"claude-code", "cline", "cursor", "github-copilot", "grok-build"}
+	if l := got[filepath.Join(e.repo, "AGENTS.md")]; len(l) != len(wantAgents) {
+		t.Errorf("AGENTS.md: %v, want %v", l, wantAgents)
+	} else {
+		for i, p := range wantAgents {
+			if l[i].product != p {
+				t.Errorf("AGENTS.md[%d] = %q, want %q (%v)", i, l[i].product, p, l)
+			}
+		}
 	}
 	for _, p := range []string{filepath.Join(e.home, ".gemini", "GEMINI.md")} {
 		if l := got[p]; len(l) != 0 {
