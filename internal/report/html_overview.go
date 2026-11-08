@@ -548,7 +548,8 @@ func overviewKeys() []string {
 		"html.ov.data.net_exceptions", "html.ov.data.no_targets_out", "html.ov.data.byo_key_routed", "html.ov.data.session_env",
 		"html.ov.data.run_everything", "html.ov.open", "html.ov.close", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",
 		"html.ov.head.not_evaluated.no_inference", "html.ov.head.not_evaluated.coverage",
-		"html.ov.head.not_evaluated.antigravity_app", "html.ov.head.not_evaluated.copilot_jetbrains", "html.ov.tag.assumed",
+		"html.ov.head.not_evaluated.antigravity_app", "html.ov.head.not_evaluated.copilot_jetbrains",
+		"html.ov.head.not_evaluated.cline_cli", "html.ov.head.not_evaluated.claude_desktop", "html.ov.tag.assumed",
 	}
 	for _, r := range rules.AllOverviewRows {
 		keys = append(keys, "html.ov.row."+r)

@@ -1,0 +1,56 @@
+{
+  "product": "gemini-cli",
+  "version": "2026-11-03",
+  "entries": [
+    {
+      "id": "read_workspace",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: read_file, glob, grep_search, list_directory run without asking; read-file.ts resolves every path with resolveActiveWorkspaceDir and returns PATH_NOT_IN_WORKSPACE, so reads are confined to the workspace."
+    },
+    {
+      "id": "write_ask",
+      "type": "write_files",
+      "approval": "ask",
+      "target_scope": "workspace",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: write_file and replace ask by default (policy write.toml); general.defaultApprovalMode auto_edit flips them to no-asking."
+    },
+    {
+      "id": "shell_ask",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "any_path",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: run_shell_command asks by default (policy write.toml); tools.allowed with run_shell_command (no prefix) approves any command."
+    },
+    {
+      "id": "network_ask",
+      "type": "network",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: web_fetch asks by default; google_web_search is a read-only search, not egress."
+    },
+    {
+      "id": "mcp_ask",
+      "type": "invoke_mcp_tool",
+      "approval": "ask",
+      "target_scope": "any_destination",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: MCP tool calls ask by default; mcpServers.<n>.trust=true approves that server without asking."
+    },
+    {
+      "id": "mode_default",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "default",
+      "source_url": "https://geminicli.com/docs/reference/configuration",
+      "verified": "CTO-22 Gemini §4, read 2026-11-07: general.defaultApprovalMode defaults to the asking mode; yolo in the file is ignored (config.ts:710-715), auto_edit stops asking for edits."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

@@ -145,7 +145,7 @@
       "properties": {
         "id": { "$ref": "#/definitions/id" },
         "kind": { "const": "capability" },
-        "type": { "enum": ["execute_shell", "read_files", "write_files", "network", "invoke_mcp_tool", "permission_mode"] },
+        "type": { "enum": ["execute_shell", "read_files", "write_files", "network", "invoke_mcp_tool", "permission_mode", "operate_app"] },
         "basis": {
           "enum": ["configured", "product_default"],
           "description": "configured: a rule written in a config file; product_default: documented behaviour of the product, from the knowledge base."

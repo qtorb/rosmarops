@@ -95,9 +95,12 @@ var remoteTypes = map[string]bool{"http": true, "streamable-http": true, "sse": 
 //  1. Claude Code user and local scopes: %USERPROFILE%\.claude.json
 //     (top-level mcpServers; projects.<path>.mcpServers)
 //  2. Claude Code project scope: <repo>\.mcp.json (per repo in repoRoots)
-//  3. Cline:  %APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json
+//  3. Cline:  %USERPROFILE%\.cline\data\settings\cline_mcp_settings.json (the
+//     live path; the legacy globalStorage and Documents copies are read too,
+//     as dead copies, CTO-22 Cline §2)
 //  4. Cursor: %USERPROFILE%\.cursor\mcp.json
-//  5. Claude Desktop: %APPDATA%\Claude\claude_desktop_config.json
+//  5. Claude Desktop: %APPDATA%\Claude\claude_desktop_config.json and the MSIX
+//     virtualized copy (CTO-22 Claude Desktop §2)
 //  6. Antigravity: %USERPROFILE%\.gemini\config\mcp_config.json and
 //     <repo>\.agents\mcp_config.json (https://antigravity.google/docs/settings)
 //
@@ -126,12 +129,6 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return platform.MCPScan{}, fmt.Errorf("resolve home dir: %w", err)
-	}
-
-	// %APPDATA% is normally set on Windows. If unset, derive from home as fallback.
-	appData := os.Getenv("APPDATA")
-	if appData == "" {
-		appData = filepath.Join(home, "AppData", "Roaming")
 	}
 
 	var scan platform.MCPScan
@@ -179,15 +176,39 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 		add(project(filepath.Join(root, ".mcp.json"), true))
 	}
 
-	// 3. Cline (VS Code extension saoudrizwan.claude-dev).
-	clineDir := filepath.Join(appData, "Code", "User", "globalStorage", "saoudrizwan.claude-dev", "settings")
-	if w.layout == agentdirs.MacOSLayout {
-		clineDir = w.layout.ClineDir(home, nil)
+	// 3. Cline (VS Code extension saoudrizwan.claude-dev). CTO-22 Cline §2: the
+	// servers live in the data folder now (~/.cline/data/settings/
+	// cline_mcp_settings.json, or CLINE_MCP_SETTINGS_PATH), and the old
+	// globalStorage and Documents copies are left behind as dead copies. The new
+	// file is the one that loads; each legacy copy that exists is read as a dead
+	// copy whenever the new file is present (loadsMCP false: its servers neither
+	// load nor double-count, but its env/headers are still credentials on disk).
+	// Only a pre-migration install with no new file lets a legacy copy load.
+	// The ai_client identity is ~/.cline/data (BV-193 decision 9): the MCP
+	// servers, the skills and FromCline all share that configDir, so they are
+	// one Cline ai_client.
+	clineConfigDir := agentdirs.ClineDataDir(home, nil)
+	clineNewMCP := filepath.Join(clineConfigDir, "settings", "cline_mcp_settings.json")
+	if v := os.Getenv("CLINE_MCP_SETTINGS_PATH"); v != "" {
+		clineNewMCP = v
 	}
+	newClineExists := fileExists(clineNewMCP)
 	add(sourceSpec{
-		path: filepath.Join(clineDir, "cline_mcp_settings.json"), client: "cline",
-		format: formatMCPServers, loadsMCP: true, configDir: clineDir, scope: platform.MCPScopeUser,
+		path: clineNewMCP, client: "cline",
+		format: formatMCPServers, loadsMCP: true, configDir: clineConfigDir, scope: platform.MCPScopeUser,
 	})
+	for _, legacy := range []string{
+		filepath.Join(w.layout.ClineDir(home, nil), "cline_mcp_settings.json"),                 // vscodeGlobalStorage
+		filepath.Join(agentdirs.DocumentsDir(home), "Cline", "MCP", "cline_mcp_settings.json"), // documentsClineMcp
+	} {
+		if legacy == clineNewMCP {
+			continue
+		}
+		add(sourceSpec{
+			path: legacy, client: "cline",
+			format: formatMCPServers, loadsMCP: !newClineExists, configDir: clineConfigDir, scope: platform.MCPScopeUser,
+		})
+	}
 
 	// 4. Cursor (adopted standard MCP format; top-level mcpServers key):
 	// ~/.cursor/mcp.json and <repo>/.cursor/mcp.json (decision 2026-10-25,
@@ -215,13 +236,23 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 	}
 	has := agentdirs.Products(present)
 
-	// 5. Claude Desktop, installer path (the MSIX path is not covered).
+	// 5. Claude Desktop: the installer path and, on Windows, the MSIX
+	// (Microsoft Store / enterprise) virtualized path (CTO-22 Claude Desktop §2,
+	// signed point 12). Both are read; the ai_client identity stays the
+	// installer folder so the two installs are one client. If both exist with
+	// different servers, step 3 notes it in coverage.
 	if has[agentdirs.ClaudeDesktop] {
 		desktopDir := w.layout.ClaudeDesktopDir(home, nil)
-		add(sourceSpec{
-			path: filepath.Join(desktopDir, "claude_desktop_config.json"), client: agentdirs.ClaudeDesktop,
-			format: formatMCPServers, loadsMCP: true, configDir: desktopDir, scope: platform.MCPScopeUser,
-		})
+		dirs := []string{desktopDir}
+		if w.layout == agentdirs.WindowsLayout {
+			dirs = append(dirs, w.layout.ClaudeDesktopMSIXDir(home, nil))
+		}
+		for _, dir := range dirs {
+			add(sourceSpec{
+				path: filepath.Join(dir, "claude_desktop_config.json"), client: agentdirs.ClaudeDesktop,
+				format: formatMCPServers, loadsMCP: true, configDir: desktopDir, scope: platform.MCPScopeUser,
+			})
+		}
 	}
 
 	// 6. Antigravity: global and per project. The shared ~/.gemini/config and the

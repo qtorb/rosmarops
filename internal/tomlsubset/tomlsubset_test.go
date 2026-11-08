@@ -117,18 +117,30 @@ func TestParse_HashInsideStringKept(t *testing.T) {
 	}
 }
 
+// BV-193: arrays of tables ([[a.b.c]]) for Codex's computer_use.windows.exes.
+func TestParse_ArrayOfTables(t *testing.T) {
+	m, err := Parse([]byte("[computer_use.windows]\n[[computer_use.windows.exes]]\nbinary_name = \"mspaint.exe\"\naccess = \"allow\"\n[[computer_use.windows.exes]]\nbinary_name = \"notepad.exe\"\naccess = \"deny\"\n"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	exes := m["computer_use"].(Map)["windows"].(Map)["exes"].(Array)
+	if len(exes) != 2 || exes[0].(Map)["binary_name"] != "mspaint.exe" || exes[1].(Map)["access"] != "deny" {
+		t.Errorf("exes: %#v", exes)
+	}
+}
+
 func TestParse_Refusals(t *testing.T) {
 	cases := map[string]string{
-		"array of tables":     "[[servers]]\nname = \"x\"\n",
-		"duplicate key":       "a = 1\na = 2\n",
-		"duplicate table":     "[t]\n[t]\n",
-		"leaf then table":     "a = 1\n[a]\n",
-		"multiline basic":     "a = \"\"\"x\n",
-		"unterminated string": "a = \"x\n",
-		"unterminated array":  "a = [1, 2\n",
-		"bad value":           "a = 2026-01-01\n",
-		"empty header":        "[]\n",
-		"no equals":           "just some words\n",
+		"array of tables over a table": "[t]\n[[t]]\n", // a table then an array of tables at the same path
+		"duplicate key":                "a = 1\na = 2\n",
+		"duplicate table":              "[t]\n[t]\n",
+		"leaf then table":              "a = 1\n[a]\n",
+		"multiline basic":              "a = \"\"\"x\n",
+		"unterminated string":          "a = \"x\n",
+		"unterminated array":           "a = [1, 2\n",
+		"bad value":                    "a = 2026-01-01\n",
+		"empty header":                 "[]\n",
+		"no equals":                    "just some words\n",
 	}
 	for name, src := range cases {
 		if _, err := Parse([]byte(src)); err == nil {

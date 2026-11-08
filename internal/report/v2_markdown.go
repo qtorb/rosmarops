@@ -37,7 +37,7 @@ var staticKeys = []string{
 	"evidence.edges",
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
-	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "legacy.none",
+	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "coverage.claude_desktop_two_configs", "legacy.none",
 	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
@@ -144,6 +144,11 @@ func CatalogKeys() []string {
 			keys = append(keys, "finding."+r+".title", "finding."+r+".what", "finding."+r+".step1")
 			continue
 		}
+		if r == rules.RuleComputerUseAppAllowed {
+			// BV-193: one signed sentence per colour, no generic what/why.
+			keys = append(keys, "finding."+r+".red", "finding."+r+".yellow")
+			continue
+		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
 		if r == rules.RuleCredInGit {
 			keys = append(keys, "finding."+r+".why.remote", "finding."+r+".why.local")
@@ -206,7 +211,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs)
+	gaps := len(v.Coverage.SourcesFailed) + len(v.Coverage.AgentsUnsupported) + len(scanErrs) + len(v.Coverage.Notes)
 	if !v.Coverage.GraphBuilt {
 		gaps++
 	}
@@ -374,6 +379,28 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding."+f.Rule+".what", p))
 			w("#### %s\n\n%s", t("finding.part.todo", p), n8nMarkdownSteps(t, f, p))
+			continue
+		}
+		if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: one signed sentence (the title), no generic what/why
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), cat.Text(computerUseKey(f), computerUseParams(f)))
+			meta := []string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}
+			if f.Radius != "" {
+				meta = append(meta, t("radius."+f.Radius, p))
+			}
+			w("%s\n\n", strings.Join(meta, " · "))
+			var own []string
+			for _, a := range f.Evidence.Assumptions {
+				if !sharedAssumption[a] {
+					own = append(own, t("unknown."+a, p))
+				}
+			}
+			if len(own) > 0 {
+				w("#### %s\n\n", t("finding.part.unknown", p))
+				for _, l := range own {
+					w("- %s\n", l)
+				}
+				w("\n")
+			}
 			continue
 		}
 		w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), t(multi(execVariant(f, "finding."+f.Rule+".title")), p))
@@ -567,6 +594,9 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	if v.Coverage.BinarySkipped > 0 { // BV-186
 		w("- %s\n", cat.Plural("coverage.binary_skipped", v.Coverage.BinarySkipped, map[string]string{"n": strconv.Itoa(v.Coverage.BinarySkipped)}))
+	}
+	for _, n := range v.Coverage.Notes { // BV-193 D3: informational notes, full signed sentence
+		w("- %s\n", t(n, nil))
 	}
 	w("\n")
 	// What this system does not check yet: shown here, not a gap (decision
