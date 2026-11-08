@@ -727,13 +727,19 @@ func Evaluate(in Input) Result {
 	return res
 }
 
-// ownsAccountFile reports that cred is the agent's own session file: a
-// .credentials.json or auth.json whose every location is under the agent's
-// configuration folder (§3). Reading one's own session credential is not a
-// finding against its owner (it is against any other agent that reaches it).
+// ownsAccountFile reports that cred is the agent's own session file: a file
+// named in the agent's knowledge-base session_files list whose every location
+// is under the agent's configuration folder (§3, BV-198 M5). Reading one's own
+// session credential is not a finding against its owner (it is against any
+// other agent that reaches it). An agent whose base lists no session files
+// (e.g. one that keeps its session in the OS credential store) owns none.
 func ownsAccountFile(a *agentView, cred graph.Node) bool {
-	if a.node.ConfigPath == "" {
+	if a.node.ConfigPath == "" || len(a.base.SessionFiles) == 0 {
 		return false
+	}
+	own := map[string]bool{}
+	for _, n := range a.base.SessionFiles {
+		own[strings.ToLower(n)] = true
 	}
 	files := graph.CredentialFiles(cred)
 	if len(files) == 0 {
@@ -741,7 +747,7 @@ func ownsAccountFile(a *agentView, cred graph.Node) bool {
 	}
 	for _, f := range files {
 		base := strings.ToLower(path.Base(strings.ReplaceAll(f, `\`, "/")))
-		if base != ".credentials.json" && base != "auth.json" && base != "mcp_credentials.json" {
+		if !own[base] {
 			return false
 		}
 		if !graph.Within(a.node.ConfigPath, f) {

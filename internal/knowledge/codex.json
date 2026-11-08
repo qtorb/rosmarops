@@ -1,6 +1,7 @@
 {
   "product": "codex",
   "version": "2026-11-01",
+  "session_files": ["auth.json", ".credentials.json"],
   "entries": [
     {
       "id": "read_accessible",

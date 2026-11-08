@@ -155,6 +155,14 @@ type Base struct {
 	// annex 2 point 2).
 	ReadCommands    []CommandClass `json:"read_commands,omitempty"`
 	NetworkCommands []CommandClass `json:"network_commands,omitempty"`
+
+	// SessionFiles are the base names of this agent's own session/account
+	// files under its configuration folder (BV-198 M5, CTO-23 §0): reading one
+	// of them is not a finding against the agent that owns it, but still is
+	// against any other agent that reaches it. Replaces the fixed list that
+	// ownsAccountFile used before. Empty for an agent with no on-disk session
+	// file (it keeps its session in the OS credential store, or has none).
+	SessionFiles []string `json:"session_files,omitempty"`
 }
 
 // CommandClass is one command of a closed list: its name, lowercase, without

@@ -1,6 +1,7 @@
 {
   "product": "claude-code",
   "version": "2026-10-24",
+  "session_files": [".credentials.json"],
   "entries": [
     {
       "id": "read_in_working_dirs",

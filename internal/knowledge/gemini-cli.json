@@ -1,6 +1,7 @@
 {
   "product": "gemini-cli",
   "version": "2026-11-08",
+  "session_files": ["oauth_creds.json"],
   "entries": [
     {
       "id": "read_workspace",

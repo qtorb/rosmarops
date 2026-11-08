@@ -1,6 +1,7 @@
 {
   "product": "cline",
   "version": "2026-11-03",
+  "session_files": ["secrets.json"],
   "entries": [
     {
       "id": "read_default",
