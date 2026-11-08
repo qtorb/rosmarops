@@ -1,6 +1,6 @@
 {
   "product": "grok-build",
-  "version": "2026-11-01",
+  "version": "2026-11-08",
   "entries": [
     {
       "id": "read_accessible",
@@ -41,6 +41,14 @@
       "target_scope": "*",
       "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
       "verified": "CTO-16 Grok §4, 2026-11-01: web_fetch asks the user in the default mode (not in the read-only list)"
+    },
+    {
+      "id": "web_search_default",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-pager/docs/user-guide/22-permissions-and-safety.md",
+      "verified": "CTO-16 Grok §4, 2026-11-01: web_search is in the read-only list, allowed with no folder limit in the default mode. BV-198 M3 (firma 2): a web tool allowed by default is internet egress — the query can carry the content of a request off the computer."
     },
     {
       "id": "builtin_default_mode",

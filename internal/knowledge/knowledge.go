@@ -60,7 +60,7 @@ const CodexVersion = "2026-11-01"
 
 // GrokBuildVersion is the version of the embedded Grok Build base
 // (grok-build.json, BV-140).
-const GrokBuildVersion = "2026-11-01"
+const GrokBuildVersion = "2026-11-08"
 
 // GitHubCopilotVersion is the version of the embedded GitHub Copilot base
 // (github-copilot.json, BV-140).
@@ -72,7 +72,7 @@ const AntigravityCLIVersion = "2026-11-01"
 
 // GeminiCLIVersion is the version of the embedded Gemini CLI base
 // (gemini-cli.json, BV-193). Not after ReviewedOn.
-const GeminiCLIVersion = "2026-11-03"
+const GeminiCLIVersion = "2026-11-08"
 
 // ClineVersion is the version of the embedded Cline base (cline.json, BV-193).
 // Not after ReviewedOn.
@@ -85,7 +85,7 @@ const ClineVersion = "2026-11-03"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-03"
+const ReviewedOn = "2026-11-08"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by

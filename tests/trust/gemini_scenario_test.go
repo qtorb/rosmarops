@@ -50,7 +50,8 @@ func geminiUserLayer(mode string) platform.GeminiLayer {
 }
 
 // G1: default settings, a high-privilege credential in the workspace. The band
-// is red and cred_readable fires on Gemini CLI.
+// is red and, with google_web_search as egress (BV-198 M3), cred_read_and_send
+// fires on Gemini CLI.
 func TestScenario_Gemini_Default(t *testing.T) {
 	scan := platform.GeminiScan{ConfigDir: fcGemini, Present: true, FolderTrustEnabled: true, Layers: []platform.GeminiLayer{geminiUserLayer("")}}
 	entries := []platform.CredentialEntry{{Path: fcRepo + "/.env", Line: 1, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(fcServiceRole)}}
@@ -59,8 +60,8 @@ func TestScenario_Gemini_Default(t *testing.T) {
 	if v.Status != "red" {
 		t.Errorf("default band: want red, got %q", v.Status)
 	}
-	if !agentFindings(v, knowledge.GeminiCLIProduct)[rules.RuleCredReadable] {
-		t.Errorf("default: missing cred_readable (have %v)", agentFindings(v, knowledge.GeminiCLIProduct))
+	if !agentFindings(v, knowledge.GeminiCLIProduct)[rules.RuleCredReadAndSend] {
+		t.Errorf("default: missing cred_read_and_send (have %v)", agentFindings(v, knowledge.GeminiCLIProduct))
 	}
 }
 

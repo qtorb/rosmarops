@@ -938,7 +938,8 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 			boundary[c.AppliesIn] = true
 		}
 	}
-	if n.Platform == knowledge.CursorProduct {
+	switch n.Platform {
+	case knowledge.CursorProduct:
 		// readBoundary workspace narrows the radius when the user's
 		// sandbox.json sets it, or every repository's (decision 2026-10-25,
 		// Cursor, annex 2 point 8).
@@ -951,22 +952,56 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 			v.blockReads = all
 		}
 		v.egress = v.cursorEgress(base)
-		return v
-	}
-	if n.Platform == knowledge.HermesProduct {
+	case knowledge.HermesProduct:
 		v.egress = v.hermesEgress()
-		return v
-	}
-	if n.Platform == knowledge.CodexProduct {
+	case knowledge.CodexProduct:
 		v.egress = v.codexEgress()
-		return v
-	}
-	if n.Platform == knowledge.GrokBuildProduct {
+	case knowledge.GrokBuildProduct:
 		v.egress = v.grokEgress()
-		return v
+	default:
+		v.egress = v.egressWays(base, launchers)
 	}
-	v.egress = v.egressWays(base, launchers)
+	// M3 (BV-198, CTO-23 §0, firma 2): the single egress rule. A web or MCP
+	// tool the agent can use without asking — default or configured — is
+	// internet egress, for every agent, decided in one place so the per-agent
+	// paths above carry only the shell and mode ways.
+	v.egress = append(v.egress, v.webMCPEgress()...)
 	return v
+}
+
+// webMCPEgress is the single egress rule (BV-198 M3, CTO-23 §0, firma 2): an
+// in-force network tool (web search, web fetch, browser) or invoke_mcp_tool
+// with approval allow and a broad destination sends the content of a request
+// off the computer without a person, so it is internet egress — the same rule
+// for every agent (Cline useBrowser/useMcp, Gemini google_web_search, Grok
+// web_search, and any agent configured that way). A network tool scoped to a
+// single domain or to preapproved documentation domains is not egress.
+func (v *agentView) webMCPEgress() []way {
+	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}
+	var out []way
+	for _, c := range v.inForce {
+		if c.Approval != graph.ApprovalAllow || !broadDestination(c.TargetScope) {
+			continue
+		}
+		switch c.Type {
+		case graph.CapNetwork:
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		case graph.CapInvokeMCPTool:
+			out = append(out, way{id: c.ID, code: "egress_mcp_allowlist", cap: c.ID, assumptions: append([]string{}, baseA...)})
+		}
+	}
+	return out
+}
+
+// broadDestination reports whether a network or MCP capability's scope reaches
+// an arbitrary destination (so data can leave the computer), as opposed to a
+// single documentation domain the user preapproved.
+func broadDestination(scope string) bool {
+	switch scope {
+	case "any_destination", scopeAll, "*:*":
+		return true
+	}
+	return false
 }
 
 // grokMode is Grok Build's effective permission mode from its in-force
@@ -1001,11 +1036,11 @@ func grokBypassMode(mode string) bool {
 	return false
 }
 
-// grokEgress are Grok Build's ways to send data out without a person (CTO-16
-// Grok §4): with an approve-everything mode (bypassPermissions, always-approve,
-// yolo) the network and shell send without asking; with auto a classifier
-// decides; a wildcard network allow also sends. The default mode asks, so it is
-// no egress. Every Grok way carries launch_flags_not_readable.
+// grokEgress are Grok Build's mode ways to send data out without a person
+// (CTO-16 Grok §4): with an approve-everything mode (bypassPermissions,
+// always-approve, yolo) the shell sends without asking; with auto a classifier
+// decides. Its web and MCP tools come through the single rule (webMCPEgress).
+// Every Grok way carries launch_flags_not_readable.
 func (v *agentView) grokEgress() []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
 	mode, modeCap := grokMode(v)
@@ -1016,59 +1051,46 @@ func (v *agentView) grokEgress() []way {
 	case mode == "auto" && modeCap != nil:
 		out = append(out, way{id: modeCap.ID, code: "egress_auto", cap: modeCap.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeAutoClassifierPermits)})
 	}
-	for _, c := range v.inForce {
-		if c.Type == graph.CapNetwork && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
-			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
-		}
-	}
 	return out
 }
 
-// codexEgress are Codex's ways to send data out without a person (CTO-16 §4):
-// the network, off by default (no way), allowed with workspace-write +
-// network_access or with danger-full-access; and the shell when it runs on the
-// machine (danger-full-access, target "*"). A workspace-sandbox shell is no
-// egress of the computer's data. Every Codex way carries launch_flags_not_readable.
+// codexEgress is Codex's shell way to send data out without a person (CTO-16
+// §4): the shell when it runs on the machine (danger-full-access, target "*").
+// A workspace-sandbox shell is no egress of the computer's data. The network
+// (off by default, allowed with workspace-write + network_access or with
+// danger-full-access) comes through the single rule (webMCPEgress). Every Codex
+// way carries launch_flags_not_readable.
 func (v *agentView) codexEgress() []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
 	var out []way
 	for _, c := range v.inForce {
-		if c.Approval != graph.ApprovalAllow {
+		if c.Approval != graph.ApprovalAllow || c.Type != graph.CapExecuteShell {
 			continue
 		}
-		switch c.Type {
-		case graph.CapNetwork:
-			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
-		case graph.CapExecuteShell:
-			if c.TargetScope != scopeAll {
-				continue // a workspace-sandbox shell stays in its sandbox
-			}
-			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
+		if c.TargetScope != scopeAll {
+			continue // a workspace-sandbox shell stays in its sandbox
 		}
+		out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
 	}
 	return out
 }
 
-// hermesEgress are Hermes Agent's ways to send data out without a person
-// (BV-111): the network tool (any destination) and the shell tool on the
-// computer. An isolated terminal backend keeps the shell in its sandbox, so
-// it is no egress of the computer's data; the network tool is not isolated.
+// hermesEgress is Hermes Agent's shell way to send data out without a person
+// (BV-111): the shell tool on the computer. An isolated terminal backend keeps
+// the shell in its sandbox, so it is no egress of the computer's data. Its
+// network and MCP tools come through the single rule (webMCPEgress); the
+// network tool is not isolated.
 func (v *agentView) hermesEgress() []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}
 	var out []way
 	for _, c := range v.inForce {
-		if c.Approval != graph.ApprovalAllow {
+		if c.Approval != graph.ApprovalAllow || c.Type != graph.CapExecuteShell {
 			continue
 		}
-		switch c.Type {
-		case graph.CapNetwork:
-			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
-		case graph.CapExecuteShell:
-			if c.TargetScope == graph.HermesScopeIsolated {
-				continue
-			}
-			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
+		if c.TargetScope == graph.HermesScopeIsolated {
+			continue
 		}
+		out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)})
 	}
 	return out
 }
@@ -1091,8 +1113,7 @@ func (v *agentView) cursorEgress(base knowledge.Base) []way {
 		if c.Basis != graph.BasisConfigured || c.Approval != graph.ApprovalAllow {
 			continue
 		}
-		switch {
-		case c.Type == graph.CapExecuteShell && strings.HasPrefix(c.Rule, "terminalAllowlist:"):
+		if c.Type == graph.CapExecuteShell && strings.HasPrefix(c.Rule, "terminalAllowlist:") {
 			_, network, launcher := graph.CursorAllowlistClass(c.TargetScope, base)
 			switch {
 			case network:
@@ -1100,8 +1121,6 @@ func (v *agentView) cursorEgress(base knowledge.Base) []way {
 			case launcher:
 				out = append(out, way{id: c.ID, code: "egress_allowlist", cap: c.ID, assumptions: append(append([]string{}, baseA...), AssumeCodeLauncherRule)})
 			}
-		case c.Type == graph.CapInvokeMCPTool && c.TargetScope == "*:*":
-			out = append(out, way{id: c.ID, code: "egress_mcp_allowlist", cap: c.ID, assumptions: append([]string{}, baseA...)})
 		}
 	}
 	return out

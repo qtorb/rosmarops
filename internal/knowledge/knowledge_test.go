@@ -67,8 +67,8 @@ func TestGrokBuild_LoadsStrictly(t *testing.T) {
 	if b.Product != knowledge.GrokBuildProduct || b.Version != knowledge.GrokBuildVersion {
 		t.Errorf("product/version: got %q/%q, want %q/%q", b.Product, b.Version, knowledge.GrokBuildProduct, knowledge.GrokBuildVersion)
 	}
-	if len(b.Entries) != 6 {
-		t.Errorf("entries: got %d, want 6", len(b.Entries))
+	if len(b.Entries) != 7 {
+		t.Errorf("entries: got %d, want 7", len(b.Entries))
 	}
 	if len(b.CodeLaunchers) == 0 {
 		t.Error("Grok Build base lacks the shared code launcher table")
