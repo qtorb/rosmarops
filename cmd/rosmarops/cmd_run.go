@@ -837,6 +837,15 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			// it is safe.
 			slog.Warn("results package skipped", "err", err)
 			pkgFailed = true
+			// BV-201 point 3: never in silence. Record a "failed" line in the
+			// sends log with the schema field path(s) only — never the value —
+			// so a package that could not be built leaves a trace next to the
+			// sends, not just a console line that is lost.
+			if built != nil {
+				fields := strings.Join(report.SchemaErrorFields(err), ",")
+				appendSendLog(filepath.Join(dataDir, SendsLogName), pkgNow,
+					report.ResultsFileName(pkgNow, built.Provenance.HostID), 0, sendFailed, fields)
+			}
 		case pkgPath != "":
 			currentPkg = pkgPath
 			slog.Info("results package written", "path", pkgPath)

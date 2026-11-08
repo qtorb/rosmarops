@@ -545,14 +545,33 @@ func svFindings(v V2, ctxs map[string]htmlCtx, home string) []SVFinding {
 		}
 		for lang, c := range ctxs {
 			steps, paste := svSteps(c, f, home)
-			sf.Text[lang] = SVText{
+			sf.Text[lang] = clampFindingText(SVText{
 				Title: c.titleText(f), WhatItMeans: c.impactText(f),
 				Steps: steps, PasteBlock: paste,
-			}
+			})
 		}
 		out = append(out, sf)
 	}
 	return out
+}
+
+// clampFindingText clamps a finding's text to the finding_text limits of
+// space-view.v1 (title 200, what_it_means 600, each step 1000, paste_block
+// 16000), with the same clipRunes rule clampReport uses for the report field
+// (cut at the end with «…»). BV-201: without this an unbounded value — e.g. the
+// {apps} list of a computer_use_app_allowed finding with many apps — overflowed
+// findings[].text.*.title and the whole package was silently dropped.
+func clampFindingText(t SVText) SVText {
+	t.Title = clipRunes(t.Title, svMax200)
+	t.WhatItMeans = clipRunes(t.WhatItMeans, svMax600)
+	for i := range t.Steps {
+		t.Steps[i] = clipRunes(t.Steps[i], svMax1000)
+	}
+	if t.PasteBlock != nil {
+		p := clipRunes(*t.PasteBlock, svMaxPaste)
+		t.PasteBlock = &p
+	}
+	return t
 }
 
 // weightAndAfter maps each finding id to its weight and the score of its
@@ -719,7 +738,11 @@ func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 		id := f.ID
 		text := map[string]string{}
 		for lang, c := range ctxs {
-			text[lang] = c.titleText(f)
+			// changes[].text is capped at 200 by the schema; clip with the same
+			// rule as the report fields (BV-201), so a long title — e.g. a new
+			// computer_use_app_allowed finding's {apps} list — never drops the
+			// package.
+			text[lang] = clipRunes(c.titleText(f), svMax200)
 		}
 		out = append(out, SVChange{Kind: "new", FindingID: &id, Text: text})
 	}
@@ -747,6 +770,33 @@ func svTopAction(v V2) *SVTopAction {
 		return &SVTopAction{FindingID: v.Today.FindingID, ScoreFrom: *ai.Value, ScoreTo: ai.Projection.Value}
 	}
 	return nil
+}
+
+// SchemaErrorFields extracts the field paths from a space-view schema-validation
+// error (the error RenderSpaceViewJSON returns), and nothing else: each reported
+// violation is a line "  <path>: <message>", and only the <path> before ": " is
+// returned. BV-201 point 3: the sends log records why a package could not be
+// built with the field path only — never the offending value, which lives after
+// the ": " and is dropped here. Returns nil for any other error.
+func SchemaErrorFields(err error) []string {
+	if err == nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, line := range strings.Split(err.Error(), "\n") {
+		i := strings.Index(line, ": ")
+		if i <= 0 {
+			continue
+		}
+		path := strings.TrimSpace(line[:i])
+		if path == "" || strings.ContainsAny(path, " \t") || seen[path] {
+			continue
+		}
+		seen[path] = true
+		out = append(out, path)
+	}
+	return out
 }
 
 // RenderSpaceViewJSON serialises sv and validates it against the embedded
