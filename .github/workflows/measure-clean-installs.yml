@@ -69,7 +69,6 @@ jobs:
 
       - name: Install ${{ matrix.agent }} (no login, no launch)
         id: install
-        continue-on-error: true
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -88,7 +87,16 @@ jobs:
               code --install-extension saoudrizwan.claude-dev
             }
             "grok-build"      { Invoke-RestMethod https://x.ai/cli/install.ps1 | Invoke-Expression }
-            "hermes"          { Invoke-Expression (Invoke-RestMethod https://hermes-agent.nousresearch.com/install.ps1) }
+            "hermes"          {
+              # Hermes's official scripts/install.ps1 is a staged bootstrap; its
+              # non-interactive mode is the -NonInteractive switch ("skip stages
+              # that need input", scripts/install.ps1:6,33,55). A switch can't be
+              # passed through `irm | iex`, so run the script as a file. It is the
+              # official installer, native Windows (no WSL); no login, no launch.
+              $hermesPs1 = Join-Path $env:RUNNER_TEMP 'hermes-install.ps1'
+              Invoke-RestMethod https://hermes-agent.nousresearch.com/install.ps1 | Set-Content -LiteralPath $hermesPs1 -Encoding utf8
+              & $hermesPs1 -NonInteractive
+            }
             "antigravity-cli" { Invoke-RestMethod https://antigravity.google/cli/install.ps1 | Invoke-Expression }
           }
 
@@ -124,6 +132,28 @@ jobs:
             "what a product writes only on first use does not appear here."
           ) | Set-Content -Encoding utf8 "$out\summary.txt"
           Write-Host "added paths: $($added.Count)"
+
+          # BV-200: the install must leave what its official installer should
+          # create. An installer that leaves nothing counts as a failure.
+          $expected = switch ("${{ matrix.agent }}") {
+            "claude-code"     { "$env:APPDATA\npm\claude.cmd" }
+            "codex"           { "$env:APPDATA\npm\codex.cmd" }
+            "gemini-cli"      { "$env:APPDATA\npm\gemini.cmd" }
+            "cursor"          { "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe" }
+            "github-copilot"  { "$env:USERPROFILE\.vscode\extensions\github.copilot-*" }
+            "cline"           { "$env:USERPROFILE\.vscode\extensions\saoudrizwan.claude-dev-*" }
+            "grok-build"      { "$env:USERPROFILE\.grok\bin\grok.exe" }
+            "antigravity-cli" { "$env:LOCALAPPDATA\agy\bin\agy.exe" }
+            "hermes"          { "$env:LOCALAPPDATA\hermes" }
+          }
+          $present = Test-Path -Path $expected
+          Add-Content -Encoding utf8 "$out\summary.txt" "expected artifact: $expected"
+          Add-Content -Encoding utf8 "$out\summary.txt" "artifact present: $present"
+          if (-not $present) {
+            Add-Content -Encoding utf8 "$out\summary.txt" "MISSING: the installer left no expected artifact"
+            Write-Error "install of ${{ matrix.agent }} left no expected artifact: $expected"
+            exit 1
+          }
 
       - name: Upload artifact
         if: always()
