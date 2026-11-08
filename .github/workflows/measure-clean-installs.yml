@@ -135,23 +135,94 @@ jobs:
 
           # BV-200: the install must leave what its official installer should
           # create. An installer that leaves nothing counts as a failure.
-          $expected = switch ("${{ matrix.agent }}") {
-            "claude-code"     { "$env:APPDATA\npm\claude.cmd" }
-            "codex"           { "$env:APPDATA\npm\codex.cmd" }
-            "gemini-cli"      { "$env:APPDATA\npm\gemini.cmd" }
-            "cursor"          { "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe" }
-            "github-copilot"  { "$env:USERPROFILE\.vscode\extensions\github.copilot-*" }
-            "cline"           { "$env:USERPROFILE\.vscode\extensions\saoudrizwan.claude-dev-*" }
-            "grok-build"      { "$env:USERPROFILE\.grok\bin\grok.exe" }
-            "antigravity-cli" { "$env:LOCALAPPDATA\agy\bin\agy.exe" }
-            "hermes"          { "$env:LOCALAPPDATA\hermes" }
+          #
+          # Two groups need more than a fixed path (reconciled on the branch
+          # against a real windows-latest run, 2026-11-08):
+          #  - npm CLIs (claude-code, codex, gemini-cli): the hosted runner sets
+          #    npm's global prefix away from %APPDATA%\npm, so the shim is
+          #    resolved through the tool name (and `npm prefix -g` as a fallback)
+          #    rather than a hard-coded path.
+          #  - github-copilot: Copilot and Copilot Chat now ship BUILT IN to
+          #    current VS Code (the install log shows github.copilot-chat as a
+          #    built-in extension), so no github.copilot-* folder is created
+          #    under %USERPROFILE%\.vscode\extensions. What the installer leaves
+          #    is the VS Code host itself; presence is confirmed there and the
+          #    built-in status is recorded for the R2 footprint.
+          $agent = "${{ matrix.agent }}"
+          $expected = ""
+          $present = $false
+          switch ($agent) {
+            { $_ -in @("claude-code", "codex", "gemini-cli") } {
+              $bin = @{ "claude-code" = "claude"; "codex" = "codex"; "gemini-cli" = "gemini" }[$agent]
+              $cmd = Get-Command $bin -ErrorAction SilentlyContinue
+              if ($cmd) {
+                $present = $true
+                $expected = $cmd.Source
+              } else {
+                $prefix = (& npm prefix -g 2>$null)
+                if ($prefix) {
+                  $prefix = ("$prefix").Trim()
+                  $hit = Get-ChildItem -Path (Join-Path $prefix "$bin.*") -ErrorAction SilentlyContinue | Select-Object -First 1
+                  $present = [bool]$hit
+                  $expected = if ($hit) { $hit.FullName } else { (Join-Path $prefix "$bin.*") }
+                } else {
+                  $expected = "$bin (npm global bin not found)"
+                }
+              }
+              break
+            }
+            "cursor" {
+              $expected = "$env:LOCALAPPDATA\Programs\cursor\Cursor.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "github-copilot" {
+              $code = Get-Command code -ErrorAction SilentlyContinue
+              if (-not $code) {
+                foreach ($c in @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd",
+                                 "$env:ProgramFiles\Microsoft VS Code\bin\code.cmd")) {
+                  if (Test-Path $c) { $code = Get-Command $c; break }
+                }
+              }
+              $vscode = @("$env:LOCALAPPDATA\Programs\Microsoft VS Code\Code.exe",
+                          "$env:ProgramFiles\Microsoft VS Code\Code.exe") |
+                        Where-Object { Test-Path $_ } | Select-Object -First 1
+              $present = [bool]$vscode -or [bool]$code
+              $expected = if ($vscode) { $vscode } elseif ($code) { $code.Source } else { "Microsoft VS Code (host for the built-in Copilot extensions)" }
+              if ($code) {
+                $exts = & $code.Source --list-extensions 2>$null
+                $copilot = @($exts | Where-Object { $_ -like 'github.copilot*' })
+                Add-Content -Encoding utf8 "$out\summary.txt" "code --list-extensions (github.copilot*): $([string]::Join(', ', $copilot))"
+              }
+              Add-Content -Encoding utf8 "$out\summary.txt" "NOTE: Copilot and Copilot Chat ship built in to current VS Code; no github.copilot-* folder is created under .vscode\extensions."
+              break
+            }
+            "cline" {
+              $expected = "$env:USERPROFILE\.vscode\extensions\saoudrizwan.claude-dev-*"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "grok-build" {
+              $expected = "$env:USERPROFILE\.grok\bin\grok.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "antigravity-cli" {
+              $expected = "$env:LOCALAPPDATA\agy\bin\agy.exe"
+              $present = Test-Path -Path $expected
+              break
+            }
+            "hermes" {
+              $expected = "$env:LOCALAPPDATA\hermes"
+              $present = Test-Path -Path $expected
+              break
+            }
           }
-          $present = Test-Path -Path $expected
           Add-Content -Encoding utf8 "$out\summary.txt" "expected artifact: $expected"
           Add-Content -Encoding utf8 "$out\summary.txt" "artifact present: $present"
           if (-not $present) {
             Add-Content -Encoding utf8 "$out\summary.txt" "MISSING: the installer left no expected artifact"
-            Write-Error "install of ${{ matrix.agent }} left no expected artifact: $expected"
+            Write-Error "install of $agent left no expected artifact: $expected"
             exit 1
           }
 
