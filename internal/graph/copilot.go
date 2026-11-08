@@ -281,7 +281,7 @@ func (in copilotInference) reaches(all []Node) []Edge {
 	}
 	var out []Edge
 	for _, cred := range all {
-		if cred.Kind != KindCredential || !in.inWorkspace(cred.Path) {
+		if cred.Kind != KindCredential || !credFileInWorkspace(cred, in.inWorkspace) {
 			continue
 		}
 		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))

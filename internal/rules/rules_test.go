@@ -43,6 +43,23 @@ var (
 
 func seg(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
 
+// reachesACredential reports whether the graph has a reaches edge from the
+// client to a credential node (BV-198 M1).
+func reachesACredential(g graph.Graph, client string) bool {
+	cred := map[string]bool{}
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindCredential {
+			cred[n.ID] = true
+		}
+	}
+	for _, e := range g.Edges {
+		if e.Type == graph.EdgeReaches && e.From == client && cred[e.To] {
+			return true
+		}
+	}
+	return false
+}
+
 func jwt(role string) string {
 	return seg(`{"alg":"HS256","typ":"JWT"}`) + "." +
 		seg(`{"iss":"supabase","ref":"abcdefghijklmnopqrst","role":"`+role+`"}`) + ".ZmFrZS1zaWduYXR1cmUtZmlsbGVy"

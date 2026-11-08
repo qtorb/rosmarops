@@ -147,6 +147,17 @@ func TestAntigravity_CaseDefault(t *testing.T) {
 	}
 }
 
+// M1 (BV-198, CTO-23 §0): the Antigravity CLI reaches a credential whose .env is
+// inside the workspace. Before the fix it filtered on the empty cred.Path
+// (antigravity.go) and, workspace-scoped, reached nothing.
+func TestAntigravity_M1_ReachesWorkspaceCred(t *testing.T) {
+	scan := platform.AntigravityScan{ConfigDir: agGemini, Present: true, Settings: platform.AntigravitySettings{Path: agSettings, Status: platform.MCPSourceRead}}
+	g, _, client := antigravityEvaluate(t, scan, nil, nil, nil, []entry{{repoWeb + "/.env", 1, "OPENAI_API_KEY", openAIKey}})
+	if !reachesACredential(g, client) {
+		t.Errorf("M1: the Antigravity CLI does not reach the workspace .env credential")
+	}
+}
+
 // D. Hook that approves (CTO-16 Antigravity §7 D): .agents/hooks.json is an
 // agent_executable of the CLI that any agent with write access in the repo can
 // rewrite.
