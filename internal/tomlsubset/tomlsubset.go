@@ -11,7 +11,7 @@
 // inline tables ({ a = 1, b = "x" }).
 //
 // Refused (the whole document errors, so the agent shows as detected, never
-// half-read): arrays of tables ([[t]]); multi-line arrays, inline tables or
+// half-read): multi-line arrays, inline tables or
 // strings; multi-line (""" / ”') strings; dates and times; a value that is not
 // one of the kinds above; a duplicate key or a key written both as a leaf and a
 // table; a table segment that is empty; more than MaxDepth nesting and more than
@@ -61,7 +61,26 @@ func Parse(b []byte) (Map, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "[[") {
-			return nil, lineErr(i, "arrays of tables are not supported")
+			path, err := arrayTableHeader(line)
+			if err != nil {
+				return nil, lineErr(i, err.Error())
+			}
+			if len(path) > MaxDepth {
+				return nil, lineErr(i, "table nested too deep")
+			}
+			parent, err := descend(root, path[:len(path)-1])
+			if err != nil {
+				return nil, lineErr(i, err.Error())
+			}
+			last := path[len(path)-1]
+			arr, ok := parent[last].(Array)
+			if parent[last] != nil && !ok {
+				return nil, lineErr(i, "key is not an array of tables")
+			}
+			t := Map{}
+			parent[last] = append(arr, t)
+			cur = t
+			continue
 		}
 		if strings.HasPrefix(line, "[") {
 			path, err := tableHeader(line)
@@ -137,6 +156,19 @@ func tableHeader(line string) ([]string, error) {
 	inner := strings.TrimSpace(line[1 : len(line)-1])
 	if inner == "" {
 		return nil, errors.New("empty table header")
+	}
+	return splitDottedKey(inner)
+}
+
+// arrayTableHeader parses "[[a.b.c]]" into its path segments (BV-193: Codex's
+// [[computer_use.windows.exes]]).
+func arrayTableHeader(line string) ([]string, error) {
+	if !strings.HasSuffix(line, "]]") {
+		return nil, errors.New("array-of-tables header not closed")
+	}
+	inner := strings.TrimSpace(line[2 : len(line)-2])
+	if inner == "" {
+		return nil, errors.New("empty array-of-tables header")
 	}
 	return splitDottedKey(inner)
 }

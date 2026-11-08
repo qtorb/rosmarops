@@ -157,7 +157,9 @@ func TestReadGrok_EmptyProjectTrusted(t *testing.T) {
 func TestReadGrok_InvalidTOML(t *testing.T) {
 	home := t.TempDir()
 	grok := filepath.Join(home, ".grok")
-	writeFileCodex(t, filepath.Join(grok, "config.toml"), "[[array_of_tables]]\nx = 1\n")
+	// BV-193: arrays of tables now parse, so use genuinely invalid TOML — an
+	// unterminated string — to exercise the parse-error path.
+	writeFileCodex(t, filepath.Join(grok, "config.toml"), "x = \"unterminated\n")
 	scan := ReadGrok(home, envOf(map[string]string{"GROK_HOME": grok}), nil)
 	user, _ := grokLayerByKindRoot(scan, platform.GrokLayerUser, "")
 	if user.Status != platform.MCPSourceFailed || !strings.Contains(user.Reason, "parse_error") {

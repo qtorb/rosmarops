@@ -225,6 +225,22 @@ if (-not $agOwn) { $failures.Add('no own_config_writable finding on the Antigrav
 if ($enHTML -notmatch 'Antigravity CLI can change its own configuration') { $failures.Add('the English HTML does not show the Antigravity CLI own-config risk') }
 if (@($v2.index.scope.not_evaluated) -contains 'Antigravity CLI') { $failures.Add('the Antigravity CLI is listed as not evaluated') }
 
+# 1e. The Gemini CLI is scored (BV-193, CTO-22 Gemini §7): its user settings.json
+# allows run_shell_command, so it runs any command without asking and, reading
+# the workspace without asking, reaches shop-api\.env and can send it out. Its
+# ai_client is in graph.v2.json, it carries a cred_read_and_send finding, the
+# English HTML shows that read-and-send risk, and it is not listed among the
+# detected-only agents.
+$geClient = @($graph.nodes | Where-Object { $_.type -eq 'ai_client' -and $_.platform -eq 'gemini-cli' } | ForEach-Object { $_.id })
+if ($geClient.Count -ne 1) { $failures.Add("want exactly one gemini-cli ai_client in graph.v2.json, got $($geClient.Count)") }
+$geSend = $v2.findings | Where-Object {
+    $f = $_
+    $f.rule -eq 'cred_read_and_send' -and @($f.evidence.nodes | Where-Object { $geClient -contains $_ }).Count -gt 0
+}
+if (-not $geSend) { $failures.Add('no cred_read_and_send finding on the Gemini CLI') }
+if ($enHTML -notmatch 'Gemini CLI can read it without asking you') { $failures.Add('the English HTML does not show the Gemini CLI read-and-send risk') }
+if (@($v2.index.scope.not_evaluated) -contains 'Gemini CLI') { $failures.Add('the Gemini CLI is listed as not evaluated') }
+
 # 2. No generated secret in full in anything RosmarOps wrote or in dist/.
 $outputs = @(Get-ChildItem -Path (Join-Path $SampleHome '.rosmarops') -Recurse -File) + @(Get-Item $published.en, $published.es)
 foreach ($f in $outputs) {

@@ -312,6 +312,24 @@ func TestRenderV2JSON_ValidatesSchema(t *testing.T) {
 	if _, err := report.RenderV2JSON(bad); err == nil {
 		t.Error("invalid report validated")
 	}
+
+	// BV-193: every not-evaluated reason the engine can emit must be in the
+	// report.v2 schema enum, or a detected agent fails validation at runtime
+	// (as the Cline CLI and Claude Desktop reasons did). One detected agent per
+	// reason, validated.
+	for _, reason := range []string{
+		rules.NotEvaluatedNoInference, rules.NotEvaluatedClineCLI, rules.NotEvaluatedClaudeDesktop,
+	} {
+		v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+		r := reason
+		v.AgentsOverview = append(v.AgentsOverview, rules.OverviewAgent{
+			Agent: "Detected " + reason, AgentID: "agent_detected_" + reason, Evaluated: false,
+			NotEvaluatedReason: &r, Rows: rules.NotEvaluatedRows(),
+		})
+		if _, err := report.RenderV2JSON(v); err != nil {
+			t.Errorf("not_evaluated_reason %q fails schema: %v", reason, err)
+		}
+	}
 }
 
 // Status is the highest of v1 and v2; no graph is at least yellow

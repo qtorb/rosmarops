@@ -621,6 +621,19 @@ type Platform interface {
 	// through ListMCPServers (client antigravity-cli).
 	ListAntigravity(ctx context.Context, repoRoots []string) (AntigravityScan, error)
 
+	// ListGemini reads Google Gemini CLI's configuration (BV-193, CTO-22
+	// Gemini §2): the system-defaults, user, project and system settings.json
+	// layers, ~/.gemini/trustedFolders.json, and the per-layer mcpServers. Its
+	// credentials by fingerprint come through credfiles.
+	ListGemini(ctx context.Context, repoRoots []string) (GeminiScan, error)
+
+	// ListCline reads the Cline VS Code extension's configuration (BV-193,
+	// CTO-22 Cline §2): ~/.cline/data/globalState.json (the auto-approval
+	// actions, the migration marker and hooksEnabled), the installed version,
+	// and the repository hook files. Its MCP servers come through ListMCPServers
+	// (client cline) and its credentials through credfiles.
+	ListCline(ctx context.Context, repoRoots []string) (ClineScan, error)
+
 	// ListShellProfiles returns SHA-256 hashes for all four PowerShell $PROFILE
 	// scopes. Scopes without a profile file on disk have an empty SHA256.
 	// Returns nil, nil if PowerShell is not available.
@@ -829,6 +842,31 @@ type CodexLayer struct {
 	// BearerTokens are model_providers.<id>.experimental_bearer_token values
 	// (CTO-16 §3), secret, by fingerprint only.
 	BearerTokens []EnvVar
+
+	// ComputerUse is the [computer_use] section of this layer (BV-193, CTO-22
+	// Computer Use); nil when absent. Legacy is set when it came from the old
+	// $CODEX_HOME/computer-use/config.toml.
+	ComputerUse *CodexComputerUse
+
+	// CUFeatureDisabled (requirements: [features] computer_use=false or
+	// allow_browser_and_computer_use=false) and CUPersistentApprovalDisabled
+	// (requirements: allow_persistent_approval=false) are the admin requirement
+	// toggles that turn Computer Use off or forbid "Always allow" (BV-193,
+	// CTO-22 Computer Use §2). Only meaningful on the requirements layer.
+	CUFeatureDisabled            bool
+	CUPersistentApprovalDisabled bool
+}
+
+// CodexComputerUse is Codex/ChatGPT desktop's Computer Use configuration
+// (BV-193, CTO-22 Computer Use): the apps allowed to be operated without asking.
+type CodexComputerUse struct {
+	// DefaultAppAccess is [computer_use].default_app_access ("allow" | "deny" | "").
+	DefaultAppAccess string
+	// Allowed are the app ids set to "allow": windows.aumids and macos.bundle_ids
+	// keys, windows.exes binary_names, and the documented always_allowed_app_ids.
+	Allowed []string
+	// Legacy marks the old $CODEX_HOME/computer-use/config.toml source.
+	Legacy bool
 }
 
 // CodexMCPServer is one [mcp_servers.<id>] of a Codex config layer.
@@ -1078,4 +1116,126 @@ type AntigravitySettings struct {
 type AntigravityHook struct {
 	Path string
 	Root string
+}
+
+// Gemini CLI settings layer kinds (BV-193, CTO-22 Gemini §2), in precedence
+// order (the last wins): the program defaults, system-defaults.json, the user
+// file, the project file, and the system file.
+const (
+	GeminiLayerSystemDefaults = "system-defaults"
+	GeminiLayerUser           = "user"
+	GeminiLayerProject        = "project"
+	GeminiLayerSystem         = "system"
+)
+
+// GeminiScan is Google Gemini CLI's at-rest configuration (BV-193, CTO-22
+// Gemini §2–§4), read only. It shares ~/.gemini with Antigravity but is a
+// distinct ai_client. The MCP servers it carries go through the shared MCP
+// pipeline (client gemini-cli); its credentials by fingerprint come through the
+// credential pipeline (credfiles). The ai_client exists when Present.
+type GeminiScan struct {
+	ConfigDir string // ~/.gemini
+	Present   bool
+
+	// Layers are the settings files considered, in precedence order; the system
+	// file wins, then the project file, then the user file, then
+	// system-defaults (settings.ts:273-288).
+	Layers []GeminiLayer
+
+	// TrustedFolders is ~/.gemini/trustedFolders.json: path → TRUST_FOLDER |
+	// TRUST_PARENT | DO_NOT_TRUST (trust.ts). FolderTrustEnabled is
+	// security.folderTrust.enabled, true by default in the code
+	// (settingsSchema.ts); when it is off, every folder is trusted.
+	TrustedFolders       map[string]string
+	TrustedFoldersStatus MCPSourceStatus
+	FolderTrustEnabled   bool
+}
+
+// GeminiLayer is one settings.json layer (JSONC), with the keys that bear on
+// posture (CTO-22 Gemini §4). Empty values mean the key is absent in this
+// layer.
+type GeminiLayer struct {
+	Kind   string // GeminiLayer* constant
+	Path   string
+	Root   string // repo root, for a project layer
+	Status MCPSourceStatus
+	Reason string
+
+	// SecurePermError marks a system-scope file that failed Gemini's
+	// isFileAndDirectorySecureSync check (CTO-22 Gemini §2): the file is
+	// ignored with a warning, so BV treats the layer as not applied and shows
+	// it in coverage. Only the Windows reader can set it.
+	SecurePermError bool
+
+	// DefaultApprovalMode is general.defaultApprovalMode ("", "auto_edit",
+	// "plan" or "yolo"; yolo in the file is ignored, CTO-22 Gemini §4).
+	DefaultApprovalMode string
+	// ToolsAllowed is tools.allowed (e.g. "run_shell_command",
+	// "run_shell_command(git)"); DisableYoloMode is security.disableYoloMode.
+	ToolsAllowed    []string
+	DisableYoloMode bool
+	// FolderTrust is security.folderTrust.enabled when this layer sets it; nil
+	// when absent. The scan's FolderTrustEnabled is resolved from the layers.
+	FolderTrust *bool
+	// ContextFileNames is context.fileName (one name or a list); "" absent.
+	ContextFileNames []string
+	// MCP are this layer's mcpServers, with their per-server trust and secrets
+	// by fingerprint (CTO-22 Gemini §3).
+	MCP []GeminiMCPServer
+}
+
+// ClineScan is the Cline VS Code extension's at-rest configuration (BV-193,
+// CTO-22 Cline §2–§5), read only. Its MCP servers come through the shared MCP
+// pipeline (client cline); its credentials by fingerprint through credfiles.
+// The ai_client exists when Present. ConfigDir is ~/.cline/data (decision 9).
+type ClineScan struct {
+	ConfigDir string
+	Present   bool
+
+	// GlobalStateStatus is the read outcome of ~/.cline/data/globalState.json.
+	GlobalStateStatus MCPSourceStatus
+
+	// HasAutoApproval reports that autoApprovalSettings is present; its actions
+	// then override the product defaults. When absent, a fresh install's
+	// defaults apply (read/edit/browser/mcp without asking, commands asking).
+	HasAutoApproval                                               bool
+	ReadFiles, EditFiles, ExecuteSafeCommands, UseBrowser, UseMcp bool
+
+	// MigrationVersion is __vscodeMigrationVersion (0 when absent). Below 3,
+	// executeSafeCommands=true means the agent's own model judged command
+	// safety (assumption agent_model_judges_command_safety, CTO-22 Cline §4).
+	MigrationVersion int
+	// Yolo reports a legacy yoloModeToggled / autoApproveAllToggled true (an
+	// approve-everything install, CTO-22 Cline §4).
+	Yolo bool
+	// HooksEnabled is hooksEnabled (true by default, CTO-22 Cline §5).
+	HooksEnabled bool
+	// Version is the installed extension version (from the extension folder
+	// name), "" when unknown.
+	Version string
+	// Hooks are the repository hook files Cline runs as processes (CTO-22 Cline
+	// §5): project_hook_runs_repo_script targets.
+	Hooks []ClineHook
+}
+
+// ClineHook is one repository hook file Cline runs (CTO-22 Cline §5).
+type ClineHook struct {
+	Path string
+	Root string
+	Size int64
+}
+
+// GeminiMCPServer is one mcpServers entry of a Gemini layer (CTO-22 Gemini §4).
+// Trust is the per-server trust:true (that server runs without asking). Env and
+// Headers are by fingerprint only (CTO-22 Gemini §3).
+type GeminiMCPServer struct {
+	ID         string
+	Command    string
+	Args       []string
+	URL        string // remote endpoint (httpUrl/url), in clear for the graph to parse
+	Trust      bool
+	EnvKeys    []string
+	Env        []EnvVar
+	HeaderKeys []string
+	Headers    []EnvVar
 }

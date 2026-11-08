@@ -448,10 +448,14 @@ func (c htmlCtx) renderCoverage() {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
+	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs)+len(cov.Notes) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
 		return
 	}
 	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
+	// BV-193 D3: informational coverage notes render their full signed sentence.
+	for _, n := range cov.Notes {
+		c.w(`<li>%s</li>`, html.EscapeString(c.t(n, nil)))
+	}
 	for _, f := range cov.SourcesFailed {
 		code, _, _ := strings.Cut(f.Reason, ": ")
 		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))
@@ -544,6 +548,10 @@ func (c htmlCtx) renderStep1() {
 		}
 		if f.Rule == rules.RulePackageKnownMalicious { // BV-100: no html.headline key
 			headline = c.t("finding.package_known_malicious.title", malParams(f))
+			break
+		}
+		if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: the signed sentence is the headline, no html.headline key
+			headline = c.cat.Text(computerUseKey(f), computerUseParams(f))
 			break
 		}
 		key := "html.headline." + f.Rule
@@ -1262,6 +1270,23 @@ func (c htmlCtx) n8nSteps(f rules.Finding) string {
 // malParams are the catalog params of a package_known_malicious finding (BV-100).
 func malParams(f rules.Finding) map[string]string { return findingParams(f) }
 
+// computerUseKey is the catalog key of a computer_use_app_allowed finding
+// (BV-193): red for a terminal/interpreter or default_app_access allow, yellow
+// otherwise.
+func computerUseKey(f rules.Finding) string {
+	if f.Severity == rules.SeverityRed {
+		return "finding.computer_use_app_allowed.red"
+	}
+	return "finding.computer_use_app_allowed.yellow"
+}
+
+// computerUseParams fills {app} and {apps} from the finding's app list (its
+// Evidence.Locations), joined; config-derived, sanitized when rendered.
+func computerUseParams(f rules.Finding) map[string]string {
+	apps := strings.Join(f.Evidence.Locations, ", ")
+	return map[string]string{"agent": f.Params.Agent, "app": apps, "apps": apps}
+}
+
 // titleText is the finding's title (§4).
 func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RulePackageKnownMalicious {
@@ -1275,6 +1300,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
 		return c.cat.Text("finding."+f.Rule+".title", c.params(f))
+	}
+	if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193
+		return c.cat.Text(computerUseKey(f), computerUseParams(f))
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
@@ -1365,6 +1393,9 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
 		return c.cat.Text("finding."+f.Rule+".what", c.params(f))
+	}
+	if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: the one signed sentence is the title; no separate impact
+		return ""
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
@@ -1480,8 +1511,8 @@ func HTMLKeys() []string {
 	}
 	for _, r := range rules.AllRules {
 		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction ||
-			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData {
-			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117, BV-175)
+			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData || r == rules.RuleComputerUseAppAllowed {
+			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117, BV-175, BV-193)
 		}
 		keys = append(keys, "html.headline."+r)
 	}
@@ -1518,6 +1549,9 @@ func HTMLKeys() []string {
 	// html.f.*), plus the foot stamp.
 	keys = append(keys, "finding.package_known_malicious.title", "finding.package_known_malicious.why",
 		"finding.package_known_malicious.action", "report.intel_stamp")
+	// BV-193: the Computer Use finding renders with its one signed sentence as
+	// the title (red or yellow), no separate impact.
+	keys = append(keys, "finding.computer_use_app_allowed.red", "finding.computer_use_app_allowed.yellow")
 	// BV-107: the project-hook finding also renders with its finding.* texts.
 	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
 		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",

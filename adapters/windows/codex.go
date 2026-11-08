@@ -72,6 +72,13 @@ func ReadCodex(home string, env agentdirs.Env, repoRoots []string, requirementsP
 	// 1. User config.toml, read first: its [projects] map gates the project
 	// layers below.
 	user := readCodexLayer(filepath.Join(dir, "config.toml"), platform.CodexLayerUser, "", dir)
+	// Legacy Computer Use file (CTO-22 Computer Use §2): only when the current
+	// config.toml has no [computer_use] section of its own.
+	if user.ComputerUse == nil {
+		if cu := readCodexLegacyComputerUse(filepath.Join(dir, "computer-use", "config.toml")); cu != nil {
+			user.ComputerUse = cu
+		}
+	}
 	scan.Layers = append(scan.Layers, user)
 
 	// 2. Profiles: CODEX_HOME/<name>.config.toml (which --profile is active is
@@ -177,7 +184,87 @@ func readCodexLayer(path, kind, root, rulesDir string) platform.CodexLayer {
 	}
 	l.MCP = codexMCPServers(m)
 	l.BearerTokens = codexBearerTokens(m)
+	l.ComputerUse = codexComputerUse(m)
+	// Admin requirement toggles (CTO-22 Computer Use §2): only meaningful on the
+	// requirements layer, read on any.
+	if feat, ok := m["features"].(tomlsubset.Map); ok {
+		if b, ok := tomlBool(feat, "computer_use"); ok && !b {
+			l.CUFeatureDisabled = true
+		}
+	}
+	if b, ok := tomlBool(m, "allow_browser_and_computer_use"); ok && !b {
+		l.CUFeatureDisabled = true
+	}
+	if b, ok := tomlBool(m, "allow_persistent_approval"); ok && !b {
+		l.CUPersistentApprovalDisabled = true
+	}
 	return l
+}
+
+// readCodexLegacyComputerUse reads the old $CODEX_HOME/computer-use/config.toml
+// (CTO-22 Computer Use §2): its allow list, marked Legacy. The file holds the
+// [computer_use] shape at the top level or nested; both are tried.
+func readCodexLegacyComputerUse(path string) *platform.CodexComputerUse {
+	raw, status, _ := readBounded(path)
+	if status != platform.MCPSourceRead {
+		return nil
+	}
+	m, err := tomlsubset.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	cu := codexComputerUse(m)
+	if cu == nil {
+		// The legacy file may carry the [windows]/[macos]/default_app_access at
+		// the top level, without the [computer_use] wrapper.
+		cu = codexComputerUse(tomlsubset.Map{"computer_use": m})
+	}
+	if cu == nil {
+		return nil
+	}
+	cu.Legacy = true
+	return cu
+}
+
+// codexComputerUse reads the [computer_use] section (BV-193, CTO-22 Computer
+// Use §2), both the documented form (windows.always_allowed_app_ids) and the
+// code form (default_app_access, windows.aumids, windows.exes, macos.bundle_ids).
+func codexComputerUse(m tomlsubset.Map) *platform.CodexComputerUse {
+	cu, ok := m["computer_use"].(tomlsubset.Map)
+	if !ok {
+		return nil
+	}
+	out := &platform.CodexComputerUse{}
+	out.DefaultAppAccess, _ = tomlString(cu, "default_app_access")
+	allowFrom := func(tbl tomlsubset.Map, key string) {
+		if sub, ok := tbl[key].(tomlsubset.Map); ok {
+			for id, v := range sub {
+				if s, _ := v.(string); s == "allow" {
+					out.Allowed = append(out.Allowed, id)
+				}
+			}
+		}
+	}
+	if win, ok := cu["windows"].(tomlsubset.Map); ok {
+		allowFrom(win, "aumids")
+		if exes, ok := win["exes"].(tomlsubset.Array); ok {
+			for _, e := range exes {
+				if t, ok := e.(tomlsubset.Map); ok {
+					access, _ := tomlString(t, "access")
+					name, _ := tomlString(t, "binary_name")
+					if access == "allow" && name != "" {
+						out.Allowed = append(out.Allowed, name)
+					}
+				}
+			}
+		}
+		out.Allowed = append(out.Allowed, tomlStringArray(win, "always_allowed_app_ids")...)
+	}
+	if mac, ok := cu["macos"].(tomlsubset.Map); ok {
+		allowFrom(mac, "bundle_ids")
+	}
+	sort.Strings(out.Allowed)
+	return out
 }
 
 // codexHasRules reports a rules/*.rules file under dir (CTO-16 §4,

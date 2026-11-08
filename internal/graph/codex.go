@@ -81,7 +81,51 @@ func FromCodex(scan platform.CodexScan, discoveredAt time.Time) Fragment {
 			b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
 		}
 	}
+	codexComputerUseCaps(b, client, scan)
 	return b.fragment()
+}
+
+// codexComputerUseCaps emits one operate_app capability per app Computer Use may
+// drive without asking (BV-193, CTO-22 Computer Use §6): a target_scope per app
+// id, or "*" for default_app_access = allow. The admin requirements turn the
+// capability not-in-force: mode_disabled (the feature is off) or
+// mode_not_allowed_in_scope (allow_persistent_approval = false removes "Always
+// allow"). The user config's [computer_use] applies; a trusted project's too.
+func codexComputerUseCaps(b *fragmentBuilder, client string, scan platform.CodexScan) {
+	featureDisabled, persistentDisabled := false, false
+	for _, l := range scan.Layers {
+		featureDisabled = featureDisabled || l.CUFeatureDisabled
+		persistentDisabled = persistentDisabled || l.CUPersistentApprovalDisabled
+	}
+	for _, l := range scan.Layers {
+		if l.ComputerUse == nil {
+			continue
+		}
+		if l.Kind == platform.CodexLayerProject && !l.Trusted {
+			continue
+		}
+		apps := append([]string{}, l.ComputerUse.Allowed...)
+		if l.ComputerUse.DefaultAppAccess == "allow" {
+			apps = append(apps, scopeAll)
+		}
+		inForce, reason := true, ""
+		switch {
+		case featureDisabled:
+			inForce, reason = false, ReasonModeDisabled
+		case persistentDisabled:
+			inForce, reason = false, ReasonModeNotAllowedInScope
+		}
+		src := "codex:computer_use:" + l.Kind
+		for _, app := range apps {
+			id := codexCapID(client, l.Kind+":cu", l.Path, CapOperateApp, app)
+			b.node(Node{
+				ID: id, Kind: KindCapability, Type: CapOperateApp, Basis: BasisConfigured,
+				InForce: inForce, NotInForceReason: reason,
+				Approval: ApprovalAllow, TargetScope: app, AppliesIn: platform.MCPScopeUser, Rule: "computer_use", Source: src,
+			})
+			b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+		}
+	}
 }
 
 // CodexMCPServers converts the MCP servers of Codex's in-force layers (the user

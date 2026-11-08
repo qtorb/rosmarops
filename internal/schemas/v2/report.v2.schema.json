@@ -675,6 +675,14 @@
           "type": "integer",
           "minimum": 0,
           "description": "How many tracked files were not opened because they are images, documents or other binary files (BV-186). Omitted when zero."
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.]{1,80}$"
+          },
+          "description": "Informational coverage notes as stable catalog codes (BV-193 D3): e.g. two Claude Desktop configs with different MCP servers. No user-facing prose."
         }
       }
     },
@@ -1319,7 +1327,9 @@
               "enum": [
                 "no_inference",
                 "coverage",
-                "graph_missing"
+                "graph_missing",
+                "cline_cli",
+                "claude_desktop"
               ]
             }
           ]

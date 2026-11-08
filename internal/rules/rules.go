@@ -41,6 +41,7 @@ const (
 	RuleOwnConfigWritable                = "own_config_writable"
 	RulePackageKnownMalicious            = "package_known_malicious"
 	RuleProjectHookRunsRepoScript        = "project_hook_runs_repo_script"
+	RuleComputerUseAppAllowed            = "computer_use_app_allowed"
 )
 
 // AllRules lists every rule code.
@@ -49,7 +50,7 @@ var AllRules = []string{
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
 	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
-	RuleN8NMCPBridge, RuleN8NKeyWithData,
+	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -90,6 +91,10 @@ const (
 	// value in the file and xAI may set it remotely; assume it is on (CTO-16
 	// point 10).
 	AssumeCompatCellRemoteUnknown = "compat_cell_remote_unknown"
+	// AssumeAgentModelJudgesCommandSafety: in old Cline versions the agent's own
+	// model decided which command was "safe"; RosmarOps cannot check that
+	// judgement at rest (BV-193, CTO-22 Cline §4, signed point 5). A premise.
+	AssumeAgentModelJudgesCommandSafety = "agent_model_judges_command_safety"
 )
 
 // AllAssumptions lists every assumption a finding can carry: the graph's and
@@ -103,7 +108,7 @@ var AllAssumptions = []string{
 	graph.AssumeConfigFileProtectionUnknown, graph.AssumeTeamPolicyUnknown, AssumeRemoteVisibilityUnknown,
 	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
 	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
-	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown,
+	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown, AssumeAgentModelJudgesCommandSafety,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -257,6 +262,12 @@ type Input struct {
 	// cells to know when a cell has no value in the file and could be decided
 	// remotely (compat_cell_remote_unknown). Optional.
 	Grok platform.GrokScan
+
+	// Cline is the Cline extension scan (BV-193): the overview reads its
+	// migration version to tell whether a pre-migration version let the agent's
+	// own model judge command safety (agent_model_judges_command_safety).
+	// Optional.
+	Cline platform.ClineScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -592,6 +603,10 @@ func Evaluate(in Input) Result {
 			res.Findings = append(res.Findings, projectHookFinding(in, n, nodes))
 		}
 	}
+	// Computer Use apps an agent can operate without asking (BV-193, CTO-22
+	// Computer Use §6): one finding per agent and colour, from its in-force
+	// operate_app capabilities.
+	res.Findings = append(res.Findings, computerUseFindings(in, g, view)...)
 	// MCP servers that act outside the machine (BV-117/BV-121): one finding
 	// per (scored agent, catalog server) that is used without a person, plus
 	// the per-agent services list for agents_overview. The catalog match rides
@@ -813,6 +828,75 @@ func projectHookFinding(in Input, n graph.Node, nodes map[string]graph.Node) Fin
 		Actions:  []Action{},
 	}
 	return f
+}
+
+// computerUseTerminalApps are the app ids that make computer_use_app_allowed
+// red: operating a terminal or interpreter is the same as running commands
+// (BV-193, CTO-22 Computer Use §6). Matched case-insensitively.
+var computerUseTerminalApps = map[string]bool{
+	"cmd.exe": true, "powershell.exe": true, "pwsh.exe": true, "wt.exe": true,
+	"microsoft.windowsterminal_8wekyb3d8bbwe!app": true,
+}
+
+// computerUseRed reports an app that makes the finding red: a terminal or
+// interpreter, or "*" (default_app_access = allow, every app).
+func computerUseRed(app string) bool {
+	return app == scopeAll || computerUseTerminalApps[strings.ToLower(app)]
+}
+
+// computerUseFindings is one finding per agent and colour from its in-force
+// operate_app capabilities (BV-193, CTO-22 Computer Use §6): red for a
+// terminal/interpreter or default_app_access allow, yellow for any other app.
+func computerUseFindings(in Input, g graph.Graph, view func(string) *agentView) []Finding {
+	var out []Finding
+	for _, n := range g.Nodes {
+		if n.Kind != graph.KindAgent || n.Type != graph.AgentAIClient {
+			continue
+		}
+		v := view(n.ID)
+		if v == nil {
+			continue
+		}
+		var red, yellow, caps []string
+		for _, c := range v.inForce {
+			if c.Type != graph.CapOperateApp || c.Approval != graph.ApprovalAllow {
+				continue
+			}
+			caps = append(caps, c.ID)
+			if computerUseRed(c.TargetScope) {
+				red = append(red, c.TargetScope)
+			} else {
+				yellow = append(yellow, c.TargetScope)
+			}
+		}
+		if f, ok := computerUseFinding(in, n, SeverityRed, red, caps); ok {
+			out = append(out, f)
+		}
+		if f, ok := computerUseFinding(in, n, SeverityYellow, yellow, caps); ok {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func computerUseFinding(in Input, agent graph.Node, sev string, apps, caps []string) (Finding, bool) {
+	apps = sortedUnique(apps)
+	if len(apps) == 0 {
+		return Finding{}, false
+	}
+	return Finding{
+		ID:          findingID(RuleComputerUseAppAllowed, agent.ID, sev),
+		Rule:        RuleComputerUseAppAllowed,
+		RuleVersion: RuleVersion,
+		Severity:    sev,
+		Confidence:  ConfidenceHigh,
+		Params:      Params{Agent: agent.Name, Count: len(apps)},
+		// Locations carry the app ids for the {app}/{apps} text (config-derived,
+		// sanitized when rendered); no new params field.
+		Evidence: Evidence{Nodes: append([]string{agent.ID}, caps...), Edges: []string{}, Locations: apps, Assumptions: []string{}},
+		Group:    group(in, []string{agent.ID}),
+		Actions:  []Action{},
+	}, true
 }
 
 // writeRuleOf is the rule and finding key of a writes_config_of edge from

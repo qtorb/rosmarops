@@ -75,6 +75,8 @@ const (
 	Antigravity      = "antigravity"              // BV-140: App and IDE, detected only (decision 2)
 	AntigravityCLI   = "antigravity-cli"          // BV-140: the CLI, scored (decision 2)
 	CopilotJetBrains = "github-copilot-jetbrains" // BV-140: Copilot in JetBrains, detected only
+	GeminiCLI        = "gemini-cli"               // BV-193: Google Gemini CLI, scored (CTO-22 decision 2)
+	ClineCLI         = "cline-cli"                // BV-193: the Cline CLI, detected only (CTO-22 decision 3)
 	Hermes           = "hermes"
 	ClaudeDesktop    = "claude-desktop"
 	N8N              = "n8n" // BV-175: detected by its user folder
@@ -227,9 +229,37 @@ func (l Layout) VSCodeUserDir(home string, env Env) string {
 
 // ClineDir is Cline's settings folder, under VS Code's global storage of its
 // extension saoudrizwan.claude-dev (LECTURA-101 §2: the id is Cline's; the
-// macOS folder is VS Code's convention).
+// macOS folder is VS Code's convention). This is the legacy globalStorage
+// path; the live data now lives under ClineDataDir (CTO-22 Cline §2).
 func (l Layout) ClineDir(home string, env Env) string {
 	return filepath.Join(l.VSCodeUserDir(home, env), "globalStorage", "saoudrizwan.claude-dev", "settings")
+}
+
+// ClineDataDir is Cline's data folder (CTO-22 Cline §2), shared by the VS Code
+// extension and the CLI: CLINE_DATA_DIR, else CLINE_DIR\data, else
+// <home>\.cline\data. The same on Windows, macOS and Linux
+// (sdk/packages/shared/src/storage/paths.ts:158-191).
+func ClineDataDir(home string, env Env) string {
+	if v, ok := lookup(env)("CLINE_DATA_DIR"); ok && v != "" {
+		return v
+	}
+	if v, ok := lookup(env)("CLINE_DIR"); ok && v != "" {
+		return filepath.Join(v, "data")
+	}
+	return filepath.Join(home, ".cline", "data")
+}
+
+// DocumentsDir is the user's Documents folder, <home>\Documents, the home of
+// Cline's legacy documentsClineMcp copy (CTO-22 Cline §2). OneDrive
+// redirection is not resolved.
+func DocumentsDir(home string) string { return filepath.Join(home, "Documents") }
+
+// ClaudeDesktopMSIXDir is Claude Desktop's MSIX (Microsoft Store and
+// enterprise deployment) virtualized folder (CTO-22 Claude Desktop §2):
+// %LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude.
+// Windows only.
+func (l Layout) ClaudeDesktopMSIXDir(home string, env Env) string {
+	return filepath.Join(localAppData(home, env), "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude")
 }
 
 // Present is an agent found on disk: its product, its configuration folder
@@ -302,6 +332,22 @@ func (l Layout) Detect(home string, env Env) []Present {
 	case isDir(l.AntigravityUserDir(home, env)):
 		out = append(out, Present{Antigravity, gemini, l.AntigravityUserDir(home, env)})
 	}
+	// Gemini CLI (scored, BV-193 / CTO-22 decision 2): any of its own files in
+	// ~/.gemini — settings.json, oauth_creds.json, google_accounts.json,
+	// trustedFolders.json, or the tmp folder (storage.ts). All are exclusive to
+	// the CLI; ~/.gemini/antigravity-cli/* is Antigravity's and does not count.
+	// It can appear alongside Antigravity; ConfigDir is ~/.gemini.
+	for _, sig := range []string{"settings.json", "oauth_creds.json", "google_accounts.json", "trustedFolders.json"} {
+		if p := filepath.Join(gemini, sig); exists(p) {
+			out = append(out, Present{GeminiCLI, gemini, p})
+			break
+		}
+	}
+	if !Products(out)[GeminiCLI] {
+		if p := filepath.Join(gemini, "tmp"); isDir(p) {
+			out = append(out, Present{GeminiCLI, gemini, p})
+		}
+	}
 	// GitHub Copilot in JetBrains (detected only, decision 1): its intellij
 	// folder; RosmarOps does not read its approvals yet (decision 9).
 	if cj := l.CopilotJetBrainsDir(home, env); isDir(filepath.Join(cj, "intellij")) {
@@ -315,9 +361,27 @@ func (l Layout) Detect(home string, env Env) []Present {
 	// is not searched there (BV-165).
 	if l != LinuxLayout {
 		desktop := l.ClaudeDesktopDir(home, env)
+		marker := ""
 		if p := filepath.Join(desktop, "claude_desktop_config.json"); exists(p) {
-			out = append(out, Present{ClaudeDesktop, desktop, p})
+			marker = p
+		} else if l == WindowsLayout {
+			// The MSIX (Store/enterprise) install keeps its config under a
+			// virtualized path (CTO-22 Claude Desktop §2). ConfigDir stays the
+			// installer folder so both installs are the same ai_client.
+			if p := filepath.Join(l.ClaudeDesktopMSIXDir(home, env), "claude_desktop_config.json"); exists(p) {
+				marker = p
+			}
 		}
+		if marker != "" {
+			out = append(out, Present{ClaudeDesktop, desktop, marker})
+		}
+	}
+	// Cline CLI (detected only, BV-193 / CTO-22 decision 3): the CLI writes
+	// ~/.cline/data/settings/global-settings.json (the extension uses
+	// globalState.json), so that file is its presence signal. ConfigDir is the
+	// shared data folder.
+	if data := ClineDataDir(home, env); exists(filepath.Join(data, "settings", "global-settings.json")) {
+		out = append(out, Present{ClineCLI, data, filepath.Join(data, "settings", "global-settings.json")})
 	}
 	// n8n (BV-175): its user folder, ~/.n8n on every OS, or $N8N_USER_FOLDER/.n8n.
 	if n8n := N8NDir(home, env); isDir(n8n) {
