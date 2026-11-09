@@ -25,18 +25,17 @@ jobs:
           $s = [IO.File]::ReadAllText($w)
           $pats = @(
             'modes4:\[\{id:"agent",[^\]]{0,260}?fullAutoRun:![01]',
-            'function a1p\([^}]{0,200}\}',
-            'function lPy\([^}]{0,260}\}',
-            'tryApplyAgentAutorunBrandNewDefault\(e\)\{.{0,900}?t\.set\(!0,void 0,void 0\)\}finally',
-            'getComposerMigrationVersion\(e\)\{[^}]{0,120}\}',
-            'function Mxy\([^}]{0,260}\}',
-            'getModeSmartModeAutoRun\(e\)\{.{0,800}?permissionsFileConstrainsUnrestrictedMode:i\}\)\}',
-            'hasSmartModeClassifierModel\(\)\{[^}]{0,120}\}',
-            ',W0e=\[\{[^\]]{0,400}\]',
-            'function HF0\([^}]{0,160}\}',
-            'case"smart_auto":return t\?"Auto-review \(with Sandbox\)":"Auto-review"',
-            'name:"supports_smart_mode_classifier"[^}]{0,40}\}',
-            'Hin\.ID="composer\.autoReviewRunModeReset"'
+            'function \w+\(e\)\{return e\?\.id==="agent"&&e\.autoRun===!0[^}]{0,120}\}',
+            'function \w+\(\{initialMigrationVersion:e,sandboxBackedAllowlistAvailable[^}]{0,220}\}',
+            'tryApplyAgentAutorunBrandNewDefault\(e\)\{.{0,120}',
+            'function \w+\(\{autoRun:e,smartAutoRun:t,fullAutoRun:i,enableSmartAuto[^}]{0,220}\}',
+            'getModeSmartModeAutoRun\(e\)\{.{0,900}?\}\)\}',
+            'getModeAutoRun\(e\)\{.{0,600}?\?\.autoRun\?\?!1\}',
+            '\[\{name:"default",clientDisplayName:"Auto"[^\]]{0,400}\]',
+            'return t\?"run_everything":[^}]{0,120}\}',
+            '.{0,140}"Auto-review \(with Sandbox\)".{0,30}',
+            '\w+\.ID="composer\.autoReviewRunModeReset"',
+            'admin_reset_agent_run_mode_to_auto_review:\{[^}]{0,40}\}'
           )
           foreach ($p in $pats) {
             $m = [regex]::Match($s, $p)
