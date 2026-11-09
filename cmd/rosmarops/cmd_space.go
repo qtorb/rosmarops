@@ -28,8 +28,11 @@ import (
 // the check. All network goes through internal/spacenet under a Permission, so
 // nothing here reaches the network without the recorded approval.
 
-// SendsLogName is the local record of every send attempt, written in the
-// reports directory (invariant 2: no new write target). One line per attempt;
+// SendsLogName is the local record of every send attempt, written in the data
+// subfolder of the reports directory — report.DataDir, i.e.
+// <reports>/data/rosmarops-sends.log (on Windows
+// %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log), not the top of
+// the reports folder (invariant 2: no new write target). One line per attempt;
 // never content.
 const SendsLogName = "rosmarops-sends.log"
 

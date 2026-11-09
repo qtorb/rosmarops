@@ -23,7 +23,7 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 
 Nothing leaves your devices unless you approve it first.
 
-- RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log in your reports folder.
+- RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log, in the data subfolder of your reports folder (on Windows, %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log).
 - It connects only to app.rosmarops.com, over HTTPS on port 443. It never sends your keys, files, settings or the report in clear, and never checks for updates.
 
 ---
