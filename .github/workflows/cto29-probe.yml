@@ -1,0 +1,48 @@
+# CTO-29 temporary read-only probe. Installs Cursor with winget on a clean
+# runner, never launches it, never logs in, and prints only product-code
+# excerpts. This branch is deleted when the review is done; no PR.
+name: cto29-probe
+on:
+  push:
+    branches: [cto/2026-11-09-cto-29-probe]
+permissions: {}
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - name: Install Cursor (no login, no launch)
+        shell: pwsh
+        run: winget install --id Anysphere.Cursor --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+      - name: Read run-mode default from the installed files
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:LOCALAPPDATA 'Programs\cursor\resources\app'
+          Write-Host "app dir exists: $(Test-Path $app)"
+          $prod = Get-Content (Join-Path $app 'product.json') -Raw | ConvertFrom-Json
+          Write-Host "product version: $($prod.version)  commit: $($prod.commit)"
+          $w = Join-Path $app 'out\vs\workbench\workbench.desktop.main.js'
+          Write-Host "workbench sha256: $((Get-FileHash $w -Algorithm SHA256).Hash.ToLower())  bytes: $((Get-Item $w).Length)"
+          $s = [IO.File]::ReadAllText($w)
+          $pats = @(
+            'modes4:\[\{id:"agent",[^\]]{0,260}?fullAutoRun:![01]',
+            'function a1p\([^}]{0,200}\}',
+            'function lPy\([^}]{0,260}\}',
+            'tryApplyAgentAutorunBrandNewDefault\(e\)\{.{0,900}?t\.set\(!0,void 0,void 0\)\}finally',
+            'getComposerMigrationVersion\(e\)\{[^}]{0,120}\}',
+            'function Mxy\([^}]{0,260}\}',
+            'getModeSmartModeAutoRun\(e\)\{.{0,800}?permissionsFileConstrainsUnrestrictedMode:i\}\)\}',
+            'hasSmartModeClassifierModel\(\)\{[^}]{0,120}\}',
+            ',W0e=\[\{[^\]]{0,400}\]',
+            'function HF0\([^}]{0,160}\}',
+            'case"smart_auto":return t\?"Auto-review \(with Sandbox\)":"Auto-review"',
+            'name:"supports_smart_mode_classifier"[^}]{0,40}\}',
+            'Hin\.ID="composer\.autoReviewRunModeReset"'
+          )
+          foreach ($p in $pats) {
+            $m = [regex]::Match($s, $p)
+            Write-Host "---- /$p/ found=$($m.Success) at=$($m.Index)"
+            if ($m.Success) { Write-Host $m.Value }
+          }
+          $schema = Join-Path $app 'extensions\cursor-always-local\schemas\permissions.schema.json'
+          Write-Host "---- permissions.schema.json approvalMode"
+          ((Get-Content $schema -Raw | ConvertFrom-Json).properties.approvalMode | ConvertTo-Json -Compress)
