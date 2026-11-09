@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/schemaval"
@@ -390,7 +391,12 @@ func explainNodeOneOf(raw []byte, e schemaval.Error) string {
 	}
 	n := doc.Nodes[idx]
 	kind := jsonString(n["kind"])
-	desc := "node kind=" + orDash(kind) + " type=" + orDash(jsonString(n["type"])) + " basis=" + orDash(jsonString(n["basis"]))
+	// type and basis are echoed only when they are real schema enum values;
+	// anything else becomes <not-in-enum>, so the diagnostic never repeats a
+	// value that is not an id, enum or stable code (BV-202 C3, CTO-28).
+	desc := "node kind=" + orDash(kind) +
+		" type=" + enumOrMarker(kind, "type", jsonString(n["type"])) +
+		" basis=" + enumOrMarker(kind, "basis", jsonString(n["basis"]))
 	// The node oneOf has one branch per kind (a const). The nearest branch is
 	// the one for this node's kind; name it so the reader knows which subschema
 	// the properties below were checked against. Unknown kind → no branch.
@@ -489,6 +495,71 @@ func orDash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+var (
+	schemaEnumsOnce sync.Once
+	typeEnumByKind  map[string]map[string]bool // node kind -> valid type values
+	basisEnumSet    map[string]bool            // valid basis values (capability)
+)
+
+// loadSchemaEnums reads, once, the valid type values per node kind and the valid
+// basis values from the embedded graph schema's own definitions, so the
+// diagnostic's enum check stays in step with the schema.
+func loadSchemaEnums() {
+	typeEnumByKind = map[string]map[string]bool{}
+	basisEnumSet = map[string]bool{}
+	var root struct {
+		Definitions map[string]struct {
+			Properties struct {
+				Type struct {
+					Enum []string `json:"enum"`
+				} `json:"type"`
+				Basis struct {
+					Enum []string `json:"enum"`
+				} `json:"basis"`
+			} `json:"properties"`
+		} `json:"definitions"`
+	}
+	if json.Unmarshal(schemas.GraphV2Schema, &root) != nil {
+		return
+	}
+	for kind, def := range kindDefinition {
+		d, ok := root.Definitions[def]
+		if !ok {
+			continue
+		}
+		set := map[string]bool{}
+		for _, v := range d.Properties.Type.Enum {
+			set[v] = true
+		}
+		typeEnumByKind[kind] = set
+		for _, v := range d.Properties.Basis.Enum {
+			basisEnumSet[v] = true
+		}
+	}
+}
+
+// enumOrMarker returns value when it is a real schema enum value for the field
+// under kind, "-" when empty, and "<not-in-enum>" otherwise — so a type or
+// basis that is not a known enum (a value from elsewhere) is never echoed
+// (BV-202 C3).
+func enumOrMarker(kind, field, value string) string {
+	if value == "" {
+		return "-"
+	}
+	schemaEnumsOnce.Do(loadSchemaEnums)
+	ok := false
+	switch field {
+	case "type":
+		ok = typeEnumByKind[kind][value]
+	case "basis":
+		ok = basisEnumSet[value]
+	}
+	if ok {
+		return value
+	}
+	return "<not-in-enum>"
 }
 
 func lastField(field string) string {
