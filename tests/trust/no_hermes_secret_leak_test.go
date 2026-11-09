@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 )
@@ -82,7 +83,10 @@ mcp_servers:
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now)
+		g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, Now: now, SkipInfer: true})
+		if err != nil {
+			t.Fatal(err)
+		}
 		enc, err := graph.Encode(g)
 		if err != nil {
 			t.Fatal(err)

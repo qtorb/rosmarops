@@ -13,6 +13,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 )
@@ -59,7 +60,7 @@ func TestNoHookCommandSecretInReports(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := graph.Infer(graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now), []string{repo}, home)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, RepoRoots: []string{repo}, Home: home, Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
