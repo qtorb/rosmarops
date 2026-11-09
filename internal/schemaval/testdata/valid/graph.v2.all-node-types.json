@@ -1,0 +1,260 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-11-09T12:00:00Z",
+  "coverage": {
+    "sources_read": [],
+    "sources_failed": [],
+    "agents_unsupported": []
+  },
+  "provenance": {
+    "engine_version": "0.10.3-fixture",
+    "rules_version": "0",
+    "knowledge_version": "k",
+    "host_id": "host_0123456789abcdef"
+  },
+  "nodes": [
+    {
+      "id": "agent_b1",
+      "kind": "agent",
+      "type": "ai_client",
+      "name": "Fixture ai_client",
+      "platform": "claude-code",
+      "config_path": "/cfg",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "agent_c2",
+      "kind": "agent",
+      "type": "mcp_server",
+      "name": "Fixture mcp_server",
+      "platform": "claude-code",
+      "config_path": "/cfg",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "agent_d3",
+      "kind": "agent",
+      "type": "extension",
+      "name": "Fixture extension",
+      "platform": "claude-code",
+      "config_path": "/cfg",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "agent_e4",
+      "kind": "agent",
+      "type": "bot",
+      "name": "Fixture bot",
+      "platform": "claude-code",
+      "config_path": "/cfg",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cap_f5",
+      "kind": "capability",
+      "type": "execute_shell",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_g6",
+      "kind": "capability",
+      "type": "read_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_h7",
+      "kind": "capability",
+      "type": "write_files",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_i8",
+      "kind": "capability",
+      "type": "network",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_j9",
+      "kind": "capability",
+      "type": "invoke_mcp_tool",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_k10",
+      "kind": "capability",
+      "type": "permission_mode",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cap_l11",
+      "kind": "capability",
+      "type": "operate_app",
+      "basis": "product_default",
+      "in_force": true,
+      "approval": "ask",
+      "target_scope": "/scope",
+      "applies_in": "",
+      "source": "kb:claude-code/x@1"
+    },
+    {
+      "id": "cred_m12",
+      "kind": "credential",
+      "type": "api_key",
+      "service": "fixture",
+      "fingerprint": "fp12",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_n13",
+      "kind": "credential",
+      "type": "db_credential",
+      "service": "fixture",
+      "fingerprint": "fp13",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_o14",
+      "kind": "credential",
+      "type": "oauth_token",
+      "service": "fixture",
+      "fingerprint": "fp14",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_p15",
+      "kind": "credential",
+      "type": "webhook_secret",
+      "service": "fixture",
+      "fingerprint": "fp15",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_q16",
+      "kind": "credential",
+      "type": "ssh_key",
+      "service": "fixture",
+      "fingerprint": "fp16",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_r17",
+      "kind": "credential",
+      "type": "private_key",
+      "service": "fixture",
+      "fingerprint": "fp17",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_s18",
+      "kind": "credential",
+      "type": "generic_secret",
+      "service": "fixture",
+      "fingerprint": "fp18",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_t19",
+      "kind": "resource",
+      "type": "file",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_u20",
+      "kind": "resource",
+      "type": "database",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_v21",
+      "kind": "resource",
+      "type": "external_service",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_w22",
+      "kind": "resource",
+      "type": "agent_config",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z",
+      "configures": "agent_b1"
+    },
+    {
+      "id": "res_x23",
+      "kind": "resource",
+      "type": "agent_instructions",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z",
+      "configures": "agent_b1"
+    },
+    {
+      "id": "res_y24",
+      "kind": "resource",
+      "type": "agent_executable",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z",
+      "configures": "agent_b1"
+    },
+    {
+      "id": "res_z25",
+      "kind": "resource",
+      "type": "git_repository",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    }
+  ],
+  "edges": []
+}

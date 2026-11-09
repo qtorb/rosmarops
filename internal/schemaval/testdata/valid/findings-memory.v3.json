@@ -1,0 +1,32 @@
+{
+  "schema_version": 3,
+  "salt_ref": "0123456789abcdef",
+  "runs": 2,
+  "last_checked": {
+    "run": 2,
+    "date": "2026-11-09",
+    "rules_version": "0",
+    "knowledge_version": "k1",
+    "agents": ["claude-code"],
+    "repos": 1,
+    "agent_refs": ["00112233445566aa"],
+    "mcp_dest_refs": ["aabbccddeeff0011"]
+  },
+  "entries": [
+    {
+      "mid": "fedcba9876543210",
+      "rule": "cred_read_and_send",
+      "severity": "red",
+      "first_seen": "2026-11-01",
+      "open_since": "2026-11-01",
+      "last_seen": "2026-11-09",
+      "last_verdict": "still_observed",
+      "reappeared": 0,
+      "last_report": "report-2026-11-09__RED__1R-0Y",
+      "last_seen_run": 2,
+      "open": true,
+      "agent": "00112233445566aa",
+      "creds": ["1122334455667788"]
+    }
+  ]
+}
