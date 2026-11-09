@@ -1039,28 +1039,6 @@ func RenderV2JSON(v V2) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-// validateReportV1 checks v1JSON against the embedded report.v1 schema, so the
-// v1 report is validated before it is written, like the v2 report and the space
-// view (BV-203 point 5).
-func validateReportV1(v1JSON []byte) error {
-	schema, err := schemaval.Compile(schemas.ReportSchema)
-	if err != nil {
-		return fmt.Errorf("compile report v1 schema: %w", err)
-	}
-	result, err := schema.Validate(v1JSON)
-	if err != nil {
-		return fmt.Errorf("validate report v1: %w", err)
-	}
-	if !result.Valid() {
-		msgs := ""
-		for _, e := range result.Errors() {
-			msgs += "\n  " + e.String()
-		}
-		return fmt.Errorf("report v1 fails schema validation:%s", msgs)
-	}
-	return nil
-}
-
 // V2Counts are the red and yellow findings of v2.
 func V2Counts(v V2) (red, yellow int) {
 	for _, f := range v.Findings {
@@ -1112,12 +1090,16 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 	if err != nil {
 		return "", "", "", err
 	}
-	// BV-203 point 5: report.json is validated against report.v1 before it is
-	// written, like the v2 report and the space view. A report that does not
-	// validate is an error, never written.
-	if err := validateReportV1(v1JSON); err != nil {
-		return "", "", "", err
-	}
+	// BV-203 point 5: report.json is NOT gated on report.v1 validation here.
+	// report.v1 is the legacy, being-retired schema (CLAUDE.md); its findings
+	// `category` enum is frozen and does not list the finding codes the v2-era
+	// engine now emits (BV-140/BV-193/BV-198 agents), so a real v1 report never
+	// validates against it. Gating the write would abort every real run, and
+	// extending report.v1.json's enum is a schema change for Albert to sign.
+	// So report.json validation is deferred: see the release note. The two
+	// outputs the product still lives by are gated — the v2 report in
+	// RenderV2JSON and the space view in RenderSpaceViewJSON — and what leaves
+	// the machine (results.v1) is validated in internal/results.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", "", fmt.Errorf("create report dir %s: %w", dir, err)
 	}
