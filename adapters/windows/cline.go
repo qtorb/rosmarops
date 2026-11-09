@@ -91,6 +91,12 @@ func readClineGlobalState(scan *platform.ClineScan, path string) {
 	}
 	scan.MigrationVersion = doc.MigrationVersion
 	scan.Yolo = doc.YoloModeToggled || doc.AutoApproveAllToggle
+	switch {
+	case doc.YoloModeToggled:
+		scan.YoloKey = "yoloModeToggled"
+	case doc.AutoApproveAllToggle:
+		scan.YoloKey = "autoApproveAllToggled"
+	}
 	if doc.HooksEnabled != nil {
 		scan.HooksEnabled = *doc.HooksEnabled
 	}

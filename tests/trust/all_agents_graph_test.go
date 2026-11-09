@@ -62,6 +62,10 @@ func allAgents(configured bool) allAgentScans {
 		s.copilot.Layers = []platform.CopilotLayer{{Kind: platform.CopilotLayerUser, Path: fcCopilotDir + "/settings.json", Status: st}}
 		s.gemini.Layers = []platform.GeminiLayer{{Kind: platform.GeminiLayerUser, Path: fcGemini + "/settings.json", Status: st}}
 		s.antigravity.Settings = platform.AntigravitySettings{Path: fcGemini + "/antigravity-cli/settings.json", Status: st}
+		// Cline auto-approval (BV-202 C5): puts the five capabilities at
+		// basis=configured, which must each carry a rule or the encode fails.
+		s.cline.HasAutoApproval = true
+		s.cline.ReadFiles, s.cline.EditFiles, s.cline.ExecuteSafeCommands, s.cline.UseBrowser, s.cline.UseMcp = true, false, true, true, false
 		cfg := platform.HermesConfig{Path: hd + "/config.yaml", ConfigDir: hd, Status: st, ApprovalMode: "smart", TerminalBackend: "local"}
 		s.hermes = platform.HermesScan{
 			Configs: []platform.HermesConfig{cfg},
