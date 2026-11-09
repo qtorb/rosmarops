@@ -757,17 +757,56 @@ func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 }
 
 // svTopAction is the one thing to do today and the score it would give, from
-// the index projection of the agent whose action is today's; null when there
-// is no today action or no projection for it.
+// the index projection of the agent today's finding belongs to; null when there
+// is no today action, no such scored agent or no projection for it.
 func svTopAction(v V2) *SVTopAction {
 	if v.Today.FindingID == "" || v.Today.ActionID == "" {
 		return nil
 	}
-	for _, ai := range v.Index.Agents {
-		if ai.Value == nil || ai.Projection == nil || ai.Projection.ActionID != v.Today.ActionID {
-			continue
+	ai := svAgentOfToday(v)
+	if ai == nil || ai.Value == nil || ai.Projection == nil {
+		return nil
+	}
+	return &SVTopAction{FindingID: v.Today.FindingID, ScoreFrom: *ai.Value, ScoreTo: ai.Projection.Value}
+}
+
+// svAgentOfToday resolves the agent whose score today's finding moves, the same
+// way the report does (html.go agentScore). BV-203 point 9: the agent is
+// resolved from today's finding — its first evidence node is its agent — never
+// from v.Today.ActionID, which is a hash of the action's content (code, file,
+// key, value, locations) and so does not identify an agent: with several scored
+// agents sharing today's action, matching by ActionID returned the wrong
+// agent's before/after (on Albert's machine «21 to 25» where the report said «8
+// to 9»). A machine finding (cred_in_git) is in every agent's score and shows
+// the first scored agent's, as the report does. Returns nil when no scored
+// agent matches.
+func svAgentOfToday(v V2) *index.AgentIndex {
+	var today *rules.Finding
+	for i := range v.Findings {
+		if v.Findings[i].ID == v.Today.FindingID {
+			today = &v.Findings[i]
+			break
 		}
-		return &SVTopAction{FindingID: v.Today.FindingID, ScoreFrom: *ai.Value, ScoreTo: ai.Projection.Value}
+	}
+	if today == nil {
+		return nil
+	}
+	if rules.IsMachineFinding(*today) {
+		for i := range v.Index.Agents {
+			if v.Index.Agents[i].Value != nil {
+				return &v.Index.Agents[i]
+			}
+		}
+		return nil
+	}
+	if len(today.Evidence.Nodes) == 0 {
+		return nil
+	}
+	agentID := today.Evidence.Nodes[0]
+	for i := range v.Index.Agents {
+		if v.Index.Agents[i].AgentID == agentID {
+			return &v.Index.Agents[i]
+		}
 	}
 	return nil
 }
