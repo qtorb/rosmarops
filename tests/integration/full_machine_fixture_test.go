@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -71,6 +72,25 @@ func fmGeminiMDRepos() []string { return fmRepos()[3:5] }
 
 // fmEnvRepos are the four repos whose .env holds a (fake) OpenAI key.
 func fmEnvRepos() []string { return fmRepos()[5:9] }
+
+// fmCommittedRepos is the git state of the machine: a high-class Supabase
+// service_role key committed (tracked in the current tree) in a repo that has
+// a remote. It gives a cred_in_git finding, which is a machine finding (it
+// weighs in every agent's score), ranks first (high + remote), and so is
+// today's action. Its before/after must resolve to the lowest-scored agent in
+// both the report and the space view — the CTO-30 A1/A3 case. Modelling the
+// repositories' git state also closes the `Repos: graph.Repos{}` gap the review
+// flagged (CTO-30 §2b).
+func fmCommittedRepos() graph.Repos {
+	cs := []finding.CommittedSecret{{
+		PatternID: "supabase_secret_key",
+		Ref:       graph.Identifier(fmSalt)("supabase_secret_key", "sb_secret_"+repeat("S", 40)),
+		Repo:      fmRepos()[9], Presence: finding.PresenceTracked,
+		File: "config/keys.ts", Line: 3,
+		Commit: "0123456789abcdef0123456789abcdef01234567", HasRemote: true,
+	}}
+	return graph.Repos{Findings: []finding.Finding{{ID: "secret:supabase", Category: "secret_tracked", Committed: cs}}}
+}
 
 // fmComputerUseApps is the fifteen Computer Use app ids Codex is told to allow
 // without asking (CTO-22 Computer Use).
@@ -185,7 +205,7 @@ func fullMachineInput(configured bool) (pipeline.Input, fullMachineScans) {
 		Instructions: instr,
 		CredFiles:    creds,
 		Extensions:   exts,
-		Repos:        graph.Repos{},
+		Repos:        fmCommittedRepos(),
 		Provenance: graph.Provenance{
 			EngineVersion:    "0.10.3-test",
 			RulesVersion:     graph.RulesVersion,

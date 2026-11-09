@@ -8,13 +8,11 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/graph"
-	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
-	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/schemas"
 	"github.com/qtorb/rosmarops/internal/schemaval"
 )
@@ -150,17 +148,25 @@ func runFullMachine(t *testing.T, configured bool) {
 		t.Fatal("empty space view")
 	}
 
-	// BV-203 point 9: the space's today-action figures must equal the report's.
-	// The report resolves today's agent from the finding (Evidence.Nodes[0]);
-	// the space must now do the same, so the two before/after figures agree.
-	if sv.TopAction != nil {
-		from, to, ok := reportTodayFigures(v2)
-		if !ok {
-			t.Errorf("space shows a top action but the report resolves no agent for today's finding")
-		} else if sv.TopAction.ScoreFrom != from || sv.TopAction.ScoreTo != to {
-			t.Errorf("space top action %d->%d differs from the report's %d->%d (svTopAction resolved the wrong agent)",
-				sv.TopAction.ScoreFrom, sv.TopAction.ScoreTo, from, to)
-		}
+	// BV-203 point 9 / CTO-30 A1,A3 (§4 point 4): the space's today-action
+	// figures must equal the report's, compared against the report's own
+	// function (report.TodayFigures), not a copy of the resolution in this test.
+	// Today's finding on this fixture is cred_in_git — a machine finding in
+	// every agent's score — so both must resolve to the lowest-scored agent; if
+	// svAgentOfToday reverts to the first-in-index agent the two diverge and this
+	// fails. The check is driven off the report: when the report resolves a
+	// figure the space must show the same one and must not be absent, and vice
+	// versa.
+	from, to, ok := report.TodayFigures(v2)
+	switch {
+	case ok && sv.TopAction == nil:
+		t.Errorf("the report resolves today's figures %d->%d but the space shows no top action", from, to)
+	case !ok && sv.TopAction != nil:
+		t.Errorf("the space shows a top action %d->%d but the report resolves no figures for today",
+			sv.TopAction.ScoreFrom, sv.TopAction.ScoreTo)
+	case ok && (sv.TopAction.ScoreFrom != from || sv.TopAction.ScoreTo != to):
+		t.Errorf("space top action %d->%d differs from the report's %d->%d (svAgentOfToday resolved the wrong agent)",
+			sv.TopAction.ScoreFrom, sv.TopAction.ScoreTo, from, to)
 	}
 
 	// 5. The results package builds and its sealed form validates against
@@ -204,48 +210,6 @@ func runFullMachine(t *testing.T, configured bool) {
 			t.Errorf("WriteHTMLPages(%s) produced no page at %s", lang, p)
 		}
 	}
-}
-
-// reportTodayFigures resolves today's agent the way the report does — a
-// machine finding shows the first scored agent's score, otherwise the finding's
-// first evidence node is its agent — and returns its before/after projection.
-func reportTodayFigures(v report.V2) (from, to int, ok bool) {
-	if v.Today.FindingID == "" {
-		return 0, 0, false
-	}
-	var today *rules.Finding
-	for i := range v.Findings {
-		if v.Findings[i].ID == v.Today.FindingID {
-			today = &v.Findings[i]
-			break
-		}
-	}
-	if today == nil {
-		return 0, 0, false
-	}
-	pick := func(a index.AgentIndex) (int, int, bool) {
-		if a.Value == nil || a.Projection == nil {
-			return 0, 0, false
-		}
-		return *a.Value, a.Projection.Value, true
-	}
-	if rules.IsMachineFinding(*today) {
-		for _, a := range v.Index.Agents {
-			if a.Value != nil {
-				return pick(a)
-			}
-		}
-		return 0, 0, false
-	}
-	if len(today.Evidence.Nodes) == 0 {
-		return 0, 0, false
-	}
-	for _, a := range v.Index.Agents {
-		if a.AgentID == today.Evidence.Nodes[0] {
-			return pick(a)
-		}
-	}
-	return 0, 0, false
 }
 
 // graphSHA is the lowercase-hex SHA-256 of the encoded graph, as the report

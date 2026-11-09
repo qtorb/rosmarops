@@ -362,13 +362,14 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	return sb.String()
 }
 
-// scoredAgents are the evaluated agents with a score, lowest first (ties
-// by name; v3 §3 point 6).
-func (c htmlCtx) scoredAgents() []*index.AgentIndex {
+// scoredAgentsOf are the evaluated agents with a score, lowest first (ties by
+// name; v3 §3 point 6). Free function so the report and the space view sort
+// the same way (BV-203 point 9 / CTO-30 A1).
+func scoredAgentsOf(v V2) []*index.AgentIndex {
 	var out []*index.AgentIndex
-	for i := range c.v.Index.Agents {
-		if c.v.Index.Agents[i].Value != nil {
-			out = append(out, &c.v.Index.Agents[i])
+	for i := range v.Index.Agents {
+		if v.Index.Agents[i].Value != nil {
+			out = append(out, &v.Index.Agents[i])
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -378,6 +379,37 @@ func (c htmlCtx) scoredAgents() []*index.AgentIndex {
 		return out[i].Agent < out[j].Agent
 	})
 	return out
+}
+
+// agentOfFinding resolves the agent whose score a finding moves — the single
+// rule the report (agentScore) and the space view (svAgentOfToday,
+// findingWeightAndAfter) share (CTO-30 A1). A machine finding (cred_in_git)
+// is in every agent's score and resolves to the lowest-scored agent, ties by
+// name, exactly as the report's card does; any other finding resolves to the
+// agent of its first evidence node. Returns false when no scored agent matches.
+func agentOfFinding(v V2, f rules.Finding) (*index.AgentIndex, bool) {
+	if rules.IsMachineFinding(f) {
+		if s := scoredAgentsOf(v); len(s) > 0 {
+			return s[0], true
+		}
+		return nil, false
+	}
+	if len(f.Evidence.Nodes) == 0 {
+		return nil, false
+	}
+	agentID := f.Evidence.Nodes[0]
+	for i := range v.Index.Agents {
+		if v.Index.Agents[i].AgentID == agentID {
+			return &v.Index.Agents[i], true
+		}
+	}
+	return nil, false
+}
+
+// scoredAgents are the evaluated agents with a score, lowest first (ties
+// by name; v3 §3 point 6).
+func (c htmlCtx) scoredAgents() []*index.AgentIndex {
+	return scoredAgentsOf(c.v)
 }
 
 // scored is the agent with the lowest score: the step 1 score and the card
@@ -1149,16 +1181,11 @@ func copyParams(p map[string]string) map[string]string {
 	return q
 }
 
-// agentScore is the score of a finding's agent.
+// agentScore is the score of a finding's agent, resolved by the one rule the
+// report and the space view share (agentOfFinding): a machine finding is in
+// every agent's score and resolves to the step 1 (lowest-scored) agent.
 func (c htmlCtx) agentScore(f rules.Finding) (*index.AgentIndex, bool) {
-	if rules.IsMachineFinding(f) {
-		return c.scored() // in every agent's score: the step 1 agent's
-	}
-	if len(f.Evidence.Nodes) == 0 {
-		return nil, false
-	}
-	a, ok := c.score[f.Evidence.Nodes[0]]
-	return a, ok
+	return agentOfFinding(c.v, f)
 }
 
 // params are the HTML texts' params of a finding: agent, target_agent,
