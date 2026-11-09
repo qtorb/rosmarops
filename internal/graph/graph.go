@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/schemaval"
@@ -298,7 +301,10 @@ func getSchema() (*schemaval.Schema, error) {
 }
 
 // schemaErrors validates raw JSON against the embedded graph schema and returns
-// one message per violation (none when valid).
+// one message per violation (none when valid). A node that fails the top-level
+// `node` oneOf is re-checked against its own kind so the message names the kind,
+// type, basis and the property that fails — never a value, a path or an id
+// (BV-202 point 3).
 func schemaErrors(raw []byte) ([]string, error) {
 	schema, err := getSchema()
 	if err != nil {
@@ -311,9 +317,256 @@ func schemaErrors(raw []byte) ([]string, error) {
 	errs := result.Errors()
 	msgs := make([]string, len(errs))
 	for i, e := range errs {
+		if d := explainNodeOneOf(raw, e); d != "" {
+			msgs[i] = d
+			continue
+		}
 		msgs[i] = e.String()
 	}
 	return msgs, nil
+}
+
+// kindDefinition maps a node kind to its schema definition name.
+var kindDefinition = map[string]string{
+	KindAgent: "agent", KindCapability: "capability",
+	KindCredential: "credential", KindResource: "resource",
+}
+
+// nodeKindSchemas compiles, once, a validator per node kind from the graph
+// schema's own definitions, so a node that fails the `node` oneOf can be
+// re-validated against the single schema its kind should satisfy.
+var nodeKindSchemas = map[string]*schemaval.Schema{}
+
+func kindSchema(kind string) (*schemaval.Schema, bool) {
+	if s, ok := nodeKindSchemas[kind]; ok {
+		return s, s != nil
+	}
+	def, ok := kindDefinition[kind]
+	if !ok {
+		nodeKindSchemas[kind] = nil
+		return nil, false
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(schemas.GraphV2Schema, &root); err != nil {
+		nodeKindSchemas[kind] = nil
+		return nil, false
+	}
+	wrapper, err := json.Marshal(map[string]any{
+		"$ref":        "#/definitions/" + def,
+		"definitions": json.RawMessage(root["definitions"]),
+	})
+	if err != nil {
+		nodeKindSchemas[kind] = nil
+		return nil, false
+	}
+	s, err := schemaval.Compile(wrapper)
+	if err != nil {
+		nodeKindSchemas[kind] = nil
+		return nil, false
+	}
+	nodeKindSchemas[kind] = s
+	return s, true
+}
+
+// explainNodeOneOf turns a bare "nodes.N: Must validate one and only one schema
+// (oneOf)" into a message naming the node's kind, type, basis and the failing
+// property, with no value, path or id. It returns "" for any other error.
+func explainNodeOneOf(raw []byte, e schemaval.Error) string {
+	if !strings.HasPrefix(e.Field, "nodes.") || !strings.Contains(e.Description, "oneOf") {
+		return ""
+	}
+	idxStr := strings.TrimPrefix(e.Field, "nodes.")
+	if i := strings.IndexByte(idxStr, '.'); i >= 0 {
+		idxStr = idxStr[:i]
+	}
+	idx, err := strconv.Atoi(idxStr)
+	if err != nil {
+		return ""
+	}
+	var doc struct {
+		Nodes []map[string]json.RawMessage `json:"nodes"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil || idx < 0 || idx >= len(doc.Nodes) {
+		return ""
+	}
+	n := doc.Nodes[idx]
+	kind := jsonString(n["kind"])
+	// type and basis are echoed only when they are real schema enum values;
+	// anything else becomes <not-in-enum>, so the diagnostic never repeats a
+	// value that is not an id, enum or stable code (BV-202 C3, CTO-28).
+	desc := "node kind=" + orDash(kind) +
+		" type=" + enumOrMarker(kind, "type", jsonString(n["type"])) +
+		" basis=" + enumOrMarker(kind, "basis", jsonString(n["basis"]))
+	// The node oneOf has one branch per kind (a const). The nearest branch is
+	// the one for this node's kind; name it so the reader knows which subschema
+	// the properties below were checked against. Unknown kind → no branch.
+	if def, ok := kindDefinition[kind]; ok {
+		desc += " oneof-branch=" + def
+	} else {
+		desc += " oneof-branch=none"
+	}
+	props := failingProperties(n, kind)
+	if len(props) == 0 {
+		return e.Field + ": " + desc + " does not match its kind's schema"
+	}
+	return e.Field + ": " + desc + " invalid property: " + strings.Join(props, ", ")
+}
+
+// failingProperties re-validates one node against its kind's schema and returns
+// the names of the properties that fail — only names, never values. Returns nil
+// when the kind is unknown or the node validates (an impossible oneOf match).
+func failingProperties(node map[string]json.RawMessage, kind string) []string {
+	s, ok := kindSchema(kind)
+	if !ok {
+		return nil
+	}
+	raw, err := json.Marshal(node)
+	if err != nil {
+		return nil
+	}
+	res, err := s.Validate(raw)
+	if err != nil || res.Valid() {
+		return nil
+	}
+	seen := map[string]bool{}
+	var props []string
+	add := func(p string) {
+		if p != "" && !seen[p] {
+			seen[p] = true
+			props = append(props, p)
+		}
+	}
+	for _, se := range res.Errors() {
+		switch {
+		case strings.HasSuffix(se.Description, " is required"):
+			add(strings.TrimSuffix(se.Description, " is required") + " (missing)")
+		case strings.HasPrefix(se.Description, "Additional property "):
+			name := strings.TrimPrefix(se.Description, "Additional property ")
+			name = strings.TrimSuffix(name, " is not allowed")
+			add(name + " (not allowed)")
+		case strings.Contains(se.Description, "Must not validate the schema (not)"):
+			// A forbidden-when-present property: name it from the kind's
+			// conditional rules by looking only at which key is present.
+			for _, p := range forbiddenPresent(node, kind) {
+				add(p + " (not allowed here)")
+			}
+		case se.Field != "(root)":
+			add(lastField(se.Field) + " (invalid)")
+		default:
+			add("(schema)")
+		}
+	}
+	return props
+}
+
+// forbiddenPresent names the properties a node carries that its kind's
+// conditional rules forbid in that node's shape (value-free).
+func forbiddenPresent(node map[string]json.RawMessage, kind string) []string {
+	var out []string
+	_, hasConfigures := node["configures"]
+	_, hasRule := node["rule"]
+	_, hasReason := node["not_in_force_reason"]
+	switch kind {
+	case KindResource:
+		if hasConfigures {
+			out = append(out, "configures")
+		}
+	case KindCapability:
+		if hasRule {
+			out = append(out, "rule")
+		}
+		if hasReason {
+			out = append(out, "not_in_force_reason")
+		}
+	}
+	return out
+}
+
+func jsonString(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	return ""
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+var (
+	schemaEnumsOnce sync.Once
+	typeEnumByKind  map[string]map[string]bool // node kind -> valid type values
+	basisEnumSet    map[string]bool            // valid basis values (capability)
+)
+
+// loadSchemaEnums reads, once, the valid type values per node kind and the valid
+// basis values from the embedded graph schema's own definitions, so the
+// diagnostic's enum check stays in step with the schema.
+func loadSchemaEnums() {
+	typeEnumByKind = map[string]map[string]bool{}
+	basisEnumSet = map[string]bool{}
+	var root struct {
+		Definitions map[string]struct {
+			Properties struct {
+				Type struct {
+					Enum []string `json:"enum"`
+				} `json:"type"`
+				Basis struct {
+					Enum []string `json:"enum"`
+				} `json:"basis"`
+			} `json:"properties"`
+		} `json:"definitions"`
+	}
+	if json.Unmarshal(schemas.GraphV2Schema, &root) != nil {
+		return
+	}
+	for kind, def := range kindDefinition {
+		d, ok := root.Definitions[def]
+		if !ok {
+			continue
+		}
+		set := map[string]bool{}
+		for _, v := range d.Properties.Type.Enum {
+			set[v] = true
+		}
+		typeEnumByKind[kind] = set
+		for _, v := range d.Properties.Basis.Enum {
+			basisEnumSet[v] = true
+		}
+	}
+}
+
+// enumOrMarker returns value when it is a real schema enum value for the field
+// under kind, "-" when empty, and "<not-in-enum>" otherwise — so a type or
+// basis that is not a known enum (a value from elsewhere) is never echoed
+// (BV-202 C3).
+func enumOrMarker(kind, field, value string) string {
+	if value == "" {
+		return "-"
+	}
+	schemaEnumsOnce.Do(loadSchemaEnums)
+	ok := false
+	switch field {
+	case "type":
+		ok = typeEnumByKind[kind][value]
+	case "basis":
+		ok = basisEnumSet[value]
+	}
+	if ok {
+		return value
+	}
+	return "<not-in-enum>"
+}
+
+func lastField(field string) string {
+	if i := strings.LastIndexByte(field, '.'); i >= 0 {
+		return field[i+1:]
+	}
+	return field
 }
 
 // LoadGraph reads the graph file at path, validates it against the embedded

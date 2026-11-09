@@ -186,7 +186,7 @@ func descend(root Map, path []string) (Map, error) {
 		case Map:
 			cur = v
 		default:
-			return nil, fmt.Errorf("key %q is not a table", seg)
+			return nil, errors.New("key is not a table")
 		}
 	}
 	return cur, nil
@@ -246,7 +246,7 @@ func setDotted(cur Map, key string, val any) error {
 	for i, seg := range segs {
 		if i == len(segs)-1 {
 			if _, dup := cur[seg]; dup {
-				return fmt.Errorf("duplicate key %q", seg)
+				return errors.New("duplicate key")
 			}
 			cur[seg] = val
 			return nil
@@ -259,7 +259,7 @@ func setDotted(cur Map, key string, val any) error {
 		case Map:
 			cur = v
 		default:
-			return fmt.Errorf("key %q is not a table", seg)
+			return errors.New("key is not a table")
 		}
 	}
 	return nil
@@ -297,7 +297,7 @@ func splitDottedKey(s string) ([]string, error) {
 			}
 			seg, i = s[i:j], j
 			if !bareKeyOK(seg) {
-				return nil, fmt.Errorf("invalid bare key %q", seg)
+				return nil, errors.New("invalid bare key")
 			}
 		}
 		segs = append(segs, seg)
@@ -393,7 +393,7 @@ func scalarToken(tok string) (any, error) {
 	if f, err := strconv.ParseFloat(clean, 64); err == nil {
 		return f, nil
 	}
-	return nil, fmt.Errorf("unsupported value %q", tok)
+	return nil, errors.New("unsupported value")
 }
 
 // scanBasicString reads a "..." string with standard escapes.
@@ -442,7 +442,7 @@ func scanBasicString(s string) (string, int, error) {
 				b.WriteRune(rune(r))
 				i += 8
 			default:
-				return "", 0, fmt.Errorf("unsupported escape \\%c", e)
+				return "", 0, errors.New("unsupported escape")
 			}
 		case '"':
 			return b.String(), i + 1, nil
@@ -541,7 +541,7 @@ func scanInlineTable(s string) (Map, int, error) {
 			}
 			key, i = s[i:j], j
 			if !bareKeyOK(key) {
-				return nil, 0, fmt.Errorf("invalid key %q in inline table", key)
+				return nil, 0, errors.New("invalid key in inline table")
 			}
 		}
 		for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
@@ -556,7 +556,7 @@ func scanInlineTable(s string) (Map, int, error) {
 			return nil, 0, err
 		}
 		if _, dup := m[key]; dup {
-			return nil, 0, fmt.Errorf("duplicate key %q in inline table", key)
+			return nil, 0, errors.New("duplicate key in inline table")
 		}
 		m[key] = v
 		i += n

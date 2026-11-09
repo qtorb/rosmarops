@@ -718,11 +718,20 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}},
 	}
 	progress.line("console.progress.agents", nil)
-	if timeoutErr := scan.Run(ctx, steps); timeoutErr != nil {
-		scanErrors = append(scanErrors, *timeoutErr)
-	}
+	// Run surfaces both a global-timeout error and any step that panicked
+	// (BV-202 S1); all become visible errors[] so the run is fail-secure.
+	scanErrors = append(scanErrors, scan.Run(ctx, steps)...)
 	if buildGraph != nil {
-		buildGraph(graph.Repos{Findings: repoFindings, Families: familyRoots(families)})
+		// The graph build runs outside scan.Run, so a panic here would otherwise
+		// bring the program down with no report (BV-202 C1, CTO-28). Contain it
+		// with the same recover: the graph stays unbuilt (E10), surfaced as a
+		// visible scope-"graph" error, and graphDone stays false so any stale
+		// graph is removed below.
+		if se := scan.RecoverStep("graph", func() {
+			buildGraph(graph.Repos{Findings: repoFindings, Families: familyRoots(families)})
+		}); se != nil {
+			scanErrors = append(scanErrors, *se)
+		}
 	}
 	// A graph step that never returned leaves no graph of this run: remove a
 	// previous one, as when the graph cannot be built.

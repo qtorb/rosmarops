@@ -122,6 +122,12 @@ const (
 
 	actionScanTimeout = "Check whether the repository is unusually large or has a very long history. " +
 		"Run RosmarOps again; if the repository keeps timing out, review it by hand."
+
+	whyRepoCheckFailed = "A git command for one of this repository's checks failed, so that check did not run. " +
+		"Anything it would have found is not in this report, and the repository is not clean just because nothing was reported."
+
+	actionRepoCheckFailed = "Check that git is installed and the repository is not corrupt. " +
+		"Run RosmarOps again; if the check keeps failing, review the repository by hand."
 )
 
 // trackedSecretsCheck and historySecretsCheck are checks 1 and 2. Always
@@ -152,7 +158,8 @@ type repoResult struct {
 	findings           []finding.Finding
 	baseline           state.RepoBaseline
 	err                error
-	filesSkippedBinary int // BV-186
+	filesSkippedBinary int      // BV-186
+	failedChecks       []string // BV-202 S3: analyses whose git command failed
 }
 
 // ScanAllRepos runs ScanRepo for each entry in repoRoots, enforcing per-repo
@@ -258,6 +265,21 @@ func ScanAllRepos(
 			})
 		}
 		allFindings = append(allFindings, r.findings...)
+
+		// BV-202 S3 (CTO-24 §0): a repository whose git command failed in one of
+		// its analyses never reports as completed with no findings. One visible
+		// yellow repo_check_failed finding per failed analysis names it, and the
+		// fail-secure reducer raises the run to at least yellow.
+		for _, analysis := range r.failedChecks {
+			f := finding.NewFinding(repoFindingID("repo_check_failed", root, analysis), finding.SeverityYellow,
+				"repo_check_failed", fmt.Sprintf("A repository check could not run: %s (%s)", analysis, root))
+			f.GroupDetail = analysis
+			f.WhyItMatters = whyRepoCheckFailed
+			f.SuggestedAction = actionRepoCheckFailed
+			f.Confidence = "high"
+			f.Evidence = finding.Evidence{RepoPath: root}
+			allFindings = append(allFindings, f)
+		}
 
 		switch r.status {
 		case repoNotStarted:
@@ -406,7 +428,7 @@ func scanOneRepo(ctx context.Context, root string, baseline *state.RepoBaseline,
 		slog.Warn("repos: scan failed", "repo", root, "err", err)
 	}
 
-	r := repoResult{status: repoCompleted, findings: repoFindings, baseline: newBL, err: err, filesSkippedBinary: trace.filesSkippedBinary}
+	r := repoResult{status: repoCompleted, findings: repoFindings, baseline: newBL, err: err, filesSkippedBinary: trace.filesSkippedBinary, failedChecks: trace.failedCheckNames()}
 	switch {
 	case repoCtx.Err() == nil:
 	case errors.Is(context.Cause(repoCtx), errRepoTimeout):

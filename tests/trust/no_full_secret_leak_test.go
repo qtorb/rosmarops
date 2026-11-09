@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	windows "github.com/qtorb/rosmarops/adapters/windows"
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -855,4 +856,59 @@ func groupOf4(code string) string {
 		g = append(g, code[i:i+4])
 	}
 	return strings.Join(g, "-")
+}
+
+// TestNoSecretInGraphFromMalformedCodexTOML (BV-202 S2) drives the real path
+// for a malformed Codex config.toml whose offending value is a fake secret
+// (k = sk-proj-FAKE…). The TOML fails to parse, which the reader records as a
+// parse_error coverage reason that reaches graph.v2.json. The encoded graph
+// must carry the parse_error (the source really failed) but never the secret.
+func TestNoSecretInGraphFromMalformedCodexTOML(t *testing.T) {
+	const fakeCodexTOMLKey = "sk-proj-FAKEcodexFAKEcodexFAKEcodexFAKE00"
+
+	home := t.TempDir()
+	codexDir := filepath.Join(home, ".codex")
+	if err := os.MkdirAll(codexDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// An unsupported bare value (tomlsubset.go:396) carrying the fake secret.
+	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"),
+		[]byte("sandbox_mode = "+fakeCodexTOMLKey+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// env returns nothing, so CODEX_HOME etc. default to ~/.codex.
+	noEnv := func(string) (string, bool) { return "", false }
+	scan := windows.ReadCodex(home, noEnv, nil, "")
+
+	var failed bool
+	for _, l := range scan.Layers {
+		if strings.Contains(l.Reason, "parse_error") {
+			failed = true
+			if strings.Contains(l.Reason, fakeCodexTOMLKey) || strings.Contains(l.Reason, fakeCodexTOMLKey[4:len(fakeCodexTOMLKey)-4]) {
+				t.Errorf("the coverage reason leaked the secret: %q", l.Reason)
+			}
+		}
+	}
+	if !failed {
+		t.Fatal("the malformed config.toml did not produce a parse_error layer — test is not exercising the path")
+	}
+
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	frag := graph.FromCodex(scan, now)
+	g := graph.Build(frag, graph.Provenance{
+		EngineVersion: "t", RulesVersion: graph.RulesVersion,
+		KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID([]byte("salt-for-test-only")),
+	}, now)
+	out, err := graph.Encode(g)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	s := string(out)
+	if !strings.Contains(s, "parse_error") {
+		t.Error("graph.v2.json lacks the parse_error coverage reason")
+	}
+	if strings.Contains(s, fakeCodexTOMLKey) || strings.Contains(s, fakeCodexTOMLKey[4:len(fakeCodexTOMLKey)-4]) {
+		t.Error("graph.v2.json contains the secret from the malformed config.toml")
+	}
 }

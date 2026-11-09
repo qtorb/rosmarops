@@ -326,7 +326,7 @@ func splitKey(s string) (key, rest string, err error) {
 			return "", "", errors.New("not a 'key: value' line")
 		}
 		k, s = s[:i], s[i+1:]
-		if strings.ContainsAny(k[:1], refusedStart+"[],#") {
+		if k == "" || strings.ContainsAny(k[:1], refusedStart+"[],#") {
 			return "", "", errors.New("a key that is not a plain scalar")
 		}
 	}
@@ -374,7 +374,7 @@ func scalar(s string, inFlow bool) (Scalar, error) {
 		return Scalar{Text: v, Quoted: true}, nil
 	}
 	if strings.ContainsAny(s[:1], refusedStart+"[]#") || s[0] == '-' && len(s) > 1 && s[1] == ' ' {
-		return Scalar{}, fmt.Errorf("%q starts what the subset does not read", s[:1])
+		return Scalar{}, errors.New("a value starting with a character the subset does not read")
 	}
 	if colon(s) >= 0 {
 		return Scalar{}, errors.New("a mapping inside a value")
@@ -473,7 +473,7 @@ func quoted(s string) (string, int, error) {
 				b.WriteRune(rune(r))
 				i += 4
 			default:
-				return "", 0, fmt.Errorf("the escape \\%c is not read", s[i])
+				return "", 0, errors.New("an escape the subset does not read")
 			}
 		default:
 			b.WriteByte(c)

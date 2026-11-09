@@ -215,7 +215,8 @@
             "config_hash_changed",
             "binary_hash_changed",
             "scan_error",
-            "scan_timeout"
+            "scan_timeout",
+            "repo_check_failed"
           ]
         },
         "title": {

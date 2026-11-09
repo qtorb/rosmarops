@@ -226,7 +226,7 @@ func checkTrackedSecrets(ctx context.Context, repoRoot string, patterns []secret
 	trace.trackedFiles = len(entries)
 	if err != nil {
 		slog.Warn("repos: git ls-files failed", "repo", repoRoot, "err", err)
-		markError(ctx)
+		markCheckFailed(ctx, "tracked_secrets")
 		return nil
 	}
 	// Files that differ from the index are read from disk and never cached.
@@ -362,7 +362,7 @@ func checkHistorySecrets(
 	hashes, err := gitLogHashes(ctx, repoRoot, HistoryMaxCommits, since)
 	if err != nil {
 		slog.Warn("repos: git log failed for history scan", "repo", repoRoot, "err", err)
-		markError(ctx)
+		markCheckFailed(ctx, "history_secrets")
 		return nil
 	}
 	trace := traceOf(ctx)
@@ -430,7 +430,7 @@ func checkHistorySecrets(
 			}
 		} else {
 			slog.Debug("repos: git log --stdin failed", "repo", repoRoot, "err", err)
-			markError(ctx)
+			markCheckFailed(ctx, "history_secrets")
 		}
 	}
 	for h := range matches {
@@ -506,7 +506,7 @@ func checkEnvTracked(ctx context.Context, repoRoot string) []finding.Finding {
 	files, err := gitLsFiles(ctx, repoRoot)
 	if err != nil {
 		slog.Warn("repos: git ls-files failed for env check", "repo", repoRoot, "err", err)
-		markError(ctx)
+		markCheckFailed(ctx, "env_tracked")
 		return nil
 	}
 

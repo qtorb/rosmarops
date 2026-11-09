@@ -1209,6 +1209,10 @@ type ClineScan struct {
 	// Yolo reports a legacy yoloModeToggled / autoApproveAllToggled true (an
 	// approve-everything install, CTO-22 Cline §4).
 	Yolo bool
+	// YoloKey is the exact globalState.json key that set Yolo ("yoloModeToggled"
+	// or "autoApproveAllToggled"), so a configured capability can cite it in its
+	// rule without any secret; "" when Yolo is false (BV-202).
+	YoloKey string
 	// HooksEnabled is hooksEnabled (true by default, CTO-22 Cline §5).
 	HooksEnabled bool
 	// Version is the installed extension version (from the extension folder

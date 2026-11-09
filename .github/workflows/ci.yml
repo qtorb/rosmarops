@@ -1,7 +1,7 @@
 # Continuous integration of RosmarOps (BV-78): on every push to master and
 # every pull request to master, the same verify job as release.yml, copied
-# literally (same runner, actions pinned by commit SHA, Go 1.24.7,
-# staticcheck 2025.1.1, gofumpt v0.7.0, strace, vet, staticcheck, gofumpt
+# literally (same runner, actions pinned by commit SHA, Go 1.27.3,
+# staticcheck 2026.2.2, gofumpt v0.7.0, strace, vet, staticcheck, gofumpt
 # and go test in linux and windows). BV-85: pushes to bv-* branches too, and
 # a verify-windows job that runs vet and the tests natively on windows-latest
 # (no strace there; the runtime network trace is Linux-only). BV-98 (macOS,
@@ -37,11 +37,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
           go install mvdan.cc/gofumpt@v0.7.0
       - name: Strace for the runtime network trust test
         run: sudo apt-get update && sudo apt-get install -y strace
@@ -72,23 +72,40 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
           go install mvdan.cc/gofumpt@v0.7.0
       - name: go vet
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
-      # BV-112: the sample report, made by this commit's rosmarops.exe on
-      # the fictitious computer of testdata/sample-home and checked; nothing
-      # is uploaded. The two checked pages go to the log, gzip and base64,
-      # one line each, for review.
+      # BV-202 C4 (CTO-28): the candidate must be built the same way as the
+      # release (release.yml:144-155), which ci.yml did not do. Write the Windows
+      # icon + version resource (.syso) with tools/winres first; winres -version
+      # takes major.minor.patch optionally with a -prerelease/+build suffix
+      # (parseVersion uses the numeric core for FIXEDFILEINFO and the whole
+      # string for Product/FileVersion), so "0.10.2-rc.<short-sha>" is accepted.
+      # Neither the .syso (git-ignored) nor the exe is committed.
+      - name: Windows resource for the candidate (icon + version, like release.yml)
+        run: |
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $ver = "0.10.2-rc.$sha"
+          "CANDIDATE_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          go run ./tools/winres -version $ver
+          Write-Output "candidate winres version: $ver"
+      # BV-112 + BV-202 C4: the sample report, made by this commit's
+      # rosmarops.exe on the fictitious computer of testdata/sample-home and
+      # checked; nothing is uploaded. The two checked pages go to the log, gzip
+      # and base64, one line each, for review. This build is the uploaded
+      # candidate, so it uses the same command as release.yml: CGO_ENABLED=0,
+      # the .syso written above, -ldflags "-X main.version=..." and -trimpath.
       - name: Sample report
         run: |
-          go build -trimpath -o dist/rosmarops.exe ./cmd/rosmarops
+          $env:CGO_ENABLED = "0"
+          go build -trimpath "-ldflags=-X main.version=$env:CANDIDATE_VERSION" -o dist/rosmarops.exe ./cmd/rosmarops
           ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
           foreach ($lang in 'en', 'es') {
             $out = [System.IO.MemoryStream]::new()
@@ -98,6 +115,34 @@ jobs:
             $gz.Dispose()
             Write-Output "SAMPLE-REPORT-$lang $([Convert]::ToBase64String($out.ToArray()))"
           }
+      # BV-202 point 10: prove the candidate carries the icon and version it
+      # gets from the .syso (if the resource were missing, VersionInfo would be
+      # empty). The icon travels with the same resource, so a set version means
+      # the icon is embedded too.
+      - name: Candidate icon and version check
+        run: |
+          $vi = (Get-Item dist/rosmarops.exe).VersionInfo
+          $vi | Format-List ProductName, ProductVersion, FileVersion, LegalCopyright
+          if (-not $vi.ProductVersion) { Write-Error "candidate has no version resource (icon/version not embedded)"; exit 1 }
+          if ($vi.ProductVersion -notlike "0.10.2-rc.*") { Write-Error "ProductVersion '$($vi.ProductVersion)' is not the expected 0.10.2-rc.* (set '$env:CANDIDATE_VERSION')"; exit 1 }
+          Write-Output "candidate carries icon + version $($vi.ProductVersion)"
+      # BV-202 S6: govulncheck as a gate, pinned, in binary mode over the
+      # Windows executable this job just built. No reachable vulnerability.
+      - name: govulncheck (binary mode)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck -mode=binary dist/rosmarops.exe
+      # BV-202 point 10: on pull requests, publish that same rosmarops.exe
+      # (built -trimpath, same Go version as release.yml) so Albert can run it
+      # on his computer before the 0.10.2 is published.
+      - name: Upload candidate rosmarops.exe (PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosmarops-candidate-windows
+          path: dist/rosmarops.exe
+          if-no-files-found: error
+          retention-days: 7
 
   verify-macos:
     runs-on: macos-latest
@@ -109,11 +154,11 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
           go install mvdan.cc/gofumpt@v0.7.0
       - name: go build
         run: go build ./...
@@ -144,7 +189,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: strace
         run: sudo apt-get update && sudo apt-get install -y strace

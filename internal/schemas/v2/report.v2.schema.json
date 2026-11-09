@@ -277,7 +277,8 @@
             "project_hook_runs_repo_script",
             "mcp_external_action",
             "n8n_mcp_bridge",
-            "n8n_key_with_data"
+            "n8n_key_with_data",
+            "computer_use_app_allowed"
           ]
         },
         "rule_version": {
@@ -1126,7 +1127,8 @@
                   "foreign_agent_config_writable",
                   "foreign_agent_instructions_writable",
                   "own_instructions_writable",
-                  "own_config_writable"
+                  "own_config_writable",
+                  "computer_use_app_allowed"
                 ]
               },
               "severity": {
@@ -1168,7 +1170,8 @@
                   "foreign_agent_config_writable",
                   "foreign_agent_instructions_writable",
                   "own_instructions_writable",
-                  "own_config_writable"
+                  "own_config_writable",
+                  "computer_use_app_allowed"
                 ]
               },
               "finding_id": {
@@ -1329,7 +1332,9 @@
                 "coverage",
                 "graph_missing",
                 "cline_cli",
-                "claude_desktop"
+                "claude_desktop",
+                "antigravity_app",
+                "copilot_jetbrains"
               ]
             }
           ]

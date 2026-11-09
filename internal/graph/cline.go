@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -43,27 +44,55 @@ func FromCline(scan platform.ClineScan, extensionPresent bool, discoveredAt time
 	if scan.HasAutoApproval || scan.Yolo {
 		basis = BasisConfigured
 	}
+	// When a capability is configured, the schema requires a rule and it must
+	// name the literal setting that decides it, with no secret (BV-202 C5,
+	// CTO-28). The whole globalState.json key path is the Source pointer. A
+	// product-default capability carries neither.
+	gs := scan.ConfigDir + "/globalState.json"
+	yoloKey := scan.YoloKey
+	if scan.Yolo && yoloKey == "" {
+		yoloKey = "yoloModeToggled" // the scan collapsed both toggles into one bool
+	}
 	for _, c := range []struct {
-		typ   string
-		allow bool
-		scope string
+		typ    string
+		allow  bool
+		scope  string
+		action string // the autoApprovalSettings.actions key this capability reads
 	}{
-		{CapReadFiles, read, clineScope},
-		{CapWriteFiles, edit, clineScope},
-		{CapExecuteShell, cmd, scopeAll},
-		{CapNetwork, browser, scopeAll},
-		{CapInvokeMCPTool, mcp, scopeAll},
+		{CapReadFiles, read, clineScope, "readFiles"},
+		{CapWriteFiles, edit, clineScope, "editFiles"},
+		{CapExecuteShell, cmd, scopeAll, "executeSafeCommands"},
+		{CapNetwork, browser, scopeAll, "useBrowser"},
+		{CapInvokeMCPTool, mcp, scopeAll, "useMcp"},
 	} {
 		approval := ApprovalAsk
 		if c.allow {
 			approval = ApprovalAllow
 		}
 		id := "cap_" + keyHash(KindCapability, basis, client, c.typ, c.scope)
+		// Source and rule depend on what put the capability in force.
 		src := "cline:auto_approval:" + c.typ
-		b.node(Node{
+		rule := ""
+		switch {
+		case basis != BasisConfigured:
+			// product default: no rule, keep the generic source.
+		case scan.Yolo:
+			// The legacy yolo toggle approves everything, so it is the deciding
+			// setting for every capability.
+			rule = yoloKey + ": true"
+			src = gs + "#/" + yoloKey
+		default: // HasAutoApproval: each capability is decided by its own action.
+			rule = "autoApprovalSettings.actions." + c.action + ": " + strconv.FormatBool(c.allow)
+			src = gs + "#/autoApprovalSettings/actions/" + c.action
+		}
+		n := Node{
 			ID: id, Kind: KindCapability, Type: c.typ, Basis: basis, InForce: true,
 			Approval: approval, TargetScope: c.scope, AppliesIn: platform.MCPScopeUser, Source: src,
-		})
+		}
+		if basis == BasisConfigured {
+			n.Rule = rule
+		}
+		b.node(n)
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
 	}
 

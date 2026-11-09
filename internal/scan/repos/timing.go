@@ -40,9 +40,10 @@ var errRepoTimeout = errors.New("per-repo timeout")
 // its checks and the size of its history scan. It only counts; nothing in
 // it changes what is scanned.
 type repoTrace struct {
-	errors         int // check errors other than the context ending
-	historyListed  int // commits git log returned
-	historyScanned int // commits whose diff was read
+	errors         int             // check errors other than the context ending
+	failedChecks   map[string]bool // BV-202 S3: analyses whose git command failed
+	historyListed  int             // commits git log returned
+	historyScanned int             // commits whose diff was read
 
 	// tracked_secrets (BV-33): files listed, read from disk, their bytes,
 	// skipped over the size limit; content cache lookups; the two git
@@ -115,6 +116,35 @@ func markError(ctx context.Context) {
 	if ctx.Err() == nil {
 		traceOf(ctx).errors++
 	}
+}
+
+// markCheckFailed records that a named analysis's git command failed (BV-202
+// S3): it counts the error and remembers the analysis, so the repository
+// carries a visible repo_check_failed finding and never reports as completed
+// with no findings. A failure that is only the context ending is not counted.
+func markCheckFailed(ctx context.Context, analysis string) {
+	if ctx.Err() != nil {
+		return
+	}
+	t := traceOf(ctx)
+	t.errors++
+	if t.failedChecks == nil {
+		t.failedChecks = map[string]bool{}
+	}
+	t.failedChecks[analysis] = true
+}
+
+// failedCheckNames lists the analyses whose git command failed, sorted.
+func (t *repoTrace) failedCheckNames() []string {
+	if len(t.failedChecks) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(t.failedChecks))
+	for a := range t.failedChecks {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // ctxOutcome is the outcome of a check that ran under ctx and ended with

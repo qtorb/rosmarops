@@ -72,8 +72,10 @@ func TestParseKeys_FailsInsideApprovals(t *testing.T) {
 	doc := "model: {x: 1}\napprovals:\n  mode: {a: 1}\n" // inline map INSIDE a read key
 	if _, err := ParseKeys([]byte(doc), "approvals", "security", "mcp_servers"); err == nil {
 		t.Fatal("an unsupported construct inside approvals must be a parse error")
-	} else if !strings.Contains(err.Error(), "{") {
-		t.Errorf("error should point at the construct: %v", err)
+	} else if !strings.Contains(err.Error(), "line 3") {
+		// BV-202 S2: the error points at the position (line), never the read
+		// text (it must not echo the offending "{").
+		t.Errorf("error should point at the line: %v", err)
 	}
 }
 

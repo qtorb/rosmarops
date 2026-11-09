@@ -10,6 +10,8 @@ package jsonkeys
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
@@ -23,25 +25,44 @@ import (
 // drops them, and returned sorted. An error is json.Unmarshal's.
 func Decode(raw []byte, v any) ([]string, error) {
 	if !json.Valid(raw) {
-		return nil, json.Unmarshal(raw, v) // the same syntax error as before
+		return nil, sanitizeJSONError(json.Unmarshal(raw, v))
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
 	var tree any
 	if err := dec.Decode(&tree); err != nil {
-		return nil, err
+		return nil, sanitizeJSONError(err)
 	}
 	var conflicts []string
 	tree = clean(tree, reflect.TypeOf(v), "", &conflicts)
 	exact, err := json.Marshal(tree)
 	if err != nil {
-		return nil, err
+		return nil, sanitizeJSONError(err)
 	}
 	if err := json.Unmarshal(exact, v); err != nil {
-		return nil, err
+		return nil, sanitizeJSONError(err)
 	}
 	sort.Strings(conflicts)
 	return conflicts, nil
+}
+
+// sanitizeJSONError turns an encoding/json error into one that carries a byte
+// offset and a stable code but never the read bytes (BV-202 S2, CTO-24 §0):
+// a malformed config must never leak a secret through its decode error, which
+// is recorded in the report's coverage. The offset locates the failure.
+func sanitizeJSONError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var se *json.SyntaxError
+	if errors.As(err, &se) {
+		return fmt.Errorf("jsonkeys: invalid JSON at byte offset %d", se.Offset)
+	}
+	var ut *json.UnmarshalTypeError
+	if errors.As(err, &ut) {
+		return fmt.Errorf("jsonkeys: unexpected JSON value at byte offset %d", ut.Offset)
+	}
+	return errors.New("jsonkeys: could not decode JSON")
 }
 
 var unmarshaler = reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()
