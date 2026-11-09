@@ -100,7 +100,7 @@ jobs:
           cache: false
       - name: Tools (pinned versions)
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@2025.1.1
+          go install honnef.co/go/tools/cmd/staticcheck@2026.2.2
           go install mvdan.cc/gofumpt@v0.7.0
       - name: Strace for the runtime network trust test
         run: sudo apt-get update && sudo apt-get install -y strace
