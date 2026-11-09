@@ -425,6 +425,33 @@ func copilotPresent(scan platform.CopilotScan, home string, env agentdirs.Env) b
 	if _, err := os.Stat(copilotHome(home, env)); err == nil {
 		return true
 	}
+	// BV-203 A1 (CTO-25): the bundled Copilot Chat extension, even with default
+	// settings and no ~/.copilot, leaves a per-extension folder under VS Code's
+	// globalStorage once it has run — <VS Code User>\globalStorage\
+	// github.copilot-chat (and github.copilot). Its presence is a detection
+	// signal. Only the folder's existence is checked; its state.vscdb and chat
+	// sessions are a VS Code database this does not read (that would be a new
+	// source). The VS Code User dir resolves per OS through the layout
+	// (%APPDATA%\Code\User, ~/Library/Application Support/Code/User,
+	// ~/.config/Code/User).
+	if copilotGlobalStoragePresent(scan.ConfigDir) {
+		return true
+	}
+	return false
+}
+
+// copilotGlobalStoragePresent reports a Copilot Chat globalStorage folder under
+// the VS Code user dir (BV-203 A1). Existence only — never a read of its
+// contents.
+func copilotGlobalStoragePresent(vscodeUserDir string) bool {
+	if vscodeUserDir == "" {
+		return false
+	}
+	for _, ext := range []string{"github.copilot-chat", "github.copilot"} {
+		if fi, err := os.Stat(filepath.Join(vscodeUserDir, "globalStorage", ext)); err == nil && fi.IsDir() {
+			return true
+		}
+	}
 	return false
 }
 
