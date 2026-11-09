@@ -82,32 +82,30 @@ jobs:
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
-      # BV-202 point 10 fix: release.yml writes the Windows icon + version
-      # resource (.syso) with tools/winres before it builds, so its exe has an
-      # icon and a Properties -> Details version; ci.yml did not, so the
-      # uploaded candidate had none. Generate the same .syso here, before the
-      # Sample report build that produces the uploaded exe. winres -version
-      # takes major.minor.patch, optionally with a -prerelease and/or +build
-      # suffix (parseVersion uses the numeric core for FIXEDFILEINFO and the
-      # whole string for Product/FileVersion), so "0.0.0-pr<n>+<short-sha>" is
-      # accepted. Neither the .syso (git-ignored) nor the exe is committed.
+      # BV-202 C4 (CTO-28): the candidate must be built the same way as the
+      # release (release.yml:144-155), which ci.yml did not do. Write the Windows
+      # icon + version resource (.syso) with tools/winres first; winres -version
+      # takes major.minor.patch optionally with a -prerelease/+build suffix
+      # (parseVersion uses the numeric core for FIXEDFILEINFO and the whole
+      # string for Product/FileVersion), so "0.10.2-rc.<short-sha>" is accepted.
+      # Neither the .syso (git-ignored) nor the exe is committed.
       - name: Windows resource for the candidate (icon + version, like release.yml)
         run: |
-          $num = "${{ github.event.pull_request.number }}"
-          if (-not $num) { $num = "0" }
           $sha = "${{ github.sha }}".Substring(0, 7)
-          $ver = "0.0.0-pr$num+$sha"
+          $ver = "0.10.2-rc.$sha"
           "CANDIDATE_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           go run ./tools/winres -version $ver
           Write-Output "candidate winres version: $ver"
-      # BV-112: the sample report, made by this commit's rosmarops.exe on
-      # the fictitious computer of testdata/sample-home and checked; nothing
-      # is uploaded. The two checked pages go to the log, gzip and base64,
-      # one line each, for review. The build picks up the .syso written above,
-      # so this exe (the uploaded candidate) carries the icon and version.
+      # BV-112 + BV-202 C4: the sample report, made by this commit's
+      # rosmarops.exe on the fictitious computer of testdata/sample-home and
+      # checked; nothing is uploaded. The two checked pages go to the log, gzip
+      # and base64, one line each, for review. This build is the uploaded
+      # candidate, so it uses the same command as release.yml: CGO_ENABLED=0,
+      # the .syso written above, -ldflags "-X main.version=..." and -trimpath.
       - name: Sample report
         run: |
-          go build -trimpath -o dist/rosmarops.exe ./cmd/rosmarops
+          $env:CGO_ENABLED = "0"
+          go build -trimpath "-ldflags=-X main.version=$env:CANDIDATE_VERSION" -o dist/rosmarops.exe ./cmd/rosmarops
           ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
           foreach ($lang in 'en', 'es') {
             $out = [System.IO.MemoryStream]::new()
@@ -126,7 +124,7 @@ jobs:
           $vi = (Get-Item dist/rosmarops.exe).VersionInfo
           $vi | Format-List ProductName, ProductVersion, FileVersion, LegalCopyright
           if (-not $vi.ProductVersion) { Write-Error "candidate has no version resource (icon/version not embedded)"; exit 1 }
-          if ($vi.ProductVersion -notlike "0.0.0-pr*") { Write-Error "ProductVersion '$($vi.ProductVersion)' is not the expected 0.0.0-pr* (set '$env:CANDIDATE_VERSION')"; exit 1 }
+          if ($vi.ProductVersion -notlike "0.10.2-rc.*") { Write-Error "ProductVersion '$($vi.ProductVersion)' is not the expected 0.10.2-rc.* (set '$env:CANDIDATE_VERSION')"; exit 1 }
           Write-Output "candidate carries icon + version $($vi.ProductVersion)"
       # BV-202 S6: govulncheck as a gate, pinned, in binary mode over the
       # Windows executable this job just built. No reachable vulnerability.
