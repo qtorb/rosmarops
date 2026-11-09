@@ -24,18 +24,10 @@ jobs:
           Write-Host "workbench sha256: $((Get-FileHash $w -Algorithm SHA256).Hash.ToLower())  bytes: $((Get-Item $w).Length)"
           $s = [IO.File]::ReadAllText($w)
           $pats = @(
-            'modes4:\[\{id:"agent",[^\]]{0,260}?fullAutoRun:![01]',
-            'function \w+\(e\)\{return e\?\.id==="agent"&&e\.autoRun===!0[^}]{0,120}\}',
-            'function \w+\(\{initialMigrationVersion:e,sandboxBackedAllowlistAvailable[^}]{0,220}\}',
-            'tryApplyAgentAutorunBrandNewDefault\(e\)\{.{0,120}',
-            'function \w+\(\{autoRun:e,smartAutoRun:t,fullAutoRun:i,enableSmartAuto[^}]{0,220}\}',
-            'getModeSmartModeAutoRun\(e\)\{.{0,900}?\}\)\}',
-            'getModeAutoRun\(e\)\{.{0,600}?\?\.autoRun\?\?!1\}',
-            '\[\{name:"default",clientDisplayName:"Auto"[^\]]{0,400}\]',
-            'return t\?"run_everything":[^}]{0,120}\}',
-            '.{0,140}"Auto-review \(with Sandbox\)".{0,30}',
-            '\w+\.ID="composer\.autoReviewRunModeReset"',
-            'admin_reset_agent_run_mode_to_auto_review:\{[^}]{0,40}\}'
+            'function vbb\(.{0,260}',
+            'function _bb\(.{0,160}',
+            'function Apb\(.{0,260}',
+            'shouldUseSandboxBackedAutorunDefault\(\)\{.{0,500}'
           )
           foreach ($p in $pats) {
             $m = [regex]::Match($s, $p)
