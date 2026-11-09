@@ -1,6 +1,6 @@
 # Continuous integration of RosmarOps (BV-78): on every push to master and
 # every pull request to master, the same verify job as release.yml, copied
-# literally (same runner, actions pinned by commit SHA, Go 1.24.7,
+# literally (same runner, actions pinned by commit SHA, Go 1.27.3,
 # staticcheck 2025.1.1, gofumpt v0.7.0, strace, vet, staticcheck, gofumpt
 # and go test in linux and windows). BV-85: pushes to bv-* branches too, and
 # a verify-windows job that runs vet and the tests natively on windows-latest
@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -72,7 +72,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -98,6 +98,23 @@ jobs:
             $gz.Dispose()
             Write-Output "SAMPLE-REPORT-$lang $([Convert]::ToBase64String($out.ToArray()))"
           }
+      # BV-202 S6: govulncheck as a gate, pinned, in binary mode over the
+      # Windows executable this job just built. No reachable vulnerability.
+      - name: govulncheck (binary mode)
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          govulncheck -mode=binary dist/rosmarops.exe
+      # BV-202 point 10: on pull requests, publish that same rosmarops.exe
+      # (built -trimpath, same Go version as release.yml) so Albert can run it
+      # on his computer before the 0.10.2 is published.
+      - name: Upload candidate rosmarops.exe (PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosmarops-candidate-windows
+          path: dist/rosmarops.exe
+          if-no-files-found: error
+          retention-days: 7
 
   verify-macos:
     runs-on: macos-latest
@@ -109,7 +126,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -144,7 +161,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.24.7"
+          go-version: "1.27.3"
           cache: false
       - name: strace
         run: sudo apt-get update && sudo apt-get install -y strace
