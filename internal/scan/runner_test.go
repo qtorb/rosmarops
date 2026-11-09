@@ -1,7 +1,9 @@
 package scan
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -170,6 +172,13 @@ func TestRun_DeadlineAlreadyPassed(t *testing.T) {
 // appears in the ScanError (no read bytes leak into the report).
 func TestPanicInReaderIsContained(t *testing.T) {
 	const secret = "sk-proj-PANIC-secret-0000"
+
+	// Capture the run log: the panic value must not reach it either (BV-202 C2).
+	var logBuf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(prev)
+
 	var ran []string
 	boom := func(context.Context) func() {
 		panic("reader exploded with " + secret)
@@ -187,6 +196,9 @@ func TestPanicInReaderIsContained(t *testing.T) {
 	}
 	if strings.Contains(errs[0].Message, secret) || strings.Contains(errs[0].Message, "exploded") {
 		t.Errorf("panic detail leaked into error: %q", errs[0].Message)
+	}
+	if log := logBuf.String(); strings.Contains(log, secret) || strings.Contains(log, "exploded") {
+		t.Errorf("panic value leaked into the run log: %q", log)
 	}
 	if strings.Join(ran, ",") != "before,after" {
 		t.Errorf("recorded: %v, want before,after (panicked step discarded, later steps still ran)", ran)

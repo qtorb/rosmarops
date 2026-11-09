@@ -94,9 +94,11 @@ func Run(ctx context.Context, steps []Step) []finding.ScanError {
 		go func(s Step) {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log the detail locally (value-free in the report).
+					// Log the step and the panic's TYPE only — never its value,
+					// which may hold bytes read from a config (invariant 3,
+					// BV-202 C2, CTO-28).
 					slog.Error("scan: scanner panicked; results discarded",
-						"scanner", s.Name, "panic", fmt.Sprint(r))
+						"scanner", s.Name, "panic_type", fmt.Sprintf("%T", r))
 					panicked <- struct{}{}
 				}
 			}()
