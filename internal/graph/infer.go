@@ -62,17 +62,40 @@ const (
 // cred.Path never matches — the bug M1 fixes in copilot.go and antigravity.go.
 func credFileInWorkspace(cred Node, inWorkspace func(string) bool) bool {
 	for _, loc := range cred.Locations {
-		file := loc
-		if i := strings.LastIndex(file, ":"); i > 0 {
-			file = file[:i]
-		} else if i := strings.IndexByte(file, '#'); i > 0 {
-			file = file[:i]
-		}
-		if inWorkspace(file) {
+		if inWorkspace(ParseLocation(loc)) {
 			return true
 		}
 	}
 	return false
+}
+
+// ParseLocation returns the file of an evidence location, which is
+// "<path>#<pointer>" or "<path>:<line>" (BV-202 S4). The single parser the
+// inference and the credential-file listing share: it tries "#" first, then a
+// final ":" only when it is followed by a line number. A Windows drive colon
+// (C:\...) is therefore never a separator, so the file of
+// "C:\x\mcp.json#/s/env/T" is "C:\x\mcp.json", not "C".
+func ParseLocation(loc string) string {
+	if i := strings.IndexByte(loc, '#'); i >= 0 {
+		return loc[:i]
+	}
+	if i := strings.LastIndexByte(loc, ':'); i > 0 && allDigits(loc[i+1:]) {
+		return loc[:i]
+	}
+	return loc
+}
+
+// allDigits reports a non-empty run of ASCII digits.
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
@@ -616,28 +639,11 @@ func credentialFiles(cred Node) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, loc := range cred.Locations {
-		file, ok := resourceFile(loc)
-		if !strings.Contains(loc, "#") {
-			file, ok = stripLine(loc), true
-		}
-		if ok && !seen[file] {
+		file := ParseLocation(loc)
+		if file != "" && !seen[file] {
 			seen[file] = true
 			out = append(out, file)
 		}
 	}
 	return out
-}
-
-// stripLine removes a final ":<line>" from a location.
-func stripLine(loc string) string {
-	i := strings.LastIndexByte(loc, ':')
-	if i <= 0 || i == len(loc)-1 {
-		return loc
-	}
-	for _, c := range loc[i+1:] {
-		if c < '0' || c > '9' {
-			return loc
-		}
-	}
-	return loc[:i]
 }

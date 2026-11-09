@@ -1,7 +1,6 @@
 package graph
 
 import (
-	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -294,11 +293,7 @@ func (in geminiInference) reaches(all []Node) []Edge {
 // empty); reads are not gated by folder trust, so every root counts.
 func (in geminiInference) credInWorkspace(cred Node) bool {
 	for _, loc := range cred.Locations {
-		file := loc
-		if i := strings.LastIndex(file, ":"); i > 0 {
-			file = file[:i]
-		}
-		if in.inWorkspace(file, false) {
+		if in.inWorkspace(ParseLocation(loc), false) {
 			return true
 		}
 	}
