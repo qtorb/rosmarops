@@ -109,6 +109,22 @@ const (
 	RecipientNotReadable      = "not_readable"
 )
 
+// The closed sets the overview can emit into report.v2 (BV-202, CTO-28):
+// every value here must be a member of the matching schema enum. The parity
+// test TestSchemaEnumsCoverCodeConstants asserts that, so a new value that the
+// schema does not yet admit fails the test instead of a user's report. A value
+// is added to a schema enum only with Albert's signature.
+var (
+	AllDeciders            = []string{DeciderNobody, DeciderModel, DeciderYou, DeciderBlocked, DeciderNotEvaluated, DeciderNotApplicable}
+	AllScopes              = []string{ScopeMachine, ScopeSameProject, ScopeNone, ScopeSandbox, ScopeAnyDestination, ScopeListedDestinations, ScopeConfig, ScopeInstructions}
+	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked}
+	AllNoFindingReasons    = []string{NoFindingNoTargets, NoFindingNotAFinding, NoFindingFeedsOtherFindings}
+	AllNotEvaluatedReasons = []string{NotEvaluatedNoInference, NotEvaluatedAntigravityApp, NotEvaluatedCopilotJetBrains, NotEvaluatedClineCLI, NotEvaluatedClaudeDesktop, NotEvaluatedCoverage, NotEvaluatedGraphMissing}
+	AllPendingReasons      = []string{PendingModelProviderResearch}
+	AllExcluded            = []string{ExcludedProtectedPaths, ExcludedSandboxProtectedPaths, ExcludedDefaultIgnoreFileTools, ExcludedDocumentedNetworkExceptions}
+	AllRecipients          = []string{RecipientAnthropicAPI, RecipientCustomGateway, RecipientAWSBedrock, RecipientGoogleVertex, RecipientMicrosoftFoundry, RecipientAnthropicAWS, RecipientVendorBackend, RecipientNotReadable}
+)
+
 // AssumeSessionEnvNotReadable: a variable set only in a terminal session
 // is not readable at rest (T12).
 const AssumeSessionEnvNotReadable = "session_env_not_readable"

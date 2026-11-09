@@ -1332,7 +1332,9 @@
                 "coverage",
                 "graph_missing",
                 "cline_cli",
-                "claude_desktop"
+                "claude_desktop",
+                "antigravity_app",
+                "copilot_jetbrains"
               ]
             }
           ]
