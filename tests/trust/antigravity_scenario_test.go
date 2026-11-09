@@ -6,6 +6,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -41,8 +42,10 @@ func antigravityV2(t *testing.T, scan platform.AntigravityScan, claude []platfor
 		t.Fatal(err)
 	}
 	frag = graph.Merge(frag, graph.FromAntigravityCLI(scan, fcNow))
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}, fcNow)
-	g, err = graph.Infer(g, roots, fcHome)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)},
+		RepoRoots:  roots, Home: fcHome, Now: fcNow,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

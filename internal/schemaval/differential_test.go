@@ -36,6 +36,11 @@ var schemaSet = map[string][]byte{
 	"index-history.v1":   schemas.IndexHistorySchema,
 	"findings-memory.v1": schemas.FindingsMemorySchema,
 	"findings-memory.v2": schemas.FindingsMemoryV2Schema,
+	"findings-memory.v3": schemas.FindingsMemoryV3Schema,
+	"space-view.v1":      schemas.SpaceViewSchema,
+	"results.v1":         schemas.ResultsSchema,
+	"kit.v1":             schemas.KitSchema,
+	"intel.v1":           schemas.IntelSchema,
 }
 
 // pair is one schema compiled by both validators.

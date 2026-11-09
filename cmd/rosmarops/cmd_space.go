@@ -28,8 +28,11 @@ import (
 // the check. All network goes through internal/spacenet under a Permission, so
 // nothing here reaches the network without the recorded approval.
 
-// SendsLogName is the local record of every send attempt, written in the
-// reports directory (invariant 2: no new write target). One line per attempt;
+// SendsLogName is the local record of every send attempt, written in the data
+// subfolder of the reports directory — report.DataDir, i.e.
+// <reports>/data/rosmarops-sends.log (on Windows
+// %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log), not the top of
+// the reports folder (invariant 2: no new write target). One line per attempt;
 // never content.
 const SendsLogName = "rosmarops-sends.log"
 
@@ -433,7 +436,12 @@ func sealedPackageForKey(body []byte, keyID string) bool {
 	if err := json.Unmarshal(body, &p); err != nil {
 		return false
 	}
-	return p.Header.KeyID == keyID && p.WrappedKey != "" && p.Ciphertext != ""
+	if p.Header.KeyID != keyID || p.WrappedKey == "" || p.Ciphertext == "" {
+		return false
+	}
+	// BV-203 point 5: nothing is sent that does not validate against the
+	// results.v1 schema — the last gate before the package leaves the machine.
+	return results.Validate(body) == nil
 }
 
 // currentPackageStatus reads the sends log for this run's package and reports

@@ -5,6 +5,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -36,8 +37,10 @@ func copilotV2(t *testing.T, scan platform.CopilotScan, claude []platform.Claude
 	if len(instr) > 0 {
 		frag = graph.AddInstructions(frag, platform.InstructionScan{Files: instr}, fcNow)
 	}
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}, fcNow)
-	g, err = graph.Infer(g, roots, fcHome)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)},
+		RepoRoots:  roots, Home: fcHome, Now: fcNow,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

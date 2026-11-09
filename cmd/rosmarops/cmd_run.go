@@ -27,6 +27,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
@@ -992,30 +993,6 @@ func compileExtraPattern(spec config.SecretPattern) (secrets.Pattern, error) {
 // fingerprints and host_id are keyed with the state's local salt. If the sources could not be listed, or
 // the salt is unusable, there is nothing trustworthy to build, so no graph is
 // written and any previous one is removed.
-// copilotExtensionPresent reports the GitHub Copilot VS Code extension among
-// the installed extensions (BV-140): it is a presence signal for the Copilot
-// ai_client even when no chat.* configuration is set.
-func copilotExtensionPresent(exts []platform.VSCodeExtension) bool {
-	for _, e := range exts {
-		switch strings.ToLower(e.ID) {
-		case "github.copilot", "github.copilot-chat":
-			return true
-		}
-	}
-	return false
-}
-
-// clineExtensionPresent reports the Cline VS Code extension (BV-193) among the
-// listed VS Code extensions, a presence signal for its ai_client.
-func clineExtensionPresent(exts []platform.VSCodeExtension) bool {
-	for _, e := range exts {
-		if strings.EqualFold(e.ID, "saoudrizwan.claude-dev") {
-			return true
-		}
-	}
-	return false
-}
-
 func writeGraph(
 	scan platform.MCPScan,
 	listErr error,
@@ -1056,74 +1033,50 @@ func writeGraph(
 	if err != nil {
 		return fail(err)
 	}
-	frag, stats, err := graph.FromScansWithGrok(scan, settings, cursor, credFiles, repoGraph, hermes, codex, grok, salt, now)
+	// The whole graph assembly lives in internal/pipeline (E3, CTO-24): the one
+	// function the real run, the full-machine test and the factory-note test
+	// all call, so no test builds the graph on a path of its own.
+	res, err := pipeline.Assemble(pipeline.Input{
+		MCP:          scan,
+		Settings:     settings,
+		Cursor:       cursor,
+		Hermes:       hermes,
+		Codex:        codex,
+		Grok:         grok,
+		Copilot:      copilot,
+		Antigravity:  antigravity,
+		Gemini:       gemini,
+		Cline:        cline,
+		Instructions: instructions,
+		Skills:       skillScan,
+		CredFiles:    credFiles,
+		Extensions:   exts,
+		Repos:        repoGraph,
+		Provenance: graph.Provenance{
+			EngineVersion:    version,
+			RulesVersion:     graph.RulesVersion,
+			KnowledgeVersion: graph.KnowledgeVersion,
+			HostID:           graph.HostID(salt),
+		},
+		Salt:       salt,
+		RepoRoots:  repoRoots,
+		Home:       home,
+		Now:        now,
+		Matcher:    matcher,
+		PkgObs:     pkgObs,
+		N8NFolder:  n8nFolder,
+		N8NKeyData: n8nKeyData,
+	})
 	if err != nil {
 		return fail(err)
 	}
-	frag = graph.AddInstructions(frag, instructions, now)
-	frag = graph.AddSkills(frag, skillScan, now)
-	frag = graph.AddExtensions(frag, exts, filepath.Join(home, ".vscode", "extensions"), now)
-	// GitHub Copilot's ai_client, its agent_config resources and its configured
-	// capabilities (BV-140, CTO-16 Copilot). The VS Code extension, already a
-	// node via AddExtensions, is the other presence signal.
-	frag = graph.Merge(frag, graph.FromCopilot(copilot, copilotExtensionPresent(exts), now))
-	// Google Antigravity CLI's ai_client, its agent_config/hooks and its
-	// configured capabilities (BV-140, CTO-16 Antigravity). Its MCP servers and
-	// their config resources come through the shared pipeline.
-	frag = graph.Merge(frag, graph.FromAntigravityCLI(antigravity, now))
-	// Google Gemini CLI's ai_client, its agent_config resources and its
-	// configured capabilities (BV-193, CTO-22 Gemini). Its MCP servers and their
-	// config resources come through the shared pipeline.
-	frag = graph.Merge(frag, graph.FromGeminiCLI(gemini, now))
-	// The Cline VS Code extension's ai_client (identified by ~/.cline/data), its
-	// globalState agent_config, its auto-approval capabilities and its repo
-	// hooks (BV-193, CTO-22 Cline). The VS Code extension is the other presence
-	// signal. Its MCP servers come through the shared pipeline.
-	frag = graph.Merge(frag, graph.FromCline(cline, clineExtensionPresent(exts), now))
-	if len(stats.Unmodeled) > 0 || stats.Malformed > 0 {
-		slog.Info("graph: permission rules not modeled", "by_tool", stats.Unmodeled, "malformed", stats.Malformed)
+	if len(res.Stats.Unmodeled) > 0 || res.Stats.Malformed > 0 {
+		slog.Info("graph: permission rules not modeled", "by_tool", res.Stats.Unmodeled, "malformed", res.Stats.Malformed)
 	}
-	g := graph.Build(frag, graph.Provenance{
-		EngineVersion:    version,
-		RulesVersion:     graph.RulesVersion,
-		KnowledgeVersion: graph.KnowledgeVersion,
-		HostID:           graph.HostID(salt),
-	}, now)
-	// Codex's explicitly-untrusted repo roots, recorded on the built graph
-	// before inference so Codex writes nothing inside them (BV-140, CTO-16 §5).
-	graph.MarkCodexUntrusted(&g, codex)
-	// Gemini CLI's untrusted repo roots, recorded before inference so Gemini
-	// reaches no credential and writes no config inside them (BV-193, CTO-22 §2).
-	graph.MarkGeminiUntrusted(&g, gemini, repoRoots)
-	// reaches and writes_config_of are inferred on the built graph.
-	g, err = graph.Infer(g, repoRoots, home)
-	if err != nil {
-		return fail(err)
-	}
-	// Threat-intel cross (BV-100, F0a): mark matching mcp_server nodes and
-	// append one file resource node per matching package read at rest, before
-	// the graph is serialized so the match is reflected in the written file and
-	// its hash. A nil matcher (invalid snapshot) makes this a no-op.
-	graph.CrossIntel(&g, scan.Servers, pkgObs, matcher, now)
-	// MCP catalog cross (BV-117/BV-121): mark mcp_server nodes of known servers
-	// that act outside the machine. In-memory only (ExternalAction), so it does
-	// not change the written file; the rules layer reads it.
-	catalog, err := knowledge.LoadMCPCatalog()
-	if err != nil {
-		return nil, "", "", fmt.Errorf("mcp catalog: %w", err)
-	}
-	graph.CrossMCPCatalog(&g, scan.Servers, catalog, now)
-	// n8n cross (BV-175): mark mcp_server nodes that are n8n instances
-	// (in-memory, does not change the written file), and, when the n8n folder
-	// keeps its credential key beside the database, append the folder resource
-	// node the n8n_key_with_data finding stands on.
-	graph.CrossN8N(&g, scan.Servers, now)
-	if n8nKeyData {
-		graph.AddN8NKeyNode(&g, n8nFolder, now)
-	}
+	g := res.Graph
 	path, err := graph.WriteFile(dir, g)
 	if err != nil {
-		return nil, "", "", err
+		return fail(err)
 	}
 	// The v2 report records the hash of the file it evaluated.
 	sha, err := hash.File(path)

@@ -1090,6 +1090,16 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 	if err != nil {
 		return "", "", "", err
 	}
+	// BV-203 point 5: report.json is NOT gated on report.v1 validation here.
+	// report.v1 is the legacy, being-retired schema (CLAUDE.md); its findings
+	// `category` enum is frozen and does not list the finding codes the v2-era
+	// engine now emits (BV-140/BV-193/BV-198 agents), so a real v1 report never
+	// validates against it. Gating the write would abort every real run, and
+	// extending report.v1.json's enum is a schema change for Albert to sign.
+	// So report.json validation is deferred: see the release note. The two
+	// outputs the product still lives by are gated — the v2 report in
+	// RenderV2JSON and the space view in RenderSpaceViewJSON — and what leaves
+	// the machine (results.v1) is validated in internal/results.
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", "", "", fmt.Errorf("create report dir %s: %w", dir, err)
 	}

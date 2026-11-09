@@ -1,0 +1,24 @@
+{
+  "format": "rosmarops-kit",
+  "version": 1,
+  "kit_id": "0c747b2f915a594637acda95fe07427e",
+  "key_id": "7c3504810421cb6c5225ff795cbb1283",
+  "envelopes": [
+    {
+      "type": "phrase",
+      "kdf": "pbkdf2-sha256",
+      "iterations": 600000,
+      "salt": "Sa/U7Mgx9tmbChK+rtN/Sw==",
+      "nonce": "Gauj4GBwN+UVZQgB",
+      "ciphertext": "txU4v1c5Gg548uCyb950uLPMNCU3m8aDr706draMpI9On2E0IxD2Tq3A4kMLAbkqBeGYMqN074YMFF+H6nvIQis7u0sN7StBty7s7pdHYeCh"
+    },
+    {
+      "type": "recovery_code",
+      "kdf": "pbkdf2-sha256",
+      "iterations": 100000,
+      "salt": "j3v4HYDIhGYG9uPulniGsA==",
+      "nonce": "emUCNw9cp6/5Dq04",
+      "ciphertext": "efwH7M8t4aLLf/XYckY1a239LQ0p6km9GbDrsd0pcjFwZ72HezvHlArgOATSn+QfeJQ4waTAqAn2T/j0/2YFbEPHCkTE9gB6KrJn2Edt3WJL"
+    }
+  ]
+}

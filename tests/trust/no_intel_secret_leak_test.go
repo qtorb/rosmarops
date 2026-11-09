@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -99,15 +100,21 @@ func TestNoSecretFromIntelCross(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := graph.Build(frag, graph.Provenance{
-		EngineVersion: "t", RulesVersion: graph.RulesVersion,
-		KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt),
-	}, now)
 	pkgObs := []graph.PackageObservation{
 		{Ecosystem: intel.EcosystemPyPI, Name: pkg, Version: version, Path: userDistInfo},
 		{Ecosystem: intel.EcosystemPyPI, Name: pkg, Version: version, Path: repoDistInfo},
 	}
-	graph.CrossIntel(&g, mcpScan.Servers, pkgObs, matcher, now)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{
+			EngineVersion: "t", RulesVersion: graph.RulesVersion,
+			KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt),
+		},
+		Now: now, SkipInfer: true,
+		IntelServers: mcpScan.Servers, IntelPkgs: pkgObs, IntelMatcher: matcher,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// The three findings are raised: one per planted location.
 	v, _ := report.BuildV2(report.V2Input{

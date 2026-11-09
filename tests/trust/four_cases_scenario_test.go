@@ -7,6 +7,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -56,9 +57,10 @@ func codexV2(t *testing.T, scan platform.CodexScan, entries []platform.Credentia
 		{Product: "claude-code", ConfigDir: fcClaudeDir, Path: fcRepo + "/CLAUDE.md"},
 		{Product: "codex", ConfigDir: fcCodexDir, Path: fcRepo + "/AGENTS.md"},
 	}}, fcNow)
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}, fcNow)
-	graph.MarkCodexUntrusted(&g, scan)
-	g, err = graph.Infer(g, roots, fcHome)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)},
+		RepoRoots:  roots, Home: fcHome, Now: fcNow, Codex: scan,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +89,10 @@ func grokV2(t *testing.T, scan platform.GrokScan, entries []platform.CredentialE
 	if err != nil {
 		t.Fatal(err)
 	}
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}, fcNow)
-	g, err = graph.Infer(g, roots, fcHome)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)},
+		RepoRoots:  roots, Home: fcHome, Now: fcNow,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

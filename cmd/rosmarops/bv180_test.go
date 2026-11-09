@@ -130,7 +130,7 @@ func TestConnectAfterResetTakesNewKeyAndSends(t *testing.T) {
 	oldKey := bv180Secret(t)
 	newKey := bv180Secret(t)
 	oldKitID, newKitID := bv180KitID(t), bv180KitID(t)
-	hostID := "hostbv180abc"
+	hostID := "host_0123456789abcdef"
 
 	sp := bv180Paths(t, oldKitID, oldKey)
 
@@ -243,7 +243,7 @@ func TestConnectAfterResetTakesNewKeyAndSends(t *testing.T) {
 func TestConnectSameKeyUnchanged(t *testing.T) {
 	key := bv180Secret(t)
 	kitID := bv180KitID(t)
-	hostID := "hostbv180abc"
+	hostID := "host_0123456789abcdef"
 
 	sp := bv180Paths(t, kitID, key)
 	content := []byte(`{"schema_version":"space-view.v1","run":"today"}`)
@@ -309,7 +309,7 @@ func TestConnectAfterResetSendsDespiteRejectedLog(t *testing.T) {
 			if !tc.changesKey {
 				spaceKitID = oldKitID
 			}
-			hostID := "hostbv180abc"
+			hostID := "host_0123456789abcdef"
 			date := time.Now().Format("2006-01-02")
 
 			sp := bv180Paths(t, oldKitID, oldKey)

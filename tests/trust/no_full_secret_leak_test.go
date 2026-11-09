@@ -27,6 +27,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
@@ -376,7 +377,7 @@ func TestNoFullSecretInReportV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g, err := graph.Infer(graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now), []string{repo}, home)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, RepoRoots: []string{repo}, Home: home, Now: now})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +559,7 @@ func TestNoFullSecretInAIExport(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g, err := graph.Infer(graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now), []string{repo}, home)
+		g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, RepoRoots: []string{repo}, Home: home, Now: now})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -701,7 +702,10 @@ func TestNoMCPDestinationSecretInReports(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now)
+		g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, Now: now, SkipInfer: true})
+		if err != nil {
+			t.Fatal(err)
+		}
 		v, _ := report.BuildV2(report.V2Input{
 			Graph: &g, GraphSHA256: strings.Repeat("0", 64), Base: base, RepoRoots: nil,
 			V1: report.Build("0.1.0-dev", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: now, Memory: mem, Salt: salt, Home: home,
@@ -896,10 +900,16 @@ func TestNoSecretInGraphFromMalformedCodexTOML(t *testing.T) {
 
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 	frag := graph.FromCodex(scan, now)
-	g := graph.Build(frag, graph.Provenance{
-		EngineVersion: "t", RulesVersion: graph.RulesVersion,
-		KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID([]byte("salt-for-test-only")),
-	}, now)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{
+			EngineVersion: "t", RulesVersion: graph.RulesVersion,
+			KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID([]byte("salt-for-test-only")),
+		},
+		Now: now, SkipInfer: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildGraph: %v", err)
+	}
 	out, err := graph.Encode(g)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)

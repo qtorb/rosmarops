@@ -25,6 +25,7 @@ import (
 
 	windows "github.com/qtorb/rosmarops/adapters/windows"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -407,7 +408,10 @@ func TestNoSecretInGraph(t *testing.T) {
 		t.Fatalf("ListAgentInstructions: %v", err)
 	}
 	frag = graph.AddInstructions(frag, instructions, now)
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "0.1.0-dev", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, now)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "0.1.0-dev", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, Now: now, SkipInfer: true})
+	if err != nil {
+		t.Fatalf("BuildGraph: %v", err)
+	}
 
 	reports := filepath.Join(home, ".rosmarops", "reports")
 	path, err := graph.WriteFile(reports, g)
@@ -672,7 +676,10 @@ func TestNoSecretInGraph_MCPDestinations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromMCPScan: %v", err)
 	}
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, time.Now())
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, Now: time.Now(), SkipInfer: true})
+	if err != nil {
+		t.Fatalf("BuildGraph: %v", err)
+	}
 	out, err := graph.Encode(g)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)

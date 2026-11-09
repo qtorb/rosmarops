@@ -41,7 +41,7 @@ func TestDiscover_NpxSkillsAddLink(t *testing.T) {
 
 		scan := skills.Discover(context.Background(), "", envOf(nil), []string{repo})
 		equal(t, "instructions", listed(tmp, scan.Instructions), []string{
-			"antigravity repo/.agents/skills/demo/SKILL.md",
+			"antigravity-cli repo/.agents/skills/demo/SKILL.md",
 			"claude-code repo/.agents/skills/demo/SKILL.md",
 			"cline repo/.agents/skills/demo/SKILL.md",
 			"codex repo/.agents/skills/demo/SKILL.md",
@@ -50,7 +50,7 @@ func TestDiscover_NpxSkillsAddLink(t *testing.T) {
 			"github-copilot repo/.agents/skills/demo/SKILL.md",
 		})
 		equal(t, "executables", listed(tmp, scan.Executables), []string{
-			"antigravity repo/.agents/skills/demo/scripts/run.ps1",
+			"antigravity-cli repo/.agents/skills/demo/scripts/run.ps1",
 			"claude-code repo/.agents/skills/demo/scripts/run.ps1",
 			"cline repo/.agents/skills/demo/scripts/run.ps1",
 			"codex repo/.agents/skills/demo/scripts/run.ps1",

@@ -4,18 +4,18 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 )
 
 // BV-202 point 4: one machine with every agent the engine knows installed at
 // once — with config and, separately, detected without config — plus a project
-// whose AGENTS.md and GEMINI.md are present. The graph is assembled exactly as
-// cmd/rosmarops writeGraph does (FromScansWithGrok → AddInstructions →
-// Merge{Copilot,Antigravity,Gemini,Cline} → Build → MarkCodexUntrusted →
-// MarkGeminiUntrusted → Infer) and then encoded and validated against
-// schemas/v2/graph.v2.schema.json. The 0.10.1 bug (5 nodes failing the node
-// oneOf on Albert's machine) would have been caught by this combination.
+// whose AGENTS.md and GEMINI.md are present. The graph is assembled through the
+// single assembly `rosmarops run` uses (pipeline.Assemble, E3) and then encoded
+// and validated against schemas/v2/graph.v2.schema.json. The 0.10.1 bug (5
+// nodes failing the node oneOf on Albert's machine) would have been caught by
+// this combination.
 
 // allAgentScans are every agent's platform scan. configured=true gives each a
 // read config layer; configured=false leaves each detected but unconfigured.
@@ -92,7 +92,9 @@ func allAgents(configured bool) allAgentScans {
 	return s
 }
 
-// buildAllAgentsGraph assembles the graph in the exact order of writeGraph.
+// buildAllAgentsGraph assembles the graph through pipeline.Assemble (E3), the
+// single assembly `rosmarops run` uses. Copilot and Cline list their VS Code
+// extension, as a real machine with them configured would.
 func buildAllAgentsGraph(t *testing.T, s allAgentScans) graph.Graph {
 	t.Helper()
 	var servers []platform.MCPServer
@@ -105,23 +107,31 @@ func buildAllAgentsGraph(t *testing.T, s allAgentScans) graph.Graph {
 		{Path: fcHome + "/.aws/credentials", Line: 1, Key: "AWS_ACCESS_KEY_ID", Value: secrets.NewSecretValue("AKIAABCDEFGHIJ123456")},
 	}}
 
-	frag, _, err := graph.FromScansWithGrok(mcp, s.settings, s.cursor, creds, graph.Repos{}, s.hermes, s.codex, s.grok, fcSalt, fcNow)
+	res, err := pipeline.Assemble(pipeline.Input{
+		MCP:          mcp,
+		Settings:     s.settings,
+		Cursor:       s.cursor,
+		Hermes:       s.hermes,
+		Codex:        s.codex,
+		Grok:         s.grok,
+		Copilot:      s.copilot,
+		Antigravity:  s.antigravity,
+		Gemini:       s.gemini,
+		Cline:        s.cline,
+		Instructions: s.instr,
+		CredFiles:    creds,
+		Extensions:   []platform.VSCodeExtension{{ID: "github.copilot"}, {ID: "saoudrizwan.claude-dev"}},
+		Repos:        graph.Repos{},
+		Provenance:   r2Prov(),
+		Salt:         fcSalt,
+		RepoRoots:    []string{fcRepo},
+		Home:         fcHome,
+		Now:          fcNow,
+	})
 	if err != nil {
-		t.Fatalf("FromScansWithGrok: %v", err)
+		t.Fatalf("pipeline.Assemble: %v", err)
 	}
-	frag = graph.AddInstructions(frag, s.instr, fcNow)
-	frag = graph.Merge(frag, graph.FromCopilot(s.copilot, true, fcNow))
-	frag = graph.Merge(frag, graph.FromAntigravityCLI(s.antigravity, fcNow))
-	frag = graph.Merge(frag, graph.FromGeminiCLI(s.gemini, fcNow))
-	frag = graph.Merge(frag, graph.FromCline(s.cline, true, fcNow))
-	g := graph.Build(frag, r2Prov(), fcNow)
-	graph.MarkCodexUntrusted(&g, s.codex)
-	graph.MarkGeminiUntrusted(&g, s.gemini, []string{fcRepo})
-	g, err = graph.Infer(g, []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatalf("Infer: %v", err)
-	}
-	return g
+	return res.Graph
 }
 
 func TestAllAgentsGraphValidates(t *testing.T) {

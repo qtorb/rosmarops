@@ -69,7 +69,7 @@ func writePkg(t *testing.T, reports, date string, sec kit.Secret) string {
 	}
 	pkg, err := results.Seal(sec.Key, results.Header{
 		Format: "rosmarops-results", Version: 1, KitID: kitID, KeyID: kit.KeyID(sec.Key),
-		HostID: "host_abc0000000000", CreatedAt: "2026-11-01T00:00:00Z", RosmaropsVersion: "1.0.0",
+		HostID: "host_0123456789abcdef", CreatedAt: "2026-11-01T00:00:00Z", RosmaropsVersion: "1.0.0",
 	}, []byte(`{"content":"`+sendMarker+`"}`))
 	if err != nil {
 		t.Fatal(err)

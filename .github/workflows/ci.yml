@@ -57,10 +57,13 @@ jobs:
           test "$(sh .github/scripts/release-flags.sh v0.5.0)" = "--latest"
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      - name: Full-machine pipeline (BV-203 E8, required on all three systems)
+        run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
       - name: go test -race (schemaval differential oracle, BV-133)
-        # The exhaustive BrokenFixtures pass under -race runs ~10 min, past go
-        # test's default 10m timeout, so give the race gate room to finish.
-        run: go test -race -count=1 -timeout 30m ./internal/schemaval/
+        # The exhaustive mutation differential under -race is slow and grew when
+        # the oracle went to 15 schemas (BV-203 E6): past 30m on the runner. Give
+        # it room so a thorough gate is not cut off by the timeout.
+        run: go test -race -count=1 -timeout 60m ./internal/schemaval/
 
   verify-windows:
     runs-on: windows-latest
@@ -82,6 +85,8 @@ jobs:
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      - name: Full-machine pipeline (BV-203 E8, required on all three systems)
+        run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
       # BV-202 C4 (CTO-28): the candidate must be built the same way as the
       # release (release.yml:144-155), which ci.yml did not do. Write the Windows
       # icon + version resource (.syso) with tools/winres first; winres -version
@@ -171,6 +176,8 @@ jobs:
       # network checks run.
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      - name: Full-machine pipeline (BV-203 E8, required on all three systems)
+        run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
 
   linux-smoke:
     # BV-165: a real Linux run of the program. It builds the Linux binary, makes

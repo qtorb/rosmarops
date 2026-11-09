@@ -108,11 +108,16 @@ func resolve(l agentdirs.Layout, home string, env agentdirs.Env) agents {
 		claude:      agent{knowledge.ClaudeCodeProduct, claudeDir},
 		cursor:      agent{cursorProduct, filepath.Join(home, ".cursor")},
 		codex:       agent{agentdirs.Codex, agentdirs.CodexHome(home, env)},
-		antigravity: agent{agentdirs.Antigravity, agentdirs.AntigravityDir(home)},
+		antigravity: agent{agentdirs.AntigravityCLI, agentdirs.AntigravityDir(home)},
 		hermes:      agent{agentdirs.Hermes, l.HermesHome(home, env)},
 		cline:       agent{clineProduct, agentdirs.ClineDataDir(home, env)},
-		copilot:     agent{copilotProduct, filepath.Join(home, ".copilot")},
-		gemini:      agent{knowledge.GeminiCLIProduct, agentdirs.AntigravityDir(home)},
+		// Copilot's identity is the VS Code user folder, the same ConfigDir its
+		// ai_client and instruction lister use (copilot.go, instructions.go:103);
+		// AddSkills joins skills to the client by clientID(product, ConfigDir), so
+		// ~/.copilot never matched and Copilot's skills never attached (CTO-30 B1).
+		// The skill search paths (.copilot/skills, .agents/skills) do not change.
+		copilot: agent{copilotProduct, l.VSCodeUserDir(home, env)},
+		gemini:  agent{knowledge.GeminiCLIProduct, agentdirs.AntigravityDir(home)},
 	}
 }
 

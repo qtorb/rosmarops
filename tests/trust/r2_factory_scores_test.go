@@ -11,6 +11,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -82,34 +83,44 @@ func r2Instr(product, configDir string) []platform.InstructionFile {
 
 // --- per-agent R2 reports ---
 
+// r2Assemble runs the reference computer's single agent through the real graph
+// assembly (E3): the same pipeline.Assemble that `rosmarops run` uses, with
+// R2's salt, provenance, repo root, home and clock. Each per-agent builder sets
+// only its own scans on in; the rest stay zero, so the agent is scored alone.
+func r2Assemble(t *testing.T, in pipeline.Input) graph.Graph {
+	t.Helper()
+	in.Provenance = r2Prov()
+	in.Salt = fcSalt
+	in.RepoRoots = []string{fcRepo}
+	in.Home = fcHome
+	in.Now = fcNow
+	res, err := pipeline.Assemble(in)
+	if err != nil {
+		t.Fatalf("pipeline.Assemble: %v", err)
+	}
+	return res.Graph
+}
+
 func r2ClaudeCode(t *testing.T) report.V2 {
 	// Claude Code installed alone, default (auto) mode, Bash available. It loads
 	// the repo's AGENTS.md (no CLAUDE.md present).
 	settings := r2Settings(platform.ClaudeSettingsFile{Scope: platform.MCPScopeUser, ConfigPath: fcClaudeDir + "/settings.json", ConfigDir: fcClaudeDir, Status: platform.MCPSourceRead})
-	frag, _, err := graph.FromScans(platform.MCPScan{}, settings, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("claude-code", fcClaudeDir)}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		Settings:     settings,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("claude-code", fcClaudeDir)},
+	})
 	return r2BuildV2(t, &g, &settings, nil)
 }
 
 func r2Cursor(t *testing.T) report.V2 {
 	settings := r2Settings()
-	cursor := platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true}
-	frag, _, err := graph.FromScansWithCursor(platform.MCPScan{}, settings, cursor, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("cursor", fcHome+"/.cursor")}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		Settings:     settings,
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("cursor", fcHome+"/.cursor")},
+	})
 	return r2BuildV2(t, &g, &settings, nil)
 }
 
@@ -126,33 +137,29 @@ func r2Codex(t *testing.T) report.V2 {
 		},
 	}
 	settings := r2Settings()
-	frag, _, err := graph.FromScansWithCodex(platform.MCPScan{Servers: graph.CodexMCPServers(scan)}, settings, platform.CursorScan{}, platform.CredentialFileScan{Entries: r2Creds()}, graph.Repos{}, platform.HermesScan{}, scan, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("codex", fcCodexDir)}, fcNow)
-	g := graph.Build(frag, r2Prov(), fcNow)
-	graph.MarkCodexUntrusted(&g, scan)
-	g, err = graph.Infer(g, []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: graph.CodexMCPServers(scan)},
+		Settings:     settings,
+		Codex:        scan,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("codex", fcCodexDir)},
+	})
 	return r2BuildV2(t, &g, &settings, func(in *report.V2Input) { in.Codex = scan })
 }
 
 func r2Copilot(t *testing.T) report.V2 {
+	// Copilot in VS Code: the configured chat extension is installed, so the
+	// real run lists it among the VS Code extensions (its presence signal).
 	scan := platform.CopilotScan{ConfigDir: fcCopilotDir, Present: true, Layers: []platform.CopilotLayer{{Kind: platform.CopilotLayerUser, Path: fcCopilotDir + "/settings.json", Status: platform.MCPSourceRead}}}
 	settings := r2Settings()
-	frag, _, err := graph.FromScans(platform.MCPScan{Servers: graph.CopilotMCPServers(scan)}, settings, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.Merge(frag, graph.FromCopilot(scan, true, fcNow))
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("github-copilot", fcCopilotDir)}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: graph.CopilotMCPServers(scan)},
+		Settings:     settings,
+		Copilot:      scan,
+		Extensions:   []platform.VSCodeExtension{{ID: "github.copilot"}},
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("github-copilot", fcCopilotDir)},
+	})
 	return r2BuildV2(t, &g, &settings, nil)
 }
 
@@ -161,48 +168,40 @@ func r2Gemini(t *testing.T) report.V2 {
 	// only, so Gemini loads no project instruction here.
 	scan := platform.GeminiScan{ConfigDir: fcGemini, Present: true, FolderTrustEnabled: true, Layers: []platform.GeminiLayer{{Kind: platform.GeminiLayerUser, Path: fcGemini + "/settings.json", Status: platform.MCPSourceRead}}}
 	settings := r2Settings()
-	frag, _, err := graph.FromScans(platform.MCPScan{Servers: graph.GeminiMCPServers(scan)}, settings, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.Merge(frag, graph.FromGeminiCLI(scan, fcNow))
-	g := graph.Build(frag, r2Prov(), fcNow)
-	graph.MarkGeminiUntrusted(&g, scan, []string{fcRepo})
-	g, err = graph.Infer(g, []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		MCP:       platform.MCPScan{Servers: graph.GeminiMCPServers(scan)},
+		Settings:  settings,
+		Gemini:    scan,
+		CredFiles: platform.CredentialFileScan{Entries: r2Creds()},
+	})
 	return r2BuildV2(t, &g, &settings, nil)
 }
 
 func r2Cline(t *testing.T) report.V2 {
+	// Cline's identity is ~/.cline/data; its VS Code extension is installed, so
+	// the real run lists it among the VS Code extensions (its presence signal).
 	scan := platform.ClineScan{ConfigDir: fcHome + "/.cline/data", Present: true, GlobalStateStatus: platform.MCPSourceRead, HooksEnabled: true, MigrationVersion: 3}
 	settings := r2Settings()
-	frag, _, err := graph.FromScans(platform.MCPScan{}, settings, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.Merge(frag, graph.FromCline(scan, true, fcNow))
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("cline", fcHome+"/.cline/data")}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		Settings:     settings,
+		Cline:        scan,
+		Extensions:   []platform.VSCodeExtension{{ID: "saoudrizwan.claude-dev"}},
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("cline", fcHome+"/.cline/data")},
+	})
 	return r2BuildV2(t, &g, &settings, func(in *report.V2Input) { in.Cline = scan })
 }
 
 func r2Grok(t *testing.T) report.V2 {
 	scan := platform.GrokScan{ConfigDir: fcGrokDir, Exists: true, Layers: []platform.GrokLayer{{Kind: platform.GrokLayerUser, Path: fcGrokCfg, Status: platform.MCPSourceRead}}}
 	settings := r2Settings()
-	frag, _, err := graph.FromScansWithGrok(platform.MCPScan{Servers: graph.GrokMCPServers(scan)}, settings, platform.CursorScan{}, platform.CredentialFileScan{Entries: r2Creds()}, graph.Repos{}, platform.HermesScan{}, platform.CodexScan{}, scan, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("grok-build", fcGrokDir)}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: graph.GrokMCPServers(scan)},
+		Settings:     settings,
+		Grok:         scan,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("grok-build", fcGrokDir)},
+	})
 	return r2BuildV2(t, &g, &settings, func(in *report.V2Input) { in.Grok = scan })
 }
 
@@ -212,31 +211,25 @@ func r2Hermes(t *testing.T) report.V2 {
 	source := platform.MCPSource{Platform: "hermes", ConfigPath: cfg.Path, ConfigDir: cfg.ConfigDir, Status: platform.MCPSourceRead, LoadsMCP: true}
 	hermes := platform.HermesScan{Configs: []platform.HermesConfig{cfg}, Sources: []platform.MCPSource{source}}
 	settings := r2Settings()
-	frag, _, err := graph.FromScansWithHermes(platform.MCPScan{Sources: hermes.Sources}, settings, platform.CursorScan{}, platform.CredentialFileScan{Entries: r2Creds()}, graph.Repos{}, hermes, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("hermes", hd)}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Sources: hermes.Sources},
+		Settings:     settings,
+		Hermes:       hermes,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("hermes", hd)},
+	})
 	return r2BuildV2(t, &g, &settings, func(in *report.V2Input) { in.Hermes = hermes })
 }
 
 func r2Antigravity(t *testing.T) report.V2 {
 	scan := platform.AntigravityScan{ConfigDir: fcGemini, Present: true, Settings: platform.AntigravitySettings{Path: fcGemini + "/antigravity-cli/settings.json", Status: platform.MCPSourceRead}}
 	settings := r2Settings()
-	frag, _, err := graph.FromScans(platform.MCPScan{}, settings, platform.CredentialFileScan{Entries: r2Creds()}, fcSalt, fcNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frag = graph.Merge(frag, graph.FromAntigravityCLI(scan, fcNow))
-	frag = graph.AddInstructions(frag, platform.InstructionScan{Files: r2Instr("antigravity-cli", fcGemini)}, fcNow)
-	g, err := graph.Infer(graph.Build(frag, r2Prov(), fcNow), []string{fcRepo}, fcHome)
-	if err != nil {
-		t.Fatal(err)
-	}
+	g := r2Assemble(t, pipeline.Input{
+		Settings:     settings,
+		Antigravity:  scan,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("antigravity-cli", fcGemini)},
+	})
 	return r2BuildV2(t, &g, &settings, nil)
 }
 

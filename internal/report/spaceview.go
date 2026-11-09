@@ -528,12 +528,12 @@ func topFindingByAgent(v V2) map[string]string {
 // report's own catalog helpers (titleText, impactText) and the action's steps
 // and paste block, so the space view says exactly what the report says.
 func svFindings(v V2, ctxs map[string]htmlCtx, home string) []SVFinding {
-	weight, after := weightAndAfter(v)
 	out := make([]SVFinding, 0, len(v.Findings))
 	for _, f := range v.Findings {
+		weight, after := findingWeightAndAfter(v, f)
 		sf := SVFinding{
 			ID: f.ID, Rule: f.Rule, Severity: f.Severity,
-			Weight: weight[f.ID], ScoreAfterFix: after[f.ID],
+			Weight: weight, ScoreAfterFix: after,
 			Text: map[string]SVText{},
 		}
 		if !rules.IsMachineFinding(f) && len(f.Evidence.Nodes) > 0 {
@@ -574,19 +574,26 @@ func clampFindingText(t SVText) SVText {
 	return t
 }
 
-// weightAndAfter maps each finding id to its weight and the score of its
-// agent once the finding is gone (score_after_fix), from the index.
-func weightAndAfter(v V2) (map[string]float64, map[string]*int) {
-	weight := map[string]float64{}
-	after := map[string]*int{}
-	for _, ai := range v.Index.Agents {
-		for _, w := range ai.Weights {
-			weight[w.FindingID] = w.Weight
+// findingWeightAndAfter is a finding's weight and the score of its agent once
+// the finding is gone (score_after_fix), read from the agent the finding
+// resolves to by the one shared rule (agentOfFinding). A machine finding
+// (cred_in_git) weighs in every agent's score, so it reports the lowest-scored
+// agent's figures — the same agent the report and svTopAction use — not an
+// arbitrary one (CTO-30 A1). A finding with no scored agent, or an agent that
+// carries no weight for it, gives (0, nil). A non-machine finding is in exactly
+// its own agent's weights, so its figures are unchanged.
+func findingWeightAndAfter(v V2, f rules.Finding) (float64, *int) {
+	ai, ok := agentOfFinding(v, f)
+	if !ok {
+		return 0, nil
+	}
+	for _, w := range ai.Weights {
+		if w.FindingID == f.ID {
 			without := w.Without
-			after[w.FindingID] = &without
+			return w.Weight, &without
 		}
 	}
-	return weight, after
+	return 0, nil
 }
 
 // svFile is the finding's file as the space view shows it: its first
@@ -757,17 +764,59 @@ func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 }
 
 // svTopAction is the one thing to do today and the score it would give, from
-// the index projection of the agent whose action is today's; null when there
-// is no today action or no projection for it.
+// the index projection of the agent today's finding belongs to; null when there
+// is no today action, no such scored agent or no projection for it.
 func svTopAction(v V2) *SVTopAction {
 	if v.Today.FindingID == "" || v.Today.ActionID == "" {
 		return nil
 	}
-	for _, ai := range v.Index.Agents {
-		if ai.Value == nil || ai.Projection == nil || ai.Projection.ActionID != v.Today.ActionID {
+	ai := svAgentOfToday(v)
+	if ai == nil || ai.Value == nil || ai.Projection == nil {
+		return nil
+	}
+	return &SVTopAction{FindingID: v.Today.FindingID, ScoreFrom: *ai.Value, ScoreTo: ai.Projection.Value}
+}
+
+// TodayFigures are the before/after scores the report shows for today's action:
+// today's finding resolved to its agent by the one shared rule (agentOfFinding),
+// then that agent's current score and its projection for today's action. ok is
+// false when there is no today finding, no scored agent for it, or that agent
+// has no projection. svTopAction is built from the same resolution, so the two
+// must agree; this exported form lets the full-machine test compare the space
+// against the report's own code, not a copy of it (CTO-30 A3 / §4 point 4).
+func TodayFigures(v V2) (from, to int, ok bool) {
+	// Resolve through agentOfFinding directly — the report's path (agentScore),
+	// not svAgentOfToday — so a test comparing the space's top action against
+	// this function catches the space resolving a different agent than the
+	// report.
+	for i := range v.Findings {
+		if v.Findings[i].ID != v.Today.FindingID {
 			continue
 		}
-		return &SVTopAction{FindingID: v.Today.FindingID, ScoreFrom: *ai.Value, ScoreTo: ai.Projection.Value}
+		ai, ok := agentOfFinding(v, v.Findings[i])
+		if !ok || ai.Value == nil || ai.Projection == nil {
+			return 0, 0, false
+		}
+		return *ai.Value, ai.Projection.Value, true
+	}
+	return 0, 0, false
+}
+
+// svAgentOfToday resolves the agent whose score today's finding moves, through
+// the one function the report also uses (agentOfFinding). BV-203 point 9: the
+// agent is resolved from today's finding, never from v.Today.ActionID, which is
+// a hash of the action's content (code, file, key, value, locations) and so
+// does not identify an agent. A machine finding (cred_in_git) is in every
+// agent's score and resolves to the lowest-scored agent, ties by name, exactly
+// as the report's card does — so on Albert's machine it is «8 to 9» (Claude
+// Code, the lowest), not «21 to 25» (whichever agent happened to come first in
+// the index). Returns nil when no scored agent matches.
+func svAgentOfToday(v V2) *index.AgentIndex {
+	for i := range v.Findings {
+		if v.Findings[i].ID == v.Today.FindingID {
+			ai, _ := agentOfFinding(v, v.Findings[i])
+			return ai
+		}
 	}
 	return nil
 }

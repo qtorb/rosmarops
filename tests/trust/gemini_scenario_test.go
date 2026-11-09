@@ -5,6 +5,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
+	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
@@ -27,9 +28,10 @@ func geminiV2(t *testing.T, scan platform.GeminiScan, claude []platform.ClaudeSe
 		t.Fatal(err)
 	}
 	frag = graph.Merge(frag, graph.FromGeminiCLI(scan, fcNow))
-	g := graph.Build(frag, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}, fcNow)
-	graph.MarkGeminiUntrusted(&g, scan, roots)
-	g, err = graph.Infer(g, roots, fcHome)
+	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{
+		Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)},
+		RepoRoots:  roots, Home: fcHome, Now: fcNow, Gemini: scan,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

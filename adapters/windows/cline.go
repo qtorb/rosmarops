@@ -125,11 +125,42 @@ func clineExtensionVersion(layout agentdirs.Layout, home string, env agentdirs.E
 		if !e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
 			continue
 		}
-		if v := strings.TrimPrefix(e.Name(), prefix); v > best {
+		if v := strings.TrimPrefix(e.Name(), prefix); best == "" || clineVersionNewer(v, best) {
 			best = v
 		}
 	}
 	return best
+}
+
+// clineVersionNewer reports whether version a is newer than b, comparing the
+// dot-separated components numerically so 4.10.0 is newer than 4.9.0 — a string
+// comparison gets that wrong, picking 4.9.0 as the highest (CTO-25 A3). Each
+// component's leading digits are its number; a non-numeric component counts as
+// 0. Equal through the shorter version's length compares equal.
+func clineVersionNewer(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		var x, y int
+		if i < len(as) {
+			x = leadingInt(as[i])
+		}
+		if i < len(bs) {
+			y = leadingInt(bs[i])
+		}
+		if x != y {
+			return x > y
+		}
+	}
+	return false
+}
+
+// leadingInt is the value of the leading decimal digits of s, or 0 if none.
+func leadingInt(s string) int {
+	n := 0
+	for i := 0; i < len(s) && s[i] >= '0' && s[i] <= '9'; i++ {
+		n = n*10 + int(s[i]-'0')
+	}
+	return n
 }
 
 // clineHookFiles lists the hook files directly under dir (CTO-22 Cline §5): a
