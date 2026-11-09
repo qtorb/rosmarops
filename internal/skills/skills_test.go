@@ -161,7 +161,9 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		"antigravity-cli": filepath.Join(home, ".gemini"),
 		"hermes":          hermes,
 		"cline":           filepath.Join(home, ".cline", "data"),
-		"github-copilot":  filepath.Join(home, ".copilot"),
+		// CTO-30 B1: Copilot's identity is the VS Code user folder, as its
+		// ai_client and instruction lister resolve it, not ~/.copilot.
+		"github-copilot": filepath.Join(home, "AppData", "Roaming", "Code", "User"),
 	} {
 		if dirs[product] != want {
 			t.Errorf("%s config dir = %q, want %q", product, dirs[product], want)
