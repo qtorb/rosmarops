@@ -60,9 +60,10 @@ jobs:
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
       - name: go test -race (schemaval differential oracle, BV-133)
-        # The exhaustive BrokenFixtures pass under -race runs ~10 min, past go
-        # test's default 10m timeout, so give the race gate room to finish.
-        run: go test -race -count=1 -timeout 30m ./internal/schemaval/
+        # The exhaustive mutation differential under -race is slow and grew when
+        # the oracle went to 15 schemas (BV-203 E6): past 30m on the runner. Give
+        # it room so a thorough gate is not cut off by the timeout.
+        run: go test -race -count=1 -timeout 60m ./internal/schemaval/
 
   verify-windows:
     runs-on: windows-latest
