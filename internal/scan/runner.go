@@ -66,6 +66,25 @@ type Step struct {
 	Run  func(ctx context.Context) (record func())
 }
 
+// RecoverStep runs fn and, if it panics, contains it the same way Run contains
+// a panicking scanner (BV-202 C1, CTO-28): it logs the step name and the
+// panic's TYPE only — never its value (invariant 3, BV-202 C2) — and returns a
+// value-free ScanError scoped to the step. It returns nil when fn does not
+// panic. The graph build runs outside Run (cmd/rosmarops builds it after the
+// scanners finish), so that call site wraps buildGraph in this to stay
+// fail-secure: a panic there leaves the graph unbuilt (E10) as a visible
+// scope-"graph" error, instead of bringing the program down with no report.
+func RecoverStep(name string, fn func()) (se *finding.ScanError) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("scan: step panicked; results discarded", "step", name, "panic_type", fmt.Sprintf("%T", r))
+			se = &finding.ScanError{Scope: name, Message: "panicked; its results were discarded"}
+		}
+	}()
+	fn()
+	return nil
+}
+
 // Run runs steps in order under ctx, whose deadline is the global one. When
 // the deadline expires, the step in progress is interrupted (its ctx is
 // done), the steps after it are not started, and Run appends a ScanError with
@@ -90,44 +109,34 @@ func Run(ctx context.Context, steps []Step) []finding.ScanError {
 		}
 		stepStart := time.Now()
 		done := make(chan func(), 1)
-		panicked := make(chan struct{}, 1)
+		panicked := make(chan finding.ScanError, 1)
 		go func(s Step) {
-			defer func() {
-				if r := recover(); r != nil {
-					// Log the step and the panic's TYPE only — never its value,
-					// which may hold bytes read from a config (invariant 3,
-					// BV-202 C2, CTO-28).
-					slog.Error("scan: scanner panicked; results discarded",
-						"scanner", s.Name, "panic_type", fmt.Sprintf("%T", r))
-					panicked <- struct{}{}
-				}
-			}()
-			done <- s.Run(ctx)
+			// The same recover as the out-of-Run graph build (RecoverStep): it
+			// logs the step and the panic's type only, never its value.
+			var rec func()
+			if se := RecoverStep(s.Name, func() { rec = s.Run(ctx) }); se != nil {
+				panicked <- *se
+				return
+			}
+			done <- rec
 		}(s)
 
 		var record func()
-		stepPanicked := false
 		select {
 		case record = <-done:
-		case <-panicked:
-			stepPanicked = true
+		case pe := <-panicked:
+			errs = append(errs, pe)
 		case <-ctx.Done():
 			grace := time.NewTimer(abandonGrace)
 			select {
 			case record = <-done:
 				grace.Stop()
-			case <-panicked:
+			case pe := <-panicked:
 				grace.Stop()
-				stepPanicked = true
+				errs = append(errs, pe)
 			case <-grace.C:
 				slog.Warn("scan: scanner did not stop at the global deadline; results discarded", "scanner", s.Name)
 			}
-		}
-		if stepPanicked {
-			errs = append(errs, finding.ScanError{
-				Scope:   s.Name,
-				Message: "scanner panicked; its results were discarded and the scan continued",
-			})
 		}
 		if record != nil {
 			record()

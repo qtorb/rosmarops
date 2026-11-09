@@ -203,4 +203,23 @@ func TestPanicInReaderIsContained(t *testing.T) {
 	if strings.Join(ran, ",") != "before,after" {
 		t.Errorf("recorded: %v, want before,after (panicked step discarded, later steps still ran)", ran)
 	}
+
+	// BV-202 C1: the graph build runs outside Run, wrapped in the same recover
+	// (RecoverStep). A panic there is contained value-free; a clean run is nil.
+	se := RecoverStep("graph", func() { panic("graph build exploded with " + secret) })
+	if se == nil {
+		t.Fatal("RecoverStep did not contain the panic")
+	}
+	if se.Scope != "graph" {
+		t.Errorf("scope = %q, want graph", se.Scope)
+	}
+	if strings.Contains(se.Message, secret) || strings.Contains(se.Message, "exploded") {
+		t.Errorf("panic detail leaked into error: %q", se.Message)
+	}
+	if RecoverStep("graph", func() {}) != nil {
+		t.Error("RecoverStep returned an error for a clean run")
+	}
+	if log := logBuf.String(); strings.Contains(log, secret) || strings.Contains(log, "exploded") {
+		t.Errorf("panic value leaked into the run log: %q", log)
+	}
 }
