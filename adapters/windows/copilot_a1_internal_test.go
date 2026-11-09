@@ -39,6 +39,37 @@ func TestCopilotDetectedByGlobalStorage(t *testing.T) {
 	}
 }
 
+// CTO-30 B5: the globalStorage folder survives turning the AI off, so it does
+// not count as a present, scored Copilot when a read settings.json layer sets
+// chat.disableAIFeatures: true.
+func TestCopilotGlobalStorageIgnoredWhenAIDisabled(t *testing.T) {
+	tmp := t.TempDir()
+	home := filepath.Join(tmp, "home")
+	userDir := filepath.Join(tmp, "Code", "User")
+	if err := os.MkdirAll(filepath.Join(userDir, "globalStorage", "github.copilot-chat"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	disabled := true
+	// The folder is present, but a read user layer disables the Copilot AI.
+	scan := platform.CopilotScan{
+		ConfigDir: userDir,
+		Layers: []platform.CopilotLayer{{
+			Kind: platform.CopilotLayerUser, Status: platform.MCPSourceRead,
+			DisableAIFeatures: &disabled,
+		}},
+	}
+	if copilotPresent(scan, home, agentdirs.Env(noEnv)) {
+		t.Error("Copilot counted as present with chat.disableAIFeatures: true (B5)")
+	}
+
+	// With the AI enabled again (false), the folder counts as before.
+	enabled := false
+	scan.Layers[0].DisableAIFeatures = &enabled
+	if !copilotPresent(scan, home, agentdirs.Env(noEnv)) {
+		t.Error("Copilot not detected by its globalStorage folder when the AI is enabled")
+	}
+}
+
 func TestCopilotGlobalStoragePresent(t *testing.T) {
 	tmp := t.TempDir()
 	if copilotGlobalStoragePresent(tmp) {

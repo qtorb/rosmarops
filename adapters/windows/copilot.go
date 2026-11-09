@@ -145,6 +145,7 @@ func readCopilotSettings(path, kind, root string) platform.CopilotLayer {
 	l.TerminalEnableAutoApprove = copilotBoolKey(keys, "chat.tools.terminal.enableAutoApprove")
 	l.TerminalIgnoreDefaults = copilotBoolKey(keys, "chat.tools.terminal.ignoreDefaultAutoApproveRules")
 	l.AgentEnabled = copilotBoolKey(keys, "chat.agent.enabled")
+	l.DisableAIFeatures = copilotBoolKey(keys, "chat.disableAIFeatures")
 	if all, ok := copilotTerminalCatchAll(keys["chat.tools.terminal.autoApprove"]); ok {
 		l.TerminalAutoApproveAll = &all
 	}
@@ -434,8 +435,25 @@ func copilotPresent(scan platform.CopilotScan, home string, env agentdirs.Env) b
 	// source). The VS Code User dir resolves per OS through the layout
 	// (%APPDATA%\Code\User, ~/Library/Application Support/Code/User,
 	// ~/.config/Code/User).
-	if copilotGlobalStoragePresent(scan.ConfigDir) {
+	//
+	// CTO-30 B5: the folder survives turning the AI off, so it does not count
+	// when a read settings.json layer sets chat.disableAIFeatures: true (VS Code
+	// docs: it "disables the Copilot extension"). Someone who used Copilot and
+	// then disabled the AI is not a present, scored agent.
+	if copilotGlobalStoragePresent(scan.ConfigDir) && !copilotAIDisabled(scan.Layers) {
 		return true
+	}
+	return false
+}
+
+// copilotAIDisabled reports that a read settings.json layer sets
+// chat.disableAIFeatures: true (CTO-30 B5). Only read layers count; an absent
+// or unreadable layer disables nothing.
+func copilotAIDisabled(layers []platform.CopilotLayer) bool {
+	for _, l := range layers {
+		if l.Status == platform.MCPSourceRead && l.DisableAIFeatures != nil && *l.DisableAIFeatures {
+			return true
+		}
 	}
 	return false
 }

@@ -1056,6 +1056,12 @@ type CopilotLayer struct {
 	PermissionsDefault string
 	Approvals          string
 	Mode               string
+
+	// DisableAIFeatures is chat.disableAIFeatures: true disables the Copilot
+	// extension (VS Code docs). When a read layer sets it true, the
+	// globalStorage folder left by earlier use is not a present-and-active
+	// signal (CTO-30 B5). nil when absent.
+	DisableAIFeatures *bool
 }
 
 // CopilotMCPSource is one MCP configuration file Copilot reads (CTO-16 Copilot
