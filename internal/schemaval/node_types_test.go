@@ -177,7 +177,10 @@ func TestGraphFixtureCoversEveryNodeType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read committed fixture: %v (regenerate with ROSMAROPS_REGEN_FIXTURES=1)", err)
 	}
-	if strings.TrimSpace(string(committed)) != strings.TrimSpace(string(raw)) {
+	// Compare line-ending-insensitively: git may check the committed JSON out
+	// with CRLF on Windows, which is not staleness.
+	norm := func(b []byte) string { return strings.TrimSpace(strings.ReplaceAll(string(b), "\r\n", "\n")) }
+	if norm(committed) != norm(raw) {
 		t.Error("testdata/valid/graph.v2.all-node-types.json is stale; regenerate with ROSMAROPS_REGEN_FIXTURES=1")
 	}
 }
