@@ -108,7 +108,7 @@ func resolve(l agentdirs.Layout, home string, env agentdirs.Env) agents {
 		claude:      agent{knowledge.ClaudeCodeProduct, claudeDir},
 		cursor:      agent{cursorProduct, filepath.Join(home, ".cursor")},
 		codex:       agent{agentdirs.Codex, agentdirs.CodexHome(home, env)},
-		antigravity: agent{agentdirs.Antigravity, agentdirs.AntigravityDir(home)},
+		antigravity: agent{agentdirs.AntigravityCLI, agentdirs.AntigravityDir(home)},
 		hermes:      agent{agentdirs.Hermes, l.HermesHome(home, env)},
 		cline:       agent{clineProduct, agentdirs.ClineDataDir(home, env)},
 		copilot:     agent{copilotProduct, filepath.Join(home, ".copilot")},

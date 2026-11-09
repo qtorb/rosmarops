@@ -106,9 +106,9 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 	scan := skills.Discover(context.Background(), home, env, []string{repo})
 
 	equal(t, "instructions", listed(tmp, scan.Instructions), []string{
-		"antigravity home/.gemini/antigravity/skills/ag/SKILL.md",
-		"antigravity repo/.agent/skills/ag2/SKILL.md",
-		"antigravity repo/.agents/skills/deploy/SKILL.md",
+		"antigravity-cli home/.gemini/antigravity/skills/ag/SKILL.md",
+		"antigravity-cli repo/.agent/skills/ag2/SKILL.md",
+		"antigravity-cli repo/.agents/skills/deploy/SKILL.md",
 		"claude-code home/.claude/skills/review/SKILL.md",
 		"claude-code repo/.claude/skills/fmt/SKILL.md",
 		"cline home/.agents/skills/shared/SKILL.md",
@@ -133,7 +133,7 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		"hermes repo/.hermes/skills/h2/SKILL.md",
 	})
 	equal(t, "executables", listed(tmp, scan.Executables), []string{
-		"antigravity repo/.agents/skills/deploy/scripts/deploy.sh",
+		"antigravity-cli repo/.agents/skills/deploy/scripts/deploy.sh",
 		"claude-code home/.claude/skills/review/scripts/check.ps1",
 		"cline home/.agents/skills/shared/scripts/lib/run.py",
 		"cline repo/.agents/skills/deploy/scripts/deploy.sh",
@@ -155,13 +155,13 @@ func TestDiscover_UserAndRepoFolders(t *testing.T) {
 		dirs[f.Product] = f.ConfigDir
 	}
 	for product, want := range map[string]string{
-		"claude-code":    filepath.Join(home, ".claude"),
-		"cursor":         filepath.Join(home, ".cursor"),
-		"codex":          filepath.Join(home, ".codex"),
-		"antigravity":    filepath.Join(home, ".gemini"),
-		"hermes":         hermes,
-		"cline":          filepath.Join(home, ".cline", "data"),
-		"github-copilot": filepath.Join(home, ".copilot"),
+		"claude-code":     filepath.Join(home, ".claude"),
+		"cursor":          filepath.Join(home, ".cursor"),
+		"codex":           filepath.Join(home, ".codex"),
+		"antigravity-cli": filepath.Join(home, ".gemini"),
+		"hermes":          hermes,
+		"cline":           filepath.Join(home, ".cline", "data"),
+		"github-copilot":  filepath.Join(home, ".copilot"),
 	} {
 		if dirs[product] != want {
 			t.Errorf("%s config dir = %q, want %q", product, dirs[product], want)
