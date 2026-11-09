@@ -116,3 +116,21 @@ func TestPackage_ValidatesSchema(t *testing.T) {
 		t.Errorf("package fails schema: %v", res.Errors())
 	}
 }
+
+// BV-203 point 5: Marshal is the gate before a package is written — a package
+// that does not validate against results.v1 is never returned, so nothing that
+// does not fit the schema can leave the machine. A bad host_id must be caught.
+func TestMarshalRejectsInvalidPackage(t *testing.T) {
+	h := sampleHeader()
+	h.HostID = "not-a-host-id" // fails ^host_[0-9a-f]{16}$
+	pkg, err := results.Seal(testKey(0x44), h, []byte(`{"a":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := results.Marshal(pkg); err == nil {
+		t.Fatal("Marshal accepted a package with an invalid host_id; it must not leave the machine")
+	}
+	if err := results.Validate([]byte(`{"not":"a package"}`)); err == nil {
+		t.Error("Validate accepted a non-package")
+	}
+}

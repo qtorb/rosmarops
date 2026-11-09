@@ -433,7 +433,12 @@ func sealedPackageForKey(body []byte, keyID string) bool {
 	if err := json.Unmarshal(body, &p); err != nil {
 		return false
 	}
-	return p.Header.KeyID == keyID && p.WrappedKey != "" && p.Ciphertext != ""
+	if p.Header.KeyID != keyID || p.WrappedKey == "" || p.Ciphertext == "" {
+		return false
+	}
+	// BV-203 point 5: nothing is sent that does not validate against the
+	// results.v1 schema — the last gate before the package leaves the machine.
+	return results.Validate(body) == nil
 }
 
 // currentPackageStatus reads the sends log for this run's package and reports

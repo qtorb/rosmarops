@@ -1039,6 +1039,28 @@ func RenderV2JSON(v V2) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
+// validateReportV1 checks v1JSON against the embedded report.v1 schema, so the
+// v1 report is validated before it is written, like the v2 report and the space
+// view (BV-203 point 5).
+func validateReportV1(v1JSON []byte) error {
+	schema, err := schemaval.Compile(schemas.ReportSchema)
+	if err != nil {
+		return fmt.Errorf("compile report v1 schema: %w", err)
+	}
+	result, err := schema.Validate(v1JSON)
+	if err != nil {
+		return fmt.Errorf("validate report v1: %w", err)
+	}
+	if !result.Valid() {
+		msgs := ""
+		for _, e := range result.Errors() {
+			msgs += "\n  " + e.String()
+		}
+		return fmt.Errorf("report v1 fails schema validation:%s", msgs)
+	}
+	return nil
+}
+
 // V2Counts are the red and yellow findings of v2.
 func V2Counts(v V2) (red, yellow int) {
 	for _, f := range v.Findings {
@@ -1088,6 +1110,12 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 	}
 	v1JSON, err := RenderJSON(r)
 	if err != nil {
+		return "", "", "", err
+	}
+	// BV-203 point 5: report.json is validated against report.v1 before it is
+	// written, like the v2 report and the space view. A report that does not
+	// validate is an error, never written.
+	if err := validateReportV1(v1JSON); err != nil {
 		return "", "", "", err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {

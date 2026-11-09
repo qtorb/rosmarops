@@ -17,6 +17,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/qtorb/rosmarops/internal/schemas"
+	"github.com/qtorb/rosmarops/internal/schemaval"
 )
 
 // Format and Version identify the package (header.format, header.version).
@@ -187,13 +190,38 @@ func firstErr(errs ...error) error {
 	return nil
 }
 
-// Marshal encodes a package as indented JSON (the file written to disk).
+// Marshal encodes a package as indented JSON (the file written to disk) and
+// validates it against the embedded results.v1 schema. A package that does not
+// validate is never returned, so nothing that leaves the machine was not first
+// checked against its schema (BV-203 point 5, CTO-24 E5/point 6).
 func Marshal(p Package) ([]byte, error) {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("results: marshal package: %w", err)
 	}
+	if err := Validate(b); err != nil {
+		return nil, err
+	}
 	return b, nil
+}
+
+// Validate checks raw against the embedded results.v1 schema. The error names
+// only how many violations there were, never a field value — the package is
+// what leaves the machine. It is used before a package is written (Marshal) and
+// before one is sent (cmd/rosmarops).
+func Validate(raw []byte) error {
+	schema, err := schemaval.Compile(schemas.ResultsSchema)
+	if err != nil {
+		return fmt.Errorf("results: compile schema: %w", err)
+	}
+	res, err := schema.Validate(raw)
+	if err != nil {
+		return fmt.Errorf("results: validate package: %w", err)
+	}
+	if !res.Valid() {
+		return fmt.Errorf("results: package fails results.v1 schema validation (%d errors)", len(res.Errors()))
+	}
+	return nil
 }
 
 // Parse decodes a package file.
