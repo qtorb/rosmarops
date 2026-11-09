@@ -718,9 +718,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}},
 	}
 	progress.line("console.progress.agents", nil)
-	if timeoutErr := scan.Run(ctx, steps); timeoutErr != nil {
-		scanErrors = append(scanErrors, *timeoutErr)
-	}
+	// Run surfaces both a global-timeout error and any step that panicked
+	// (BV-202 S1); all become visible errors[] so the run is fail-secure.
+	scanErrors = append(scanErrors, scan.Run(ctx, steps)...)
 	if buildGraph != nil {
 		buildGraph(graph.Repos{Findings: repoFindings, Families: familyRoots(families)})
 	}

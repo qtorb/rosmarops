@@ -68,43 +68,78 @@ type Step struct {
 
 // Run runs steps in order under ctx, whose deadline is the global one. When
 // the deadline expires, the step in progress is interrupted (its ctx is
-// done), the steps after it are not started, and Run returns a ScanError
-// with scope GlobalTimeoutScope naming the interrupted step. A step that
-// returns after the deadline still records what it collected. Otherwise Run
-// returns nil.
-func Run(ctx context.Context, steps []Step) *finding.ScanError {
+// done), the steps after it are not started, and Run appends a ScanError with
+// scope GlobalTimeoutScope naming the interrupted step. A step that returns
+// after the deadline still records what it collected.
+//
+// A step that panics does not bring the run down (BV-202 S1, CTO-24 §0): the
+// panic is recovered on the step's own goroutine, its partial results are
+// discarded (record is not called), and Run appends a ScanError scoped to that
+// step so the run is fail-secure (at least yellow) and the steps after it still
+// run. The panic value never reaches the ScanError — only the step name — so no
+// read bytes leak into the report; the detail is logged locally.
+//
+// Run returns every ScanError it collected (panics in order, then at most one
+// global_timeout), or nil when none occurred.
+func Run(ctx context.Context, steps []Step) []finding.ScanError {
+	var errs []finding.ScanError
 	for i, s := range steps {
 		if ctx.Err() != nil {
-			return timeoutError(ctx, "", steps[i:])
+			errs = append(errs, *timeoutError(ctx, "", steps[i:]))
+			return errs
 		}
 		stepStart := time.Now()
 		done := make(chan func(), 1)
-		go func(s Step) { done <- s.Run(ctx) }(s)
+		panicked := make(chan struct{}, 1)
+		go func(s Step) {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the detail locally (value-free in the report).
+					slog.Error("scan: scanner panicked; results discarded",
+						"scanner", s.Name, "panic", fmt.Sprint(r))
+					panicked <- struct{}{}
+				}
+			}()
+			done <- s.Run(ctx)
+		}(s)
 
 		var record func()
+		stepPanicked := false
 		select {
 		case record = <-done:
+		case <-panicked:
+			stepPanicked = true
 		case <-ctx.Done():
 			grace := time.NewTimer(abandonGrace)
 			select {
 			case record = <-done:
 				grace.Stop()
+			case <-panicked:
+				grace.Stop()
+				stepPanicked = true
 			case <-grace.C:
 				slog.Warn("scan: scanner did not stop at the global deadline; results discarded", "scanner", s.Name)
 			}
+		}
+		if stepPanicked {
+			errs = append(errs, finding.ScanError{
+				Scope:   s.Name,
+				Message: "scanner panicked; its results were discarded and the scan continued",
+			})
 		}
 		if record != nil {
 			record()
 		}
 		// Per-step duration (BV-101, decision 5): technical codes only, no
 		// catalog text. Logged for every step, including one abandoned at the
-		// deadline (record == nil).
+		// deadline or panicked (record == nil).
 		slog.Info("scan: step done", "step", s.Name, "duration_ms", time.Since(stepStart).Milliseconds())
 		if ctx.Err() != nil {
-			return timeoutError(ctx, s.Name, steps[i+1:])
+			errs = append(errs, *timeoutError(ctx, s.Name, steps[i+1:]))
+			return errs
 		}
 	}
-	return nil
+	return errs
 }
 
 // timeoutError builds the global_timeout ScanError: the interrupted step

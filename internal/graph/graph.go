@@ -391,6 +391,14 @@ func explainNodeOneOf(raw []byte, e schemaval.Error) string {
 	n := doc.Nodes[idx]
 	kind := jsonString(n["kind"])
 	desc := "node kind=" + orDash(kind) + " type=" + orDash(jsonString(n["type"])) + " basis=" + orDash(jsonString(n["basis"]))
+	// The node oneOf has one branch per kind (a const). The nearest branch is
+	// the one for this node's kind; name it so the reader knows which subschema
+	// the properties below were checked against. Unknown kind → no branch.
+	if def, ok := kindDefinition[kind]; ok {
+		desc += " oneof-branch=" + def
+	} else {
+		desc += " oneof-branch=none"
+	}
 	props := failingProperties(n, kind)
 	if len(props) == 0 {
 		return e.Field + ": " + desc + " does not match its kind's schema"

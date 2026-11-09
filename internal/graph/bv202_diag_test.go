@@ -36,10 +36,12 @@ func TestEncodeNamesFailingNode(t *testing.T) {
 	}
 	msg := err.Error()
 
-	// Names kind/type/basis and the property.
+	// Names kind/type/basis, the nearest oneOf branch and the property.
 	for _, want := range []string{
-		"kind=capability", "type=network", "basis=product_default", "rule (not allowed here)",
-		"kind=resource", "type=git_repository", "configures (not allowed here)",
+		"kind=capability", "type=network", "basis=product_default",
+		"oneof-branch=capability", "rule (not allowed here)",
+		"kind=resource", "type=git_repository",
+		"oneof-branch=resource", "configures (not allowed here)",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error missing %q:\n%s", want, msg)

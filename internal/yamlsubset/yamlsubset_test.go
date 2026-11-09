@@ -106,6 +106,8 @@ func TestParseRefuses(t *testing.T) {
 		"indented start":            "  a: 1\n",
 		"too deep":                  deep,
 		"not UTF-8":                 "a: \xff\n",
+		"empty key":                 ": x\n",     // BV-202 S1: a ':' with no key — must error, not panic
+		"empty key at end":          "a: 1\n:\n", // bare ':' line
 	} {
 		if v, err := Parse([]byte(doc)); err == nil {
 			t.Errorf("%s: read as %v", name, v)

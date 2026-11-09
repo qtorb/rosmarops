@@ -326,7 +326,7 @@ func splitKey(s string) (key, rest string, err error) {
 			return "", "", errors.New("not a 'key: value' line")
 		}
 		k, s = s[:i], s[i+1:]
-		if strings.ContainsAny(k[:1], refusedStart+"[],#") {
+		if k == "" || strings.ContainsAny(k[:1], refusedStart+"[],#") {
 			return "", "", errors.New("a key that is not a plain scalar")
 		}
 	}
