@@ -54,6 +54,12 @@ func r2Settings(files ...platform.ClaudeSettingsFile) platform.ClaudeSettingsSca
 
 func r2BuildV2(t *testing.T, g *graph.Graph, settings *platform.ClaudeSettingsScan, extra func(*report.V2Input)) report.V2 {
 	t.Helper()
+	// BV-202 point 4: each agent's graph is encoded and validated against
+	// schemas/v2/graph.v2.schema.json. The 0.10.1 bug (5 nodes failing the node
+	// oneOf on Albert's machine) would have been caught here, per agent.
+	if _, err := graph.Encode(*g); err != nil {
+		t.Fatalf("agent graph fails graph.v2 schema validation: %v", err)
+	}
 	bases, err := knowledge.All()
 	if err != nil {
 		t.Fatal(err)
