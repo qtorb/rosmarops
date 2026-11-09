@@ -82,10 +82,29 @@ jobs:
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      # BV-202 point 10 fix: release.yml writes the Windows icon + version
+      # resource (.syso) with tools/winres before it builds, so its exe has an
+      # icon and a Properties -> Details version; ci.yml did not, so the
+      # uploaded candidate had none. Generate the same .syso here, before the
+      # Sample report build that produces the uploaded exe. winres -version
+      # takes major.minor.patch, optionally with a -prerelease and/or +build
+      # suffix (parseVersion uses the numeric core for FIXEDFILEINFO and the
+      # whole string for Product/FileVersion), so "0.0.0-pr<n>+<short-sha>" is
+      # accepted. Neither the .syso (git-ignored) nor the exe is committed.
+      - name: Windows resource for the candidate (icon + version, like release.yml)
+        run: |
+          $num = "${{ github.event.pull_request.number }}"
+          if (-not $num) { $num = "0" }
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $ver = "0.0.0-pr$num+$sha"
+          "CANDIDATE_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          go run ./tools/winres -version $ver
+          Write-Output "candidate winres version: $ver"
       # BV-112: the sample report, made by this commit's rosmarops.exe on
       # the fictitious computer of testdata/sample-home and checked; nothing
       # is uploaded. The two checked pages go to the log, gzip and base64,
-      # one line each, for review.
+      # one line each, for review. The build picks up the .syso written above,
+      # so this exe (the uploaded candidate) carries the icon and version.
       - name: Sample report
         run: |
           go build -trimpath -o dist/rosmarops.exe ./cmd/rosmarops
@@ -98,6 +117,17 @@ jobs:
             $gz.Dispose()
             Write-Output "SAMPLE-REPORT-$lang $([Convert]::ToBase64String($out.ToArray()))"
           }
+      # BV-202 point 10: prove the candidate carries the icon and version it
+      # gets from the .syso (if the resource were missing, VersionInfo would be
+      # empty). The icon travels with the same resource, so a set version means
+      # the icon is embedded too.
+      - name: Candidate icon and version check
+        run: |
+          $vi = (Get-Item dist/rosmarops.exe).VersionInfo
+          $vi | Format-List ProductName, ProductVersion, FileVersion, LegalCopyright
+          if (-not $vi.ProductVersion) { Write-Error "candidate has no version resource (icon/version not embedded)"; exit 1 }
+          if ($vi.ProductVersion -notlike "0.0.0-pr*") { Write-Error "ProductVersion '$($vi.ProductVersion)' is not the expected 0.0.0-pr* (set '$env:CANDIDATE_VERSION')"; exit 1 }
+          Write-Output "candidate carries icon + version $($vi.ProductVersion)"
       # BV-202 S6: govulncheck as a gate, pinned, in binary mode over the
       # Windows executable this job just built. No reachable vulnerability.
       - name: govulncheck (binary mode)
