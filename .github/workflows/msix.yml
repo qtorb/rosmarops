@@ -23,6 +23,16 @@ on:
         description: "Released version to package, e.g. 0.11.0 (its tag v0.11.0 must exist)"
         required: true
         type: string
+  # On a PR that changes the packaging, build the review artifact (both arches,
+  # unsigned + test-signed) so a reviewer and Albert can download and sideload
+  # it before merge. It uploads nothing to the Store and uses no secret. A PR
+  # run has no version input, so it packages as the current release version
+  # (REVIEW_VERSION below) — the number only names the sideload package.
+  pull_request:
+    paths:
+      - "packaging/msix/**"
+      - ".github/workflows/msix.yml"
+      - "tools/winres/**"
 
 permissions: {}
 
@@ -32,7 +42,9 @@ jobs:
     permissions:
       contents: read
     env:
-      VERSION: ${{ inputs.version }}
+      # On a manual run, the version input; on a PR run (no input), the current
+      # release version, used only to name the review package.
+      VERSION: ${{ inputs.version || '0.11.0' }}
     steps:
       - name: Check the version
         shell: pwsh
