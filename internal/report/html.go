@@ -370,10 +370,10 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 // {n} unsent problems…» when any remain. Nothing when there are none.
 func (c *htmlCtx) renderProblemsNote() {
 	if c.v.ProblemsSentThisRun > 0 {
-		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.sent", map[string]string{"n": strconv.Itoa(c.v.ProblemsSentThisRun)}))
+		c.w(`<p class="problems-note">%s</p>`, c.cat.Plural("report.problems.sent", c.v.ProblemsSentThisRun, map[string]string{"n": strconv.Itoa(c.v.ProblemsSentThisRun)}))
 	}
 	if c.v.ProblemsUnsent > 0 && !c.v.ProblemsWillAsk {
-		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.unsent", map[string]string{"n": strconv.Itoa(c.v.ProblemsUnsent)}))
+		c.w(`<p class="problems-note">%s</p>`, c.cat.Plural("report.problems.unsent", c.v.ProblemsUnsent, map[string]string{"n": strconv.Itoa(c.v.ProblemsUnsent)}))
 	}
 }
 
@@ -1537,7 +1537,8 @@ func HTMLKeys() []string {
 	// key, so report.space_no_kit is gone.
 	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_rejected", "report.space_button")
 	// BV-210 §2: the problem-notebook report lines.
-	keys = append(keys, "report.problems.unsent", "report.problems.sent")
+	keys = append(keys, "report.problems.unsent.one", "report.problems.unsent.other",
+		"report.problems.sent.one", "report.problems.sent.other")
 	// BV-158 part 3: the always-shown «Your space» copy (connected and not) and
 	// the folded «More information» (not connected).
 	keys = append(keys, "report.space_has", "report.space_keep", "report.space_open_link",

@@ -100,7 +100,8 @@ var staticKeys = []string{
 	"problems.summary.run_unfinished", "problems.summary.step_failed", "problems.summary.time_ran_out",
 	"problems.summary.output_invalid", "problems.summary.space_rejected",
 	"problems.summary.config_unreadable", "problems.summary.report_not_opened", "problems.summary.several",
-	"report.problems.unsent", "report.problems.sent",
+	"report.problems.unsent.one", "report.problems.unsent.other",
+	"report.problems.sent.one", "report.problems.sent.other",
 	// CTO-32 C3/C4: the terminal send prompt, the auto-send untick box and the
 	// «ask again» command confirmation.
 	"problems.terminal.send", "problems.autosent.body", "problems.ok", "problems.ask_again", "problems.ask.done",
@@ -276,10 +277,10 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	// BV-210 §2: the problem-notebook lines (sent this run via the checkbox,
 	// and/or still unsent).
 	if v.ProblemsSentThisRun > 0 {
-		w("%s\n\n", t("report.problems.sent", map[string]string{"n": strconv.Itoa(v.ProblemsSentThisRun)}))
+		w("%s\n\n", cat.Plural("report.problems.sent", v.ProblemsSentThisRun, map[string]string{"n": strconv.Itoa(v.ProblemsSentThisRun)}))
 	}
 	if v.ProblemsUnsent > 0 && !v.ProblemsWillAsk {
-		w("%s\n\n", t("report.problems.unsent", map[string]string{"n": strconv.Itoa(v.ProblemsUnsent)}))
+		w("%s\n\n", cat.Plural("report.problems.unsent", v.ProblemsUnsent, map[string]string{"n": strconv.Itoa(v.ProblemsUnsent)}))
 	}
 	// BV-148: when the agent knowledge was last reviewed, and the same stale
 	// warning the HTML shows when the program is more than 14 days older than it.
