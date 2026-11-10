@@ -100,6 +100,70 @@ func TestOneAskPerSession(t *testing.T) {
 	}
 }
 
+// TestBV211dWindowAAfterUnshownWindowB is the BV-211d regression: a Window B
+// that could not be shown at startup (problemUIHook returns asked == false) must
+// not mark the run as asked. When a new problem is then recorded during the
+// review, the after-report step still offers Window A — exactly once.
+func TestBV211dWindowAAfterUnshownWindowB(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	stPath, err := state.StatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.DefaultState("0.11.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SendProblemsWithoutAsking = false // checkbox off
+	if err := os.MkdirAll(filepath.Dir(stPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.SaveState(stPath, st); err != nil {
+		t.Fatal(err)
+	}
+	reports := filepath.Join(home, ".rosmarops", "reports")
+	dataDir := report.DataDir(reports)
+
+	calls := 0
+	lastWindowB := false
+	orig := problemUIHook
+	t.Cleanup(func() { problemUIHook = orig })
+	// Window B (first call) cannot be shown; Window A (later) shows and is
+	// answered «Not now».
+	problemUIHook = func(a problemAsk) (problemAnswer, bool) {
+		calls++
+		lastWindowB = a.windowB
+		if a.windowB {
+			return problemAnswer{}, false // could not be shown
+		}
+		return problemAnswer{send: false}, true
+	}
+	problemsAskedThisRun = false
+	t.Cleanup(func() { problemsAskedThisRun = false })
+
+	// A problem exists at startup (e.g. run_unfinished); Window B is attempted
+	// but cannot be shown.
+	recordProblems(dataDir, problems.Entry{Code: problems.RunUnfinished, Step: problems.StepReview, Day: "2026-11-10"})
+	offerProblems(dataDir, "en", "0.11.0", true /*windowB*/, true, &st, stPath, time.Now())
+	if problemsAskedThisRun {
+		t.Fatal("an unshown Window B must not mark the run as asked")
+	}
+
+	// A new problem is recorded during the review (two repos ran out of time).
+	recordProblems(dataDir, problems.Entry{Code: problems.TimeRanOut, Step: "repos", Day: "2026-11-10"})
+
+	before := calls
+	offerProblemsAfterReport(reports, "en", true)
+	if calls-before != 1 {
+		t.Fatalf("after-report must offer Window A exactly once, got %d calls", calls-before)
+	}
+	if lastWindowB {
+		t.Fatal("the after-report offer must be Window A, not Window B")
+	}
+}
+
 func stubProblemUI(t *testing.T, ans problemAnswer, asked bool) {
 	t.Helper()
 	orig := problemUIHook
