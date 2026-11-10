@@ -36,6 +36,12 @@ type State struct {
 	// DPAPI blob, never here. No connection happens unless this is true.
 	SpacePermission bool `json:"space_permission,omitempty"`
 
+	// SendProblemsWithoutAsking records the «Send the next ones without asking»
+	// checkbox (BV-210 §2): when true, the program sends the problem list
+	// directly in A, B and C instead of asking. Off by default (signed Albert
+	// 10-11 09:22); the person can untick it at any time. Optional in state.v2.
+	SendProblemsWithoutAsking bool `json:"send_problems_without_asking,omitempty"`
+
 	// ConnectOfferDeclinedAt is when the person last said «Not now» to the
 	// connect offer at the end of a double-click review (BV-158 part 4, decision
 	// A): a UTC RFC 3339 time. The offer is not shown again until 7 days after

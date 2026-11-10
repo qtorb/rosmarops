@@ -116,6 +116,14 @@ type V2 struct {
 	// (400/403/409/413) and dropped, so the section says so instead of
 	// "pending" (CTO-15 PR5). Not in the JSON.
 	SpaceRejected bool `json:"-"`
+	// ProblemsUnsent is how many local problem-notebook lines are still unsent
+	// at report time (BV-210 §2 C): shown as a one-line note so the person
+	// knows RosmarOps will ask next time. Set by the command; not in the JSON.
+	ProblemsUnsent int `json:"-"`
+	// ProblemsSentThisRun is how many problems the «send without asking»
+	// checkbox sent this run (BV-210 §2): shown as a one-line note. Set by the
+	// command; not in the JSON.
+	ProblemsSentThisRun int `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;

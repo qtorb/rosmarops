@@ -90,6 +90,20 @@ var staticKeys = []string{
 	"findings.when.own_task_changed", "findings.when.config_key_case_conflict",
 	"findings.when.default",
 	"report.dismissed.title", "report.dismissed.note",
+	// BV-210: the problem-send window/terminal texts (§3) and the two report
+	// lines (§2). The window keys are emitted by cmd/rosmarops, listed here so
+	// the catalog-coverage test accounts for them, like connect.* and findings.*.
+	"problems.a.title", "problems.a.text", "problems.b.title", "problems.b.text",
+	"problems.send", "problems.not_now", "problems.see", "problems.comment.fold",
+	"problems.comment.q", "problems.email.q", "problems.remember",
+	"problems.sent", "problems.sent.email", "problems.fail",
+	"problems.summary.run_unfinished", "problems.summary.step_failed", "problems.summary.time_ran_out",
+	"problems.summary.output_invalid", "problems.summary.space_rejected",
+	"problems.summary.config_unreadable", "problems.summary.report_not_opened", "problems.summary.several",
+	"report.problems.unsent", "report.problems.sent",
+	// CTO-32 C3/C4: the terminal send prompt, the auto-send untick box and the
+	// «ask again» command confirmation.
+	"problems.terminal.send", "problems.autosent.body", "problems.ok", "problems.ask_again", "problems.ask.done",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
@@ -235,6 +249,15 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		scope += " " + t("report.coverage_gap", map[string]string{"count": strconv.Itoa(gaps)})
 	}
 	w("%s\n\n", scope)
+
+	// BV-210 §2: the problem-notebook lines (sent this run via the checkbox,
+	// and/or still unsent).
+	if v.ProblemsSentThisRun > 0 {
+		w("%s\n\n", t("report.problems.sent", map[string]string{"n": strconv.Itoa(v.ProblemsSentThisRun)}))
+	}
+	if v.ProblemsUnsent > 0 {
+		w("%s\n\n", t("report.problems.unsent", map[string]string{"n": strconv.Itoa(v.ProblemsUnsent)}))
+	}
 	// BV-148: when the agent knowledge was last reviewed, and the same stale
 	// warning the HTML shows when the program is more than 14 days older than it.
 	w("%s\n\n", t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(cat, knowledge.ReviewedOn)}))

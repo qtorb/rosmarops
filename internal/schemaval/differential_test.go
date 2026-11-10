@@ -39,6 +39,7 @@ var schemaSet = map[string][]byte{
 	"findings-memory.v3": schemas.FindingsMemoryV3Schema,
 	"space-view.v1":      schemas.SpaceViewSchema,
 	"results.v1":         schemas.ResultsSchema,
+	"problems.v1":        schemas.ProblemsSchema,
 	"kit.v1":             schemas.KitSchema,
 	"intel.v1":           schemas.IntelSchema,
 }

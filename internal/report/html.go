@@ -344,6 +344,9 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.renderHowFix(local)
 	// b) «Your space» (always): connected status, or the pitch to connect.
 	c.renderYourSpace()
+	// BV-210 §2: the problem-notebook lines — sent this run (checkbox), and/or
+	// still unsent (we'll ask next time).
+	c.renderProblemsNote()
 	// c) What we could not read, and other signals on this computer (always,
 	// when there are any): never hidden.
 	c.renderCoverage()
@@ -360,6 +363,18 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	}
 	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS)
 	return sb.String()
+}
+
+// renderProblemsNote writes the one-line problem-notebook notes (BV-210 §2):
+// «We sent {n} problems» when the checkbox sent some this run, and «There are
+// {n} unsent problems…» when any remain. Nothing when there are none.
+func (c *htmlCtx) renderProblemsNote() {
+	if c.v.ProblemsSentThisRun > 0 {
+		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.sent", map[string]string{"n": strconv.Itoa(c.v.ProblemsSentThisRun)}))
+	}
+	if c.v.ProblemsUnsent > 0 {
+		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.unsent", map[string]string{"n": strconv.Itoa(c.v.ProblemsUnsent)}))
+	}
 }
 
 // scoredAgentsOf are the evaluated agents with a score, lowest first (ties by
@@ -1521,6 +1536,8 @@ func HTMLKeys() []string {
 	// BV-119: the «Your space» section (AP-17 §2); BV-132: shown only with a
 	// key, so report.space_no_kit is gone.
 	keys = append(keys, "report.space_h2", "report.space_sent", "report.space_pending", "report.space_rejected", "report.space_button")
+	// BV-210 §2: the problem-notebook report lines.
+	keys = append(keys, "report.problems.unsent", "report.problems.sent")
 	// BV-158 part 3: the always-shown «Your space» copy (connected and not) and
 	// the folded «More information» (not connected).
 	keys = append(keys, "report.space_has", "report.space_keep", "report.space_open_link",

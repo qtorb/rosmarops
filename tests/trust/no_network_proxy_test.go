@@ -26,6 +26,8 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/problems"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -48,7 +50,7 @@ func TestNoNetwork_ProxyOnlyConnectsToFixedHost(t *testing.T) {
 		{"binary with hostile -X (negative case)", hostile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			connects, inet := runBehindRecordingProxy(t, strace, recorder, tc.bin)
+			connects, inet := runBehindRecordingProxy(t, strace, recorder, tc.bin, seedConnectedHome(t), "run")
 			if len(connects) != 1 || connects[0] != "app.rosmarops.com:443" {
 				t.Errorf("CONNECT targets = %v, want exactly [app.rosmarops.com:443]", connects)
 			}
@@ -79,7 +81,7 @@ func buildBin(t *testing.T, pkg string, extra []string) string {
 // runBehindRecordingProxy starts the recorder, seeds a connected HOME, runs
 // `rosmarops run` behind the recorder under strace, and returns the CONNECT
 // targets the recorder saw and the inet connect targets strace saw.
-func runBehindRecordingProxy(t *testing.T, strace, recorder, bin string) (connects, inet []string) {
+func runBehindRecordingProxy(t *testing.T, strace, recorder, bin, home string, args ...string) (connects, inet []string) {
 	t.Helper()
 	rec := exec.Command(recorder)
 	stdout, err := rec.StdoutPipe()
@@ -120,9 +122,8 @@ func runBehindRecordingProxy(t *testing.T, strace, recorder, bin string) (connec
 		t.Fatal("recorder did not report its address")
 	}
 
-	home := seedConnectedHome(t)
 	traceFile := filepath.Join(t.TempDir(), "run.strace")
-	argv := []string{strace, "-f", "-qq", "-Y", "-e", "trace=connect", "-o", traceFile, bin, "run"}
+	argv := append([]string{strace, "-f", "-qq", "-Y", "-e", "trace=connect", "-o", traceFile, bin}, args...)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = home
 	cmd.Env = append(os.Environ(),
@@ -232,6 +233,63 @@ func seedConnectedHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(reports, "rosmarops-results-2026-11-01-host_000.locked.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+// TestNoNetwork_ProblemSend_OnlyFixedHost is CTO-32 C2(b): with the «send the
+// next ones without asking» checkbox on and a problem in the notebook, an
+// unattended review sends the problem — and the only host it connects to is
+// app.rosmarops.com:443. The recording proxy sees exactly one CONNECT, and
+// strace confirms every inet connection goes to the local proxy. Linux+strace.
+func TestNoNetwork_ProblemSend_OnlyFixedHost(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the proxy+strace network check is implemented for Linux")
+	}
+	strace, err := exec.LookPath("strace")
+	if err != nil {
+		t.Skip("strace not available")
+	}
+	recorder := buildBin(t, "./tests/trust/testdata/proxyrecorder", nil)
+	bin := buildBin(t, "./cmd/rosmarops", nil)
+
+	connects, inet := runBehindRecordingProxy(t, strace, recorder, bin, seedCheckboxHomeWithProblem(t), "run", "--unattended")
+	if len(connects) != 1 || connects[0] != "app.rosmarops.com:443" {
+		t.Errorf("CONNECT targets = %v, want exactly [app.rosmarops.com:443]", connects)
+	}
+	for _, target := range inet {
+		if !strings.HasPrefix(target, "127.0.0.1:") && !strings.HasPrefix(target, "[::1]:") {
+			t.Errorf("an inet connection went to %q, not the local proxy", target)
+		}
+	}
+}
+
+// seedCheckboxHomeWithProblem lays out a HOME whose state has the checkbox on
+// and whose notebook holds one unsent problem, so an unattended review sends it.
+func seedCheckboxHomeWithProblem(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	dir := filepath.Join(home, ".rosmarops")
+	reports := filepath.Join(dir, "reports")
+	if err := os.MkdirAll(reports, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.WriteConfig(filepath.Join(dir, "config.json"), config.DefaultConfig()); err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.DefaultState("1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SendProblemsWithoutAsking = true
+	if err := state.SaveState(filepath.Join(dir, "state.json"), st); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := report.DataDir(reports)
+	if _, err := problems.New(dataDir).Record(problems.Entry{
+		Code: problems.StepFailed, Step: "mcp", Day: problems.Day(time.Now()),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	return home

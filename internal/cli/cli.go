@@ -30,6 +30,7 @@ var HelpKeys = []string{
 	"cli.cmd.findings.long", "cli.cmd.findings.short",
 	"cli.cmd.init.long", "cli.cmd.init.short",
 	"cli.cmd.kit.create.short", "cli.cmd.kit.import.short", "cli.cmd.kit.long", "cli.cmd.kit.new_phrase.short", "cli.cmd.kit.short",
+	"cli.cmd.problems.ask.short", "cli.cmd.problems.short",
 	"cli.cmd.run.long", "cli.cmd.run.short", "cli.cmd.schedule.short", "cli.cmd.status.long", "cli.cmd.status.short",
 	"cli.flag.lang", "cli.flag.repos_under", "cli.help.more", "cli.usage",
 }

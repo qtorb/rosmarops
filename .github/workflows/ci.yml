@@ -107,10 +107,13 @@ jobs:
       # and base64, one line each, for review. This build is the uploaded
       # candidate, so it uses the same command as release.yml: CGO_ENABLED=0,
       # the .syso written above, -ldflags "-X main.version=..." and -trimpath.
+      # BV-210/CTO-32 C5: the candidate ALSO carries -tags demoproblem so Albert
+      # can trigger a test problem with ROSMAROPS_DEMO_PROBLEM; release.yml never
+      # sets this tag, so the release binary ignores the variable.
       - name: Sample report
         run: |
           $env:CGO_ENABLED = "0"
-          go build -trimpath "-ldflags=-X main.version=$env:CANDIDATE_VERSION" -o dist/rosmarops.exe ./cmd/rosmarops
+          go build -trimpath -tags demoproblem "-ldflags=-X main.version=$env:CANDIDATE_VERSION" -o dist/rosmarops.exe ./cmd/rosmarops
           ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
           foreach ($lang in 'en', 'es') {
             $out = [System.IO.MemoryStream]::new()

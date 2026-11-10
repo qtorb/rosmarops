@@ -58,8 +58,12 @@ var errNoText = errors.New("no notification text")
 
 // finish shows text (ok: there is one), opening reportPath on click; when
 // the probe found it unavailable, when there is no text, or when showing it
-// fails or Windows no longer allows it, it opens the report instead.
-func (n notifier) finish(ctx context.Context, nt notice, text string, ok bool, reportPath string) {
+// fails or Windows no longer allows it, it opens the report instead. It returns
+// whether the person was reached — a notice shown, or the report opened (or
+// opening it is not applicable on this platform, which is not a failure). A
+// false return is the report_not_opened case of BV-210 (§1): neither the
+// notice nor the report reached the person.
+func (n notifier) finish(ctx context.Context, nt notice, text string, ok bool, reportPath string) (delivered bool) {
 	if nt.enabled {
 		if !ok {
 			slog.Warn(fmt.Sprintf("notify: failed err=%v", errNoText))
@@ -72,22 +76,23 @@ func (n notifier) finish(ctx context.Context, nt notice, text string, ok bool, r
 				slog.Warn("notify: unavailable setting=" + setting)
 			default:
 				slog.Info("notify: shown")
-				return
+				return true
 			}
 		}
 	}
 	if err := n.open(reportPath); err != nil {
 		if errors.Is(err, platform.ErrNotApplicable) {
 			slog.Info(fmt.Sprintf("notify: report not opened err=%v", err))
-			return
+			return true
 		}
 		slog.Warn(fmt.Sprintf("notify: report not opened err=%v", err))
-		return
+		return false
 	}
 	slog.Info("notify: report opened")
+	return true
 }
 
 // announce is probe and finish at once, for an abort's report.
 func (n notifier) announce(ctx context.Context, text, reportPath string) {
-	n.finish(ctx, n.probe(ctx), text, true, reportPath)
+	_ = n.finish(ctx, n.probe(ctx), text, true, reportPath)
 }

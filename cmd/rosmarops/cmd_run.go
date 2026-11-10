@@ -29,6 +29,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/scan/avexclusions"
@@ -43,6 +44,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 	"github.com/qtorb/rosmarops/internal/scan/shellprofile"
 	"github.com/qtorb/rosmarops/internal/scan/vscode"
+	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -82,7 +84,7 @@ var (
 
 func runRun(inv cli.Invocation) error {
 	unattended := inv.Flags["unattended"] == "true"
-	_, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
+	htmlPath, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
 	if err != nil && unattended {
 		// B3 (BV-93): a scheduled review never fails in silence — a red page,
 		// a notification and the run_failed exit code. Never returns.
@@ -96,6 +98,8 @@ func runRun(inv cli.Invocation) error {
 				offerDismissAfterReport(inv.Flags["lang"], cfgPath, stPath, true, time.Now())
 			}
 		}
+		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
+		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
 	}
 	return err
 }
@@ -243,6 +247,38 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		migrateReportsLayout(reportDir)
 	}
 	dataDir := report.DataDir(reportDir)
+
+	// BV-210: mark this review in progress so an abrupt end (killed, hung,
+	// crashed) is seen as run_unfinished next time, and learn whether the
+	// previous review did not finish. The notebook and the mark live in the
+	// reports data directory (an already-allowed path, invariant 2); nothing
+	// here leaves the machine. EndReview clears the mark on any return — only a
+	// true crash, where defers do not run, leaves it behind.
+	notebook := problems.New(dataDir)
+	problemsAutoSentThisRun = 0
+	// BV-210 test aid: ROSMAROPS_DEMO_PROBLEM lets Albert see the windows
+	// without touching his real config — it only writes to the problem notebook
+	// and run mark (allowed paths), never to any agent or RosmarOps config.
+	// "b" leaves a fake in-progress mark so this run detects run_unfinished and
+	// shows Window B at startup; "a" seeds one unsent problem so Window A shows
+	// at the end of this review.
+	seedDemoProblemB(dataDir, start)
+	prevUnfinishedDay, _ := notebook.StartReview(start)
+	defer func() { _ = notebook.EndReview() }()
+	seedDemoProblemA(dataDir, start)
+
+	// BV-210 §2 B: the previous review did not finish. Record run_unfinished now
+	// (so Window B and the report see it) and, when someone is present and the
+	// checkbox is off, ask before starting the new review. Nobody present (a
+	// scheduled review): never ask here; the checkbox auto-send below sends it.
+	if prevUnfinishedDay != "" {
+		recordProblems(dataDir, problems.Entry{Code: problems.RunUnfinished, Step: problems.StepReview, Day: prevUnfinishedDay})
+		// §2 B: with someone present and the checkbox off, ask before the new
+		// review. With the checkbox on, the pre-report send below sends it.
+		if presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking {
+			offerProblems(dataDir, lang, version, true, true, &st, stPath, time.Now())
+		}
+	}
 
 	// The connect offer moved to the end of the double click (BV-158 part 4,
 	// decision A): it is shown after the report opens, in runNoArgs, not here
@@ -760,6 +796,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}
 	}
 
+	// BV-210: write this review's problems to the local notebook. Nothing
+	// leaves the machine here; space_rejected and output_invalid are recorded in
+	// the send path below. The agent for a config_unreadable is taken only from
+	// the graph's agent product ids — never from a path or parser detail.
+	recordProblems(dataDir, problemsFromRun(today(start), scanErrors, repoFindings, built)...)
+
 	// Build report.
 	elapsed := time.Since(start).Seconds()
 	r := report.Build(version, findings, scanErrors, 0, 0, st.ConsecutiveGreen, allowListedTotal, nil)
@@ -889,6 +931,26 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Warn("space send skipped: kit path", "err", perr)
 	}
 
+	// BV-210 §2: before the report is written, if the «send the next ones
+	// without asking» checkbox is on, send the unsent problems now (so the
+	// report's line is right). Then set the two report lines: how many problems
+	// were sent this run (checkbox) and how many remain unsent. The interactive
+	// Window A, if any, comes after the report opens.
+	if st.SendProblemsWithoutAsking {
+		pctx, pcancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		// CTO-32 C1: the consent is read from the state inside spacenet.
+		if consent, cerr := spacenet.ConsentFromState(stPath); cerr == nil {
+			if res := submitProblems(pctx, consent, dataDir, lang, version, nil, nil, time.Now()); res.Delivered {
+				v2.ProblemsSentThisRun = res.Sent
+				problemsAutoSentThisRun = res.Sent
+			}
+		}
+		pcancel()
+	}
+	if left, lerr := problems.New(dataDir).Unsent(problems.MaxPerSend); lerr == nil {
+		v2.ProblemsUnsent = len(left)
+	}
+
 	// Write report files.
 	progress.line("console.progress.report", nil)
 	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
@@ -947,12 +1009,19 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// just before the summary (and, on a double click, report_opened).
 	ui.done()
 
+	// BV-210 §2 A: the end-of-review problems step (Window A, or the untick box
+	// after an automatic send) runs in the caller, AFTER the report has opened
+	// (CTO-32 C3), so an unanswered window never delays the report.
+
 	// Print summary.
 	if unattended {
 		// The notice, last (J7, J9): agent, score and counts, or the report
 		// opened.
 		text, ok := report.NotificationText(v2, cat)
-		defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName)))
+		if !defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName))) {
+			// BV-210: neither the notice nor the report reached the person.
+			recordProblems(dataDir, problems.Entry{Code: problems.ReportNotOpened, Step: problems.StepNotify, Day: today(start)})
+		}
 		slog.Info("scheduled run finished", "status", v2.Status)
 		return htmlPath, nil
 	}

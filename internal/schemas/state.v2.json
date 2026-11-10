@@ -33,6 +33,10 @@
       "type": "boolean",
       "description": "True once the person approved connecting this computer to their online space (BV-137). The only space state kept here; the key and send credential live in the kit DPAPI blob. No network happens unless this is true."
     },
+    "send_problems_without_asking": {
+      "type": "boolean",
+      "description": "The «Send the next ones without asking» checkbox (BV-210). When true, the program sends the problem list directly instead of asking. Off by default; the person can untick it at any time."
+    },
     "connect_offer_declined_at": {
       "type": "string",
       "format": "date-time",

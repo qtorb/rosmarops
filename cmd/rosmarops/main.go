@@ -66,6 +66,7 @@ func newRootCmd() *cli.Command {
 			newBaselineCmd(),   // cmd_baseline.go — skips integrity check
 			newStatusCmd(),     // cmd_status.go
 			newFindingsCmd(),   // cmd_findings.go — «No me afecta» (BV-184)
+			newProblemsCmd(),   // cmd_problems_cli.go — «problems ask» (BV-210, CTO-32 C4)
 			newAllowCmd(),      // stub → M4
 			newScheduleCmd(),   // stub → M8
 			newKitCmd(),        // cmd_kit.go
