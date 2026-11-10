@@ -60,7 +60,7 @@
         <uap:DefaultTile ShortName="RosmarOps" />
       </uap:VisualElements>
       <Extensions>
-        <uap3:Extension Category="windows.appExecutionAlias">
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="rosmarops.exe" EntryPoint="Windows.FullTrustApplication">
           <uap3:AppExecutionAlias>
             <desktop:ExecutionAlias Alias="rosmarops.exe" />
           </uap3:AppExecutionAlias>
