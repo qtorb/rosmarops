@@ -372,7 +372,7 @@ func (c *htmlCtx) renderProblemsNote() {
 	if c.v.ProblemsSentThisRun > 0 {
 		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.sent", map[string]string{"n": strconv.Itoa(c.v.ProblemsSentThisRun)}))
 	}
-	if c.v.ProblemsUnsent > 0 {
+	if c.v.ProblemsUnsent > 0 && !c.v.ProblemsWillAsk {
 		c.w(`<p class="problems-note">%s</p>`, c.t("report.problems.unsent", map[string]string{"n": strconv.Itoa(c.v.ProblemsUnsent)}))
 	}
 }

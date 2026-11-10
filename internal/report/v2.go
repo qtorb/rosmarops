@@ -124,6 +124,11 @@ type V2 struct {
 	// checkbox sent this run (BV-210 §2): shown as a one-line note. Set by the
 	// command; not in the JSON.
 	ProblemsSentThisRun int `json:"-"`
+	// ProblemsWillAsk is true when this run will still ask the person about the
+	// unsent problems (Window A, after the report opens): the «unsent» note is
+	// then suppressed so it does not say «we'll ask you next time» while the
+	// program is about to ask now (BV-211d). Set by the command; not in the JSON.
+	ProblemsWillAsk bool `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;

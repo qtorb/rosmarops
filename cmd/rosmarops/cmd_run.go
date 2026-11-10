@@ -297,10 +297,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// §2 B: with someone present and the checkbox off, ask before the new
 		// review. With the checkbox on, the pre-report send below sends it.
 		if presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking {
+			// offerProblems sets problemsAskedThisRun only when it really asks
+			// (CTO-33, one question per session). BV-211d: it is no longer set
+			// unconditionally here — a Window B that could not be shown must not
+			// suppress Window A for a problem recorded later this run.
 			offerProblems(dataDir, lang, version, true, true, &st, stPath, time.Now())
-			// CTO-33: Window B has asked this run, so the after-report step does
-			// not ask again — one problems question per session.
-			problemsAskedThisRun = true
 		}
 	}
 
@@ -978,6 +979,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if left, lerr := problems.New(dataDir).Unsent(problems.MaxPerSend); lerr == nil {
 		v2.ProblemsUnsent = len(left)
 	}
+	// BV-211d: when someone is present, the checkbox is off and this run has not
+	// already asked (Window B), the after-report step will show Window A for the
+	// unsent problems. In that case the report must not print the «we'll ask you
+	// next time» note — the program is about to ask now. The note stays only when
+	// the program truly cannot ask: no one present, or the ask was already made
+	// and declined this run.
+	v2.ProblemsWillAsk = presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking && !problemsAskedThisRun
 
 	// Write report files.
 	progress.line("console.progress.report", nil)

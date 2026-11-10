@@ -278,7 +278,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	if v.ProblemsSentThisRun > 0 {
 		w("%s\n\n", t("report.problems.sent", map[string]string{"n": strconv.Itoa(v.ProblemsSentThisRun)}))
 	}
-	if v.ProblemsUnsent > 0 {
+	if v.ProblemsUnsent > 0 && !v.ProblemsWillAsk {
 		w("%s\n\n", t("report.problems.unsent", map[string]string{"n": strconv.Itoa(v.ProblemsUnsent)}))
 	}
 	// BV-148: when the agent knowledge was last reviewed, and the same stale
