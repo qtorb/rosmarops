@@ -139,9 +139,30 @@ jobs:
             $src.Dispose(); $ico.Dispose()
 
             # Manifest with this version and architecture filled in.
+            $manifestPath = Join-Path $stage 'AppxManifest.xml'
             (Get-Content packaging/msix/AppxManifest.xml -Raw).
               Replace('@VERSION@', $env:PKGVERSION).Replace('@ARCH@', $arch) |
-              Set-Content (Join-Path $stage 'AppxManifest.xml') -NoNewline
+              Set-Content $manifestPath -NoNewline
+
+            # Validate the manifest before packaging (BV-209): it must be
+            # well-formed XML, carry no leftover @...@ placeholder, and declare
+            # the execution alias with the desktop-namespace ExecutionAlias that
+            # a full-trust app needs (the uap3 one is rejected by MakeAppx). This
+            # catches a bad manifest with a clear message before MakeAppx runs.
+            $raw = Get-Content $manifestPath -Raw
+            if ($raw -match '@[A-Z]+@') { throw "manifest still has a placeholder: $($Matches[0])" }
+            [xml]$doc = $raw   # throws on malformed XML
+            $ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+            $ns.AddNamespace('uap3', 'http://schemas.microsoft.com/appx/manifest/uap/windows10/3')
+            $ns.AddNamespace('desktop', 'http://schemas.microsoft.com/appx/manifest/desktop/windows10')
+            $alias = $doc.SelectSingleNode('//uap3:AppExecutionAlias/desktop:ExecutionAlias', $ns)
+            if (-not $alias -or $alias.Alias -ne 'rosmarops.exe') {
+              throw "manifest must declare <desktop:ExecutionAlias Alias='rosmarops.exe'> inside uap3:AppExecutionAlias"
+            }
+            $id = $doc.Package.Identity
+            if ($id.ProcessorArchitecture -ne $arch) { throw "manifest ProcessorArchitecture is '$($id.ProcessorArchitecture)', want '$arch'" }
+            if ($id.Version -ne $env:PKGVERSION) { throw "manifest Version is '$($id.Version)', want '$env:PKGVERSION'" }
+            Write-Output "manifest validated for $arch ($($id.Name) $($id.Version))"
 
             $unsigned = "dist/msix/rosmarops-$env:VERSION-$arch.msix"
             & $env:MAKEAPPX pack /o /d $stage /p $unsigned
