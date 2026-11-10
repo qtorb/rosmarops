@@ -1,33 +1,28 @@
-# msix (BV-209): build the Microsoft Store MSIX packages of a released version,
-# by hand only (Run workflow). It NEVER touches release.yml, the GitHub release
-# or winget, and it uploads nothing to Partner Center — Albert does that. It
-# builds, from the released tag's source, an x64 and an arm64 package, each in
-# two forms:
-#   - rosmarops-<version>-<arch>.msix          unsigned, to upload to the Store
-#                                              (Microsoft re-signs it on
-#                                              certification);
+# msix (BV-209): build the Microsoft Store MSIX packages of a released version.
+# It NEVER touches release.yml, the GitHub release or winget, and it uploads
+# nothing to Partner Center — Albert does that. Two triggers:
+#   - workflow_dispatch (from master only): the Store build. The exe is built
+#     from the released tag's source (a second checkout of refs/tags/v<version>),
+#     with the same recipe as release.yml, and its x64 SHA-256 is checked against
+#     the release's SHA256SUMS.txt before packaging.
+#   - pull_request (packaging paths): a review build from the PR branch, so a
+#     reviewer and Albert can sideload the test package before merge.
+# Both forms, per architecture (x64 and arm64):
+#   - rosmarops-<version>-<arch>.msix          unsigned, to upload to the Store;
 #   - rosmarops-<version>-<arch>-test.msix     signed with a self-signed test
-#     + rosmarops-<version>-<arch>-test.cer    certificate generated in this job
-#                                              (never stored in the repo), to
-#                                              sideload on a real Windows machine.
+#     + rosmarops-<version>-<arch>-test.cer    certificate made in the job (never
+#                                              stored in the repo), to sideload.
 # MakeAppx and SignTool come from the Windows SDK already on windows-latest; no
-# third-party tool is installed. The exes are built like release.yml (CGO off,
-# -trimpath, the winres icon/version .syso per arch), so the packaged graph is
-# the same as the standalone exe's.
+# third-party tool is installed and no secret is used.
 name: msix
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Released version to package, e.g. 0.11.0 (its tag v0.11.0 must exist)"
+        description: "Released version to package, e.g. 0.11.0 (its tag v0.11.0 must exist). Run from master only."
         required: true
         type: string
-  # On a PR that changes the packaging, build the review artifact (both arches,
-  # unsigned + test-signed) so a reviewer and Albert can download and sideload
-  # it before merge. It uploads nothing to the Store and uses no secret. A PR
-  # run has no version input, so it packages as the current release version
-  # (REVIEW_VERSION below) — the number only names the sideload package.
   pull_request:
     paths:
       - "packaging/msix/**"
@@ -43,22 +38,26 @@ jobs:
       contents: read
     env:
       # On a manual run, the version input; on a PR run (no input), the current
-      # release version, used only to name the review package.
+      # release version, used to name the review package and to pick the tag the
+      # reproducibility check builds from.
       VERSION: ${{ inputs.version || '0.11.0' }}
+      GOTOOLCHAIN: local
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check the version
+      - name: Check the request (version; dispatch only from master)
         shell: pwsh
         run: |
           if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
             throw "version must be X.Y.Z, got '$env:VERSION'"
           }
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch' -and '${{ github.ref }}' -ne 'refs/heads/master') {
+            throw "Run the Store build (workflow_dispatch) from master only, got '${{ github.ref }}'."
+          }
           "PKGVERSION=$env:VERSION.0" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      # Built from the ref this workflow is dispatched on: the branch while the
-      # PR is in review, or, once merged, the release tag that carries this
-      # packaging code and the version's program. `version` only names the
-      # package and its files. The exe is built here, so the packaged program is
-      # this source's, byte-for-byte the same build recipe as release.yml.
+      # Primary checkout: the ref the workflow runs on (master on dispatch, the
+      # PR branch on a PR). It carries the manifest, the Store icon source and
+      # the winres tool used for every .syso.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -67,6 +66,14 @@ jobs:
         with:
           go-version: "1.27.3"
           cache: false
+
+      # The released tag's source, for the reproducibility check and (on a Store
+      # build) the packaged exe. Pinned action, no persisted credentials.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/v${{ env.VERSION }}
+          path: src
+          persist-credentials: false
 
       - name: Locate the Windows SDK tools (MakeAppx, SignTool)
         shell: pwsh
@@ -83,17 +90,51 @@ jobs:
           if (-not $signtool) { throw "signtool.exe not found under $root" }
           "MAKEAPPX=$($makeappx.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           "SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Output "MakeAppx: $($makeappx.FullName)"
-          Write-Output "SignTool: $($signtool.FullName)"
+
+      - name: Reproducible build — x64 matches the released rosmarops.exe
+        # Build x64 from the released tag's source with the same recipe as
+        # release.yml (CGO off, -trimpath, -ldflags "-X main.version=...", the
+        # winres amd64 resource) and the same Go, then compare its SHA-256 with
+        # rosmarops.exe in the release's SHA256SUMS.txt. The comparison is exact:
+        # a mismatch fails the build and prints both hashes.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go run ./tools/winres -version $env:VERSION -ico src/assets/windows/rosmarops.ico -out src/cmd/rosmarops/rsrc_windows_amd64.syso
+          if ($LASTEXITCODE -ne 0) { throw "winres (amd64) failed" }
+          Push-Location src
+          $env:GOOS = 'windows'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
+          go build -trimpath -ldflags="-X main.version=$env:VERSION" -o (Join-Path $env:RUNNER_TEMP 'repro-x64.exe') ./cmd/rosmarops
+          $code = $LASTEXITCODE
+          Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+          Pop-Location
+          if ($code -ne 0) { throw "go build (amd64) from the tag failed" }
+          $built = (Get-FileHash -Algorithm SHA256 (Join-Path $env:RUNNER_TEMP 'repro-x64.exe')).Hash.ToLowerInvariant()
+          gh release download "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --pattern SHA256SUMS.txt --dir $env:RUNNER_TEMP
+          $m = Get-Content (Join-Path $env:RUNNER_TEMP 'SHA256SUMS.txt') |
+            Select-String -Pattern '([0-9a-fA-F]{64})\s+\*?rosmarops\.exe$'
+          if (-not $m) { throw "no rosmarops.exe line in the release SHA256SUMS.txt" }
+          $released = $m.Matches[0].Groups[1].Value.ToLowerInvariant()
+          Write-Output "built    x64 rosmarops.exe SHA-256: $built"
+          Write-Output "released     rosmarops.exe SHA-256: $released"
+          "x64 rosmarops.exe built=$built released=$released" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          if ($built -ne $released) {
+            throw "x64 build does not reproduce the released rosmarops.exe (built $built, released $released)"
+          }
+          Write-Output "x64 reproduces the release exactly."
 
       - name: Build the packages (x64 and arm64)
-        # Windows PowerShell 5.1: System.Drawing is built in here (it is not in
-        # the default pwsh 7 assembly set), for resizing the icon to the Store
-        # PNG assets.
+        # Windows PowerShell 5.1: System.Drawing is built in here (not in the
+        # default pwsh 7 assembly set), for resizing the icon to the Store PNGs.
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path dist/msix | Out-Null
+
+          # Store build (workflow_dispatch) packages the released tag's source;
+          # the PR review build packages the branch (so the test package carries
+          # the alias behaviour under review).
+          $pkgsrc = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { 'src' } else { '.' }
 
           # One self-signed test certificate for every test package. Its subject
           # must equal the manifest Publisher. The .pfx never leaves the job.
@@ -107,55 +148,55 @@ jobs:
           Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" -FilePath $pfx -Password $pwd | Out-Null
 
           foreach ($arch in @('x64', 'arm64')) {
-            $goarch = $arch   # GOARCH names match: amd64? no — map below
-            if ($arch -eq 'x64') { $goarch = 'amd64' }
-            Write-Output "=== $arch (GOARCH=$goarch) ==="
+            $goarch = if ($arch -eq 'x64') { 'amd64' } else { 'arm64' }
+            Write-Output "=== $arch (GOARCH=$goarch) from $pkgsrc ==="
 
-            # Icon + version resource for this arch, then the exe, like release.yml.
-            go run ./tools/winres -version $env:VERSION -arch $goarch
+            # Icon + version resource for this arch (winres from the primary
+            # checkout, which supports -arch), then the exe, like release.yml.
+            go run ./tools/winres -version $env:VERSION -arch $goarch -ico "$pkgsrc/assets/windows/rosmarops.ico" -out "$pkgsrc/cmd/rosmarops/rsrc_windows_$goarch.syso"
             if ($LASTEXITCODE -ne 0) { throw "winres failed for $goarch" }
-            $env:GOOS = 'windows'; $env:GOARCH = $goarch; $env:CGO_ENABLED = '0'
-            go build -trimpath -ldflags="-X main.version=$env:VERSION" -o (Join-Path $env:RUNNER_TEMP "pkg-$arch\rosmarops.exe") ./cmd/rosmarops
-            if ($LASTEXITCODE -ne 0) { throw "go build failed for $goarch" }
-            Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
-            Remove-Item cmd/rosmarops/rsrc_windows_*.syso -ErrorAction SilentlyContinue
-
             $stage = Join-Path $env:RUNNER_TEMP "pkg-$arch"
             New-Item -ItemType Directory -Force -Path (Join-Path $stage 'Assets') | Out-Null
+            Push-Location $pkgsrc
+            $env:GOOS = 'windows'; $env:GOARCH = $goarch; $env:CGO_ENABLED = '0'
+            go build -trimpath -ldflags="-X main.version=$env:VERSION" -o (Join-Path $stage 'rosmarops.exe') ./cmd/rosmarops
+            $code = $LASTEXITCODE
+            Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+            Remove-Item "cmd/rosmarops/rsrc_windows_$goarch.syso" -ErrorAction SilentlyContinue
+            Pop-Location
+            if ($code -ne 0) { throw "go build failed for $goarch" }
 
             # Store assets from the current icon, no redesign: load the .ico and
             # resize to the sizes the Store needs (System.Drawing, in the SDK).
             Add-Type -AssemblyName System.Drawing
             $ico = [System.Drawing.Icon]::new((Resolve-Path 'assets/windows/rosmarops.ico').Path, 256, 256)
-            $src = $ico.ToBitmap()
+            $bmpsrc = $ico.ToBitmap()
             foreach ($a in @(@{n='Square44x44Logo.png';s=44}, @{n='Square150x150Logo.png';s=150}, @{n='StoreLogo.png';s=50})) {
               $bmp = New-Object System.Drawing.Bitmap($a.s, $a.s)
               $g = [System.Drawing.Graphics]::FromImage($bmp)
               $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-              $g.DrawImage($src, 0, 0, $a.s, $a.s)
+              $g.DrawImage($bmpsrc, 0, 0, $a.s, $a.s)
               $bmp.Save((Join-Path $stage "Assets\$($a.n)"), [System.Drawing.Imaging.ImageFormat]::Png)
               $g.Dispose(); $bmp.Dispose()
             }
-            $src.Dispose(); $ico.Dispose()
+            $bmpsrc.Dispose(); $ico.Dispose()
 
-            # Manifest with this version and architecture filled in.
+            # Manifest (from the primary checkout) with this version and arch.
             $manifestPath = Join-Path $stage 'AppxManifest.xml'
             (Get-Content packaging/msix/AppxManifest.xml -Raw).
               Replace('@VERSION@', $env:PKGVERSION).Replace('@ARCH@', $arch) |
               Set-Content $manifestPath -NoNewline
 
-            # Validate the manifest before packaging (BV-209): it must be
-            # well-formed XML, carry no leftover @...@ placeholder, and declare
-            # the execution alias with the desktop-namespace ExecutionAlias that
-            # a full-trust app needs (the uap3 one is rejected by MakeAppx). This
-            # catches a bad manifest with a clear message before MakeAppx runs.
+            # Validate the manifest before packaging (BV-209): well-formed XML,
+            # no leftover @...@ placeholder, the desktop-namespace ExecutionAlias
+            # a full-trust app needs, and the right arch/version.
             $raw = Get-Content $manifestPath -Raw
             if ($raw -match '@[A-Z]+@') { throw "manifest still has a placeholder: $($Matches[0])" }
-            [xml]$doc = $raw   # throws on malformed XML
-            $ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
-            $ns.AddNamespace('uap3', 'http://schemas.microsoft.com/appx/manifest/uap/windows10/3')
-            $ns.AddNamespace('desktop', 'http://schemas.microsoft.com/appx/manifest/desktop/windows10')
-            $alias = $doc.SelectSingleNode('//uap3:AppExecutionAlias/desktop:ExecutionAlias', $ns)
+            [xml]$doc = $raw
+            $nsm = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+            $nsm.AddNamespace('uap3', 'http://schemas.microsoft.com/appx/manifest/uap/windows10/3')
+            $nsm.AddNamespace('desktop', 'http://schemas.microsoft.com/appx/manifest/desktop/windows10')
+            $alias = $doc.SelectSingleNode('//uap3:AppExecutionAlias/desktop:ExecutionAlias', $nsm)
             if (-not $alias -or $alias.Alias -ne 'rosmarops.exe') {
               throw "manifest must declare <desktop:ExecutionAlias Alias='rosmarops.exe'> inside uap3:AppExecutionAlias"
             }
