@@ -27,6 +27,11 @@ const MaxLines = 200
 // to 20 problems, §4/§11).
 const MaxPerSend = 20
 
+// MaxCount is the largest count problems.v1 accepts (schema maximum). A line
+// whose count is above it would fail Marshal, so Load drops it (CTO-32 N1)
+// rather than let one bad line block every send.
+const MaxCount = 10000
+
 // Entry is one notebook line: one code, part, agent and day, with a running
 // count. It carries nothing free-form (§1). Agent and HTTPStatus are omitted
 // when absent so lines without them compare and read cleanly.
@@ -82,7 +87,10 @@ func (nb *Notebook) Load() ([]Entry, error) {
 		if err := json.Unmarshal(line, &e); err != nil {
 			continue
 		}
-		if !ValidCode(e.Code) || !ValidStep(e.Step) || e.Day == "" || e.Count < 1 {
+		// The day must match the pattern pickDay writes (a real YYYY-MM-DD date)
+		// and the count must be in problems.v1's range; otherwise the line would
+		// fail Marshal and block every send. Drop it, keep the rest (CTO-32 N1).
+		if !ValidCode(e.Code) || !ValidStep(e.Step) || !validDay(e.Day) || e.Count < 1 || e.Count > MaxCount {
 			continue
 		}
 		// Defence in depth (§7): an agent that is not a known product id, or an
@@ -241,11 +249,18 @@ func (nb *Notebook) EndReview() error {
 	return nil
 }
 
+// validDay reports whether day is a real YYYY-MM-DD date, the pattern pickDay
+// writes and problems.v1 requires.
+func validDay(day string) bool {
+	_, err := time.Parse("2006-01-02", day)
+	return err == nil
+}
+
 // pickDay returns a valid YYYY-MM-DD day: the given one if it already looks
 // like a date, otherwise today's local date. This keeps a stray or empty mark
 // from producing an out-of-pattern day.
 func pickDay(day string) string {
-	if _, err := time.Parse("2006-01-02", day); err == nil {
+	if validDay(day) {
 		return day
 	}
 	return Day(time.Now())

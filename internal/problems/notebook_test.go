@@ -176,3 +176,41 @@ func TestLoadSkipsMalformedLines(t *testing.T) {
 		t.Fatalf("want 2 valid lines, got %d: %+v", len(entries), entries)
 	}
 }
+
+// TestLoadDropsBadDayOrCountKeepsGood is CTO-32 N1: a line whose day is not a
+// real date, or whose count is above the problems.v1 maximum, would fail
+// Marshal and block every send. Load drops it and keeps the good lines, so the
+// good problems still go out.
+func TestLoadDropsBadDayOrCountKeepsGood(t *testing.T) {
+	dir := t.TempDir()
+	nb := New(dir)
+	content := strings.Join([]string{
+		`{"code":"step_failed","step":"mcp","day":"2026-11-09","count":1}`,               // good
+		`{"code":"time_ran_out","step":"review","day":"2026-13-40","count":1}`,           // day is not a real date
+		`{"code":"config_unreadable","step":"agents","day":"not-a-day","count":1}`,       // day out of pattern
+		`{"code":"space_rejected","step":"space_send","day":"2026-11-09","count":10001}`, // count over the max
+		`{"code":"report_not_opened","step":"notify","day":"2026-11-09","count":2}`,      // good
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, NotebookName), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := nb.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("want only the 2 good lines, got %d: %+v", len(entries), entries)
+	}
+	// A line at exactly the maximum is kept.
+	if err := os.WriteFile(filepath.Join(dir, NotebookName),
+		[]byte(`{"code":"step_failed","step":"mcp","day":"2026-11-09","count":10000}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	unsent, err := nb.Unsent(MaxPerSend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unsent) != 1 || unsent[0].Count != MaxCount {
+		t.Fatalf("count at the maximum should survive: %+v", unsent)
+	}
+}
