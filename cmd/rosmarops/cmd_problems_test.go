@@ -82,7 +82,9 @@ func TestSubmitProblemsDeliversAndMarksSent(t *testing.T) {
 	}
 }
 
-func TestSubmitProblemsKeepsOnReject(t *testing.T) {
+// TestSubmitProblems400MarksRejected is CTO-32 N2: a terminal 400 marks the
+// sent lines rejected, so the next review does not ask about them again.
+func TestSubmitProblems400MarksRejected(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
 	withLocalProblemsServer(t, 400)
@@ -91,13 +93,50 @@ func TestSubmitProblemsKeepsOnReject(t *testing.T) {
 	if res.Delivered || res.Sent != 0 || !res.Attempted {
 		t.Fatalf("want attempted, not delivered, got %+v", res)
 	}
+	// Nothing is offered next time: the lines are rejected, not unsent.
 	left, _ := problems.New(dir).Unsent(problems.MaxPerSend)
-	if len(left) != 2 {
-		t.Fatalf("want 2 unsent kept, got %d", len(left))
+	if len(left) != 0 {
+		t.Fatalf("after a 400, the lines must not be offered again, got %d unsent", len(left))
+	}
+	// A following review tries no send: there is nothing to send.
+	next := submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
+	if next.Attempted {
+		t.Fatalf("the next review must not attempt a send, got %+v", next)
 	}
 	log := readSendsLog(t, dir)
 	if !strings.Contains(log, "bad_request rosmarops-problems.v1") {
 		t.Fatalf("sends log missing bad_request line:\n%s", log)
+	}
+}
+
+// TestSubmitProblems413MarksRejected is CTO-32 N2 for the other terminal
+// status: a 413 from the server also stops those lines being offered again.
+func TestSubmitProblems413MarksRejected(t *testing.T) {
+	dir := t.TempDir()
+	seedNotebook(t, dir)
+	withLocalProblemsServer(t, 413)
+
+	submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
+	left, _ := problems.New(dir).Unsent(problems.MaxPerSend)
+	if len(left) != 0 {
+		t.Fatalf("after a 413, the lines must not be offered again, got %d unsent", len(left))
+	}
+}
+
+// TestSubmitProblemsKeepsOnDeferred: a 429 (or 5xx, or a network error) is not
+// terminal — the lines stay unsent and are offered again next time.
+func TestSubmitProblemsKeepsOnDeferred(t *testing.T) {
+	dir := t.TempDir()
+	seedNotebook(t, dir)
+	withLocalProblemsServer(t, 429)
+
+	res := submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
+	if res.Delivered || res.Sent != 0 || !res.Attempted {
+		t.Fatalf("want attempted, not delivered, got %+v", res)
+	}
+	left, _ := problems.New(dir).Unsent(problems.MaxPerSend)
+	if len(left) != 2 {
+		t.Fatalf("want 2 unsent kept after 429, got %d", len(left))
 	}
 }
 

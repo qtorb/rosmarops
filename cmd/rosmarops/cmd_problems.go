@@ -74,6 +74,17 @@ func submitProblems(ctx context.Context, consent spacenet.ProblemsConsent, dataD
 	result := problemsResultFor(status, sendErr)
 	appendSendLog(logPath, now, "rosmarops-problems.v1", len(body), result)
 	if result != sendSent {
+		// A terminal server rejection (400 or 413, CTO-32 N2) means these lines
+		// will never be accepted — a schema mismatch, say. Mark them rejected so
+		// the window does not reappear with the same problems at every review.
+		// 429, 5xx and network errors stay unsent, to try again next time.
+		if result == sendBadRequest || result == sendTooLarge {
+			if _, err := nb.MarkRejected(unsent); err != nil {
+				slog.Warn("problems send: rejected but could not mark", "err", err)
+			}
+			slog.Info("problems send: server rejected; will not offer these again", "status", status)
+			return problemsSendResult{Attempted: true}
+		}
 		slog.Info("problems send: not delivered; kept for next time", "status", status)
 		return problemsSendResult{Attempted: true}
 	}

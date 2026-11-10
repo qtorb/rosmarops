@@ -43,6 +43,11 @@ type Entry struct {
 	Day        string `json:"day"`
 	Count      int    `json:"count"`
 	Sent       bool   `json:"sent"`
+	// Rejected marks a line the server refused with a terminal status (400 or
+	// 413, CTO-32 N2). Like Sent, it is never offered or sent again, so a
+	// schema mismatch cannot make the window reappear with the same problems
+	// at every review. Omitted when false so older notebooks read unchanged.
+	Rejected bool `json:"rejected,omitempty"`
 }
 
 // key is the aggregation key: a repeated (code, step, agent, http_status, day)
@@ -186,7 +191,7 @@ func (nb *Notebook) Unsent(max int) ([]Entry, error) {
 	}
 	var out []Entry
 	for _, e := range entries {
-		if !e.Sent {
+		if !e.Sent && !e.Rejected {
 			out = append(out, e)
 			if max > 0 && len(out) >= max {
 				break
@@ -210,8 +215,38 @@ func (nb *Notebook) MarkSent(sent []Entry) (int, error) {
 	n := 0
 	for _, s := range sent {
 		for i := range entries {
-			if !entries[i].Sent && entries[i].key() == s.key() {
+			if !entries[i].Sent && !entries[i].Rejected && entries[i].key() == s.key() {
 				entries[i].Sent = true
+				n++
+				break
+			}
+		}
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	return n, nb.save(entries)
+}
+
+// MarkRejected marks the lines matching the given keys as rejected and
+// persists (CTO-32 N2). A rejected line, like a sent one, is never offered or
+// sent again: a server that refused the report with a terminal status (400 or
+// 413) would refuse the same lines every time. A key matches the first still
+// open (unsent, not rejected) line with the same (code, step, agent,
+// http_status, day). Returns the number marked.
+func (nb *Notebook) MarkRejected(rejected []Entry) (int, error) {
+	if len(rejected) == 0 {
+		return 0, nil
+	}
+	entries, err := nb.Load()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rejected {
+		for i := range entries {
+			if !entries[i].Sent && !entries[i].Rejected && entries[i].key() == r.key() {
+				entries[i].Rejected = true
 				n++
 				break
 			}
@@ -268,7 +303,7 @@ func pickDay(day string) string {
 
 func findUnsent(entries []Entry, key Entry) int {
 	for i := range entries {
-		if !entries[i].Sent && entries[i].key() == key {
+		if !entries[i].Sent && !entries[i].Rejected && entries[i].key() == key {
 			return i
 		}
 	}
