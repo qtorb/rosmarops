@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -104,6 +105,9 @@ func runNoArgs() int {
 		fmt.Println(cat.Text("console.report_opened", nil))
 	} else {
 		fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
+		// BV-210: the report could not be opened for the person (§1). The HTML
+		// pages live in the reports root, so the notebook is in its data dir.
+		recordProblems(report.DataDir(filepath.Dir(absPath(htmlPath))), problems.Entry{Code: problems.ReportNotOpened, Step: problems.StepNotify, Day: today(time.Now())})
 	}
 
 	// BV-158 part 4 (decision A): after the report opens, offer to connect when

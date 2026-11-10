@@ -1,0 +1,111 @@
+// Package problems is the local problem notebook (BV-210, telemetría pasiva).
+// It records, on the machine and never leaving it on its own, a closed list of
+// anomaly codes RosmarOps ran into during a review — never paths, file or
+// folder names, the user or computer name, file contents, keys, config values,
+// the IP, or the free text of error messages (decision 2026-11-10, §1). The
+// notebook is the only thing the send path reads; sending happens only with the
+// person's permission (the «Send» button or the saved checkbox), in
+// internal/spacenet.
+//
+// Everything here is local and does no network and no I/O outside the reports
+// data directory (invariant 2): the notebook and the run mark both live next to
+// rosmarops-sends.log.
+package problems
+
+// Code is one anomaly code. The list is closed: these seven values and no
+// others (§1). Each maps to a {summary} line in the catalog for the window.
+type Code string
+
+const (
+	// RunUnfinished: at startup, the previous review had started and did not
+	// finish — it was killed, hung, or closed abruptly. Detected by the run
+	// mark (StartReview / EndReview); there is no other signal for it.
+	RunUnfinished Code = "run_unfinished"
+	// StepFailed: one part of the review failed internally and its results were
+	// discarded. Detected by RecoverStep (internal/scan/runner.go).
+	StepFailed Code = "step_failed"
+	// TimeRanOut: the review ran out of time, whole or in one project. Detected
+	// by the global timeout and per-repo scan_timeout.
+	TimeRanOut Code = "time_ran_out"
+	// OutputInvalid: a result did not pass its own format check before leaving.
+	// Detected by results.v1 validation at the send gate (since 0.10.3).
+	OutputInvalid Code = "output_invalid"
+	// SpaceRejected: the space refused a send or a connection (401, 409, 4xx,
+	// 5xx). Detected from the send result.
+	SpaceRejected Code = "space_rejected"
+	// ConfigUnreadable: an agent config file in a format RosmarOps knows could
+	// not be parsed. Detected from the graph coverage parse_error reason; only
+	// the code is recorded, never the read text (S2 of BV-202).
+	ConfigUnreadable Code = "config_unreadable"
+	// ReportNotOpened: the report could not be opened nor the notice shown.
+	// Detected in internal/notify / the notice finish.
+	ReportNotOpened Code = "report_not_opened"
+)
+
+// Codes is every valid code, in the order of §1.
+var Codes = []Code{
+	RunUnfinished, StepFailed, TimeRanOut, OutputInvalid,
+	SpaceRejected, ConfigUnreadable, ReportNotOpened,
+}
+
+var validCode = func() map[Code]bool {
+	m := make(map[Code]bool, len(Codes))
+	for _, c := range Codes {
+		m[c] = true
+	}
+	return m
+}()
+
+// ValidCode reports whether c is one of the seven codes.
+func ValidCode(c Code) bool { return validCode[c] }
+
+// Step values name the part of the review a problem belongs to. The list is
+// closed (§1): the scanner names, plus the logical steps for detections that do
+// not come from a single scanner. All match problems.v1's step pattern
+// ^[a-z0-9_]{1,40}$.
+const (
+	StepReview    = "review"     // the whole review (run_unfinished, global timeout)
+	StepAgents    = "agents"     // reading an agent's configuration (config_unreadable)
+	StepResults   = "results"    // building/validating the results package (output_invalid)
+	StepSpaceSend = "space_send" // sending to the space (space_rejected)
+	StepNotify    = "notify"     // opening the report / showing the notice (report_not_opened)
+)
+
+// scannerSteps are the scanner names used verbatim as the step for step_failed
+// and per-repo time_ran_out (they are the Step.Name values in cmd/rosmarops,
+// plus "graph" for the out-of-Run graph build).
+var scannerSteps = []string{
+	"vscode", "mcp", "credentials", "graph", "shellprofile",
+	"scheduledtasks", "avexclusions", "globals", "repos",
+}
+
+var validStep = func() map[string]bool {
+	m := map[string]bool{
+		StepReview: true, StepAgents: true, StepResults: true,
+		StepSpaceSend: true, StepNotify: true,
+	}
+	for _, s := range scannerSteps {
+		m[s] = true
+	}
+	return m
+}()
+
+// ValidStep reports whether s is one of the closed-list step tokens.
+func ValidStep(s string) bool { return validStep[s] }
+
+// ValidAgent reports whether s matches problems.v1's agent pattern
+// (^[a-z0-9-]{1,40}$): a product id such as "cline" or "claude-code". The
+// value always comes from a known product id, never from a path or free text.
+func ValidAgent(s string) bool {
+	if s == "" || len(s) > 40 {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}

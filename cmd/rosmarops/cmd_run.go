@@ -29,6 +29,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/scan/avexclusions"
@@ -243,6 +244,16 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		migrateReportsLayout(reportDir)
 	}
 	dataDir := report.DataDir(reportDir)
+
+	// BV-210: mark this review in progress so an abrupt end (killed, hung,
+	// crashed) is seen as run_unfinished next time, and learn whether the
+	// previous review did not finish. The notebook and the mark live in the
+	// reports data directory (an already-allowed path, invariant 2); nothing
+	// here leaves the machine. EndReview clears the mark on any return — only a
+	// true crash, where defers do not run, leaves it behind.
+	notebook := problems.New(dataDir)
+	prevUnfinishedDay, _ := notebook.StartReview(start)
+	defer func() { _ = notebook.EndReview() }()
 
 	// The connect offer moved to the end of the double click (BV-158 part 4,
 	// decision A): it is shown after the report opens, in runNoArgs, not here
@@ -760,6 +771,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}
 	}
 
+	// BV-210: write this review's problems to the local notebook. Nothing
+	// leaves the machine here; space_rejected and output_invalid are recorded in
+	// the send path below. The agent for a config_unreadable is taken only from
+	// the graph's agent product ids — never from a path or parser detail.
+	recordProblems(dataDir, problemsFromRun(today(start), prevUnfinishedDay, scanErrors, repoFindings, built)...)
+
 	// Build report.
 	elapsed := time.Since(start).Seconds()
 	r := report.Build(version, findings, scanErrors, 0, 0, st.ConsecutiveGreen, allowListedTotal, nil)
@@ -952,7 +969,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// The notice, last (J7, J9): agent, score and counts, or the report
 		// opened.
 		text, ok := report.NotificationText(v2, cat)
-		defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName)))
+		if !defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName))) {
+			// BV-210: neither the notice nor the report reached the person.
+			recordProblems(dataDir, problems.Entry{Code: problems.ReportNotOpened, Step: problems.StepNotify, Day: today(start)})
+		}
 		slog.Info("scheduled run finished", "status", v2.Status)
 		return htmlPath, nil
 	}

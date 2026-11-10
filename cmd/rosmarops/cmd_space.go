@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/kit"
+	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/results"
 	"github.com/qtorb/rosmarops/internal/spacenet"
@@ -265,12 +266,24 @@ func spaceSend(ctx context.Context, paths spacePaths, currentPkg string, now tim
 		// kit's key, ever leaves (CTO-15 PR5); anything else is logged skipped
 		// and never sent.
 		if !sealedPackageForKey(body, keyID) {
+			// BV-210: a result that is ours but did not pass its own results.v1
+			// check before leaving is output_invalid (§1). A file that is not our
+			// package at all is just skipped, not a problem.
+			if isOurSealedPackage(body, keyID) {
+				recordProblems(paths.reports, problems.Entry{Code: problems.OutputInvalid, Step: problems.StepResults, Day: problems.Day(now)})
+			}
 			appendSendLog(logPath, now, filepath.Base(pkg), len(body), sendSkipped)
 			continue
 		}
 		status, sendErr := sendPackage(ctx, perm, hostID, stored.SpaceCredential, body)
 		result := sendResultFor(status, sendErr)
 		appendSendLog(logPath, now, filepath.Base(pkg), len(body), result)
+		// BV-210: the space refused a send (401, 403, 409, any 4xx/5xx) — record
+		// space_rejected with the HTTP status (§1). A network error (status 0) is
+		// deferred, not a rejection, so it is not recorded here.
+		if sendErr == nil && status >= 400 {
+			recordProblems(paths.reports, problems.Entry{Code: problems.SpaceRejected, Step: problems.StepSpaceSend, HTTPStatus: status, Day: problems.Day(now)})
+		}
 		switch result {
 		case sendUnauthorized:
 			// BV-172: 401 no_credential — forget like a 409 and clear the 7-day
@@ -442,6 +455,27 @@ func sealedPackageForKey(body []byte, keyID string) bool {
 	// BV-203 point 5: nothing is sent that does not validate against the
 	// results.v1 schema — the last gate before the package leaves the machine.
 	return results.Validate(body) == nil
+}
+
+// isOurSealedPackage reports whether body is structurally one of our sealed
+// packages for keyID (size, key_id, wrapped_key, ciphertext) — the same checks
+// as sealedPackageForKey but without the results.v1 validation. It tells «ours
+// but did not validate» (output_invalid, BV-210) apart from «not our file».
+func isOurSealedPackage(body []byte, keyID string) bool {
+	if len(body) > maxPackageBytes {
+		return false
+	}
+	var p struct {
+		Header struct {
+			KeyID string `json:"key_id"`
+		} `json:"header"`
+		WrappedKey string `json:"wrapped_key"`
+		Ciphertext string `json:"ciphertext"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return false
+	}
+	return p.Header.KeyID == keyID && p.WrappedKey != "" && p.Ciphertext != ""
 }
 
 // currentPackageStatus reads the sends log for this run's package and reports
