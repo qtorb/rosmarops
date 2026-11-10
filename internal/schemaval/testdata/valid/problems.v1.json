@@ -1,0 +1,32 @@
+{
+  "format": "problems.v1",
+  "lang": "es",
+  "rosmarops_version": "0.10.3",
+  "os": "windows",
+  "os_version": "10.0.26100",
+  "arch": "amd64",
+  "problems": [
+    {
+      "code": "space_rejected",
+      "step": "space_send",
+      "http_status": 409,
+      "day": "2026-11-09",
+      "count": 3
+    },
+    {
+      "code": "config_unreadable",
+      "step": "agents",
+      "agent": "cline",
+      "day": "2026-11-09",
+      "count": 1
+    },
+    {
+      "code": "run_unfinished",
+      "step": "review",
+      "day": "2026-11-08",
+      "count": 1
+    }
+  ],
+  "comment": null,
+  "email": null
+}

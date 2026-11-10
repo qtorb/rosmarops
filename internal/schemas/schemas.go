@@ -82,6 +82,12 @@ var KitSchema []byte
 //go:embed results.v1.schema.json
 var ResultsSchema []byte
 
+// ProblemsSchema is the embedded problems.v1.schema.json schema: the problem
+// report the program sends only with the person's permission (BV-210, §11).
+//
+//go:embed problems.v1.schema.json
+var ProblemsSchema []byte
+
 // SpaceViewSchema is the embedded v2/space-view.v1.schema.json schema: the
 // content of a rosmarops-results v1 package (BV-119/BV-122, copied unchanged
 // from vigil).
