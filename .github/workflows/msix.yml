@@ -1,0 +1,150 @@
+# msix (BV-209): build the Microsoft Store MSIX packages of a released version,
+# by hand only (Run workflow). It NEVER touches release.yml, the GitHub release
+# or winget, and it uploads nothing to Partner Center — Albert does that. It
+# builds, from the released tag's source, an x64 and an arm64 package, each in
+# two forms:
+#   - rosmarops-<version>-<arch>.msix          unsigned, to upload to the Store
+#                                              (Microsoft re-signs it on
+#                                              certification);
+#   - rosmarops-<version>-<arch>-test.msix     signed with a self-signed test
+#     + rosmarops-<version>-<arch>-test.cer    certificate generated in this job
+#                                              (never stored in the repo), to
+#                                              sideload on a real Windows machine.
+# MakeAppx and SignTool come from the Windows SDK already on windows-latest; no
+# third-party tool is installed. The exes are built like release.yml (CGO off,
+# -trimpath, the winres icon/version .syso per arch), so the packaged graph is
+# the same as the standalone exe's.
+name: msix
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version to package, e.g. 0.11.0 (its tag v0.11.0 must exist)"
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: v${{ inputs.version }}
+    steps:
+      - name: Check the version and tag
+        shell: pwsh
+        run: |
+          if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "version must be X.Y.Z, got '$env:VERSION'"
+          }
+          "PKGVERSION=$env:VERSION.0" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache: false
+
+      - name: Locate the Windows SDK tools (MakeAppx, SignTool)
+        shell: pwsh
+        run: |
+          $root = 'C:\Program Files (x86)\Windows Kits\10\bin'
+          if (-not (Test-Path $root)) { throw "Windows SDK bin not found at $root" }
+          $makeappx = Get-ChildItem -Path $root -Recurse -Filter makeappx.exe |
+            Where-Object { $_.FullName -match '\\x64\\makeappx.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          $signtool = Get-ChildItem -Path $root -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\signtool.exe$' } |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $makeappx) { throw "makeappx.exe not found under $root" }
+          if (-not $signtool) { throw "signtool.exe not found under $root" }
+          "MAKEAPPX=$($makeappx.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Output "MakeAppx: $($makeappx.FullName)"
+          Write-Output "SignTool: $($signtool.FullName)"
+
+      - name: Build the packages (x64 and arm64)
+        # Windows PowerShell 5.1: System.Drawing is built in here (it is not in
+        # the default pwsh 7 assembly set), for resizing the icon to the Store
+        # PNG assets.
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path dist/msix | Out-Null
+
+          # One self-signed test certificate for every test package. Its subject
+          # must equal the manifest Publisher. The .pfx never leaves the job.
+          $publisher = 'CN=E6864926-2E32-484E-9FDB-FE93F4BF4836'
+          $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher `
+            -KeyUsage DigitalSignature -FriendlyName 'RosmarOps MSIX test' `
+            -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pwd = ConvertTo-SecureString -String ([guid]::NewGuid().ToString()) -Force -AsPlainText
+          $pfx = Join-Path $env:RUNNER_TEMP 'test.pfx'
+          Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" -FilePath $pfx -Password $pwd | Out-Null
+
+          foreach ($arch in @('x64', 'arm64')) {
+            $goarch = $arch   # GOARCH names match: amd64? no — map below
+            if ($arch -eq 'x64') { $goarch = 'amd64' }
+            Write-Output "=== $arch (GOARCH=$goarch) ==="
+
+            # Icon + version resource for this arch, then the exe, like release.yml.
+            go run ./tools/winres -version $env:VERSION -arch $goarch
+            if ($LASTEXITCODE -ne 0) { throw "winres failed for $goarch" }
+            $env:GOOS = 'windows'; $env:GOARCH = $goarch; $env:CGO_ENABLED = '0'
+            go build -trimpath -ldflags="-X main.version=$env:VERSION" -o (Join-Path $env:RUNNER_TEMP "pkg-$arch\rosmarops.exe") ./cmd/rosmarops
+            if ($LASTEXITCODE -ne 0) { throw "go build failed for $goarch" }
+            Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+            Remove-Item cmd/rosmarops/rsrc_windows_*.syso -ErrorAction SilentlyContinue
+
+            $stage = Join-Path $env:RUNNER_TEMP "pkg-$arch"
+            New-Item -ItemType Directory -Force -Path (Join-Path $stage 'Assets') | Out-Null
+
+            # Store assets from the current icon, no redesign: load the .ico and
+            # resize to the sizes the Store needs (System.Drawing, in the SDK).
+            Add-Type -AssemblyName System.Drawing
+            $ico = [System.Drawing.Icon]::new((Resolve-Path 'assets/windows/rosmarops.ico').Path, 256, 256)
+            $src = $ico.ToBitmap()
+            foreach ($a in @(@{n='Square44x44Logo.png';s=44}, @{n='Square150x150Logo.png';s=150}, @{n='StoreLogo.png';s=50})) {
+              $bmp = New-Object System.Drawing.Bitmap($a.s, $a.s)
+              $g = [System.Drawing.Graphics]::FromImage($bmp)
+              $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+              $g.DrawImage($src, 0, 0, $a.s, $a.s)
+              $bmp.Save((Join-Path $stage "Assets\$($a.n)"), [System.Drawing.Imaging.ImageFormat]::Png)
+              $g.Dispose(); $bmp.Dispose()
+            }
+            $src.Dispose(); $ico.Dispose()
+
+            # Manifest with this version and architecture filled in.
+            (Get-Content packaging/msix/AppxManifest.xml -Raw).
+              Replace('@VERSION@', $env:PKGVERSION).Replace('@ARCH@', $arch) |
+              Set-Content (Join-Path $stage 'AppxManifest.xml') -NoNewline
+
+            $unsigned = "dist/msix/rosmarops-$env:VERSION-$arch.msix"
+            & $env:MAKEAPPX pack /o /d $stage /p $unsigned
+            if ($LASTEXITCODE -ne 0) { throw "makeappx failed for $arch" }
+
+            # A signed copy for sideloading, plus the public .cer to trust it.
+            $test = "dist/msix/rosmarops-$env:VERSION-$arch-test.msix"
+            Copy-Item $unsigned $test
+            & $env:SIGNTOOL sign /fd SHA256 /a /f $pfx /p ([System.Net.NetworkCredential]::new('', $pwd).Password) $test
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed for $arch" }
+            Export-Certificate -Cert "Cert:\CurrentUser\My\$($cert.Thumbprint)" -FilePath "dist/msix/rosmarops-$env:VERSION-$arch-test.cer" | Out-Null
+          }
+
+          Get-ChildItem dist/msix | Select-Object Name, Length
+
+      - name: Upload the MSIX packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosmarops-msix-${{ env.VERSION }}
+          path: dist/msix/*
+          if-no-files-found: error
