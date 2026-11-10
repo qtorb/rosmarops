@@ -1,12 +1,15 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/problems"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -42,6 +45,58 @@ func TestComposeSummary(t *testing.T) {
 	})
 	if !strings.Contains(many, "2") {
 		t.Errorf("several summary should carry the count: %q", many)
+	}
+}
+
+// TestOneAskPerSession is CTO-33 condition 2: with Window B shown at startup
+// (the previous review did not finish) and answered «Not now», the after-report
+// step must not ask again — problemUIHook is called exactly once this run.
+func TestOneAskPerSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	stPath, err := state.StatePath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := state.DefaultState("0.11.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SendProblemsWithoutAsking = false // checkbox off: Window B and Window A both ask
+	if err := os.MkdirAll(filepath.Dir(stPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.SaveState(stPath, st); err != nil {
+		t.Fatal(err)
+	}
+	reports := filepath.Join(home, ".rosmarops", "reports")
+	dataDir := report.DataDir(reports)
+	seedNotebook(t, dataDir) // unsent problems exist, so a prompt would be shown
+
+	calls := 0
+	orig := problemUIHook
+	t.Cleanup(func() { problemUIHook = orig })
+	problemUIHook = func(problemAsk) (problemAnswer, bool) { calls++; return problemAnswer{send: false}, true } // «Not now»
+
+	problemsAskedThisRun = false
+	t.Cleanup(func() { problemsAskedThisRun = false })
+
+	// Window B asks at startup, then marks the run asked (as cmd_run.go does).
+	offerProblems(dataDir, "en", "0.11.0", true /*windowB*/, true, &st, stPath, time.Now())
+	problemsAskedThisRun = true
+
+	// After the report: must not ask again.
+	offerProblemsAfterReport(reports, "en", true)
+	if calls != 1 {
+		t.Fatalf("Window B «Not now»: problemUIHook must be called once per run, got %d", calls)
+	}
+
+	// Guard proof: without the run flag, the after-report step does ask.
+	problemsAskedThisRun = false
+	offerProblemsAfterReport(reports, "en", true)
+	if calls != 2 {
+		t.Fatalf("with no prior ask this run, the after-report step should ask, got %d", calls)
 	}
 }
 

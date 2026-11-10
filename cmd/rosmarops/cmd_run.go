@@ -256,6 +256,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// true crash, where defers do not run, leaves it behind.
 	notebook := problems.New(dataDir)
 	problemsAutoSentThisRun = 0
+	problemsAskedThisRun = false
 	// BV-210 test aid: ROSMAROPS_DEMO_PROBLEM lets Albert see the windows
 	// without touching his real config — it only writes to the problem notebook
 	// and run mark (allowed paths), never to any agent or RosmarOps config.
@@ -277,6 +278,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// review. With the checkbox on, the pre-report send below sends it.
 		if presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking {
 			offerProblems(dataDir, lang, version, true, true, &st, stPath, time.Now())
+			// CTO-33: Window B has asked this run, so the after-report step does
+			// not ask again — one problems question per session.
+			problemsAskedThisRun = true
 		}
 	}
 
