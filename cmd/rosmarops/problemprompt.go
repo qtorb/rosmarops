@@ -95,6 +95,11 @@ func offerProblems(dataDir, lang, version string, windowB, present bool, st *sta
 	if !asked {
 		return
 	}
+	// CTO-33 / BV-211d: one problems question per session — but only once we
+	// have *actually* asked. Set the flag here, when the prompt really ran, so a
+	// Window B that could not be shown (asked == false, it returned above) does
+	// not suppress Window A for a new problem recorded later this run.
+	problemsAskedThisRun = true
 
 	// Remember the checkbox regardless of this time's choice: it governs the
 	// next reviews.
