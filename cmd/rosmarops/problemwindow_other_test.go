@@ -6,7 +6,11 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/qtorb/rosmarops/internal/catalog"
 )
+
+func esCat() (catalog.Catalog, error) { return catalog.Load("es") }
 
 // TestAskProblemTerminalTimeout is CTO-32 C3: the terminal question ends as
 // «Not now» (asked, nothing to send) when there is no answer within the cap.

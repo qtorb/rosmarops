@@ -19,8 +19,6 @@ func enCat(t *testing.T) catalog.Catalog {
 	return c
 }
 
-func esCat() (catalog.Catalog, error) { return catalog.Load("es") }
-
 func TestComposeSummary(t *testing.T) {
 	cat := enCat(t)
 	one := composeSummary(cat, []problems.Entry{{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Agent: "cline", Day: "2026-11-09", Count: 1}})
