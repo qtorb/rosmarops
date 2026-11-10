@@ -132,3 +132,32 @@ func TestR2AllAssembles(t *testing.T) {
 		}
 	}
 }
+
+// TestR2AllC2ReadsConfigOf (BV-208 pt2, CTO-26 §1 eje 3 C2): in R2-todos the
+// graph carries the new reads_config_of edge from Grok Build to Claude Code and
+// to Cursor — the «loads another product's config» signal R2 (one agent) cannot
+// show. No other product reads another's config at rest today.
+func TestR2AllC2ReadsConfigOf(t *testing.T) {
+	_, g := r2AllReport(t)
+	prod := map[string]string{}
+	for _, n := range g.Nodes {
+		if n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient {
+			prod[n.ID] = n.Platform
+		}
+	}
+	got := map[string]bool{}
+	for _, e := range g.Edges {
+		if e.Type != graph.EdgeReadsConfigOf {
+			continue
+		}
+		if prod[e.From] != "grok-build" {
+			t.Errorf("reads_config_of from %q, want only grok-build", prod[e.From])
+		}
+		got[prod[e.From]+"->"+prod[e.To]] = true
+	}
+	for _, want := range []string{"grok-build->claude-code", "grok-build->cursor"} {
+		if !got[want] {
+			t.Errorf("missing reads_config_of %s", want)
+		}
+	}
+}

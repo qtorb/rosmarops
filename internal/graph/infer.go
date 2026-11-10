@@ -147,6 +147,34 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 			}
 		}
 	}
+	// BV-208 C2 (CTO-26 §1 eje 3): Grok Build reads another product's config at
+	// rest — Claude Code's settings always, and Cursor's hooks by default compat
+	// (CTO-16 Grok §4–§5, modelled in FromGrok). One reads_config_of edge from
+	// each Grok client to each Claude Code and Cursor client present.
+	var grokClients, foreignTargets []string
+	for _, n := range g.Nodes {
+		if n.Kind != KindAgent || n.Type != AgentAIClient {
+			continue
+		}
+		switch n.Platform {
+		case knowledge.GrokBuildProduct:
+			grokClients = append(grokClients, n.ID)
+		case p.claude.Product, knowledge.CursorProduct:
+			foreignTargets = append(foreignTargets, n.ID)
+		}
+	}
+	for _, from := range grokClients {
+		for _, to := range foreignTargets {
+			e := Edge{
+				ID: edgeID(EdgeReadsConfigOf, from, to), Type: EdgeReadsConfigOf, From: from, To: to,
+				Source: "grok:reads_foreign_config", Certainty: CertaintyInferred,
+				DerivedFrom: []string{from, to}, Assumptions: []string{},
+			}
+			if _, dup := edges[e.ID]; !dup {
+				edges[e.ID] = e
+			}
+		}
+	}
 	// A Claude Code hook that Cursor loads rests on Cursor's Third-Party
 	// Imports setting, on by default and not readable at rest (annex).
 	for id, e := range edges {

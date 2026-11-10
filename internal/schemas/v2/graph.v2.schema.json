@@ -248,6 +248,7 @@
         { "$ref": "#/definitions/edgeHas" },
         { "$ref": "#/definitions/edgeReaches" },
         { "$ref": "#/definitions/edgeWritesConfigOf" },
+        { "$ref": "#/definitions/edgeReadsConfigOf" },
         { "$ref": "#/definitions/edgeLoads" },
         { "$ref": "#/definitions/edgeReceives" },
         { "$ref": "#/definitions/edgeAuthenticatesTo" },
@@ -297,6 +298,23 @@
       "properties": {
         "id": { "$ref": "#/definitions/id" },
         "type": { "const": "writes_config_of" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "inferred" },
+        "derived_from": { "$ref": "#/definitions/derivedFrom" },
+        "assumptions": { "$ref": "#/definitions/assumptions" }
+      }
+    },
+
+    "edgeReadsConfigOf": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Agent to agent: a client reads another product's configuration at rest (BV-208 / CTO-26 C2, e.g. Grok Build reading Claude Code's settings or Cursor's hooks).",
+      "required": ["id", "type", "from", "to", "source", "certainty", "derived_from", "assumptions"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "reads_config_of" },
         "from": { "$ref": "#/definitions/id" },
         "to": { "$ref": "#/definitions/id" },
         "source": { "$ref": "#/definitions/sourceRef" },
