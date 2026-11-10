@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,42 +11,20 @@ import (
 	"github.com/qtorb/rosmarops/internal/problems"
 )
 
-// withLocalProblemsServer points the send seam at a local test server (standing
-// in for BA-84's endpoint until it ships) and returns the bodies it received.
+// withLocalProblemsServer stubs the send seam with the given status and records
+// the bodies it would send. It must not import net/http: the trust test
+// TestNoNetwork_OnlySpacenetImportsNetwork forbids any package but spacenet from
+// bringing in the network, test imports included. The real wire path (host-pin,
+// POST /api/v1/problems, no credential or cookie) is proved in internal/spacenet
+// and tests/trust, not here.
 func withLocalProblemsServer(t *testing.T, status int) *[][]byte {
 	t.Helper()
 	var got [][]byte
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/problems" {
-			t.Errorf("unexpected path %q", r.URL.Path)
-		}
-		if a := r.Header.Get("Authorization"); a != "" {
-			t.Errorf("problems send must carry no credential, got Authorization %q", a)
-		}
-		if len(r.Cookies()) != 0 {
-			t.Errorf("problems send must carry no cookie, got %v", r.Cookies())
-		}
-		b := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(b)
-		got = append(got, b)
-		w.WriteHeader(status)
-	}))
-	t.Cleanup(srv.Close)
-
 	orig := sendProblemsFn
 	t.Cleanup(func() { sendProblemsFn = orig })
-	sendProblemsFn = func(ctx context.Context, body []byte) (int, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, srv.URL+"/api/v1/problems", strings.NewReader(string(body)))
-		if err != nil {
-			return 0, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := srv.Client().Do(req)
-		if err != nil {
-			return 0, err
-		}
-		defer resp.Body.Close()
-		return resp.StatusCode, nil
+	sendProblemsFn = func(_ context.Context, body []byte) (int, error) {
+		got = append(got, append([]byte(nil), body...))
+		return status, nil
 	}
 	return &got
 }
@@ -67,7 +43,7 @@ func seedNotebook(t *testing.T, dir string) {
 func TestSubmitProblemsDeliversAndMarksSent(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, http.StatusNoContent)
+	bodies := withLocalProblemsServer(t, 204)
 
 	res := submitProblems(context.Background(), dir, "en", "0.10.3", nil, nil, time.Now())
 	if !res.Delivered || res.Sent != 2 {
@@ -103,7 +79,7 @@ func TestSubmitProblemsDeliversAndMarksSent(t *testing.T) {
 func TestSubmitProblemsKeepsOnReject(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	withLocalProblemsServer(t, http.StatusBadRequest)
+	withLocalProblemsServer(t, 400)
 
 	res := submitProblems(context.Background(), dir, "en", "0.10.3", nil, nil, time.Now())
 	if res.Delivered || res.Sent != 0 || !res.Attempted {

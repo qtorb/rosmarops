@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +44,7 @@ func stubProblemUI(t *testing.T, ans problemAnswer, asked bool) {
 func TestOfferProblemsCheckboxAutoSends(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, http.StatusNoContent)
+	bodies := withLocalProblemsServer(t, 204)
 	// If the UI is called, that's a bug: the checkbox means no question.
 	stubProblemUI(t, problemAnswer{}, true)
 	problemUIHook = func(problemAsk) (problemAnswer, bool) {
@@ -68,7 +67,7 @@ func TestOfferProblemsCheckboxAutoSends(t *testing.T) {
 func TestOfferProblemsNobodyPresentLeaves(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, http.StatusNoContent)
+	bodies := withLocalProblemsServer(t, 204)
 	problemUIHook = func(problemAsk) (problemAnswer, bool) {
 		t.Fatal("nobody present: must not ask")
 		return problemAnswer{}, false
@@ -90,7 +89,7 @@ func TestOfferProblemsNobodyPresentLeaves(t *testing.T) {
 func TestOfferProblemsAsksAndSends(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, http.StatusNoContent)
+	bodies := withLocalProblemsServer(t, 204)
 	stubProblemUI(t, problemAnswer{send: true, comment: "x", email: "a@b.co"}, true)
 
 	st := &state.State{}
@@ -109,7 +108,7 @@ func TestOfferProblemsAsksAndSends(t *testing.T) {
 func TestOfferProblemsNotNowLeavesButRemembers(t *testing.T) {
 	dir := t.TempDir()
 	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, http.StatusNoContent)
+	bodies := withLocalProblemsServer(t, 204)
 	stubProblemUI(t, problemAnswer{send: false, remember: true}, true)
 
 	stPath := t.TempDir() + "/state.json"
