@@ -56,6 +56,12 @@ var problemUnmarkHook = showProblemAutoSent
 // the untick box can show the count. Reset at the start of every run.
 var problemsAutoSentThisRun int
 
+// problemsAskedThisRun records that the person was already asked about problems
+// this run — set true when Window B asks at startup (cmd_run.go) — so the
+// after-report step does not ask again (CTO-33, one ask per session). Reset at
+// the start of every run.
+var problemsAskedThisRun bool
+
 // offerProblems asks whether to send the unsent problems and acts on the answer
 // (BV-210 §2, Window A/B or the terminal question). It is ask-only: the
 // automatic send when the checkbox is on happens in runWith, not here, so the
@@ -127,6 +133,11 @@ func offerProblems(dataDir, lang, version string, windowB, present bool, st *sta
 // automatic send (CTO-32 C4.1). It never fails the run.
 func offerProblemsAfterReport(reportDir, lang string, present bool) {
 	if !present {
+		return
+	}
+	// CTO-33: if Window B already asked this run, do not ask again — one
+	// problems question per session.
+	if problemsAskedThisRun {
 		return
 	}
 	dataDir := report.DataDir(reportDir)
