@@ -85,6 +85,11 @@ jobs:
         run: go vet ./...
       - name: go test (trust tests included)
         run: go test -count=1 ./...
+      # BV-211b / CTO-34 §4+§5: run the stdin-bootstrap runtime proof verbosely
+      # on this native Windows PowerShell 5.1 runner, so the measured command
+      # line and the two runtime cases appear in the log to paste in the PR.
+      - name: BV-211b window launcher proof (CTO-34 §4/§5)
+        run: go test -count=1 -v -run "TestBV211b" ./cmd/rosmarops/
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
       # BV-202 C4 (CTO-28): the candidate must be built the same way as the

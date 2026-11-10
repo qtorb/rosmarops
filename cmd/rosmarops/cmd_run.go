@@ -82,9 +82,29 @@ var (
 	}
 )
 
+// installRunLog routes slog to a fresh run log (RunLogName) and returns it, so
+// a manual «run» keeps its log in the reports directory and out of the console
+// (BV-211 §1). The log buffers until runWith attaches it to the reports dir.
+func installRunLog() *deferredLog {
+	log := &deferredLog{name: RunLogName}
+	slog.SetDefault(slog.New(slog.NewTextHandler(log, nil)))
+	return log
+}
+
 func runRun(inv cli.Invocation) error {
 	unattended := inv.Flags["unattended"] == "true"
-	htmlPath, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
+	m := runMode{unattended: unattended}
+	// BV-211 §1: a manual «run» with a console sends its slog to the run log in
+	// the reports directory (RunLogName), the same file as a double click, never
+	// to stdout or stderr — so the console shows only the catalog's progress
+	// lines, never «INFO …» mixed in. A scheduled review (unattended) keeps its
+	// own log (ScheduledLogName), set inside runWith.
+	if !unattended {
+		log := installRunLog()
+		defer log.Close()
+		m.log = log
+	}
+	htmlPath, err := runWith(inv.Flags["lang"], m)
 	if err != nil && unattended {
 		// B3 (BV-93): a scheduled review never fails in silence — a red page,
 		// a notification and the run_failed exit code. Never returns.
@@ -307,6 +327,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	ctx, cancel := newScanContext(projects)
 	defer cancel()
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
+	// BV-211 §3: refresh the repositories line once a second so its elapsed time
+	// ticks and a slow repository is explained, even while the count holds.
+	progress.start()
+	defer progress.stop()
 
 	var (
 		findings         []finding.Finding
