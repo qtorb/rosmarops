@@ -38,7 +38,6 @@
   <Resources>
     <Resource Language="en" />
     <Resource Language="es" />
-    <Resource Language="ca" />
   </Resources>
 
   <Dependencies>
