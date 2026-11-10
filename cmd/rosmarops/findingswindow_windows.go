@@ -108,10 +108,6 @@ func dismissWindowInput(c dismissWindowConfig) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-func dismissWindowArgs() []string {
-	return []string{"-NoProfile", "-NonInteractive", "-STA", "-Command", dismissWindowScript}
-}
-
 // driveDismissWindow reads the window's answer: "save" then a line of the
 // space-separated ids that are ticked (possibly empty), or "cancel" (or a
 // closed stream) for «Not now». It returns the ticked ids and whether saved.
@@ -133,18 +129,28 @@ func showDismiss(cards []report.FindingCard, cat catalog.Catalog) ([]string, boo
 	if ps == "" {
 		ps = "powershell"
 	}
-	cmd := exec.Command(ps, dismissWindowArgs()...)
+	scriptPath, cleanup, ok := windowScriptFile(dismissWindowScript)
+	if !ok {
+		slog.Info("dismiss window not shown: could not write its script")
+		recordWindowFailure()
+		return nil, false
+	}
+	defer cleanup()
+	cmd := exec.Command(ps, windowArgs(scriptPath)...)
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		recordWindowFailure()
 		return nil, false
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		recordWindowFailure()
 		return nil, false
 	}
 	if err := cmd.Start(); err != nil {
 		slog.Info("dismiss window not shown", "err", err)
+		recordWindowFailure()
 		return nil, false
 	}
 	if _, err := stdin.Write([]byte(dismissWindowInput(dismissWindowConfigFrom(cat, cards)) + "\n")); err != nil {

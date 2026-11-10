@@ -58,11 +58,6 @@ func connectWindowInput(c connectWindowConfig) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-// connectWindowArgs are powershell.exe's arguments for the window.
-func connectWindowArgs() []string {
-	return []string{"-NoProfile", "-NonInteractive", "-STA", "-Command", connectWindowScript}
-}
-
 // connectWindowScript shows the window with System.Windows.Forms and talks to
 // the program over the standard streams. The first stdin line is the base64 JSON
 // config, read with [Console]::In.ReadLine() before the window shows (as v0.7.0
@@ -403,18 +398,28 @@ func connectOffer(paths spacePaths, cat catalog.Catalog) connectResult {
 	if ps == "" {
 		ps = "powershell"
 	}
-	cmd := exec.Command(ps, connectWindowArgs()...)
+	scriptPath, cleanup, ok := windowScriptFile(connectWindowScript)
+	if !ok {
+		slog.Info("connect window not shown: could not write its script")
+		recordWindowFailure()
+		return connectNotOffered
+	}
+	defer cleanup()
+	cmd := exec.Command(ps, windowArgs(scriptPath)...)
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		recordWindowFailure()
 		return connectNotOffered
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		recordWindowFailure()
 		return connectNotOffered
 	}
 	if err := cmd.Start(); err != nil {
 		slog.Info("connect window not shown", "err", err)
+		recordWindowFailure()
 		return connectNotOffered
 	}
 	fmt.Fprintln(stdin, connectWindowInput(connectWindowConfigFrom(cat)))

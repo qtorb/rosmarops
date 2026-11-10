@@ -66,10 +66,6 @@ func problemWindowInput(c problemWindowConfig) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-func problemWindowArgs() []string {
-	return []string{"-NoProfile", "-NonInteractive", "-STA", "-Command", problemWindowScript}
-}
-
 // driveProblemWindow reads the window's answer (BV-210 §3): four lines —
 // "send" or "cancel"; remember "1"/"0"; base64 comment; base64 email. A closed
 // stream or an unexpected first line is «Not now».
@@ -111,18 +107,28 @@ func askProblem(a problemAsk) (problemAnswer, bool) {
 	if ps == "" {
 		ps = "powershell"
 	}
-	cmd := exec.Command(ps, problemWindowArgs()...)
+	scriptPath, cleanup, ok := windowScriptFile(problemWindowScript)
+	if !ok {
+		slog.Info("problem window not shown: could not write its script")
+		recordWindowFailure()
+		return problemAnswer{}, false
+	}
+	defer cleanup()
+	cmd := exec.Command(ps, windowArgs(scriptPath)...)
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		recordWindowFailure()
 		return problemAnswer{}, false
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		recordWindowFailure()
 		return problemAnswer{}, false
 	}
 	if err := cmd.Start(); err != nil {
 		slog.Info("problem window not shown", "err", err)
+		recordWindowFailure()
 		return problemAnswer{}, false
 	}
 	if _, err := stdin.Write([]byte(problemWindowInput(problemWindowConfigFrom(a)) + "\n")); err != nil {
