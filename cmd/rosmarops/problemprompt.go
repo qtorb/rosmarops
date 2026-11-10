@@ -180,10 +180,12 @@ func composeSummary(cat catalog.Catalog, unsent []problems.Entry) string {
 }
 
 // summaryOf is the one-problem summary; config_unreadable carries the agent.
+// {agent} shows the product's display name (CTO-32 N3); the value recorded and
+// sent stays the product id.
 func summaryOf(cat catalog.Catalog, e problems.Entry) string {
 	p := map[string]string{}
 	if e.Agent != "" {
-		p["agent"] = e.Agent
+		p["agent"] = problems.AgentName(e.Agent)
 	}
 	return cat.Text("problems.summary."+string(e.Code), p)
 }

@@ -126,3 +126,29 @@ func KnownAgents() []string {
 	}
 	return out
 }
+
+// agentNames is the display name shown for each known product id in the
+// window and the terminal question (CTO-32 N3). It mirrors the report's own
+// client names. Only the display changes: the value recorded and sent is
+// always the product id (ValidAgent's closed list), never this name.
+var agentNames = map[string]string{
+	knowledge.ClaudeCodeProduct:     "Claude Code",
+	knowledge.CursorProduct:         "Cursor",
+	knowledge.HermesProduct:         "Hermes Agent",
+	knowledge.CodexProduct:          "Codex",
+	knowledge.GrokBuildProduct:      "Grok Build",
+	knowledge.GitHubCopilotProduct:  "GitHub Copilot",
+	knowledge.AntigravityCLIProduct: "Antigravity CLI",
+	knowledge.GeminiCLIProduct:      "Gemini CLI",
+	knowledge.ClineProduct:          "Cline",
+}
+
+// AgentName is the product's display name for a known agent id, for the
+// {agent} slot of the prompt (CTO-32 N3). An id with no name (should not
+// happen for a valid agent) falls back to the id itself.
+func AgentName(id string) string {
+	if name, ok := agentNames[id]; ok {
+		return name
+	}
+	return id
+}

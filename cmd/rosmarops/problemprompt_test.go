@@ -22,8 +22,19 @@ func enCat(t *testing.T) catalog.Catalog {
 func TestComposeSummary(t *testing.T) {
 	cat := enCat(t)
 	one := composeSummary(cat, []problems.Entry{{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Agent: "cline", Day: "2026-11-09", Count: 1}})
-	if !strings.Contains(one, "cline") {
+	// CTO-32 N3: the summary names the agent by its product name, not its id.
+	if !strings.Contains(one, "Cline") {
 		t.Errorf("single config_unreadable summary should name the agent: %q", one)
+	}
+	// github-copilot shows as «GitHub Copilot»; the raw id never appears.
+	cop := composeSummary(cat, []problems.Entry{{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Agent: "github-copilot", Day: "2026-11-09", Count: 1}})
+	if !strings.Contains(cop, "GitHub Copilot") || strings.Contains(cop, "github-copilot") {
+		t.Errorf("config_unreadable should show the product name, not the id: %q", cop)
+	}
+	// The value that would be sent still carries the identifier, not the name.
+	sent := previewJSON("en", "0.10.3", []problems.Entry{{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Agent: "github-copilot", Day: "2026-11-09", Count: 1}})
+	if !strings.Contains(sent, `"agent": "github-copilot"`) || strings.Contains(sent, "GitHub Copilot") {
+		t.Errorf("the sent body must carry the id, not the display name: %s", sent)
 	}
 	many := composeSummary(cat, []problems.Entry{
 		{Code: problems.SpaceRejected, Step: problems.StepSpaceSend, Day: "2026-11-09", Count: 1},
