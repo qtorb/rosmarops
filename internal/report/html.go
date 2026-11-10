@@ -1616,20 +1616,12 @@ var glossTerms = []string{"agent", "score", "master", "auto", "env", "config", "
 // LegacyHTMLKeys are the HTML keys allowed to fall back to English (v1 §9):
 // none since the legacy section left the HTML (v2 §3, CTO-7 M5).
 var LegacyHTMLKeys = map[string]bool{
-	// BV-100: the threat-intel finding and the foot stamp; ES/CA fall back to
-	// English until the owner supplies translations.
-	"finding.package_known_malicious.title":  true,
-	"finding.package_known_malicious.why":    true,
-	"finding.package_known_malicious.action": true,
-	"report.intel_stamp":                     true,
-	// BV-107: the project-hook finding's texts; ES/CA fall back to English
-	// until the owner supplies translations (contract §5).
-	"finding.project_hook_runs_repo_script.title":       true,
-	"finding.project_hook_runs_repo_script.title.large": true,
-	"finding.project_hook_runs_repo_script.what":        true,
-	"finding.project_hook_runs_repo_script.what.large":  true,
-	"finding.project_hook_runs_repo_script.impact":      true,
-	"finding.project_hook_runs_repo_script.fix":         true,
+	// BV-100: the threat-intel foot stamp; ES/CA fall back to English until the
+	// owner supplies a translation. The package_known_malicious and
+	// project_hook_runs_repo_script finding texts, which fell back here before,
+	// are translated into Spanish since 0.11.0 (release note v0.11.0, part B),
+	// so they are no longer allowed to fall back.
+	"report.intel_stamp": true,
 	// BV-102: the macOS preview's texts; ES/CA fall back to English until
 	// the owner supplies translations (decision 2026-10-29, point 5).
 	"html.assume.scope.macos":    true,

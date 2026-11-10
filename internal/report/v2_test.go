@@ -631,6 +631,27 @@ func TestSpanishCoverage(t *testing.T) {
 	}
 }
 
+// CTO-33 / 0.11.0 part B: every finding text the HTML report renders directly
+// (its heroes and titles, HTMLFindingKeys) must be in es, so no finding shows
+// in English in the Spanish report — unless it is a sanctioned English
+// fall-back listed in LegacyHTMLKeys (today, only the mcp_external_action
+// texts, which the owner keeps in English for now). This is the test that
+// catches an untranslated HTML finding key; package_known_malicious and
+// project_hook_runs_repo_script are translated since 0.11.0, so they must no
+// longer be allowed to fall back.
+func TestSpanishHTMLFindingCoverage(t *testing.T) {
+	es, err := catalog.Load("es")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range report.HTMLFindingKeys() {
+		if es.HasOwn(k) || report.LegacyHTMLKeys[k] {
+			continue
+		}
+		t.Errorf("the Spanish HTML report would show %s in English: add it to es.json or allow it in LegacyHTMLKeys", k)
+	}
+}
+
 // A graph with agents and no finding gives a valid report (findings: []).
 func TestBuildV2_NoFindingIsValid(t *testing.T) {
 	g := v2GraphWith(t, nil, nil)
