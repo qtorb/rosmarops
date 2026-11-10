@@ -338,7 +338,6 @@ $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
 $form.BackColor = $cWhite
-$form.ClientSize = New-Object System.Drawing.Size(460,300)
 $form.Font = $fBody
 try { if ($cfg.icon -and (Test-Path $cfg.icon)) { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon) } } catch {}
 
@@ -347,7 +346,7 @@ $title.Text = $cfg.title
 $title.Font = $fTitle
 $title.ForeColor = $cInk
 $title.AutoSize = $false
-$title.SetBounds(24,20,412,28)
+$title.SetBounds(24,0,412,28)
 $form.Controls.Add($title)
 
 $text = New-Object System.Windows.Forms.Label
@@ -355,61 +354,64 @@ $text.Text = $cfg.text
 $text.Font = $fBody
 $text.ForeColor = $cInk
 $text.AutoSize = $false
-$text.SetBounds(24,52,412,70)
+$text.SetBounds(24,0,412,70)
 $form.Controls.Add($text)
 
 $see = New-Object System.Windows.Forms.LinkLabel
 $see.Text = $cfg.see
-$see.SetBounds(24,124,412,20)
+$see.SetBounds(24,0,412,20)
 $form.Controls.Add($see)
 
+# BV-211 §4: one line per field, monospaced, vertical scroll. Go's indented
+# JSON uses LF; a WinForms TextBox needs its Lines set so each field shows on
+# its own line instead of a single strip.
 $preview = New-Object System.Windows.Forms.TextBox
 $preview.Multiline = $true
 $preview.ReadOnly = $true
+$preview.WordWrap = $false
 $preview.ScrollBars = 'Vertical'
 $preview.Font = $fMono
 $preview.BackColor = $cPaper
-$preview.Text = $cfg.preview
-$preview.SetBounds(24,148,412,96)
+$preview.Lines = [regex]::Split($cfg.preview, "\r?\n")
+$preview.SetBounds(24,0,412,120)
 $preview.Visible = $false
 $form.Controls.Add($preview)
-$see.Add_LinkClicked({ $preview.Visible = -not $preview.Visible })
 
 $fold = New-Object System.Windows.Forms.LinkLabel
 $fold.Text = $cfg.fold
-$fold.SetBounds(24,148,412,20)
+$fold.SetBounds(24,0,412,20)
 $form.Controls.Add($fold)
 
 $commentLbl = New-Object System.Windows.Forms.Label
 $commentLbl.Text = $cfg.comment_q
 $commentLbl.AutoSize = $false
-$commentLbl.SetBounds(24,172,412,18)
+$commentLbl.SetBounds(24,0,412,18)
 $commentLbl.Visible = $false
 $form.Controls.Add($commentLbl)
 
 $comment = New-Object System.Windows.Forms.TextBox
 $comment.Multiline = $true
 $comment.ScrollBars = 'Vertical'
-$comment.SetBounds(24,192,412,44)
+$comment.SetBounds(24,0,412,44)
 $comment.Visible = $false
 $form.Controls.Add($comment)
 
 $emailLbl = New-Object System.Windows.Forms.Label
 $emailLbl.Text = $cfg.email_q
 $emailLbl.AutoSize = $false
-$emailLbl.SetBounds(24,240,412,18)
+$emailLbl.SetBounds(24,0,412,18)
 $emailLbl.Visible = $false
 $form.Controls.Add($emailLbl)
 
 $email = New-Object System.Windows.Forms.TextBox
-$email.SetBounds(24,260,412,24)
+$email.SetBounds(24,0,412,24)
 $email.Visible = $false
 $form.Controls.Add($email)
 
 $remember = New-Object System.Windows.Forms.CheckBox
 $remember.Text = $cfg.remember
 $remember.AutoSize = $true
-$remember.SetBounds(24,296,412,22)
+$remember.SetBounds(24,0,412,22)
 $form.Controls.Add($remember)
 
 $send = New-Object System.Windows.Forms.Button
@@ -418,7 +420,7 @@ $send.BackColor = $cCobalt
 $send.ForeColor = $cWhite
 $send.FlatStyle = 'Flat'
 $send.FlatAppearance.BorderSize = 0
-$send.SetBounds(236,330,100,32)
+$send.SetBounds(236,0,100,32)
 $form.Controls.Add($send)
 
 $no = New-Object System.Windows.Forms.Button
@@ -427,8 +429,30 @@ $no.BackColor = $cWhite
 $no.ForeColor = $cInk
 $no.FlatStyle = 'Flat'
 $no.FlatAppearance.BorderColor = $cBorder
-$no.SetBounds(120,330,110,32)
+$no.SetBounds(120,0,110,32)
 $form.Controls.Add($no)
+
+# BV-211 §4: lay the window out to fit what is visible, with no white gap when
+# the folds are closed, and grow it when one opens.
+function Relayout {
+  $y = 20
+  $title.Top = $y; $y += 36
+  $text.Top = $y; $y += 74
+  $see.Top = $y; $y += 24
+  if ($preview.Visible) { $preview.Top = $y; $y += $preview.Height + 10 }
+  $fold.Top = $y; $y += 26
+  if ($comment.Visible) {
+    $commentLbl.Top = $y; $y += 20
+    $comment.Top = $y; $y += $comment.Height + 8
+    $emailLbl.Top = $y; $y += 20
+    $email.Top = $y; $y += $email.Height + 10
+  }
+  $remember.Top = $y; $y += 32
+  $send.Top = $y; $no.Top = $y; $y += 32 + 20
+  $form.ClientSize = New-Object System.Drawing.Size(460, $y)
+}
+
+$see.Add_LinkClicked({ $preview.Visible = -not $preview.Visible; Relayout })
 
 $foldState = $false
 $fold.Add_LinkClicked({
@@ -437,9 +461,10 @@ $fold.Add_LinkClicked({
   $comment.Visible = $script:foldState
   $emailLbl.Visible = $script:foldState
   $email.Visible = $script:foldState
+  Relayout
 })
 
-$form.ClientSize = New-Object System.Drawing.Size(460,374)
+Relayout
 $script:decision = 'cancel'
 $send.Add_Click({ $script:decision = 'send'; $form.Close() })
 $no.Add_Click({ $script:decision = 'cancel'; $form.Close() })

@@ -52,7 +52,7 @@ var staticKeys = []string{
 	"report.testdata.one", "report.testdata.other", "report.testdata.entry",
 	"report.silenced.expired.one", "report.silenced.expired.other",
 	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent", "memory.new_mcp", "memory.mcp_changed",
-	"console.progress.agents", "console.progress.repos", "console.progress.report",
+	"console.progress.agents", "console.progress.repos", "console.progress.repos_slow", "console.progress.report",
 	"console.config_changed", "console.config_change.rotated", "console.config_change.fixture", "console.config_change.other",
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification

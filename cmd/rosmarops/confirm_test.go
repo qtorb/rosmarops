@@ -133,9 +133,11 @@ func TestProgress(t *testing.T) {
 		p.repos(i, 5)
 	}
 	p.line("console.progress.report", nil)
+	// BV-211 §3: the repositories line now carries the elapsed time; these
+	// calls are instant, so it is 0:00.
 	want := cat.Text("console.progress.agents", nil) + "\n" +
-		cat.Text("console.progress.repos", map[string]string{"done": "0", "total": "5"}) + "\n" +
-		cat.Text("console.progress.repos", map[string]string{"done": "5", "total": "5"}) + "\n" +
+		cat.Text("console.progress.repos", map[string]string{"done": "0", "total": "5", "elapsed": "0:00"}) + "\n" +
+		cat.Text("console.progress.repos", map[string]string{"done": "5", "total": "5", "elapsed": "0:00"}) + "\n" +
 		cat.Text("console.progress.report", nil) + "\n"
 	if out.String() != want {
 		t.Errorf("no console:\n%q\nwant\n%q", out.String(), want)
@@ -153,8 +155,8 @@ func TestProgress(t *testing.T) {
 	clock = clock.Add(10 * time.Millisecond)
 	p.repos(3, 3) // the last: always
 	got := out.String()
-	if strings.Contains(got, "1/3") || !strings.Contains(got, "\r"+cat.Text("console.progress.repos", map[string]string{"done": "2", "total": "3"})) ||
-		!strings.HasSuffix(got, "\r"+cat.Text("console.progress.repos", map[string]string{"done": "3", "total": "3"})+"\n") {
+	if strings.Contains(got, "1/3") || !strings.Contains(got, "\r"+cat.Text("console.progress.repos", map[string]string{"done": "2", "total": "3", "elapsed": "0:00"})) ||
+		!strings.HasSuffix(got, "\r"+cat.Text("console.progress.repos", map[string]string{"done": "3", "total": "3", "elapsed": "0:00"})+"\n") {
 		t.Errorf("console: %q", got)
 	}
 }

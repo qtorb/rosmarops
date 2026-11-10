@@ -46,6 +46,10 @@ func runNoArgs() int {
 	log := &deferredLog{name: RunLogName}
 	defer log.Close()
 	slog.SetDefault(slog.New(slog.NewTextHandler(log, nil)))
+	// BV-211 §2: a double click gets its own console; turn off QuickEdit so a
+	// click does not freeze the run in «Select» mode, and restore the original
+	// mode on exit. A console inherited from PowerShell or cmd is left untouched.
+	defer disableQuickEdit()()
 	fail := func(err error) int {
 		slog.Error("run failed", "err", err)
 		dir, dirErr := report.DefaultReportDir()
