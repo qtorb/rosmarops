@@ -123,6 +123,29 @@ func mcpExternalKeys() []string {
 	return keys
 }
 
+// HTMLFindingKeys are the finding.* catalog codes the HTML report renders
+// directly (its bespoke heroes and titles), rather than through the html.f.*
+// keys the generic rows use (TestSpanishCoverage covers those). These are the
+// finding texts a reader sees in the HTML, so a Spanish report must have each
+// one in es.json unless it is a sanctioned English fall-back
+// (LegacyHTMLKeys). Kept in step with htmlCtx.titleText / impactText /
+// renderStep2.
+func HTMLFindingKeys() []string {
+	pk := "finding." + rules.RulePackageKnownMalicious
+	ph := "finding." + rules.RuleProjectHookRunsRepoScript
+	nb := "finding." + rules.RuleN8NMCPBridge
+	nk := "finding." + rules.RuleN8NKeyWithData
+	cu := "finding." + rules.RuleComputerUseAppAllowed
+	keys := []string{
+		pk + ".title", pk + ".why", pk + ".action",
+		ph + ".title", ph + ".title.large", ph + ".what", ph + ".what.large", ph + ".impact", ph + ".fix",
+		nb + ".title", nb + ".what", nb + ".step1", nb + ".step2",
+		nk + ".title", nk + ".what", nk + ".step1",
+		cu + ".red", cu + ".yellow",
+	}
+	return append(keys, mcpExternalKeys()...)
+}
+
 // CatalogKeys returns every code the v2 Markdown and the run's console
 // summary can emit, sorted.
 func CatalogKeys() []string {
