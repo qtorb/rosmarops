@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,7 +152,68 @@ func askProblem(a problemAsk) (problemAnswer, bool) {
 	return out.ans, out.asked
 }
 
-// showProblemOutcome shows the «Sent»/«couldn't be sent» message after the send.
+// problemBoxConfig is a small message box: a body, a primary button and an
+// optional secondary one. It closes itself after 60 seconds as the primary
+// button (CTO-32 C3), so it never waits without a tope.
+type problemBoxConfig struct {
+	Body      string `json:"body"`
+	Primary   string `json:"primary"`
+	Secondary string `json:"secondary"` // empty for a one-button box
+	Icon      string `json:"icon"`
+}
+
+// runProblemBox shows the box and returns whether the secondary button was
+// clicked. A failure, a timeout, or the primary button all return false.
+func runProblemBox(cfg problemBoxConfig) bool {
+	ps := winpath.PowerShellExe()
+	if ps == "" {
+		ps = "powershell"
+	}
+	cmd := exec.Command(ps, "-NoProfile", "-NonInteractive", "-STA", "-Command", problemBoxScript)
+	cmd.Env = winpath.ChildEnv(os.Environ())
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return false
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return false
+	}
+	if err := cmd.Start(); err != nil {
+		slog.Info("problem box not shown", "err", err)
+		return false
+	}
+	b, _ := json.Marshal(cfg)
+	if _, err := stdin.Write([]byte(base64.StdEncoding.EncodeToString(b) + "\n")); err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return false
+	}
+	done := make(chan string, 1)
+	go func() {
+		r := bufio.NewReader(stdout)
+		line, _ := r.ReadString('\n')
+		done <- strings.TrimRight(line, "\r\n")
+	}()
+	var choice string
+	select {
+	case choice = <-done:
+	case <-time.After(2 * time.Minute):
+		_ = cmd.Process.Kill()
+		<-done
+	}
+	_ = stdin.Close()
+	_ = cmd.Wait()
+	return choice == "secondary"
+}
+
+func problemBoxIcon() string {
+	icon, _ := os.Executable()
+	return icon
+}
+
+// showProblemOutcome shows the «Sent»/«couldn't be sent» message after the send;
+// the box closes itself after 60 seconds (CTO-32 C3).
 func showProblemOutcome(cat catalog.Catalog, delivered bool, email string) {
 	msg := cat.Text("problems.fail", nil)
 	if delivered {
@@ -160,31 +222,87 @@ func showProblemOutcome(cat catalog.Catalog, delivered bool, email string) {
 			msg += " " + cat.Text("problems.sent.email", map[string]string{"email": email})
 		}
 	}
-	ps := winpath.PowerShellExe()
-	if ps == "" {
-		ps = "powershell"
-	}
-	cmd := exec.Command(ps, "-NoProfile", "-NonInteractive", "-STA", "-Command", problemOutcomeScript)
-	cmd.Env = winpath.ChildEnv(os.Environ())
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return
-	}
-	if err := cmd.Start(); err != nil {
-		return
-	}
-	_, _ = stdin.Write([]byte(base64.StdEncoding.EncodeToString([]byte(msg)) + "\n"))
-	_ = stdin.Close()
-	_ = cmd.Wait()
+	runProblemBox(problemBoxConfig{Body: msg, Primary: cat.Text("problems.ok", nil), Icon: problemBoxIcon()})
 }
 
-// problemOutcomeScript shows a plain message box with the base64 text on stdin.
-const problemOutcomeScript = `
+// showProblemAutoSent is the box after an automatic send with someone present
+// (CTO-32 C4.1): «We sent {n}…» with «OK» (primary) and «Ask me before sending»
+// (secondary). It returns true when the person chose to be asked again; it
+// closes itself after 60 seconds as «OK» (false).
+func showProblemAutoSent(cat catalog.Catalog, n int) bool {
+	return runProblemBox(problemBoxConfig{
+		Body:      cat.Text("problems.autosent.body", map[string]string{"n": strconv.Itoa(n)}),
+		Primary:   cat.Text("problems.ok", nil),
+		Secondary: cat.Text("problems.ask_again", nil),
+		Icon:      problemBoxIcon(),
+	})
+}
+
+// problemBoxScript draws the box from the base64 JSON config on stdin, prints
+// "primary" or "secondary" on the click, and auto-closes after 60 s as primary.
+const problemBoxScript = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
 $b64 = [Console]::In.ReadLine()
-$msg = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64))
-[void][System.Windows.Forms.MessageBox]::Show($msg, 'RosmarOps')
+$cfg = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64)) | ConvertFrom-Json
+
+$cInk    = [System.Drawing.Color]::FromArgb(17,24,39)
+$cCobalt = [System.Drawing.Color]::FromArgb(37,99,235)
+$cWhite  = [System.Drawing.Color]::White
+$cBorder = [System.Drawing.Color]::FromArgb(209,213,219)
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'RosmarOps'
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.BackColor = $cWhite
+$form.ClientSize = New-Object System.Drawing.Size(420,130)
+$form.Font = New-Object System.Drawing.Font('Segoe UI',10)
+try { if ($cfg.icon -and (Test-Path $cfg.icon)) { $form.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon) } } catch {}
+
+$label = New-Object System.Windows.Forms.Label
+$label.Text = $cfg.body
+$label.ForeColor = $cInk
+$label.AutoSize = $false
+$label.SetBounds(24,20,372,56)
+$form.Controls.Add($label)
+
+$script:choice = 'primary'
+
+$primary = New-Object System.Windows.Forms.Button
+$primary.Text = $cfg.primary
+$primary.BackColor = $cCobalt
+$primary.ForeColor = $cWhite
+$primary.FlatStyle = 'Flat'
+$primary.FlatAppearance.BorderSize = 0
+$primary.SetBounds(320,88,76,30)
+$primary.Add_Click({ $script:choice = 'primary'; $form.Close() })
+$form.Controls.Add($primary)
+$form.AcceptButton = $primary
+
+if ($cfg.secondary) {
+  $secondary = New-Object System.Windows.Forms.Button
+  $secondary.Text = $cfg.secondary
+  $secondary.BackColor = $cWhite
+  $secondary.ForeColor = $cInk
+  $secondary.FlatStyle = 'Flat'
+  $secondary.FlatAppearance.BorderColor = $cBorder
+  $secondary.SetBounds(96,88,216,30)
+  $secondary.Add_Click({ $script:choice = 'secondary'; $form.Close() })
+  $form.Controls.Add($secondary)
+}
+
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 60000
+$timer.Add_Tick({ $script:choice = 'primary'; $timer.Stop(); $form.Close() })
+$timer.Start()
+
+[void]$form.ShowDialog()
+[Console]::Out.WriteLine($script:choice)
 `
 
 // problemWindowScript is the WinForms window. It reads the base64 JSON config

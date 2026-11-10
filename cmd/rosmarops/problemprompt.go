@@ -10,6 +10,8 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/problems"
+	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -43,15 +45,29 @@ var problemUIHook = askProblem
 // so a test that answers «Send» does not pop a real window.
 var showProblemOutcomeFn = showProblemOutcome
 
-// offerProblems decides whether and how to ask about the unsent problems, then
-// acts on the answer (BV-210 §2). present is whether someone is at the machine.
-//   - Checkbox ticked → send directly, no question (A, B and C).
-//   - Nobody present (C) → never ask; leave the problems for next time.
-//   - Otherwise → ask (window A/B or terminal); on «Send», send, and remember
-//     the choice if the checkbox was ticked.
-//
-// It never fails the run. windowB selects the «last check didn't finish» text.
+// problemUnmarkHook is the seam for the «we sent {n}, keep sending or ask me
+// again?» box shown after an automatic send with someone present (CTO-32 C4.1,
+// a window on Windows; macOS/Linux has no box and returns false). It returns
+// true when the person chose «Ask me before sending». TestMain neutralizes it.
+var problemUnmarkHook = showProblemAutoSent
+
+// problemsAutoSentThisRun is how many problems the checkbox sent this run, set
+// by runWith before the report is written and read by the after-report step so
+// the untick box can show the count. Reset at the start of every run.
+var problemsAutoSentThisRun int
+
+// offerProblems asks whether to send the unsent problems and acts on the answer
+// (BV-210 §2, Window A/B or the terminal question). It is ask-only: the
+// automatic send when the checkbox is on happens in runWith, not here, so the
+// one «Send» consent lives in a single place (CTO-32 C1/C4). The caller only
+// reaches here with someone present and the checkbox off. On «Send» it sends
+// under ConsentFromSendButton and shows the outcome; «remember» ticks the
+// checkbox. It never fails the run. windowB selects the «last check didn't
+// finish» text.
 func offerProblems(dataDir, lang, version string, windowB, present bool, st *state.State, stPath string, now time.Time) {
+	if !present {
+		return
+	}
 	nb := problems.New(dataDir)
 	unsent, err := nb.Unsent(problems.MaxPerSend)
 	if err != nil || len(unsent) == 0 {
@@ -60,20 +76,6 @@ func offerProblems(dataDir, lang, version string, windowB, present bool, st *sta
 	cat, err := catalog.Load(lang)
 	if err != nil {
 		slog.Warn("problems prompt: catalog", "err", err)
-		return
-	}
-
-	// Checkbox already set: send without asking, in A, B or C.
-	if st != nil && st.SendProblemsWithoutAsking {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		submitProblems(ctx, dataDir, lang, version, nil, nil, now)
-		cancel()
-		return
-	}
-
-	// Nobody present (a scheduled review): never ask (§2 C). The report says
-	// there are unsent problems (pt5).
-	if !present {
 		return
 	}
 
@@ -108,12 +110,51 @@ func offerProblems(dataDir, lang, version string, windowB, present bool, st *sta
 		email = &ans.email
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	res := submitProblems(ctx, dataDir, lang, version, comment, email, now)
+	// CTO-32 C1: the «Send» button is the one place that calls
+	// ConsentFromSendButton (a trust test enforces it).
+	res := submitProblems(ctx, spacenet.ConsentFromSendButton(), dataDir, lang, version, comment, email, now)
 	cancel()
 
 	// Tell the person the outcome (§3: «Sent. Thank you…» / «It couldn't be
 	// sent…»), a message box on Windows and a console line elsewhere.
 	showProblemOutcomeFn(cat, res.Delivered, ans.email)
+}
+
+// offerProblemsAfterReport is the end-of-review problems step, run by the caller
+// after the report has opened (CTO-32 C3), so an unanswered window never delays
+// the report. present is whether someone is at the machine. With the checkbox
+// off it asks (Window A); with the checkbox on it offers to untick it after the
+// automatic send (CTO-32 C4.1). It never fails the run.
+func offerProblemsAfterReport(reportDir, lang string, present bool) {
+	if !present {
+		return
+	}
+	dataDir := report.DataDir(reportDir)
+	stPath, err := state.StatePath()
+	if err != nil {
+		return
+	}
+	st, err := state.LoadState(stPath)
+	if err != nil {
+		return
+	}
+	if st.SendProblemsWithoutAsking {
+		if problemsAutoSentThisRun <= 0 {
+			return
+		}
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			return
+		}
+		if problemUnmarkHook(cat, problemsAutoSentThisRun) {
+			st.SendProblemsWithoutAsking = false
+			if err := state.SaveState(stPath, st); err != nil {
+				slog.Warn("problems prompt: untick checkbox", "err", err)
+			}
+		}
+		return
+	}
+	offerProblems(dataDir, lang, version, false, true, &st, stPath, time.Now())
 }
 
 // presentForProblems reports whether someone is at the machine to be asked: an

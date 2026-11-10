@@ -13,6 +13,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/results"
+	"github.com/qtorb/rosmarops/internal/state"
 )
 
 // CTO-13 §3 test 6 (CTO-15 PR3), unit: the real Send transmits only the sealed
@@ -79,5 +80,84 @@ func TestSendTransmitsNoPlaintextMarker(t *testing.T) {
 				t.Errorf("a marker reached header %q: %q", k, v)
 			}
 		}
+	}
+}
+
+// TestSendProblems_PathAndNoCredential is CTO-32 C2(a): the problem send is a
+// POST to /api/v1/problems with no Authorization and no Cookie. It points the
+// problems client at a local server (the production host-pin is unchanged and
+// proved elsewhere) and fails if any of the four facts changes.
+func TestSendProblems_PathAndNoCredential(t *testing.T) {
+	var gotMethod, gotPath, gotAuth string
+	var gotCookies int
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		gotCookies = len(r.Cookies())
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	orig := problemsClient
+	problemsClient = func() (*http.Client, string) { return ts.Client(), ts.URL }
+	defer func() { problemsClient = orig }()
+
+	status, err := SendProblems(context.Background(), ConsentFromSendButton(), []byte(`{"format":"problems.v1"}`))
+	if err != nil || status != http.StatusNoContent {
+		t.Fatalf("send: status=%d err=%v", status, err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method = %q, want POST", gotMethod)
+	}
+	if gotPath != "/api/v1/problems" {
+		t.Errorf("path = %q, want /api/v1/problems", gotPath)
+	}
+	if gotAuth != "" {
+		t.Errorf("Authorization = %q, want none", gotAuth)
+	}
+	if gotCookies != 0 {
+		t.Errorf("cookies = %d, want 0", gotCookies)
+	}
+}
+
+// TestSendProblems_RefusesWithoutConsent is CTO-32 C1: the zero consent is
+// unusable, so SendProblems opens no connection without it.
+func TestSendProblems_RefusesWithoutConsent(t *testing.T) {
+	called := false
+	orig := problemsClient
+	problemsClient = func() (*http.Client, string) { called = true; return Client(), prodBaseURL }
+	defer func() { problemsClient = orig }()
+
+	status, err := SendProblems(context.Background(), ProblemsConsent{}, []byte(`{}`))
+	if err != ErrNoProblemsConsent || status != 0 {
+		t.Fatalf("want ErrNoProblemsConsent and status 0, got status=%d err=%v", status, err)
+	}
+	if called {
+		t.Error("the client must not be built without consent")
+	}
+}
+
+// TestConsentFromState is CTO-32 C1: consent comes only from a state whose
+// checkbox is set.
+func TestConsentFromState(t *testing.T) {
+	dir := t.TempDir()
+	stPath := dir + "/state.json"
+	st, err := state.DefaultState("1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := state.SaveState(stPath, st); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ConsentFromState(stPath); err != ErrNoProblemsConsent {
+		t.Fatalf("checkbox off: want ErrNoProblemsConsent, got %v", err)
+	}
+	st.SendProblemsWithoutAsking = true
+	if err := state.SaveState(stPath, st); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ConsentFromState(stPath); err != nil {
+		t.Fatalf("checkbox on: want consent, got %v", err)
 	}
 }

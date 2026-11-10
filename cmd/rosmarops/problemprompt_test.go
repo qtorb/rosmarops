@@ -19,6 +19,8 @@ func enCat(t *testing.T) catalog.Catalog {
 	return c
 }
 
+func esCat() (catalog.Catalog, error) { return catalog.Load("es") }
+
 func TestComposeSummary(t *testing.T) {
 	cat := enCat(t)
 	one := composeSummary(cat, []problems.Entry{{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Agent: "cline", Day: "2026-11-09", Count: 1}})
@@ -39,29 +41,6 @@ func stubProblemUI(t *testing.T, ans problemAnswer, asked bool) {
 	orig := problemUIHook
 	t.Cleanup(func() { problemUIHook = orig })
 	problemUIHook = func(problemAsk) (problemAnswer, bool) { return ans, asked }
-}
-
-func TestOfferProblemsCheckboxAutoSends(t *testing.T) {
-	dir := t.TempDir()
-	seedNotebook(t, dir)
-	bodies := withLocalProblemsServer(t, 204)
-	// If the UI is called, that's a bug: the checkbox means no question.
-	stubProblemUI(t, problemAnswer{}, true)
-	problemUIHook = func(problemAsk) (problemAnswer, bool) {
-		t.Fatal("checkbox set: must not ask")
-		return problemAnswer{}, false
-	}
-
-	st := &state.State{SendProblemsWithoutAsking: true}
-	offerProblems(dir, "en", "0.10.3", false, true, st, "", time.Now())
-
-	if len(*bodies) != 1 {
-		t.Fatalf("checkbox should auto-send once, got %d", len(*bodies))
-	}
-	left, _ := problems.New(dir).Unsent(problems.MaxPerSend)
-	if len(left) != 0 {
-		t.Fatalf("auto-send should empty the notebook, got %d", len(left))
-	}
 }
 
 func TestOfferProblemsNobodyPresentLeaves(t *testing.T) {

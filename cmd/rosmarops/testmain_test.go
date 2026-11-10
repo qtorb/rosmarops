@@ -20,5 +20,6 @@ func TestMain(m *testing.M) {
 	// tested directly through these seams.
 	problemUIHook = func(problemAsk) (problemAnswer, bool) { return problemAnswer{}, false }
 	showProblemOutcomeFn = func(catalog.Catalog, bool, string) {}
+	problemUnmarkHook = func(catalog.Catalog, int) bool { return false }
 	os.Exit(m.Run())
 }

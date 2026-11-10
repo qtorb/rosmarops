@@ -44,6 +44,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 	"github.com/qtorb/rosmarops/internal/scan/shellprofile"
 	"github.com/qtorb/rosmarops/internal/scan/vscode"
+	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -83,7 +84,7 @@ var (
 
 func runRun(inv cli.Invocation) error {
 	unattended := inv.Flags["unattended"] == "true"
-	_, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
+	htmlPath, err := runWith(inv.Flags["lang"], runMode{unattended: unattended})
 	if err != nil && unattended {
 		// B3 (BV-93): a scheduled review never fails in silence — a red page,
 		// a notification and the run_failed exit code. Never returns.
@@ -97,6 +98,8 @@ func runRun(inv cli.Invocation) error {
 				offerDismissAfterReport(inv.Flags["lang"], cfgPath, stPath, true, time.Now())
 			}
 		}
+		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
+		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
 	}
 	return err
 }
@@ -252,6 +255,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// here leaves the machine. EndReview clears the mark on any return — only a
 	// true crash, where defers do not run, leaves it behind.
 	notebook := problems.New(dataDir)
+	problemsAutoSentThisRun = 0
 	// BV-210 test aid: ROSMAROPS_DEMO_PROBLEM lets Albert see the windows
 	// without touching his real config — it only writes to the problem notebook
 	// and run mark (allowed paths), never to any agent or RosmarOps config.
@@ -267,12 +271,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// (so Window B and the report see it) and, when someone is present and the
 	// checkbox is off, ask before starting the new review. Nobody present (a
 	// scheduled review): never ask here; the checkbox auto-send below sends it.
-	askedAtStart := false
 	if prevUnfinishedDay != "" {
 		recordProblems(dataDir, problems.Entry{Code: problems.RunUnfinished, Step: problems.StepReview, Day: prevUnfinishedDay})
+		// §2 B: with someone present and the checkbox off, ask before the new
+		// review. With the checkbox on, the pre-report send below sends it.
 		if presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking {
 			offerProblems(dataDir, lang, version, true, true, &st, stPath, time.Now())
-			askedAtStart = true
 		}
 	}
 
@@ -934,8 +938,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Window A, if any, comes after the report opens.
 	if st.SendProblemsWithoutAsking {
 		pctx, pcancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		if res := submitProblems(pctx, dataDir, lang, version, nil, nil, time.Now()); res.Delivered {
-			v2.ProblemsSentThisRun = res.Sent
+		// CTO-32 C1: the consent is read from the state inside spacenet.
+		if consent, cerr := spacenet.ConsentFromState(stPath); cerr == nil {
+			if res := submitProblems(pctx, consent, dataDir, lang, version, nil, nil, time.Now()); res.Delivered {
+				v2.ProblemsSentThisRun = res.Sent
+				problemsAutoSentThisRun = res.Sent
+			}
 		}
 		pcancel()
 	}
@@ -1001,13 +1009,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// just before the summary (and, on a double click, report_opened).
 	ui.done()
 
-	// BV-210 §2 A: at the end of a review with new unsent problems, when someone
-	// is present and the checkbox is off, ask whether to send them (Window A /
-	// terminal question). Skipped when nobody is present (a scheduled review:
-	// §2 C leaves them for next time) or when B already asked this session.
-	if !askedAtStart && !st.SendProblemsWithoutAsking && presentForProblems(m, unattended) {
-		offerProblems(dataDir, lang, version, false, true, &st, stPath, time.Now())
-	}
+	// BV-210 §2 A: the end-of-review problems step (Window A, or the untick box
+	// after an automatic send) runs in the caller, AFTER the report has opened
+	// (CTO-32 C3), so an unanswered window never delays the report.
 
 	// Print summary.
 	if unattended {

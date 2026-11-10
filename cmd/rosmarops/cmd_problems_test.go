@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/problems"
+	"github.com/qtorb/rosmarops/internal/spacenet"
 )
 
 // withLocalProblemsServer stubs the send seam with the given status and records
@@ -22,12 +23,17 @@ func withLocalProblemsServer(t *testing.T, status int) *[][]byte {
 	var got [][]byte
 	orig := sendProblemsFn
 	t.Cleanup(func() { sendProblemsFn = orig })
-	sendProblemsFn = func(_ context.Context, body []byte) (int, error) {
+	sendProblemsFn = func(_ context.Context, _ spacenet.ProblemsConsent, body []byte) (int, error) {
 		got = append(got, append([]byte(nil), body...))
 		return status, nil
 	}
 	return &got
 }
+
+// testConsent is a consent value for direct submitProblems calls in tests; the
+// seam above ignores it, and the real consent discipline is tested in
+// internal/spacenet and tests/trust.
+func testConsent() spacenet.ProblemsConsent { return spacenet.ConsentFromSendButton() }
 
 func seedNotebook(t *testing.T, dir string) {
 	t.Helper()
@@ -45,7 +51,7 @@ func TestSubmitProblemsDeliversAndMarksSent(t *testing.T) {
 	seedNotebook(t, dir)
 	bodies := withLocalProblemsServer(t, 204)
 
-	res := submitProblems(context.Background(), dir, "en", "0.10.3", nil, nil, time.Now())
+	res := submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
 	if !res.Delivered || res.Sent != 2 {
 		t.Fatalf("want delivered with 2 sent, got %+v", res)
 	}
@@ -81,7 +87,7 @@ func TestSubmitProblemsKeepsOnReject(t *testing.T) {
 	seedNotebook(t, dir)
 	withLocalProblemsServer(t, 400)
 
-	res := submitProblems(context.Background(), dir, "en", "0.10.3", nil, nil, time.Now())
+	res := submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
 	if res.Delivered || res.Sent != 0 || !res.Attempted {
 		t.Fatalf("want attempted, not delivered, got %+v", res)
 	}
@@ -97,7 +103,7 @@ func TestSubmitProblemsKeepsOnReject(t *testing.T) {
 
 func TestSubmitProblemsNothingToSend(t *testing.T) {
 	dir := t.TempDir()
-	res := submitProblems(context.Background(), dir, "en", "0.10.3", nil, nil, time.Now())
+	res := submitProblems(context.Background(), testConsent(), dir, "en", "0.10.3", nil, nil, time.Now())
 	if res.Attempted || res.Delivered || res.Sent != 0 {
 		t.Fatalf("empty notebook: want no attempt, got %+v", res)
 	}

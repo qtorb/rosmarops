@@ -13,8 +13,9 @@ import (
 
 // sendProblemsFn is the network seam for the problem report send (BV-210 §4):
 // production is spacenet.SendProblems (host-pinned to app.rosmarops.com:443,
-// POST /api/v1/problems, no account, credential or cookie); tests point it at a
-// local server. It is the only way this package reaches the problems endpoint.
+// POST /api/v1/problems, no account, credential or cookie, only with consent);
+// tests replace it. It is the only way this package reaches the problems
+// endpoint.
 var sendProblemsFn = spacenet.SendProblems
 
 // problemsSendResult is the outcome of trying to send the problem notebook.
@@ -37,7 +38,7 @@ var osVersionFn = func() string { return "" }
 // next time. Every attempt is written to the sends log. It never panics and
 // never fails the run: a build/validate failure means nothing is sent and a
 // "failed" line is recorded. comment and email are optional (nil → null).
-func submitProblems(ctx context.Context, dataDir, lang, version string, comment, email *string, now time.Time) problemsSendResult {
+func submitProblems(ctx context.Context, consent spacenet.ProblemsConsent, dataDir, lang, version string, comment, email *string, now time.Time) problemsSendResult {
 	nb := problems.New(dataDir)
 	unsent, err := nb.Unsent(problems.MaxPerSend)
 	if err != nil {
@@ -69,7 +70,7 @@ func submitProblems(ctx context.Context, dataDir, lang, version string, comment,
 		return problemsSendResult{Attempted: true}
 	}
 
-	status, sendErr := sendProblemsFn(ctx, body)
+	status, sendErr := sendProblemsFn(ctx, consent, body)
 	result := problemsResultFor(status, sendErr)
 	appendSendLog(logPath, now, "rosmarops-problems.v1", len(body), result)
 	if result != sendSent {

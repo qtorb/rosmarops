@@ -121,6 +121,11 @@ func runNoArgs() int {
 	// the run. A failure to show or save changes nothing here.
 	offerDismissAfterReport(lang, cfgPath, stPath, true, time.Now())
 
+	// BV-210 §2 A / CTO-32 C3: the problems step (Window A, or the untick box
+	// after an automatic send) runs after the report has opened, so an
+	// unanswered window never delays the report.
+	offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), lang, true)
+
 	if reportOpened {
 		if isTerminal(os.Stdout) {
 			time.Sleep(closeDelay)

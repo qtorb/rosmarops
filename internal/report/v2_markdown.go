@@ -101,6 +101,9 @@ var staticKeys = []string{
 	"problems.summary.output_invalid", "problems.summary.space_rejected",
 	"problems.summary.config_unreadable", "problems.summary.report_not_opened", "problems.summary.several",
 	"report.problems.unsent", "report.problems.sent",
+	// CTO-32 C3/C4: the terminal send prompt, the auto-send untick box and the
+	// «ask again» command confirmation.
+	"problems.terminal.send", "problems.autosent.body", "problems.ok", "problems.ask_again", "problems.ask.done",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
