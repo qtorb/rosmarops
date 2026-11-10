@@ -252,8 +252,29 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// here leaves the machine. EndReview clears the mark on any return — only a
 	// true crash, where defers do not run, leaves it behind.
 	notebook := problems.New(dataDir)
+	// BV-210 test aid: ROSMAROPS_DEMO_PROBLEM lets Albert see the windows
+	// without touching his real config — it only writes to the problem notebook
+	// and run mark (allowed paths), never to any agent or RosmarOps config.
+	// "b" leaves a fake in-progress mark so this run detects run_unfinished and
+	// shows Window B at startup; "a" seeds one unsent problem so Window A shows
+	// at the end of this review.
+	seedDemoProblemB(dataDir, start)
 	prevUnfinishedDay, _ := notebook.StartReview(start)
 	defer func() { _ = notebook.EndReview() }()
+	seedDemoProblemA(dataDir, start)
+
+	// BV-210 §2 B: the previous review did not finish. Record run_unfinished now
+	// (so Window B and the report see it) and, when someone is present and the
+	// checkbox is off, ask before starting the new review. Nobody present (a
+	// scheduled review): never ask here; the checkbox auto-send below sends it.
+	askedAtStart := false
+	if prevUnfinishedDay != "" {
+		recordProblems(dataDir, problems.Entry{Code: problems.RunUnfinished, Step: problems.StepReview, Day: prevUnfinishedDay})
+		if presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking {
+			offerProblems(dataDir, lang, version, true, true, &st, stPath, time.Now())
+			askedAtStart = true
+		}
+	}
 
 	// The connect offer moved to the end of the double click (BV-158 part 4,
 	// decision A): it is shown after the report opens, in runNoArgs, not here
@@ -775,7 +796,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// leaves the machine here; space_rejected and output_invalid are recorded in
 	// the send path below. The agent for a config_unreadable is taken only from
 	// the graph's agent product ids — never from a path or parser detail.
-	recordProblems(dataDir, problemsFromRun(today(start), prevUnfinishedDay, scanErrors, repoFindings, built)...)
+	recordProblems(dataDir, problemsFromRun(today(start), scanErrors, repoFindings, built)...)
 
 	// Build report.
 	elapsed := time.Since(start).Seconds()
@@ -906,6 +927,22 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		slog.Warn("space send skipped: kit path", "err", perr)
 	}
 
+	// BV-210 §2: before the report is written, if the «send the next ones
+	// without asking» checkbox is on, send the unsent problems now (so the
+	// report's line is right). Then set the two report lines: how many problems
+	// were sent this run (checkbox) and how many remain unsent. The interactive
+	// Window A, if any, comes after the report opens.
+	if st.SendProblemsWithoutAsking {
+		pctx, pcancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if res := submitProblems(pctx, dataDir, lang, version, nil, nil, time.Now()); res.Delivered {
+			v2.ProblemsSentThisRun = res.Sent
+		}
+		pcancel()
+	}
+	if left, lerr := problems.New(dataDir).Unsent(problems.MaxPerSend); lerr == nil {
+		v2.ProblemsUnsent = len(left)
+	}
+
 	// Write report files.
 	progress.line("console.progress.report", nil)
 	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
@@ -963,6 +1000,14 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// BV-151: the report is written — the window says so and the taskbar clears,
 	// just before the summary (and, on a double click, report_opened).
 	ui.done()
+
+	// BV-210 §2 A: at the end of a review with new unsent problems, when someone
+	// is present and the checkbox is off, ask whether to send them (Window A /
+	// terminal question). Skipped when nobody is present (a scheduled review:
+	// §2 C leaves them for next time) or when B already asked this session.
+	if !askedAtStart && !st.SendProblemsWithoutAsking && presentForProblems(m, unattended) {
+		offerProblems(dataDir, lang, version, false, true, &st, stPath, time.Now())
+	}
 
 	// Print summary.
 	if unattended {

@@ -2,6 +2,8 @@ package main
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,18 +31,13 @@ func recordProblems(dataDir string, entries ...problems.Entry) {
 const panicDiscardMessage = "panicked; its results were discarded"
 
 // problemsFromRun turns this review's outcome into notebook entries (BV-210 §1):
-// run_unfinished (from the run mark), step_failed (discarded panic),
-// time_ran_out (global timeout and per-repo scan_timeout), and config_unreadable
-// (an agent config that did not parse). space_rejected and output_invalid are
-// recorded at the send path, not here. day is this run's local day;
-// prevUnfinishedDay, when non-empty, is the day a previous review was found
-// unfinished at startup.
-func problemsFromRun(day, prevUnfinishedDay string, scanErrors []finding.ScanError, findings []finding.Finding, g *graph.Graph) []problems.Entry {
+// step_failed (discarded panic), time_ran_out (global timeout and per-repo
+// scan_timeout), and config_unreadable (an agent config that did not parse).
+// run_unfinished is recorded at startup (from the run mark) so Window B can ask
+// before the scan; space_rejected and output_invalid are recorded at the send
+// path. day is this run's local day.
+func problemsFromRun(day string, scanErrors []finding.ScanError, findings []finding.Finding, g *graph.Graph) []problems.Entry {
 	var out []problems.Entry
-
-	if prevUnfinishedDay != "" {
-		out = append(out, problems.Entry{Code: problems.RunUnfinished, Step: problems.StepReview, Day: prevUnfinishedDay})
-	}
 
 	for _, se := range scanErrors {
 		switch {
@@ -87,3 +84,31 @@ func problemsFromRun(day, prevUnfinishedDay string, scanErrors []finding.ScanErr
 
 // today is this run's local day in the notebook's format.
 func today(now time.Time) string { return problems.Day(now) }
+
+// seedDemoProblemB, when ROSMAROPS_DEMO_PROBLEM=b, writes a fake in-progress run
+// mark so the next StartReview reports a previous unfinished review and Window B
+// shows at startup. It touches only the run mark in the reports data directory
+// (an allowed path), never any real config. A no-op otherwise.
+func seedDemoProblemB(dataDir string, now time.Time) {
+	if os.Getenv("ROSMAROPS_DEMO_PROBLEM") != "b" {
+		return
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		slog.Warn("demo problem b: mkdir", "err", err)
+		return
+	}
+	path := filepath.Join(dataDir, problems.RunMarkName)
+	if err := os.WriteFile(path, []byte(problems.Day(now)+"\n"), 0o600); err != nil {
+		slog.Warn("demo problem b: write mark", "err", err)
+	}
+}
+
+// seedDemoProblemA, when ROSMAROPS_DEMO_PROBLEM=a, records one synthetic unsent
+// problem so Window A shows at the end of this review. It writes only to the
+// problem notebook (an allowed path), never any real config. A no-op otherwise.
+func seedDemoProblemA(dataDir string, now time.Time) {
+	if os.Getenv("ROSMAROPS_DEMO_PROBLEM") != "a" {
+		return
+	}
+	recordProblems(dataDir, problems.Entry{Code: problems.StepFailed, Step: "mcp", Day: problems.Day(now)})
+}

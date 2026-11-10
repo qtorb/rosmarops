@@ -34,7 +34,7 @@ func TestProblemsFromRunMapsEveryCode(t *testing.T) {
 		},
 	}
 
-	got := problemsFromRun(day, "2026-11-02", scanErrors, repoFindings, g)
+	got := problemsFromRun(day, scanErrors, repoFindings, g)
 
 	want := map[problems.Code]int{}
 	for _, e := range got {
@@ -43,8 +43,9 @@ func TestProblemsFromRunMapsEveryCode(t *testing.T) {
 			t.Errorf("entry has empty day: %+v", e)
 		}
 	}
-	if want[problems.RunUnfinished] != 1 {
-		t.Errorf("run_unfinished: want 1, got %d", want[problems.RunUnfinished])
+	// run_unfinished is recorded at startup, not here.
+	if want[problems.RunUnfinished] != 0 {
+		t.Errorf("run_unfinished must not come from problemsFromRun, got %d", want[problems.RunUnfinished])
 	}
 	if want[problems.StepFailed] != 1 {
 		t.Errorf("step_failed: want 1 (only the discard panic), got %d", want[problems.StepFailed])
@@ -54,13 +55,6 @@ func TestProblemsFromRunMapsEveryCode(t *testing.T) {
 	}
 	if want[problems.ConfigUnreadable] != 2 {
 		t.Errorf("config_unreadable: want 2 parse errors, got %d", want[problems.ConfigUnreadable])
-	}
-
-	// run_unfinished carries the previous day, not today's.
-	for _, e := range got {
-		if e.Code == problems.RunUnfinished && e.Day != "2026-11-02" {
-			t.Errorf("run_unfinished day = %q, want 2026-11-02", e.Day)
-		}
 	}
 }
 
@@ -76,7 +70,7 @@ func TestConfigUnreadableTakesAgentIDNeverPath(t *testing.T) {
 			},
 		},
 	}
-	got := problemsFromRun("2026-11-09", "", nil, nil, g)
+	got := problemsFromRun("2026-11-09", nil, nil, g)
 
 	var withAgent, withoutAgent int
 	for _, e := range got {
