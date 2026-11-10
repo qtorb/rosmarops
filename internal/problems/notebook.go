@@ -85,6 +85,15 @@ func (nb *Notebook) Load() ([]Entry, error) {
 		if !ValidCode(e.Code) || !ValidStep(e.Step) || e.Day == "" || e.Count < 1 {
 			continue
 		}
+		// Defence in depth (§7): an agent that is not a known product id, or an
+		// out-of-range status, is dropped even from a hand-edited notebook, so
+		// nothing but closed-list values can ever be read back and sent.
+		if e.Agent != "" && !ValidAgent(e.Agent) {
+			e.Agent = ""
+		}
+		if e.HTTPStatus != 0 && (e.HTTPStatus < 100 || e.HTTPStatus > 599) {
+			e.HTTPStatus = 0
+		}
 		out = append(out, e)
 	}
 	if err := sc.Err(); err != nil {

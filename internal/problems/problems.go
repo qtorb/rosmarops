@@ -12,6 +12,8 @@
 // rosmarops-sends.log.
 package problems
 
+import "github.com/qtorb/rosmarops/internal/knowledge"
+
 // Code is one anomaly code. The list is closed: these seven values and no
 // others (§1). Each maps to a {summary} line in the catalog for the window.
 type Code string
@@ -93,19 +95,34 @@ var validStep = func() map[string]bool {
 // ValidStep reports whether s is one of the closed-list step tokens.
 func ValidStep(s string) bool { return validStep[s] }
 
-// ValidAgent reports whether s matches problems.v1's agent pattern
-// (^[a-z0-9-]{1,40}$): a product id such as "cline" or "claude-code". The
-// value always comes from a known product id, never from a path or free text.
-func ValidAgent(s string) bool {
-	if s == "" || len(s) > 40 {
-		return false
+// knownAgents is the closed set of product ids that may appear as a problem's
+// agent (BV-210 §1/§7). The agent of a config_unreadable is always one of these
+// — a scored AI client's product id, never a path, a user or computer name, or
+// anything typed. Restricting the sent agent to this set (stricter than the
+// problems.v1 pattern, which BA accepts the same) means a tampered notebook
+// cannot smuggle user data through the agent field.
+var knownAgents = map[string]bool{
+	knowledge.ClaudeCodeProduct:     true,
+	knowledge.CursorProduct:         true,
+	knowledge.HermesProduct:         true,
+	knowledge.CodexProduct:          true,
+	knowledge.GrokBuildProduct:      true,
+	knowledge.GitHubCopilotProduct:  true,
+	knowledge.AntigravityCLIProduct: true,
+	knowledge.GeminiCLIProduct:      true,
+	knowledge.ClineProduct:          true,
+}
+
+// ValidAgent reports whether s is one of the known product ids that may be sent
+// as a problem's agent (§7). It is deliberately stricter than the problems.v1
+// agent pattern: only a closed list of product names, never free text.
+func ValidAgent(s string) bool { return knownAgents[s] }
+
+// KnownAgents returns the product ids ValidAgent accepts, for tests.
+func KnownAgents() []string {
+	out := make([]string, 0, len(knownAgents))
+	for a := range knownAgents {
+		out = append(out, a)
 	}
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
-		default:
-			return false
-		}
-	}
-	return true
+	return out
 }
