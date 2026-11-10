@@ -34,8 +34,14 @@ type problemAnswer struct {
 // problemUIHook is the seam for the prompt: production is askProblem (a window
 // on Windows, a terminal question on macOS/Linux); tests replace it. The bool
 // is whether the person was actually asked (false when there is no interactive
-// surface).
+// surface). TestMain neutralizes it so the headless test suite never launches a
+// real window (as it does for the connect window).
 var problemUIHook = askProblem
+
+// showProblemOutcomeFn is the seam for the «Sent»/«couldn't be sent» message
+// shown after a send (a message box on Windows). TestMain neutralizes it too,
+// so a test that answers «Send» does not pop a real window.
+var showProblemOutcomeFn = showProblemOutcome
 
 // offerProblems decides whether and how to ask about the unsent problems, then
 // acts on the answer (BV-210 §2). present is whether someone is at the machine.
@@ -107,7 +113,7 @@ func offerProblems(dataDir, lang, version string, windowB, present bool, st *sta
 
 	// Tell the person the outcome (§3: «Sent. Thank you…» / «It couldn't be
 	// sent…»), a message box on Windows and a console line elsewhere.
-	showProblemOutcome(cat, res.Delivered, ans.email)
+	showProblemOutcomeFn(cat, res.Delivered, ans.email)
 }
 
 // presentForProblems reports whether someone is at the machine to be asked: an
