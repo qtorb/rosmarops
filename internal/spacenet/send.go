@@ -28,6 +28,24 @@ func Send(ctx context.Context, perm Permission, hostID string, credential, body 
 	return resp.StatusCode, nil
 }
 
+// SendProblems POSTs a problems.v1 body to /api/v1/problems over the one
+// host-pinned client (BV-210 §4). Unlike Send, it needs no account, space,
+// credential or cookie — the body is anonymous and carries no device
+// identifier. The person's permission is the «Send» button pressed now, or the
+// saved «Send the next ones without asking» checkbox; the caller
+// (cmd/rosmarops) enforces that, and the network trust test (§7) proves no
+// connection happens without it. It returns the HTTP status (0 on a network
+// error) and, on a network error, that error. The caller decides what each
+// status means (204 received, 400/413 terminal, 429 retry later).
+func SendProblems(ctx context.Context, body []byte) (int, error) {
+	resp, err := do(ctx, Client(), http.MethodPost, prodBaseURL+"/api/v1/problems", "", body)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
 // Disconnect revokes this computer's credential at the area with
 // DELETE /api/v1/devices/self (Bearer device_credential). It returns the HTTP
 // status (0 on a network error). 204 is success; 401 means the credential was
