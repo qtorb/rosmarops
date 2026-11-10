@@ -357,6 +357,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if exeErr != nil {
 		slog.Warn("run: could not resolve the executable's path", "err", exeErr)
 	}
+	// BV-209: from a Microsoft Store install the real exe is under a versioned
+	// WindowsApps folder that changes on every update; the weekly-review command
+	// the report gives and the task RosmarOps looks for must name the stable
+	// execution alias instead. No-op for the standalone .exe and on macOS/Linux.
+	// The integrity check still hashes the real running binary (hash.Self).
+	exePath = storeAliasExe(exePath, os.Getenv("LOCALAPPDATA"))
 	langs := make([]string, 0, len(runLangs))
 	for l := range runLangs {
 		langs = append(langs, l)
