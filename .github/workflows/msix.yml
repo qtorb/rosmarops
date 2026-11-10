@@ -33,9 +33,8 @@ jobs:
       contents: read
     env:
       VERSION: ${{ inputs.version }}
-      TAG: v${{ inputs.version }}
     steps:
-      - name: Check the version and tag
+      - name: Check the version
         shell: pwsh
         run: |
           if ($env:VERSION -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
@@ -43,9 +42,13 @@ jobs:
           }
           "PKGVERSION=$env:VERSION.0" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      # Built from the ref this workflow is dispatched on: the branch while the
+      # PR is in review, or, once merged, the release tag that carries this
+      # packaging code and the version's program. `version` only names the
+      # package and its files. The exe is built here, so the packaged program is
+      # this source's, byte-for-byte the same build recipe as release.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.TAG }}
           persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
