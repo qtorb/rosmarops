@@ -13,7 +13,7 @@ The only reason to trust RosmarOps is that **you can check what it does**. This 
 If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 
 - **It never connects anywhere without your permission.** Without it, the program opens no connection at all: not to send data, not to check for updates, not for anything. With it, see «What it sends, only with your permission» below.
-- **It never sends telemetry.** Not anonymous, not aggregated, not opt-in. There is no switch: the only thing the program can ever send is your encrypted results, to your space, with your permission.
+- **It never sends anything you haven't approved.** It keeps a local list of problems it runs into (error codes, version and system, never your files, paths, names or keys). It sends that list only when you press «Send», or after you tick «Send the next ones without asking», which you can untick at any time. Every send is listed in rosmarops-sends.log.
 - **It never changes your files, settings, repositories, keys or agents.** It reads. The report tells you what to change; you, or your own agent with your approval, make the change.
 - **It never prints a secret in full.** Not in the report, not in its logs, not in its state.
 - **It never writes outside its own folders** (see claim 3).
@@ -25,6 +25,7 @@ Nothing leaves your devices unless you approve it first.
 
 - RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log, in the data subfolder of your reports folder (on Windows, %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log).
 - It connects only to app.rosmarops.com, over HTTPS on port 443. It never sends your keys, files, settings or the report in clear, and never checks for updates.
+- If you press «Send» when RosmarOps finds a problem, it sends that problem list to app.rosmarops.com. No account is needed and nothing links it to your space. If you write your email, we use it only to answer you.
 
 ---
 
