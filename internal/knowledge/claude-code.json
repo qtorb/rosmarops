@@ -65,7 +65,7 @@
       "approval": "allow",
       "target_scope": "auto",
       "source_url": "https://code.claude.com/docs/en/permission-modes",
-      "verified": "doc 2026-10-24: \"With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions\""
+      "verified": "doc 2026-10-24: \"With Claude Code v2.1.283 or later, auto mode is the built-in starting permission mode for interactive terminal and VS Code sessions. On earlier versions, it's the built-in starting permission mode only on Pro, Max, and Team plans.\"; conditions (permission-modes): the startup table gives two version figures of the page itself (v2.1.228 or later on macOS, Linux and WSL, and v2.1.233 or later on native Windows; the same page also says v2.1.283); disableAutoMode set to \"disable\" in any settings file, and claude -p or the Agent SDK, fall back to default; model requirement Claude Opus 4.6 or later, Sonnet 4.6 or later, Haiku 5.5, or a Fable model (older models not supported on any provider); all plans. In R2 these are covered by auto_mode_available on the mode's edges (CTO-27 §3)"
     },
     {
       "id": "protected_paths",

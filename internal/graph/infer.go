@@ -523,7 +523,15 @@ func (in inference) readWays(files []string) []inferredWay {
 	}
 	if in.bashVia != nil && !in.shellRules("Bash") {
 		if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
-			add(via{*in.bashVia, baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)}, true, rules)
+			assume := baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)
+			// CTO-27 §3 / BV-208: in auto mode the read-only Bash commands can
+			// also wait for the classifier's review, so a model decides that way
+			// too (the read cell becomes model, not nobody). Moves no factory
+			// note or class: the reach and the finding are the same.
+			if in.mode == permissionModeAuto {
+				assume = append(assume, AssumeAutoClassifierPermits)
+			}
+			add(via{*in.bashVia, assume}, true, rules)
 		}
 	}
 	if in.modeCap != nil {

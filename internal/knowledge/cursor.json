@@ -62,7 +62,7 @@
       "approval": "allow",
       "target_scope": "auto_review",
       "source_url": "https://cursor.com/docs/agent/security/run-modes.md",
-      "verified": "doc 2026-10-25; \"Auto-review shipped as the recommended default\" (3.6); assumed, the IDE mode is not readable at rest (ide_run_mode_not_readable)"
+      "verified": "product 3.27.12 (winget) and 3.29.9, workbench.desktop.main.js: brand-new install migration tryApplyAgentAutorunBrandNewDefault sets agent autoRun=true, fullAutoRun=false, smartModeAutoRun=true (not experiment-gated; the sandbox gate only adds 'with Sandbox'); effective only if the server model list has supportsSmartModeClassifier, else Allowlist with an empty list (not readable at rest; ide_run_mode_not_readable)"
     },
     {
       "id": "terminal_default",
