@@ -93,6 +93,7 @@
   "connect.ok": "Aceptar",
   "connect.q": "¿Quieres ver tus resultados en tu espacio?",
   "connect.text": "RosmarOps enviará tus resultados después de cada revisión, cifrados. Solo los resultados: nada más sale de este ordenador. Puedes pararlo cuando quieras.",
+  "connect.console.prompt": "Escribe s y pulsa Intro para conectar. Pulsa Intro para saltar: ",
   "connect.yes": "Guardar en mi espacio",
   "console.binary_changed": "RosmarOps ha cambiado desde la ejecución anterior.\n  Antes: versión {old_version}, hash {old_hash}…\n  Ahora: versión {new_version}, hash {new_hash}…",
   "console.binary_confirm": "¿Has instalado tú esta versión? Compara el hash nuevo con el publicado en la página de la versión. (s/N): ",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -704,13 +705,20 @@ func runConnect(inv cli.Invocation) error {
 
 // connectInConsole asks the connect question and runs today's protocol in the
 // console (the flow `rosmarops connect` has always had), and reports the
-// outcome. It is also the macOS connect offer at the end of a double click
-// (BV-158 part 4); the console has no «Not now» button, so it only reports
-// connected or failed, never declined. It never returns an error: every outcome
+// outcome. It is also the macOS and Linux connect offer at the end of a double
+// click (BV-158 part 4). BV-215 (invariant 1): after the question it reads one
+// line of the console and connects only on a yes (consoleYes); anything else —
+// an empty line, another answer, or the end of the input — is declined, with no
+// permission recorded and no network. It never returns an error: every outcome
 // is a line for the person.
 func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 	fmt.Fprintln(kitOutput, cat.Text("connect.q", nil))
 	fmt.Fprintln(kitOutput, cat.Text("connect.text", nil))
+	fmt.Fprint(kitOutput, cat.Text("connect.console.prompt", nil))
+	line, _ := bufio.NewReader(kitInput).ReadString('\n')
+	if !consoleYes(line) {
+		return connectDeclined
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 11*time.Minute)
 	defer cancel()
 	// BV-164: the number is no longer shown. The protocol still sends n_sealed
@@ -737,6 +745,16 @@ func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 		fmt.Fprintln(kitOutput, cat.Text("connect.failed", nil))
 		return connectFailed
 	}
+}
+
+// consoleYes reports whether a console answer is a yes (BV-215): the line
+// without surrounding spaces and in lower case is y, yes, s, si or sí.
+func consoleYes(line string) bool {
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes", "s", "si", "sí":
+		return true
+	}
+	return false
 }
 
 // newDisconnectCmd is `rosmarops disconnect` (BV-137 point 8).

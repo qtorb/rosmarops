@@ -121,6 +121,7 @@
   "connect.ok": "OK",
   "connect.q": "See your results in your space?",
   "connect.text": "RosmarOps will send your results after each check, encrypted. Only the results: nothing else leaves this computer. You can stop it at any time.",
+  "connect.console.prompt": "Type y and press Enter to connect. Press Enter to skip: ",
   "connect.yes": "Save to my space",
   "console.binary_changed": "RosmarOps has changed since the last run.\n  Before: version {old_version}, hash {old_hash}…\n  Now:    version {new_version}, hash {new_hash}…",
   "console.binary_confirm": "Did you install this version? Compare the new hash with the one published on the release page. (y/N): ",
