@@ -54,22 +54,41 @@ jobs:
 
       # Primary checkout: the ref the workflow runs on (master on dispatch, the
       # PR branch on a PR). It carries the winres tool used for every .syso.
+      # Done first (before src/ exists) so its clean does not remove the tag
+      # checkout below.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.27.3"
-          cache: false
-
       # The released tag's source, for the reproducibility check and (on a Store
-      # build) the packaged exe.
+      # build) the packaged exe. Checked out before Go is set up so we can read
+      # the Go version the release was built with from this tag's own release.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/tags/v${{ env.VERSION }}
           path: src
           persist-credentials: false
+
+      - name: Go version from the released tag's release.yml
+        # The exe is built with the Go the release used, read from the packaged
+        # tag's own release.yml — not master's. A later toolchain bump (e.g.
+        # go1.27.3 -> go1.27.4 for GO-2026-6859) then never silently changes the
+        # bytes, and the exact SHA comparison below keeps holding, not relaxed.
+        # Fails if the tag does not pin exactly one Go version.
+        run: |
+          set -euo pipefail
+          vers=$(grep -oE 'go-version:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' src/.github/workflows/release.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u)
+          n=$(printf '%s\n' "$vers" | grep -c . || true)
+          if [ "$n" -ne 1 ]; then
+            echo "tag v$VERSION release.yml pins $n distinct Go versions (want exactly 1):"; printf '%s\n' "$vers"; exit 1
+          fi
+          echo "GOVERSION=$vers" >> "$GITHUB_ENV"
+          echo "tag v$VERSION was released with Go $vers (from its release.yml)"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "${{ env.GOVERSION }}"
+          cache: false
 
       - name: Reproducible build — x64 matches the released rosmarops.exe
         # Built from the released tag's source, on ubuntu, with release.yml's
@@ -78,6 +97,12 @@ jobs:
         # amd64 output is byte-identical to the tag's). Exact comparison.
         run: |
           set -euo pipefail
+          # Prove the Go that builds the exe is the tag's release.yml version.
+          active=$(go version | grep -oE 'go[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/^go//')
+          echo "active Go: $active (tag v$VERSION release.yml: $GOVERSION)"
+          if [ "$active" != "$GOVERSION" ]; then
+            echo "active Go $active does not match the tag's release.yml ($GOVERSION); the reproducibility check would be meaningless"; exit 1
+          fi
           GOOS=linux GOARCH=amd64 go run ./tools/winres -version "$VERSION" -ico src/assets/windows/rosmarops.ico -out src/cmd/rosmarops/rsrc_windows_amd64.syso
           ( cd src && CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=$VERSION" -o "$RUNNER_TEMP/repro-x64.exe" ./cmd/rosmarops )
           built=$(sha256sum "$RUNNER_TEMP/repro-x64.exe" | cut -d' ' -f1)
