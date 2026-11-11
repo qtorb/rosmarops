@@ -420,15 +420,24 @@ func sortFindings(fs []Finding) {
 	})
 }
 
-// pickToday is the first finding of the ordered list and, among its
-// actions, the largest reduction per magnitude (points / magnitude). Ties:
-// the action that touches more findings of the list, then the one that
-// changes a single file, then the larger reduction, then the action id.
+// pickToday is the first finding of the ordered list that has at least one
+// action (BV-215: a finding the knowledge base has no action for never leaves
+// step 2 empty while a later one has one) and, among its actions, the largest
+// reduction per magnitude (points / magnitude). Ties: the action that touches
+// more findings of the list, then the one that changes a single file, then the
+// larger reduction, then the action id. When no finding has an action it is
+// the first finding, with no action, as before.
 func pickToday(fs []Finding) Today {
 	if len(fs) == 0 {
 		return Today{Code: TodayNothingUrgent}
 	}
 	f := fs[0]
+	for _, x := range fs {
+		if len(x.Actions) > 0 {
+			f = x
+			break
+		}
+	}
 	if len(f.Actions) == 0 {
 		return Today{FindingID: f.ID}
 	}
