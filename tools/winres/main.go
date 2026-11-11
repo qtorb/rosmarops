@@ -8,10 +8,13 @@
 // byte-for-byte deterministic: nothing in it depends on the time or the
 // machine. Usage, from the repository root:
 //
-//	go run ./tools/winres -version 0.7.3
+//	go run ./tools/winres -version 0.7.3            # amd64 (default)
+//	go run ./tools/winres -version 0.7.3 -arch arm64 # arm64 (BV-209)
 //
 // The .syso it writes is a build input picked up automatically by
-// `GOOS=windows GOARCH=amd64 go build ./cmd/rosmarops`; it is git-ignored.
+// `GOOS=windows GOARCH=amd64 go build ./cmd/rosmarops`; with -arch arm64 it
+// writes rsrc_windows_arm64.syso, picked up by a windows/arm64 build. Both are
+// git-ignored.
 package main
 
 import (
@@ -34,9 +37,26 @@ func main() {
 	version := flag.String("version", "", "program version without the leading v, e.g. 0.7.3 (required)")
 	icoPath := flag.String("ico", defaultICO, "path to the .ico file")
 	outPath := flag.String("out", defaultOut, "path to write the .syso object")
+	arch := flag.String("arch", "amd64", "target architecture: amd64 or arm64")
 	flag.Parse()
 	if *version == "" {
 		fmt.Fprintln(os.Stderr, "winres: -version is required (e.g. -version 0.7.3)")
+		os.Exit(2)
+	}
+	// BV-209: the COFF object must match the build's GOARCH. For arm64 switch the
+	// machine word and the relocation type, and (unless -out was given) write the
+	// arch-suffixed name Go links for a windows/arm64 build.
+	switch *arch {
+	case "amd64":
+		// defaults already set
+	case "arm64":
+		coffMachine = imageFileMachineARM64
+		coffReloc = relARM64ADDR32NB
+		if *outPath == defaultOut {
+			*outPath = "cmd/rosmarops/rsrc_windows_arm64.syso"
+		}
+	default:
+		fmt.Fprintln(os.Stderr, "winres: -arch must be amd64 or arm64, got", *arch)
 		os.Exit(2)
 	}
 	ico, err := os.ReadFile(*icoPath)
@@ -414,10 +434,22 @@ func writeDir(buf *bytes.Buffer, nIDEntries int) {
 
 const (
 	imageFileMachineAMD64 = 0x8664
+	imageFileMachineARM64 = 0xAA64
 	relAMD64ADDR32NB      = 0x0003
+	relARM64ADDR32NB      = 0x0002
 	scnCntInitData        = 0x00000040
 	scnMemRead            = 0x40000000
 	symClassStatic        = 3
+)
+
+// coffMachine and coffReloc are the IMAGE_FILE_HEADER.Machine and the section
+// relocation type the COFF object is assembled with. They default to x86-64 and
+// are switched to ARM64 by the -arch flag (BV-209): the .rsrc layout is
+// identical for both, only the machine word and the ADDR32NB relocation type
+// differ. main sets them before assembleCOFF runs.
+var (
+	coffMachine uint16 = imageFileMachineAMD64
+	coffReloc   uint16 = relAMD64ADDR32NB
 )
 
 func assembleCOFF(rsrc []byte, relocs []reloc, symbolOffsets []uint32) []byte {
@@ -432,7 +464,7 @@ func assembleCOFF(rsrc []byte, relocs []reloc, symbolOffsets []uint32) []byte {
 
 	var buf bytes.Buffer
 	// IMAGE_FILE_HEADER.
-	putU16(&buf, imageFileMachineAMD64)
+	putU16(&buf, coffMachine)
 	putU16(&buf, 1) // NumberOfSections
 	putU32(&buf, 0) // TimeDateStamp (deterministic)
 	putU32(&buf, uint32(symStart))
@@ -461,7 +493,7 @@ func assembleCOFF(rsrc []byte, relocs []reloc, symbolOffsets []uint32) []byte {
 	for _, r := range relocs {
 		putU32(&buf, r.virtualAddress)
 		putU32(&buf, r.symbolIndex)
-		putU16(&buf, relAMD64ADDR32NB)
+		putU16(&buf, coffReloc)
 	}
 
 	// Symbol table: one static symbol per data entry, named $R%06d, pointing at

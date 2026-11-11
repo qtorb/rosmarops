@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BV-209: the MSIX manifest for the Microsoft Store package of RosmarOps.
+
+  @VERSION@ and @ARCH@ are filled in by the packaging CI job (.github/workflows/
+  msix.yml), never by hand: @VERSION@ with the program version plus ".0"
+  (e.g. 0.11.0.0) and @ARCH@ with "x64" or "arm64", one package per architecture.
+
+  Identity values are Albert's Partner Center product identity (public package
+  data, not secrets). runFullTrust is required because RosmarOps is a desktop
+  security auditor that reads other apps' configuration files and runs read-only
+  PowerShell queries; the justification is in the certification notes. The
+  execution alias "rosmarops.exe" is the stable command path under
+  %LOCALAPPDATA%\Microsoft\WindowsApps that the weekly-review task points at
+  (the real exe lives in a versioned WindowsApps folder). The app has a visible
+  Start-menu entry: it is a double-click app, not only a console tool.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 desktop rescap">
+
+  <Identity
+    Name="AlbertGarciaPujadas.RosmarOps"
+    Publisher="CN=E6864926-2E32-484E-9FDB-FE93F4BF4836"
+    Version="@VERSION@"
+    ProcessorArchitecture="@ARCH@" />
+
+  <Properties>
+    <DisplayName>RosmarOps</DisplayName>
+    <PublisherDisplayName>Albert Garcia Pujadas</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Resources>
+    <Resource Language="en" />
+    <Resource Language="es" />
+  </Resources>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+
+  <Applications>
+    <Application Id="RosmarOps" Executable="rosmarops.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="RosmarOps"
+        Description="Local, read-only review of what the AI agents on your computer can do."
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png"
+        BackgroundColor="transparent">
+        <uap:DefaultTile ShortName="RosmarOps" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="rosmarops.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="rosmarops.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+</Package>
