@@ -168,6 +168,22 @@ func TestExposurePotentialJSON(t *testing.T) {
 		t.Fatalf("want 9 agents, got %d", len(doc.Agents))
 	}
 	for _, a := range doc.Agents {
+		// CTO-31 M1: while the registry is not complete, complexity has no data
+		// and the class can only be provisional, with complexity among the
+		// missing axes. A «final» class here would claim a complexity the engine
+		// does not know.
+		if a.Axes.Complexity.Level == nil {
+			if a.ClassStatus != "provisional" {
+				t.Errorf("%s: complexity has no data but class_status is %q, want provisional", a.Product, a.ClassStatus)
+			}
+			found := false
+			for _, m := range a.MissingAxes {
+				found = found || m == "complexity"
+			}
+			if !found {
+				t.Errorf("%s: complexity has no data but missing_axes = %v", a.Product, a.MissingAxes)
+			}
+		}
 		for name, ax := range map[string]epAxis{
 			"autonomy": a.Axes.Autonomy, "reach": a.Axes.Reach, "contagion": a.Axes.Contagion,
 			"delegation": a.Axes.Delegation, "opacity": a.Axes.Opacity, "complexity": a.Axes.Complexity,
@@ -193,4 +209,50 @@ func TestExposurePotentialJSON(t *testing.T) {
 			t.Errorf("exposure-potential value contains a space (possible prose): %q", v)
 		}
 	})
+}
+
+// TestExposureNotEvaluatedJSON (CTO-31 M3 i): a detected-only agent, written
+// with the file's own shape, carries no class and no class_status key; its
+// axes are opacity 3 and the rest null with not_evaluated.
+func TestExposureNotEvaluatedJSON(t *testing.T) {
+	a := exposure.Compute(exposure.Inputs{Product: "cursor", Evaluated: false, FactoryBand: "exposed"})
+	missing := a.MissingAxes
+	if missing == nil {
+		missing = []string{}
+	}
+	ag := epAgent{
+		Product: a.Product, Evaluated: a.Evaluated,
+		Axes: epAxes{
+			Autonomy: epAxisOf(a.Axes[exposure.AxisAutonomy]), Reach: epAxisOf(a.Axes[exposure.AxisReach]),
+			Contagion: epAxisOf(a.Axes[exposure.AxisContagion]), Delegation: epAxisOf(a.Axes[exposure.AxisDelegation]),
+			Opacity: epAxisOf(a.Axes[exposure.AxisOpacity]), Complexity: epAxisOf(a.Axes[exposure.AxisComplexity]),
+		},
+		Class: a.Class, ClassStatus: a.ClassStatus, MissingAxes: missing, FactoryBand: a.FactoryBand,
+	}
+	data, err := json.Marshal(ag)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"class", "class_status"} {
+		if _, ok := m[k]; ok {
+			t.Errorf("not-evaluated agent JSON has %q: %s", k, data)
+		}
+	}
+	axes := m["axes"].(map[string]any)
+	for name, v := range axes {
+		ax := v.(map[string]any)
+		if name == "opacity" {
+			if ax["level"] != float64(3) {
+				t.Errorf("opacity level = %v, want 3", ax["level"])
+			}
+			continue
+		}
+		if ax["level"] != nil || ax["no_data"] != "not_evaluated" {
+			t.Errorf("%s = %v, want level null and not_evaluated", name, ax)
+		}
+	}
 }

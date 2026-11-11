@@ -125,11 +125,21 @@ func FromCursor(scan platform.CursorScan, settings platform.ClaudeSettingsScan, 
 		}
 	}
 	// Claude Code's hooks are Cursor's executables too (K7; third-party
-	// imports, annex): user, project and local settings.
+	// imports, annex): user, project and local settings. CTO-31 M2 (C2):
+	// importing them, Cursor reads Claude Code's settings at rest — on by
+	// default, «The setting is on by default» — so each settings file it imports
+	// from gives one reads_config_of edge from Cursor to that Claude Code client,
+	// resting on the Third-Party Imports assumption, as Grok's do (infer.go).
 	for _, file := range settings.Files {
 		if file.Status != platform.MCPSourceRead || file.Scope == platform.MCPScopeManaged {
 			continue
 		}
+		claude := clientID(knowledge.ClaudeCodeProduct, file.ConfigDir)
+		b.edge(Edge{
+			ID: edgeID(EdgeReadsConfigOf, client, claude), Type: EdgeReadsConfigOf, From: client, To: claude,
+			Source: "cursor:third_party_hooks", Certainty: CertaintyInferred,
+			DerivedFrom: []string{client, claude}, Assumptions: []string{AssumeThirdPartyImportsNotReadable},
+		})
 		for _, ptr := range file.Executables {
 			if !strings.HasPrefix(ptr, "/hooks/") {
 				continue

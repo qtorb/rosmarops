@@ -133,10 +133,11 @@ func TestR2AllAssembles(t *testing.T) {
 	}
 }
 
-// TestR2AllC2ReadsConfigOf (BV-208 pt2, CTO-26 §1 eje 3 C2): in R2-todos the
-// graph carries the new reads_config_of edge from Grok Build to Claude Code and
-// to Cursor — the «loads another product's config» signal R2 (one agent) cannot
-// show. No other product reads another's config at rest today.
+// TestR2AllC2ReadsConfigOf (BV-208 pt2, CTO-26 §1 eje 3 C2; CTO-31 M2): in
+// R2-todos the graph carries exactly three reads_config_of edges — Grok Build to
+// Claude Code and to Cursor, and Cursor to Claude Code (Cursor loads Claude
+// Code's hooks by default) — the «loads another product's config» signal R2
+// (one agent) cannot show.
 func TestR2AllC2ReadsConfigOf(t *testing.T) {
 	_, g := r2AllReport(t)
 	prod := map[string]string{}
@@ -145,19 +146,31 @@ func TestR2AllC2ReadsConfigOf(t *testing.T) {
 			prod[n.ID] = n.Platform
 		}
 	}
-	got := map[string]bool{}
+	got := map[string]int{}
+	n := 0
 	for _, e := range g.Edges {
 		if e.Type != graph.EdgeReadsConfigOf {
 			continue
 		}
-		if prod[e.From] != "grok-build" {
-			t.Errorf("reads_config_of from %q, want only grok-build", prod[e.From])
+		n++
+		got[prod[e.From]+"->"+prod[e.To]]++
+		if prod[e.From] == "cursor" {
+			found := false
+			for _, a := range e.Assumptions {
+				found = found || a == graph.AssumeThirdPartyImportsNotReadable
+			}
+			if !found {
+				t.Errorf("cursor->%s reads_config_of lacks the Third-Party Imports assumption: %v", prod[e.To], e.Assumptions)
+			}
 		}
-		got[prod[e.From]+"->"+prod[e.To]] = true
 	}
-	for _, want := range []string{"grok-build->claude-code", "grok-build->cursor"} {
-		if !got[want] {
-			t.Errorf("missing reads_config_of %s", want)
+	want := []string{"grok-build->claude-code", "grok-build->cursor", "cursor->claude-code"}
+	for _, w := range want {
+		if got[w] != 1 {
+			t.Errorf("reads_config_of %s: %d edges, want 1", w, got[w])
 		}
+	}
+	if n != len(want) {
+		t.Errorf("R2-todos has %d reads_config_of edges, want exactly %d (%v): %v", n, len(want), want, got)
 	}
 }
