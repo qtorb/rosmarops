@@ -117,6 +117,17 @@ func (e Edge) MarshalJSON() ([]byte, error) {
 			DerivedFrom []string `json:"derived_from"`
 			Assumptions []string `json:"assumptions"`
 		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, nonNil(e.DerivedFrom), nonNil(e.Assumptions)})
+	case EdgeReadsConfigOf:
+		return json.Marshal(struct {
+			ID          string   `json:"id"`
+			Type        string   `json:"type"`
+			From        string   `json:"from"`
+			To          string   `json:"to"`
+			Source      string   `json:"source"`
+			Certainty   string   `json:"certainty"`
+			DerivedFrom []string `json:"derived_from"`
+			Assumptions []string `json:"assumptions"`
+		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, nonNil(e.DerivedFrom), nonNil(e.Assumptions)})
 	case EdgeLoads:
 		return json.Marshal(struct {
 			ID            string `json:"id"`

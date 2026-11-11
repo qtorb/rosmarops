@@ -35,6 +35,7 @@ const (
 	EdgeAuthenticatesTo = "authenticates_to"
 	EdgeReadsEnv        = "reads_env"
 	EdgeWritesConfigOf  = "writes_config_of"
+	EdgeReadsConfigOf   = "reads_config_of" // BV-208 C2: a client reads another product's config at rest
 	EdgeCommittedIn     = "committed_in"
 	EdgeSendsTo         = "sends_to" // mcp_server → external_service (BV-91, E1)
 )
@@ -278,6 +279,10 @@ var edgeEndpoints = map[string]struct{ from, to []endpoint }{
 		to: []endpoint{{kind: KindResource, types: []string{
 			ResourceAgentConfig, ResourceAgentInstructions, ResourceAgentExecutable,
 		}}},
+	},
+	EdgeReadsConfigOf: {
+		from: []endpoint{{kind: KindAgent}},
+		to:   []endpoint{{kind: KindAgent}},
 	},
 	EdgeSendsTo: {
 		from: []endpoint{{kind: KindAgent, types: []string{AgentMCPServer}}},
