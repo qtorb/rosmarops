@@ -168,6 +168,22 @@ func TestExposurePotentialJSON(t *testing.T) {
 		t.Fatalf("want 9 agents, got %d", len(doc.Agents))
 	}
 	for _, a := range doc.Agents {
+		// CTO-31 M1: while the registry is not complete, complexity has no data
+		// and the class can only be provisional, with complexity among the
+		// missing axes. A «final» class here would claim a complexity the engine
+		// does not know.
+		if a.Axes.Complexity.Level == nil {
+			if a.ClassStatus != "provisional" {
+				t.Errorf("%s: complexity has no data but class_status is %q, want provisional", a.Product, a.ClassStatus)
+			}
+			found := false
+			for _, m := range a.MissingAxes {
+				found = found || m == "complexity"
+			}
+			if !found {
+				t.Errorf("%s: complexity has no data but missing_axes = %v", a.Product, a.MissingAxes)
+			}
+		}
 		for name, ax := range map[string]epAxis{
 			"autonomy": a.Axes.Autonomy, "reach": a.Axes.Reach, "contagion": a.Axes.Contagion,
 			"delegation": a.Axes.Delegation, "opacity": a.Axes.Opacity, "complexity": a.Axes.Complexity,

@@ -362,9 +362,13 @@ func changesOtherAgents(a rules.OverviewAgent) (toInstructions, toConfig bool) {
 
 // --- axis 6: complexity, from the registry ---
 
+// complexity has no data (registry_missing) for a product with no entry, an
+// entry not marked Complete, or one with no sources (CTO-31 M1): a partial
+// list would give a level, never «no data», and a level of 0 for nothing
+// declared would claim what the engine does not know (CTO-26 §6).
 func complexity(product string) Axis {
 	e, ok := agents.EntryOf(product)
-	if !ok {
+	if !ok || !e.Complete || len(e.Sources) == 0 {
 		return noData(NoDataRegistryMissing)
 	}
 	_, level := e.Complexity()

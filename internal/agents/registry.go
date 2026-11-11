@@ -46,17 +46,24 @@ type ConfigSource struct {
 	AffectsPermissions bool
 }
 
-// Entry is a product's registry entry: its configuration sources.
+// Entry is a product's registry entry: its configuration sources. Complete is
+// true only when Sources lists every source the product's official
+// documentation gives that decides permissions (CTO-31 M1, §a); until then the
+// complexity axis has no data (registry_missing), never a level computed from
+// a partial list.
 type Entry struct {
-	Product string
-	Sources []ConfigSource
+	Product  string
+	Sources  []ConfigSource
+	Complete bool
 }
 
 // registry is the nine scored products. Each source listed is one the reader
 // opens on the full-machine fixture today (grounded in TestFullMachinePipeline's
 // coverage.sources_read); the complexity it yields grows as that fixture
 // exercises more of each product's layers. Cursor opens no config file on the
-// current full machine, so it declares none yet.
+// current full machine, so it declares none yet. No entry is Complete yet
+// (CTO-31 M1): the lists are the fixture's, not the products' documented
+// sources, so every complexity is «no data» until the full registry (§a).
 var registry = []Entry{
 	{Product: "claude-code", Sources: []ConfigSource{
 		{LayerUser, FormatJSON, true}, // ~/.claude/settings.json
