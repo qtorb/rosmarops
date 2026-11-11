@@ -252,6 +252,7 @@ func TestRenderHTML_TitleOthers(t *testing.T) {
 func TestRenderHTML_YourSpaceAlways(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	v.OS = "windows" // the window's «Save to my space» card (BV-215: off Windows, the console card)
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		// Not connected (BV-196): the one signed card and the plain text link; no
@@ -297,5 +298,30 @@ func TestRenderHTML_YourSpaceAlways(t *testing.T) {
 		}
 		v.SpaceConnected = false
 		v.SpaceSentDate = ""
+	}
+}
+
+// TestRenderHTML_YourSpaceConsole (BV-215): not connected, a report made on
+// macOS or Linux — no «Save to my space» window there — gives the console's way
+// in (report.space_keep.console); one made on Windows keeps report.space_keep.
+func TestRenderHTML_YourSpaceConsole(t *testing.T) {
+	g := v2Graph(t)
+	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+	for _, os := range []string{"macos", "linux", "windows"} {
+		v.OS = os
+		key, other := "report.space_keep.console", "report.space_keep"
+		if os == "windows" {
+			key, other = other, key
+		}
+		for _, lang := range []string{"en", "es"} {
+			cat, _ := catalog.Load(lang)
+			page := renderHTML(t, lang, v)
+			if want := `<div class="spacecard">` + htmlEscape(cat.Text(key, nil)) + `</div>`; !strings.Contains(page, want) {
+				t.Errorf("%s/%s: missing %s card %q", os, lang, key, want)
+			}
+			if strings.Contains(page, htmlEscape(cat.Text(other, nil))) {
+				t.Errorf("%s/%s: shows %s too", os, lang, other)
+			}
+		}
 	}
 }

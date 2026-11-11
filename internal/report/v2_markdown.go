@@ -69,6 +69,8 @@ var staticKeys = []string{
 	// BV-164: the connect offer no longer shows a number, so connect.number and
 	// connect.wait are gone; connect.yes is now «Save to my space».
 	"connect.q", "connect.text", "connect.yes", "connect.no",
+	// BV-215: the console's yes/skip prompt (macOS and Linux) after connect.text.
+	"connect.console.prompt",
 	"connect.ok", "connect.done", "connect.expired", "connect.failed",
 	"disconnect.done",
 	// BV-184: the «No me afecta» window and the console list (chrome), the
