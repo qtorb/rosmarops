@@ -1,6 +1,6 @@
 # Continuous integration of RosmarOps (BV-78): on every push to master and
 # every pull request to master, the same verify job as release.yml, copied
-# literally (same runner, actions pinned by commit SHA, Go 1.27.3,
+# literally (same runner, actions pinned by commit SHA, Go 1.27.4,
 # staticcheck 2026.2.2, gofumpt v0.7.0, strace, vet, staticcheck, gofumpt
 # and go test in linux and windows). BV-85: pushes to bv-* branches too, and
 # a verify-windows job that runs vet and the tests natively on windows-latest
@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.3"
+          go-version: "1.27.4"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -75,7 +75,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.3"
+          go-version: "1.27.4"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -167,7 +167,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.3"
+          go-version: "1.27.4"
           cache: false
       - name: Tools (pinned versions)
         run: |
@@ -204,7 +204,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.27.3"
+          go-version: "1.27.4"
           cache: false
       - name: strace
         run: sudo apt-get update && sudo apt-get install -y strace
