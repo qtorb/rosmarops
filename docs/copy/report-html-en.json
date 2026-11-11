@@ -479,6 +479,7 @@
   "report.services_none": "No connected services that can act for you.",
   "report.space_button": "Open your space",
   "report.space_keep": "Keep this report and see how your score changes over time: open RosmarOps again and, when the check finishes, click «Save to my space». If you don't have a space, you create it right then.",
+  "report.space_keep.console": "Keep this report and see how your score changes over time: open RosmarOps again and, when the check finishes, answer y when it asks whether to see your results in your space. If you don't have a space, you create it right then.",
   "report.space_open_link": "I already have a space: open it",
   "report.space_h2": "Your space",
   "report.space_has": "In your space you have your score's evolution, how each agent works, what changed since the last check and the analysis details, for all your computers.",

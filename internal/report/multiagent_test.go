@@ -173,6 +173,7 @@ func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
 	v1 := report.Build("t", nil, nil, 0, 0, 0, 0, nil)
 	v1.GeneratedAt = "2026-10-25T12:00:00Z" // the day the golden page was rendered (its report name)
 	v := buildV2(t, &g, v1)
+	v.OS = "windows" // the golden page is the Windows one on every system (BV-215: «Your space» differs off Windows)
 	for _, lang := range []string{"en", "es"} {
 		raw, err := os.ReadFile("testdata/html_one_agent_bv56." + lang + ".html")
 		if err != nil {

@@ -101,8 +101,14 @@ func (c htmlCtx) renderYourSpace() {
 		// the person the only way in — run RosmarOps again and «Save to my space» —
 		// and below it a plain text link, for whoever already has a space. No
 		// «Create your space» button: there is no second door.
+		// BV-215: off Windows there is no «Save to my space» window; the way in
+		// is answering y to the console question, so the card says that.
+		keep := "report.space_keep"
+		if c.v.OS == "macos" || c.v.OS == "linux" {
+			keep = "report.space_keep.console"
+		}
 		c.w(`<div class="spacecard">%s</div><p class="spacelinkp"><a class="spacelink" href="https://app.rosmarops.com/space">%s</a></p>`,
-			c.t("report.space_keep", nil), c.t("report.space_open_link", nil))
+			c.t(keep, nil), c.t("report.space_open_link", nil))
 	}
 	c.w(`</section>`)
 }

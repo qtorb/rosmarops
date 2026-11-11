@@ -1541,7 +1541,7 @@ func HTMLKeys() []string {
 		"report.problems.sent.one", "report.problems.sent.other")
 	// BV-158 part 3: the always-shown «Your space» copy (connected and not) and
 	// the folded «More information» (not connected).
-	keys = append(keys, "report.space_has", "report.space_keep", "report.space_open_link",
+	keys = append(keys, "report.space_has", "report.space_keep", "report.space_keep.console", "report.space_open_link",
 		"html.more.title", "html.more.agents", "html.more.analysis")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
