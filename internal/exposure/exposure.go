@@ -299,7 +299,7 @@ func contagion(a rules.OverviewAgent, g graph.Graph, clientID string) Axis {
 		return lvl(3, inputs...)
 	case (c1 && c2) || c3inst:
 		return lvl(2, inputs...)
-	case c1:
+	case c1 || c2: // signed (CTO-31 M3 iii): only C1 or only C2 → 1
 		return lvl(1, inputs...)
 	default:
 		return lvl(0)
