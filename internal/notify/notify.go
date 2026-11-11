@@ -12,16 +12,36 @@ import (
 	"strings"
 )
 
-// AppID is Windows PowerShell's application identity.
+// AppID is Windows PowerShell's application identity, used when RosmarOps runs
+// unpackaged (the common case): the toast is shown under PowerShell's identity.
 const AppID = `{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe`
 
-// Script reads ToastNotifier.Setting and, only when it is Enabled and an XML
-// comes on the standard input, shows it; it prints the setting. It is
-// constant: nothing of the report enters it.
-const Script = `$ErrorActionPreference = 'Stop'
+// AppName is the Id of the <Application> in packaging/msix/AppxManifest.xml.
+// When RosmarOps runs packaged (from the Microsoft Store), the toast is shown
+// under the package's own identity, whose AUMID is <PackageFamilyName>!AppName,
+// so it carries RosmarOps's name and icon instead of PowerShell's (BV-213).
+const AppName = "RosmarOps"
+
+// AUMIDFor is the Application User Model ID the toast is shown under: the
+// package's (<PackageFamilyName>!AppName) when running packaged (a non-empty
+// package family name), else Windows PowerShell's AppID — the unpackaged
+// behaviour, unchanged. Pure, so it is tested with and without a package.
+func AUMIDFor(packageFamilyName string) string {
+	if packageFamilyName == "" {
+		return AppID
+	}
+	return packageFamilyName + "!" + AppName
+}
+
+// scriptFor is the notification script for an AUMID: it reads
+// ToastNotifier.Setting and, only when it is Enabled and an XML comes on the
+// standard input, shows it; it prints the setting. Nothing of the report enters
+// it; the AUMID is the only thing that varies (packaged vs not).
+func scriptFor(aumid string) string {
+	return `$ErrorActionPreference = 'Stop'
 $null = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
 $null = [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
-$n = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('` + AppID + `')
+$n = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('` + psSingleQuote(aumid) + `')
 $s = [string]$n.Setting
 $x = [Console]::In.ReadToEnd()
 if ($s -eq 'Enabled' -and $x.Length -gt 0) {
@@ -30,9 +50,24 @@ if ($s -eq 'Enabled' -and $x.Length -gt 0) {
   $n.Show((New-Object Windows.UI.Notifications.ToastNotification $d))
 }
 [Console]::Out.Write($s)`
+}
 
-// Args are powershell.exe's arguments: always the same.
-func Args() []string { return []string{"-NonInteractive", "-NoProfile", "-Command", Script} }
+// psSingleQuote escapes a value for a PowerShell single-quoted string literal
+// (a single quote becomes two). The AUMIDs used here contain none, but the
+// script must never let one through.
+func psSingleQuote(s string) string { return strings.ReplaceAll(s, "'", "''") }
+
+// Script is the notification script under PowerShell's identity (the unpackaged
+// default). Kept for callers and tests; the packaged path builds its own.
+var Script = scriptFor(AppID)
+
+// Args are powershell.exe's arguments for the default (unpackaged) identity.
+func Args() []string { return argsFor(AppID) }
+
+// argsFor are powershell.exe's arguments running the script for an AUMID.
+func argsFor(aumid string) []string {
+	return []string{"-NonInteractive", "-NoProfile", "-Command", scriptFor(aumid)}
+}
 
 // Settings of ToastNotifier.Setting and the report's codes for the ones that
 // keep the notification from showing (report.v2 notification_unavailable).

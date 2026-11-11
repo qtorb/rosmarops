@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/qtorb/rosmarops/internal/proc"
 	"github.com/qtorb/rosmarops/internal/winpath"
@@ -17,6 +19,32 @@ import (
 
 // timeout bounds the PowerShell call.
 const timeout = 30 * time.Second
+
+var kernel32 = syscall.NewLazyDLL("kernel32.dll")
+
+// appModelErrorNoPackage is APPMODEL_ERROR_NO_PACKAGE: the process has no
+// package identity (RosmarOps runs unpackaged). It is not a failure.
+const appModelErrorNoPackage = 15700
+
+// packageFamilyName returns the current process's package family name when
+// RosmarOps runs packaged (installed from the Microsoft Store), else "" when it
+// runs unpackaged or the name cannot be read. It calls kernel32's
+// GetCurrentPackageFamilyName with no new dependency (BV-213).
+func packageFamilyName() string {
+	getPFN := kernel32.NewProc("GetCurrentPackageFamilyName")
+	// First call: with a null buffer it sets length to the size needed.
+	var length uint32
+	r, _, _ := getPFN.Call(uintptr(unsafe.Pointer(&length)), 0)
+	if r == appModelErrorNoPackage || length == 0 {
+		return ""
+	}
+	buf := make([]uint16, length)
+	r, _, _ = getPFN.Call(uintptr(unsafe.Pointer(&length)), uintptr(unsafe.Pointer(&buf[0])))
+	if r != 0 { // anything but ERROR_SUCCESS
+		return ""
+	}
+	return syscall.UTF16ToString(buf[:length])
+}
 
 // Run runs the script with toastXML on its standard input (empty: only
 // read the setting) and returns ToastNotifier.Setting.
@@ -33,7 +61,9 @@ func Run(ctx context.Context, toastXML string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, exe, Args()...)
+	// Packaged (Store): show the toast under the package AUMID so it carries
+	// RosmarOps's name and icon; unpackaged: PowerShell's identity, as before.
+	cmd := exec.CommandContext(ctx, exe, argsFor(AUMIDFor(packageFamilyName()))...)
 	proc.Hide(cmd)
 	cmd.Env = winpath.ChildEnv(os.Environ())
 	cmd.Stdin = strings.NewReader(toastXML)

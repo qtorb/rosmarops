@@ -35,15 +35,16 @@ type psTaskRecord struct {
 
 // psRosmarOps is the detail of a task that runs rosmarops.exe (J5).
 type psRosmarOps struct {
-	Count            int         `json:"Count"`
-	Execute          string      `json:"Execute"`
-	Expanded         string      `json:"Expanded"`
-	Arguments        string      `json:"Arguments"`
-	WorkingDirectory string      `json:"WorkingDirectory"`
-	UserID           string      `json:"UserId"`
-	LogonType        string      `json:"LogonType"`
-	RunLevel         string      `json:"RunLevel"`
-	Triggers         []psTrigger `json:"Triggers"`
+	Count              int         `json:"Count"`
+	Execute            string      `json:"Execute"`
+	Expanded           string      `json:"Expanded"`
+	Arguments          string      `json:"Arguments"`
+	WorkingDirectory   string      `json:"WorkingDirectory"`
+	UserID             string      `json:"UserId"`
+	LogonType          string      `json:"LogonType"`
+	RunLevel           string      `json:"RunLevel"`
+	ExecutionTimeLimit string      `json:"ExecutionTimeLimit"`
+	Triggers           []psTrigger `json:"Triggers"`
 }
 
 type psTrigger struct {
@@ -102,6 +103,7 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 		`UserId="$($task.Principal.UserId)";` +
 		`LogonType="$($task.Principal.LogonType)";` +
 		`RunLevel="$($task.Principal.RunLevel)";` +
+		`ExecutionTimeLimit="$($task.Settings.ExecutionTimeLimit)";` +
 		`Triggers=@($task.Triggers | ForEach-Object {[PSCustomObject]@{Class=$_.CimClass.CimClassName;Days="$($_.DaysOfWeek)";Start="$($_.StartBoundary)"}})` +
 		`}}else{$null})` +
 		`}` +
@@ -148,6 +150,7 @@ func (r *psRosmarOps) task() *platform.RosmarOpsTask {
 	t := &platform.RosmarOpsTask{
 		Actions: r.Count, Execute: r.Execute, ExecuteExpanded: r.Expanded, Arguments: r.Arguments,
 		WorkingDirectory: r.WorkingDirectory, UserID: r.UserID, LogonType: r.LogonType, RunLevel: r.RunLevel,
+		ExecutionTimeLimit: r.ExecutionTimeLimit,
 	}
 	for _, tr := range r.Triggers {
 		days, _ := strconv.Atoi(strings.TrimSpace(tr.Days))
