@@ -38,14 +38,17 @@ var (
 
 // runNoArgs is the double click; it returns the exit code.
 func runNoArgs() int {
+	// BV-215: the log goes to the deferred run log before anything logs, so
+	// systemLang's line (macOS: display language not applicable) is in the
+	// log, never on the console.
+	log := &deferredLog{name: RunLogName}
+	defer log.Close()
+	slog.SetDefault(slog.New(slog.NewTextHandler(log, nil)))
 	lang := systemLang()
 	cat, err := catalog.Load(lang)
 	if err != nil {
 		cat, _ = catalog.Load(catalog.DefaultLang)
 	}
-	log := &deferredLog{name: RunLogName}
-	defer log.Close()
-	slog.SetDefault(slog.New(slog.NewTextHandler(log, nil)))
 	// BV-211 §2: a double click gets its own console; turn off QuickEdit so a
 	// click does not freeze the run in «Select» mode, and restore the original
 	// mode on exit. A console inherited from PowerShell or cmd is left untouched.
