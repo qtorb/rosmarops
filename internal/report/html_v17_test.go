@@ -168,7 +168,7 @@ func TestWeeklyCommandLiteral(t *testing.T) {
 	want := `$a = New-ScheduledTaskAction -Execute 'C:\Users\Ana María\O''Brien tools\rosmarops.exe' -Argument 'run --lang es --unattended' -WorkingDirectory 'C:\Users\Ana María\O''Brien tools'
 $t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday -At 09:00
 $p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
-$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
+$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 25) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName 'RosmarOps weekly review' -Action $a -Trigger $t -Principal $p -Settings $s -Force`
 	got := report.WeeklyCommand(v17Exe, "es")
 	if got != want {
