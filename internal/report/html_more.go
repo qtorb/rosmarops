@@ -341,7 +341,7 @@ func WeeklyCommand(exe, lang string) string {
 	return "$a = New-ScheduledTaskAction -Execute " + psQuote(exe) + " -Argument 'run --lang " + lang + " --unattended' -WorkingDirectory " + psQuote(folder) + "\n" +
 		"$t = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Friday -At 09:00\n" +
 		`$p = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited` + "\n" +
-		"$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew\n" +
+		"$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 25) -MultipleInstances IgnoreNew\n" +
 		"Register-ScheduledTask -TaskName 'RosmarOps weekly review' -Action $a -Trigger $t -Principal $p -Settings $s -Force"
 }
 
