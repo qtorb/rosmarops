@@ -531,7 +531,12 @@ type RosmarOpsTask struct {
 	UserID           string
 	LogonType        string // e.g. "Interactive"
 	RunLevel         string // "Limited" or "Highest"
-	Triggers         []TaskTrigger
+	// ExecutionTimeLimit is the task's settings time limit as registered, an
+	// ISO-8601 duration (e.g. "PT25M", "PT1H"); "PT0S" or empty means no limit
+	// (BV-212). Used to spot an own weekly task whose limit is shorter than the
+	// review can need.
+	ExecutionTimeLimit string
+	Triggers           []TaskTrigger
 }
 
 // TaskTrigger is one trigger: its CIM class (MSFT_TaskWeeklyTrigger, …),
