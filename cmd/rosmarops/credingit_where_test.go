@@ -112,9 +112,37 @@ func bv219Findings(v2 string) int {
 	return len(regexp.MustCompile(`"rule":\s*"cred_in_git"`).FindAllString(v2, -1))
 }
 
-// bv219Where is how many times the page shows a «where» line: step 3's row
-// of the second key (the first is step 2's).
-const bv219Where = 1
+// bv219Where checks that the page shows want twice, both outside
+// «Technical details» (BV-219 B2): below the title of step 2 (one key) and
+// in step 3's row (the other key), before «what it means».
+func bv219Where(t *testing.T, page, want string) {
+	t.Helper()
+	step2, step3, ok := strings.Cut(page, `<section aria-labelledby="step3">`)
+	if !ok {
+		t.Fatal("no step 3 in the page")
+	}
+	_, step2, _ = strings.Cut(step2, `<section class="now"`)
+	visible := func(s string) string { // s without its details.tech blocks
+		var b strings.Builder
+		for {
+			before, rest, found := strings.Cut(s, `<details class="tech">`)
+			b.WriteString(before)
+			if !found {
+				return b.String()
+			}
+			_, s, _ = strings.Cut(rest, `</details>`)
+		}
+	}
+	for name, part := range map[string]string{"step 2": step2, "step 3": step3} {
+		if n := strings.Count(visible(part), want); n != 1 {
+			t.Errorf("%s shows the «where» line %d times outside «Technical details», want 1: %q", name, n, want)
+		}
+		_, after, _ := strings.Cut(visible(part), want)
+		if !strings.HasPrefix(after, `</p><p class="imp">`) && !strings.HasPrefix(after, `</p><p>`) {
+			t.Errorf("%s: the «where» line is not right before «what it means»: %.80q", name, after)
+		}
+	}
+}
 
 // bv219Env is the .env both keys are in.
 const bv219Env = "AWS_ACCESS_KEY_ID=" + bv219AWSKey + "\nGITHUB_TOKEN=" + bv219Token + "\n"
@@ -148,9 +176,7 @@ func TestCredInGitWhere_Tracked(t *testing.T) {
 		t.Error("a tracked key's title does not say it is saved in git")
 	}
 	want := `<p class="where">En <code>.env</code>, que git sigue, en el proyecto ~` + string(filepath.Separator) + `proj.`
-	if n := strings.Count(page, want); n != bv219Where {
-		t.Errorf("the «where» line of a tracked key shows %d times, want %d: %q", n, bv219Where, want)
-	}
+	bv219Where(t, page, want)
 	if strings.Contains(page, "la añadió en") {
 		t.Error("a tracked key shows the history «where» line")
 	}
@@ -182,9 +208,7 @@ func TestCredInGitWhere_HistoryOnly(t *testing.T) {
 	}
 	want := `<p class="where">En el proyecto ~` + string(filepath.Separator) + `proj: el commit <code>` + commit +
 		`</code> la añadió en <code>.env</code>. Hoy ese fichero puede estar ignorado o ya no existir, pero la clave sigue en el historial.`
-	if n := strings.Count(page, want); n != bv219Where {
-		t.Errorf("the «where» line of a history-only key shows %d times, want %d: %q", n, bv219Where, want)
-	}
+	bv219Where(t, page, want)
 	if strings.Contains(page, "que git sigue") {
 		t.Error("a history-only key shows the tracked «where» line")
 	}
