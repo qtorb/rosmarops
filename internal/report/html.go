@@ -647,6 +647,9 @@ func (c htmlCtx) renderStep1() {
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
 		c.w(`<p class="meta warn">%s</p>`, c.t("html.integrity.not_checked", nil))
 	}
+	if v.storeNew != "" { // BV-222: a Microsoft Store update accepted by the integrity check
+		c.w(`<p class="meta">%s</p>`, html.EscapeString(c.cat.Text("report.integrity.binary_store", map[string]string{"old": v.storeOld, "new": v.storeNew})))
+	}
 	// BV-148: the program's knowledge is more than 14 days older than its last
 	// review — it may miss newer agent behaviour. Compared offline, against the
 	// run's own local date; no URL (the report carries none).
@@ -1496,6 +1499,7 @@ func HTMLKeys() []string {
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
 		"html.where",
+		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
 		"html.projects.title", "html.projects.summary", "html.projects.item",
 		"html.projects.source.home", "html.projects.source.root", "html.projects.source.claude",

@@ -56,6 +56,10 @@ type State struct {
 type Integrity struct {
 	VigilBinarySHA256 string `json:"vigil_binary_sha256"`
 	ConfigSHA256      string `json:"config_sha256"`
+	// BinaryAcceptedVia is how the last binary change was accepted (F3,
+	// BV-222): baseline, console, admin_list or store. Optional; absent in a
+	// state from before it.
+	BinaryAcceptedVia string `json:"binary_accepted_via,omitempty"`
 }
 
 // Baselines holds the last-known state of every audited surface.

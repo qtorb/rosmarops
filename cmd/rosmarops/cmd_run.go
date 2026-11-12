@@ -246,9 +246,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		ask.in, ask.out, ask.terminal = strings.NewReader(""), io.Discard, false
 	}
+	// BV-222: a Microsoft Store update of RosmarOps itself is accepted
+	// without asking (invariant 8); storeUpd records it for the report.
+	var storeUpd storeUpdate
 	integrityNotChecked, err := integrityRun{
 		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: defaultDir,
 		unattended: unattended, window: m.window, lang: lang, selfHash: hash.Self,
+		store: realStoreCheck, accepted: &storeUpd,
 	}.check()
 	if err != nil {
 		return "", err
@@ -901,7 +905,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, ConfigFile: absPath(cfgPath),
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan,
 		IntegrityNotChecked: integrityNotChecked,
-		ExePath:             exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
+		StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
+		ExePath: exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 		BinarySkipped: binarySkipped,

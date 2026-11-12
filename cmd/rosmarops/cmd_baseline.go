@@ -76,6 +76,7 @@ func runBaseline(cli.Invocation) error {
 	// configuration with its hash (adjustment A: the copy lists what
 	// changes next).
 	st.Integrity.VigilBinarySHA256 = binaryHash
+	st.Integrity.BinaryAcceptedVia = acceptedViaBaseline
 	st.Integrity.ConfigSHA256 = configHash
 	st.EngineVersion = version // the version the binary reference is of (J2)
 	copyDir := ""

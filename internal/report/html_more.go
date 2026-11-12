@@ -268,6 +268,15 @@ func (c htmlCtx) renderWeekly() {
 	case scheduledtasks.WeeklyOwn:
 		c.w(`<p>%s</p>`, c.t("html.weekly.on", map[string]string{"day": c.cat.Text("html.day."+w.Day, nil), "time": w.Time}))
 	case scheduledtasks.WeeklyOther:
+		if c.v.storeNew != "" && c.v.exePath != "" {
+			// BV-222 (CTO-41 §2.2 b): this run accepted a Microsoft Store
+			// update and the weekly review still runs another copy: say so and
+			// give the command with the Store alias (exePath is the alias).
+			c.w(`<p>%s</p><pre>%s</pre>`, c.t("report.weekly.points_to_old_exe", map[string]string{"path": userPath(w.Other, c.home, "~")}),
+				html.EscapeString(WeeklyCommand(c.v.exePath, c.cat.Lang())))
+			c.renderWeeklyCopy()
+			break
+		}
 		c.w(`<p>%s</p>`, c.t("html.weekly.other_exe", map[string]string{"path": userPath(w.Other, c.home, "~")}))
 		c.renderWeeklyCopy()
 	default:

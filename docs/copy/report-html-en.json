@@ -479,6 +479,8 @@
   "html.weekly.prompt.linux": "Run exactly these commands in the terminal, without changing them and without sudo. If they fail, stop and show me the error.",
   "html.weekly.title": "Weekly review",
   "html.where": "Found in:",
+  "report.integrity.binary_store": "RosmarOps was updated from {old} to {new} through the Microsoft Store.",
+  "report.weekly.points_to_old_exe": "Your weekly check still runs an older copy of RosmarOps ({path}). Now that you use the Microsoft Store version, point the weekly check to it with this command:",
   "html.projects.title": "Projects checked",
   "html.projects.summary": "RosmarOps found {found} projects in {roots} folders and checked {scanned}.",
   "html.projects.item": "{path}",
