@@ -92,6 +92,10 @@ type V2 struct {
 	// {projects} (v3 §15.2).
 	radiusProj map[string]map[string]int
 	repoRoots  []string
+	// committed are the graph's committed_in edges by edge id, for the
+	// «where» line of cred_in_git (BV-219): the commit and the path inside
+	// the repository. Not in the JSON; empty when the report is read back.
+	committed map[string]committedPlace
 	// integrityNotChecked is V2Input's (v3 §17.5).
 	integrityNotChecked bool
 	exePath             string
@@ -433,6 +437,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	var res rules.Result
 	if in.Graph != nil {
 		g := *in.Graph
+		v.committed = committedPlaces(g)
 		prov, sha := g.Provenance, in.GraphSHA256
 		v.Provenance.Graph, v.Provenance.GraphSHA256 = &prov, &sha
 		res = rules.Evaluate(rules.Input{
