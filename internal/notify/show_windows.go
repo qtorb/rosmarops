@@ -9,42 +9,20 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/qtorb/rosmarops/internal/proc"
 	"github.com/qtorb/rosmarops/internal/winpath"
+	"github.com/qtorb/rosmarops/internal/winpkg"
 )
 
 // timeout bounds the PowerShell call.
 const timeout = 30 * time.Second
 
-var kernel32 = syscall.NewLazyDLL("kernel32.dll")
-
-// appModelErrorNoPackage is APPMODEL_ERROR_NO_PACKAGE: the process has no
-// package identity (RosmarOps runs unpackaged). It is not a failure.
-const appModelErrorNoPackage = 15700
-
-// packageFamilyName returns the current process's package family name when
-// RosmarOps runs packaged (installed from the Microsoft Store), else "" when it
-// runs unpackaged or the name cannot be read. It calls kernel32's
-// GetCurrentPackageFamilyName with no new dependency (BV-213).
-func packageFamilyName() string {
-	getPFN := kernel32.NewProc("GetCurrentPackageFamilyName")
-	// First call: with a null buffer it sets length to the size needed.
-	var length uint32
-	r, _, _ := getPFN.Call(uintptr(unsafe.Pointer(&length)), 0)
-	if r == appModelErrorNoPackage || length == 0 {
-		return ""
-	}
-	buf := make([]uint16, length)
-	r, _, _ = getPFN.Call(uintptr(unsafe.Pointer(&length)), uintptr(unsafe.Pointer(&buf[0])))
-	if r != 0 { // anything but ERROR_SUCCESS
-		return ""
-	}
-	return syscall.UTF16ToString(buf[:length])
-}
+// packageFamilyName is the current process's package family name when
+// RosmarOps runs packaged (installed from the Microsoft Store), else "" (BV-213).
+// It moved to internal/winpkg (BV-222), shared with the integrity check.
+func packageFamilyName() string { return winpkg.FamilyName() }
 
 // Run runs the script with toastXML on its standard input (empty: only
 // read the setting) and returns ToastNotifier.Setting.
