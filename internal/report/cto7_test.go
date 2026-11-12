@@ -174,8 +174,8 @@ func TestCardSilencedSameBytes(t *testing.T) {
 
 // TestRenderHTML_FixTextsOffWindows (BV-219 B3): on macOS and Linux the fix
 // steps that open config.json name the user's folder with ~ and open the file
-// without Notepad (html.fix.manual.open.macos on macOS, .other on Linux); on
-// Windows they are as before.
+// with html.fix.manual.open.other (no Notepad, no TextEdit); on Windows they
+// are as before.
 func TestRenderHTML_FixTextsOffWindows(t *testing.T) {
 	v := cto7Report(t)
 	for _, os := range []string{"linux", "macos", "windows"} {
@@ -202,12 +202,11 @@ func TestRenderHTML_FixTextsOffWindows(t *testing.T) {
 			if want := htmlEscape(cat.Text("html.agent.prompt.rotated", map[string]string{"file": "~/.rosmarops/config.json"})); !strings.Contains(page, want) {
 				t.Errorf("%s/%s: no %q", os, lang, want)
 			}
-			key := "html.fix.manual.open.other"
-			if os == "macos" {
-				key = "html.fix.manual.open.macos"
+			if want := htmlEscape(strings.SplitN(cat.Text("html.fix.manual.open.other", nil), "{", 2)[0]); !strings.Contains(page, want) {
+				t.Errorf("%s/%s: the manual step is not html.fix.manual.open.other", os, lang)
 			}
-			if want := htmlEscape(cat.Text(key, map[string]string{"file": "~/.rosmarops/config.json"})); !strings.Contains(page, strings.SplitN(want, "~", 2)[0]) {
-				t.Errorf("%s/%s: the manual step is not %s", os, lang, key)
+			if lang == "en" && strings.Contains(page, "TextEdit") {
+				t.Errorf("%s/%s: html.fix.manual.open.macos in the page", os, lang)
 			}
 		}
 	}

@@ -147,8 +147,8 @@ var osLinuxVariant = map[string]bool{
 	"html.assume.scope": true,
 }
 
-// osOtherVariant are the keys whose Linux text is key + ".other" (BV-219
-// B3): the text that names no Windows program.
+// osOtherVariant are the keys whose macOS and Linux text is key + ".other"
+// (BV-219 B3): the text that names no Windows program.
 var osOtherVariant = map[string]bool{
 	"html.fix.manual.open": true,
 }
@@ -164,16 +164,17 @@ func (v V2) homePrefix() string {
 }
 
 // osKey is key, or its macOS text (key + ".macos") on macOS (decision
-// 2026-10-29, point 5).
+// 2026-10-29, point 5); off Windows, the keys of osOtherVariant take their
+// «.other» text instead (BV-219 B3).
 func (v V2) osKey(key string) string {
+	if (v.macOS() || v.linux()) && osOtherVariant[key] {
+		return key + ".other"
+	}
 	if v.macOS() {
 		return key + ".macos"
 	}
 	if v.linux() && osLinuxVariant[key] {
 		return key + ".linux"
-	}
-	if v.linux() && osOtherVariant[key] {
-		return key + ".other"
 	}
 	return key
 }
