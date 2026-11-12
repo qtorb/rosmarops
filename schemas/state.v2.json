@@ -56,6 +56,10 @@
           "type": "string",
           "pattern": "^[a-f0-9]{64}$",
           "description": "Hash of rosmarops.config.json as of the last successful run."
+        },
+        "binary_accepted_via": {
+          "enum": ["baseline", "console", "admin_list", "store"],
+          "description": "How the last change of the binary was accepted (CTO-37 F3, BV-222): by `rosmarops baseline`, confirmed in the console, by the administrator fingerprint list (0.12.0), or as a Microsoft Store update. Optional; absent in a state from before it."
         }
       }
     },

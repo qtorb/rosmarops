@@ -65,6 +65,23 @@ type integrityRun struct {
 	// abort is abortWithIntegrityFailure, which never returns; tests
 	// replace it.
 	abort func(category, why, action string, o abortOptions)
+	// store reports whether a changed binary is a Microsoft Store update the
+	// check accepts without asking (storeAccepts with this process's package
+	// identity); nil: never (tests that do not exercise it).
+	store func(stateVersion string) bool
+	// accepted is set when the check accepted a Microsoft Store update, for
+	// the report; nil: not recorded.
+	accepted *storeUpdate
+}
+
+// realStoreCheck is integrityRun.store for a real run: this process's package
+// identity and real executable (CTO-41 §1.2 B).
+func realStoreCheck(stateVersion string) bool {
+	exe, err := currentExe()
+	if err != nil {
+		return false
+	}
+	return storeAccepts(currentPackage(), exe, os.Getenv("LOCALAPPDATA"), version, stateVersion)
 }
 
 // errAborted is check's error after an abort that returned (tests only).
@@ -78,6 +95,7 @@ func (r integrityRun) recordReferences(self string) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 	r.st.Integrity.VigilBinarySHA256 = self
+	r.st.Integrity.BinaryAcceptedVia = acceptedViaConsole
 	r.st.Integrity.ConfigSHA256 = hash.Bytes(raw)
 	r.st.EngineVersion = version
 	if err := writeAcceptedCopy(r.reportDir, raw); err != nil {
@@ -134,6 +152,22 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		slog.Warn("integrity: no reference recorded yet — run 'rosmarops baseline' to establish it")
 		return false, nil
 	}
+	if self != r.st.Integrity.VigilBinarySHA256 && r.store != nil && r.st.EngineVersion != "" && r.store(r.st.EngineVersion) {
+		// Invariant 8 (BV-222): a Microsoft Store update of RosmarOps itself,
+		// newer than the recorded version, is accepted without asking; the
+		// report says so.
+		oldVersion := r.st.EngineVersion
+		slog.Info("integrity: binary accepted as a Microsoft Store update", "old_version", oldVersion, "new_version", version)
+		r.st.Integrity.VigilBinarySHA256 = self
+		r.st.Integrity.BinaryAcceptedVia = acceptedViaStore
+		r.st.EngineVersion = version
+		if err := state.SaveState(r.stPath, *r.st); err != nil {
+			return false, fmt.Errorf("save state: %w", err)
+		}
+		if r.accepted != nil {
+			*r.accepted = storeUpdate{Old: oldVersion, New: version}
+		}
+	}
 	if self != r.st.Integrity.VigilBinarySHA256 {
 		// J2: the old and the new version and fingerprint, and the question.
 		old := r.st.Integrity.VigilBinarySHA256
@@ -148,6 +182,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			return false, errAborted
 		}
 		r.st.Integrity.VigilBinarySHA256 = self
+		r.st.Integrity.BinaryAcceptedVia = acceptedViaConsole
 		r.st.EngineVersion = version
 		if err := state.SaveState(r.stPath, *r.st); err != nil {
 			return false, fmt.Errorf("save state: %w", err)

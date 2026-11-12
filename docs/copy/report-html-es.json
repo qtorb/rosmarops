@@ -599,6 +599,8 @@
   "html.weekly.prompt.linux": "Ejecuta exactamente estos comandos en la terminal, sin cambiarlos y sin sudo. Si fallan, para y enséñame el error.",
   "html.weekly.title": "Revisión semanal",
   "html.where": "Encontrado en:",
+  "report.integrity.binary_store": "RosmarOps se ha actualizado de la {old} a la {new} desde la Microsoft Store.",
+  "report.weekly.points_to_old_exe": "Tu revisión semanal todavía ejecuta una copia anterior de RosmarOps ({path}). Ahora que usas la versión de la Microsoft Store, apunta la revisión semanal a ella con esta orden:",
   "kit.space_connected": "Este ordenador está conectado a tu espacio. Desconéctalo primero con «rosmarops disconnect».",
   "md.silenced.config": "Ocultos por tu configuración",
   "memory.counts": "Avisos desde la ejecución anterior — Nuevos: {new} · Siguen: {still} · Ya no se observan: {gone} · Vuelven a aparecer: {again}",

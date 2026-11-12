@@ -695,6 +695,8 @@
   "html.weekly.prompt.linux": "Run exactly these commands in the terminal, without changing them and without sudo. If they fail, stop and show me the error.",
   "html.weekly.title": "Weekly review",
   "html.where": "Found in:",
+  "report.integrity.binary_store": "RosmarOps was updated from {old} to {new} through the Microsoft Store.",
+  "report.weekly.points_to_old_exe": "Your weekly check still runs an older copy of RosmarOps ({path}). Now that you use the Microsoft Store version, point the weekly check to it with this command:",
   "kit.import_prompt": "Type your secret phrase, or your recovery code:",
   "kit.import_wrong": "That doesn't open this key file. Check your phrase or recovery code.",
   "kit.imported": "Key imported. This computer now uses the same key as your others. Its next report can't be compared with the previous one, once, because the fingerprints change.",

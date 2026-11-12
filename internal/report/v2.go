@@ -98,9 +98,12 @@ type V2 struct {
 	committed map[string]committedPlace
 	// integrityNotChecked is V2Input's (v3 §17.5).
 	integrityNotChecked bool
-	exePath             string
-	weekly              scheduledtasks.Weekly
-	weeklyNoSystemd     bool // BV-165: Linux has no user systemd; the weekly section says so
+	// storeOld and storeNew are the versions of a Microsoft Store update the
+	// integrity check accepted in this run (BV-222); empty otherwise.
+	storeOld, storeNew string
+	exePath            string
+	weekly             scheduledtasks.Weekly
+	weeklyNoSystemd    bool // BV-165: Linux has no user systemd; the weekly section says so
 	// OS is the operating system of the run, from the v1 report's platform
 	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
 	// sections (decision 2026-10-29, macOS vista previa).
@@ -406,6 +409,11 @@ type V2Input struct {
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).
 	IntegrityNotChecked bool
+	// StoreUpdateOld and StoreUpdateNew are the versions of a Microsoft Store
+	// update the integrity check accepted in this run (invariant 8, BV-222):
+	// the report says so and, when the weekly review still runs another copy,
+	// gives the command with the Store alias. Empty otherwise.
+	StoreUpdateOld, StoreUpdateNew string
 
 	// ExePath is the absolute path of the rosmarops.exe that made the report
 	// and Weekly what the scheduled tasks say about its weekly review (J4,
@@ -482,6 +490,8 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		notReviewed:   in.ProjectsNotReviewed,
 
 		integrityNotChecked: in.IntegrityNotChecked,
+		storeOld:            in.StoreUpdateOld,
+		storeNew:            in.StoreUpdateNew,
 		exePath:             in.ExePath,
 		weekly:              in.Weekly,
 		weeklyNoSystemd:     in.WeeklyNoSystemd,
