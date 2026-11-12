@@ -11,6 +11,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // The bottom strip of informe HTML v3 §17 (decision 2026-10-26, integridad y
@@ -122,7 +123,9 @@ func (c htmlCtx) renderMoreInfo(local time.Time) {
 	c.w(`<details class="moreinfo"><summary>%s</summary><div class="migrid">`, c.t("html.more.title", nil))
 	c.w(`<div><h3>%s</h3>`, c.t("html.more.agents", nil))
 	c.renderAgentsList()
-	c.w(`</div><div><h3>%s</h3>`, c.t("html.since.title", nil))
+	c.w(`</div>`)
+	c.renderProjects()
+	c.w(`<div><h3>%s</h3>`, c.t("html.since.title", nil))
 	c.renderSince()
 	c.w(`</div><div class="ovcell">`)
 	c.renderOverview()
@@ -447,4 +450,56 @@ func moreKeys() []string {
 		keys = append(keys, "html.notify.unavailable."+r)
 	}
 	return keys
+}
+
+// projectPathsShown is the most paths a «where it did not look» line lists;
+// a longer list shows only its count (CTO-38 §4.2).
+const projectPathsShown = 10
+
+// renderProjects is «Projects checked» (CTO-38 §4.2): the summary, the
+// repositories with where each came from, new and gone since the previous
+// review, and where the search did not look. Absent when the report has no
+// project search (not built by a review).
+func (c htmlCtx) renderProjects() {
+	p := c.v.Coverage.Projects
+	if p == nil {
+		return
+	}
+	n := strconv.Itoa
+	c.w(`<div><h3>%s</h3>`, c.t("html.projects.title", nil))
+	summary := c.t("html.projects.summary", map[string]string{"found": n(p.Found), "roots": n(len(p.Roots)), "scanned": n(p.Scanned)})
+	if len(p.Items) == 0 {
+		c.w(`<p>%s</p>`, html.EscapeString(summary))
+	} else {
+		c.w(`<details><summary>%s</summary><ul>`, html.EscapeString(summary))
+		for _, it := range p.Items {
+			c.w(`<li><code>%s</code> · %s</li>`, html.EscapeString(c.t("html.projects.item", map[string]string{"path": untrusted.PlainText(it.Path)})),
+				html.EscapeString(c.t("html.projects.source."+it.Source, nil)))
+		}
+		c.w(`</ul></details>`)
+	}
+	if p.New > 0 {
+		c.w(`<p>%s</p>`, html.EscapeString(c.t("html.projects.new", map[string]string{"count": n(p.New)})))
+	}
+	if p.Gone > 0 {
+		c.w(`<p>%s</p>`, html.EscapeString(c.t("html.projects.gone", map[string]string{"count": n(p.Gone)})))
+	}
+	if len(p.NotSearched) > 0 {
+		c.w(`<h4>%s</h4><ul>`, c.t("html.projects.not_searched.title", nil))
+		for _, ns := range p.NotSearched {
+			c.w(`<li>%s`, html.EscapeString(c.t("html.projects.not_searched."+ns.Reason, map[string]string{"count": n(ns.Count)})))
+			if len(ns.Paths) > 0 && ns.Count <= projectPathsShown {
+				c.w(`<br>`)
+				for i, path := range ns.Paths {
+					if i > 0 {
+						c.w(`, `)
+					}
+					c.w(`<code>%s</code>`, html.EscapeString(untrusted.PlainText(path)))
+				}
+			}
+			c.w(`</li>`)
+		}
+		c.w(`</ul>`)
+	}
+	c.w(`</div>`)
 }

@@ -13,9 +13,21 @@
     },
     "repo_roots": {
       "type": "array",
-      "description": "Absolute paths to directories that may contain git repos. RosmarOps scans recursively but always skips the forced-exclusion list (see CLAUDE.md).",
+      "description": "Folders where RosmarOps looks for git repositories, up to 6 levels below each one, stopping at each repository found. An entry that is itself a repository is that repository. Folders that are hidden, of the system, in the forced-exclusion list, links, on another or a network file system, or cloud placeholders are never entered (see CLAUDE.md, invariant 5).",
       "items": { "type": "string", "minLength": 1 },
       "uniqueItems": true
+    },
+    "search_home": {
+      "type": "boolean",
+      "default": true,
+      "description": "Also look in the whole user folder, with the same rules."
+    },
+    "skip_folders": {
+      "type": "array",
+      "description": "Absolute paths RosmarOps never searches. Only removes places; it cannot undo any rule of invariant 5.",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "maxItems": 64
     },
     "report_directory": {
       "type": "string",

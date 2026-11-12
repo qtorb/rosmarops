@@ -77,8 +77,8 @@ func newRunCmd() *cli.Command {
 var (
 	runInput       io.Reader = os.Stdin
 	runCanAsk                = func() bool { return canAsk(os.Stdin, os.Stdout) }
-	newScanContext           = func(projects int) (context.Context, context.CancelFunc) {
-		return context.WithTimeout(context.Background(), scan.GlobalTimeoutFor(projects))
+	newScanContext           = func(searchStart time.Time, projects int) (context.Context, context.CancelFunc) {
+		return context.WithDeadline(context.Background(), scan.DeadlineFor(searchStart, projects))
 	}
 )
 
@@ -317,15 +317,26 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// discovery) counts within the same limit: every scanner runs under this
 	// one context, which counts from after the integrity questions — the time a
 	// person takes to answer is not the scan's (J13).
-	projects := len(cfg.RepoRoots)
-	limit := scan.GlobalTimeoutFor(projects)
+	//
+	// CTO-38: the projects are found by the project search, in every review
+	// and with no cache (internal/scan/projects); repo_roots is only its
+	// input. The global limit counts from the start of the search (G2), so the
+	// search's own time (at most projects.MaxTime) is within it.
+	search := searchProjects(cfg, st)
+	prevRepos := previousRepos(st) // before the repo scan replaces the baselines
+	repoList := search.Repos()
+	nProjects := len(repoList)
+	limit := scan.GlobalTimeoutFor(nProjects)
 	limitMinutes := scan.LimitMinutes(limit)
-	// The console line, once the number of projects is known (BV-155 point 2);
-	// never on a scheduled review (no console) or when output is discarded.
+	// The console lines, once the number of projects is known (BV-155 point 2,
+	// CTO-38 §4.1); never on a scheduled review (no console).
 	if !unattended {
-		fmt.Fprintln(os.Stdout, checkingLine(cat, projects, limitMinutes))
+		printProjects(os.Stdout, cat, search, consoleWidth())
+		fmt.Fprintln(os.Stdout, checkingLine(cat, nProjects, limitMinutes))
 	}
-	ctx, cancel := newScanContext(projects)
+	slog.Info("project search", "status", search.Status, "found", search.Found, "checked", nProjects,
+		"dirs_read", search.DirsRead, "duration", search.Duration)
+	ctx, cancel := newScanContext(search.Started, nProjects)
 	defer cancel()
 	progress := newProgress(os.Stdout, isTerminal(os.Stdout), cat)
 	// BV-211 §3: refresh the repositories line once a second so its elapsed time
@@ -341,6 +352,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// report (decision 2026-10-27, blindaje, B9).
 		allowHits []config.AllowHit
 	)
+	// CTO-38 §2.2: a search that reached its limit is a yellow finding, so the
+	// review is never green (invariant 4).
+	if !search.Complete() {
+		findings = append(findings, projectSearchFinding(cat, search))
+	}
 
 	// The fallback state carries a fresh local salt, so this run's credential
 	// fingerprints and host_id cannot be compared with earlier runs.
@@ -478,7 +494,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 		// --- MCP server scanner (M5) ---
 		{Name: "mcp", Run: func(ctx context.Context) func() {
-			scanned, listErr := plat.ListMCPServers(ctx, cfg.RepoRoots)
+			scanned, listErr := plat.ListMCPServers(ctx, repoList)
 			// Hermes Agent's config.yaml (N2a, BV-97): its MCP servers and
 			// its sources join every agent's; a config.yaml not read is a
 			// failed source (B6).
@@ -490,31 +506,31 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			// servers join every agent's, so the shared pipeline builds their
 			// nodes, loads edges and credentials; the scan is kept for the graph
 			// step (sandbox and approval capabilities, the overview's assumptions).
-			codex, codexErr := plat.ListCodex(ctx, cfg.RepoRoots)
+			codex, codexErr := plat.ListCodex(ctx, repoList)
 			scanned.Servers = append(scanned.Servers, graph.CodexMCPServers(codex)...)
 			codexScan = codex
 			// xAI Grok Build (BV-140, CTO-16 Grok): its in-force MCP servers join
 			// every agent's; the scan is kept for the graph step.
-			grok, grokErr := plat.ListGrok(ctx, cfg.RepoRoots)
+			grok, grokErr := plat.ListGrok(ctx, repoList)
 			scanned.Servers = append(scanned.Servers, graph.GrokMCPServers(grok)...)
 			grokScan = grok
 			// GitHub Copilot in VS Code (BV-140, CTO-16 Copilot): its MCP servers
 			// join every agent's; the scan is kept for the graph step.
-			copilot, copilotErr := plat.ListCopilot(ctx, cfg.RepoRoots)
+			copilot, copilotErr := plat.ListCopilot(ctx, repoList)
 			scanned.Servers = append(scanned.Servers, graph.CopilotMCPServers(copilot)...)
 			copilotScan = copilot
 			// Google Antigravity CLI (BV-140, decision 2): its settings drive its
 			// caps; its MCP servers already joined above as antigravity-cli.
-			antigravity, antigravityErr := plat.ListAntigravity(ctx, cfg.RepoRoots)
+			antigravity, antigravityErr := plat.ListAntigravity(ctx, repoList)
 			antigravityScan = antigravity
 			// Google Gemini CLI (BV-193, CTO-22 Gemini): its in-force MCP servers
 			// join every agent's; the scan is kept for the graph step.
-			gemini, geminiErr := plat.ListGemini(ctx, cfg.RepoRoots)
+			gemini, geminiErr := plat.ListGemini(ctx, repoList)
 			scanned.Servers = append(scanned.Servers, graph.GeminiMCPServers(gemini)...)
 			geminiScan = gemini
 			// Cline VS Code extension (BV-193, CTO-22 Cline): its globalState
 			// drives its caps; its MCP servers already joined above as client cline.
-			cline, clineErr := plat.ListCline(ctx, cfg.RepoRoots)
+			cline, clineErr := plat.ListCline(ctx, repoList)
 			clineScan = cline
 			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr, clineErr)
 			// Only the servers a client loads (A4); no reference: new and
@@ -546,7 +562,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// files of every repo and the user's credential files, for the graph.
 		// No git, no subprocess; outside the per-repo budget. ---
 		{Name: "credentials", Run: func(ctx context.Context) func() {
-			scanned := credfiles.CollectOn(agentdirs.Current(), homeDir, cfg.RepoRoots, nil)
+			scanned := credfiles.CollectOn(agentdirs.Current(), homeDir, repoList, nil)
 			// The envFile of Cursor's MCP servers (decision 2026-10-25,
 			// Cursor, K10).
 			var envFiles []string
@@ -569,10 +585,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// any previous one is removed); the run continues and ends at least
 		// yellow.
 		{Name: "graph", Run: func(ctx context.Context) func() {
-			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, cfg.RepoRoots)
-			instructions, instructionsErr := plat.ListAgentInstructions(ctx, cfg.RepoRoots)
-			cursorScan, cursorErr := plat.ListCursor(ctx, cfg.RepoRoots)
-			skillScan, skillsErr := plat.ListSkills(ctx, cfg.RepoRoots)
+			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, repoList)
+			instructions, instructionsErr := plat.ListAgentInstructions(ctx, repoList)
+			cursorScan, cursorErr := plat.ListCursor(ctx, repoList)
+			skillScan, skillsErr := plat.ListSkills(ctx, repoList)
 			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
 			if ctx.Err() != nil {
 				settingsErr = errors.Join(settingsErr, fmt.Errorf("claude settings: %w", ctx.Err()))
@@ -594,7 +610,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					// run, and it is only logged — not a failure and not coverage.
 					// The MCP and npm-global crosses do not depend on it.
 					var pyResult pyenv.Result
-					pyDirs, pyErr := plat.PythonSitePackages(cfg.RepoRoots)
+					pyDirs, pyErr := plat.PythonSitePackages(repoList)
 					if errors.Is(pyErr, platform.ErrNotApplicable) {
 						slog.Info("pyenv", "err", pyErr)
 						notChecked = append(notChecked, "python_cross")
@@ -625,7 +641,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, cfg.RepoRoots, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
 						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
 					}
@@ -774,7 +790,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				scanCfg.Identify = graph.Identifier(salt)
 			}
 			scanned, newRepoBaselines, repoErrs := repos.ScanAllRepos(
-				ctx, cfg.RepoRoots, st.Baselines.Repos, scanCfg,
+				ctx, repoList, st.Baselines.Repos, scanCfg,
 			)
 			return func() {
 				families = repoFamilies
@@ -827,7 +843,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		if reposNotReviewed >= 0 {
 			projectsNotReviewed = reposNotReviewed
 		} else {
-			projectsNotReviewed = projects
+			projectsNotReviewed = nProjects
 		}
 	}
 
@@ -877,7 +893,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		nt = defaultNotifier.probe(ctx)
 	}
 	v2, ruled := report.BuildV2(report.V2Input{
-		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: cfg.RepoRoots,
+		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
 		Families: families, V1: r, GeneratedAt: time.Now(),
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),

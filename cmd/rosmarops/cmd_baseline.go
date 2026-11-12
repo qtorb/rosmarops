@@ -117,7 +117,9 @@ func runBaseline(cli.Invocation) error {
 	// MCP nuevos, A4): a new one is the v2 memory's.
 	var repoRoots []string
 	if cfgLoadErr == nil {
-		repoRoots = cfg.RepoRoots
+		// The repositories come from the project search, as in a review
+		// (CTO-38 §2.5); repo_roots is only its input.
+		repoRoots = searchProjects(cfg, st).Repos()
 	}
 
 	// Snapshot repo baselines (M6).

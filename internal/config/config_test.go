@@ -159,37 +159,3 @@ func TestLoadConfig_AllowListNoteMinLength(t *testing.T) {
 		t.Fatal("LoadConfig: expected schema error for note shorter than 5 chars, got nil")
 	}
 }
-
-func TestReposUnder_DirectGitSubdirsOnly(t *testing.T) {
-	root := t.TempDir()
-	for _, d := range []string{"beta/.git", "alpha/.git", "notes", "deep/inner/.git"} {
-		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(d)), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// A worktree or submodule has a .git file.
-	if err := os.MkdirAll(filepath.Join(root, "gamma"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "gamma", ".git"), []byte("gitdir: ../x\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := config.ReposUnder(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{filepath.Join(root, "alpha"), filepath.Join(root, "beta"), filepath.Join(root, "gamma")}
-	if strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Errorf("got %v, want %v (direct repos only, alphabetical)", got, want)
-	}
-}
-
-func TestReposUnder_MissingDirIsAnError(t *testing.T) {
-	if _, err := config.ReposUnder(filepath.Join(t.TempDir(), "absent")); err == nil {
-		t.Error("want error for a missing folder")
-	}
-}

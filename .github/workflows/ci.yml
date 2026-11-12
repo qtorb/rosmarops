@@ -92,6 +92,13 @@ jobs:
         run: go test -count=1 -v -run "TestBV211b" ./cmd/rosmarops/
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
+      # CTO-38 P13 (BV-219 A): the project search over the CTO-38 §3 tree
+      # (about 200,000 folders, 50 repositories). It never blocks: it leaves
+      # the time and the folders read in the log, the figure the signed
+      # condition asks for (more than 30 s cold on Windows goes back to Albert).
+      - name: CTO-38 P13 project search benchmark (does not block)
+        continue-on-error: true
+        run: go test -count=1 -run "^$" -bench BenchmarkProjectsSearch -benchtime 1x ./internal/scan/projects/
       # BV-202 C4 (CTO-28): the candidate must be built the same way as the
       # release (release.yml:144-155), which ci.yml did not do. Write the Windows
       # icon + version resource (.syso) with tools/winres first; winres -version
@@ -210,6 +217,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y strace
       - name: Build the Linux binary
         run: CGO_ENABLED=0 GOOS=linux go build -o "$RUNNER_TEMP/rosmarops" ./cmd/rosmarops
+      # CTO-38 P13 (BV-219 A): the project search over the CTO-38 §3 tree
+      # (about 200,000 folders, 50 repositories). It never blocks: it leaves
+      # the time and the folders read in the log, the figure the signed
+      # condition asks for (more than 30 s cold on Windows goes back to Albert).
+      - name: CTO-38 P13 project search benchmark (does not block)
+        continue-on-error: true
+        run: go test -count=1 -run "^$" -bench BenchmarkProjectsSearch -benchtime 1x ./internal/scan/projects/
       - name: Realistic Linux run and checks
         shell: bash
         run: |

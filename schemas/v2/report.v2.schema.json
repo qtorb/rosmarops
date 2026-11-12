@@ -684,6 +684,119 @@
             "pattern": "^[a-z0-9_.]{1,80}$"
           },
           "description": "Informational coverage notes as stable catalog codes (BV-193 D3): e.g. two Claude Desktop configs with different MCP servers. No user-facing prose."
+        },
+        "projects": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The project search of this review (CTO-38, G4): how it ended, the repositories it found and checked, the folders it walked, where it did not look and why, and the repositories new or gone since the previous review. Paths are ~/… under the user folder.",
+          "required": [
+            "search",
+            "found",
+            "scanned",
+            "roots",
+            "items",
+            "not_searched",
+            "new",
+            "gone"
+          ],
+          "properties": {
+            "search": {
+              "enum": [
+                "complete",
+                "time_limit",
+                "dir_limit",
+                "off"
+              ]
+            },
+            "found": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "scanned": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "roots": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "source"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "home",
+                      "root",
+                      "claude",
+                      "workspace",
+                      "previous",
+                      "listed"
+                    ]
+                  }
+                }
+              }
+            },
+            "not_searched": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reason",
+                  "count"
+                ],
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "hidden",
+                      "system",
+                      "forced",
+                      "links",
+                      "other_fs",
+                      "network",
+                      "cloud",
+                      "unreadable",
+                      "depth",
+                      "user_skip",
+                      "over_max",
+                      "incomplete"
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "paths": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "new": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "gone": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },

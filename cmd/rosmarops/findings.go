@@ -62,7 +62,9 @@ func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now t
 		}
 	}
 	home, _ := os.UserHomeDir()
-	v, err := report.ReadV2(report.DataDir(reportDir), cfg.RepoRoots, 0)
+	// The repositories the review checked come from the project search, as in
+	// the review itself (CTO-38 §2.5); repo_roots is only its input.
+	v, err := report.ReadV2(report.DataDir(reportDir), searchProjects(cfg, state.State{}).Repos(), 0)
 	if err != nil {
 		slog.Info("dismiss: last review not read; not offering", "err", err)
 		return

@@ -53,6 +53,9 @@ var staticKeys = []string{
 	"report.silenced.expired.one", "report.silenced.expired.other",
 	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent", "memory.new_mcp", "memory.mcp_changed",
 	"console.progress.agents", "console.progress.repos", "console.progress.repos_slow", "console.progress.report",
+	// CTO-38 §4.1: the project search's console lines
+	"console.projects.found.one", "console.projects.found.other", "console.projects.list", "console.projects.more",
+	"console.projects.not_searched", "console.projects.incomplete", "console.projects.none",
 	"console.config_changed", "console.config_change.rotated", "console.config_change.fixture", "console.config_change.other",
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification
@@ -701,7 +704,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 // legacyTexts are the technical-report categories with their own catalog
 // texts (finding.<category>.title, .why and .action), shown in their group:
 // own_task_changed (BV-93, B2) and config_key_case_conflict (BV-94, B5).
-var legacyTexts = map[string]bool{"own_task_changed": true, "config_key_case_conflict": true}
+var legacyTexts = map[string]bool{"own_task_changed": true, "config_key_case_conflict": true, "project_search_incomplete": true}
 
 // sharedAssumptions are in nearly every edge and change nothing (§1, base
 // group): shown once, before the findings, not in each one (BV-39).

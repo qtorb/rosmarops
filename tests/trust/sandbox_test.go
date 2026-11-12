@@ -177,8 +177,29 @@ func (s *sandbox) setFirstUseAside(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first use wrote no config: %v", err)
 	}
-	if _, err := exec.LookPath("git"); err == nil && !strings.Contains(string(raw), s.repo) {
-		t.Fatalf("first use did not find the repository:\n%s", raw)
+	// CTO-38: the first use leaves repo_roots empty; its review's project
+	// search (here through ~/.claude.json's projects) checked the repository.
+	if _, err := exec.LookPath("git"); err == nil {
+		var v2 struct {
+			Coverage struct {
+				Projects struct {
+					Items []struct {
+						Path string `json:"path"`
+					} `json:"items"`
+				} `json:"projects"`
+			} `json:"coverage"`
+		}
+		b, err := os.ReadFile(filepath.Join(s.home, ".rosmarops", "reports", "data", "report.v2.json"))
+		if err == nil {
+			err = json.Unmarshal(b, &v2)
+		}
+		found := false
+		for _, it := range v2.Coverage.Projects.Items {
+			found = found || it.Path == s.repo
+		}
+		if err != nil || !found {
+			t.Fatalf("first use did not find the repository (%v):\n%s", err, raw)
+		}
 	}
 	aside := filepath.Join(s.home, ".rosmarops", "firstuse")
 	mustMkdir(t, aside)

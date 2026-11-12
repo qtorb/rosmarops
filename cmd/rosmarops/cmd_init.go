@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/qtorb/rosmarops/internal/scan/projects"
+
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/hash"
@@ -33,17 +35,25 @@ func runInit(inv cli.Invocation) error {
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
 	}
-	// repo_roots from --repos-under when given. A folder that cannot be read
-	// leaves repo_roots empty: init still succeeds.
+	// --repos-under adds that folder as a root the project search walks
+	// (CTO-38 §2.3), not its children. A folder that cannot be read leaves
+	// repo_roots empty: init still succeeds.
 	var repoRoots []string
 	if reposUnder != "" {
-		repos, err := config.ReposUnder(reposUnder)
+		dir, err := filepath.Abs(reposUnder)
+		if err == nil {
+			var info os.FileInfo
+			if info, err = os.Stat(dir); err == nil && !info.IsDir() {
+				err = fmt.Errorf("%s is not a folder", dir)
+			}
+		}
 		if err != nil {
 			slog.Warn("init: --repos-under folder not read; repo_roots left empty", "err", err)
 			fmt.Fprintf(os.Stderr, "warning: %v; repo_roots left empty\n", err)
 		} else {
-			repoRoots = repos
-			fmt.Printf("Repositories found under %s: %d\n", reposUnder, len(repos))
+			repoRoots = []string{dir}
+			found := projects.Search(projects.Options{Roots: repoRoots})
+			fmt.Printf("Repositories found under %s: %d\n", reposUnder, len(found.Items))
 		}
 	}
 	stPath, reportDir, err := initialize(cfgPath, repoRoots)

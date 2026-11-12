@@ -51,10 +51,12 @@ These cannot be violated by any code you write. They are the product.
    .venv, venv, __pycache__, .pytest_cache, .mypy_cache,
    .ruff_cache, .turbo, .parcel-cache
    ```
+   The project search never enters, below a root: a hidden folder; `AppData` (Windows), `Library` (macOS) or `snap` (Linux) under the user's folder; a symbolic link, junction or any other reparse point; a folder on another file system than its root's; a network file system; or a cloud placeholder not present on disk. It only lists folders: it never opens a file.
 
 6. **Resource limits, hardcoded:**
    - Files >2 MB are not opened for content scan.
-   - Global scan timeout: 15 seconds per project to scan, at least 300 and at most 1,200 seconds, computed once per run after the projects are found. Hard cap (signed by Albert 03-11 11:06, BV-155).
+   - Project search: at most 30 seconds and 200,000 folders read, at most 6 levels below each root, and at most 100 repositories found (`MaxRepos`; repositories listed by the person are always kept). A search over budget stops, keeps what it found and the previous run's repositories that still exist, and adds a yellow finding `project_search_incomplete`.
+   - Global scan timeout: 15 seconds per project to scan, at least 300 and at most 1,200 seconds, computed once per run after the projects are found and counted from the start of the project search. Hard cap (signed by Albert 03-11 11:06, BV-155).
    - Per-repo timeout: 60 seconds. Repo over budget → yellow finding "scan_timeout", continue with next repo.
 
 7. **Per-repo isolation.** Each repo scan runs in its own context with `defer`/`recover` for the equivalent of try/finally. One repo failing must not abort the run.

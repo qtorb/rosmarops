@@ -224,6 +224,50 @@ type V2Coverage struct {
 	// D3): the engine saw something it reports without it being a failure.
 	// Omitted when empty.
 	Notes []string `json:"notes,omitempty"`
+	// Projects is this review's project search (CTO-38, G4); absent when the
+	// report was not built by a review (tests, examples).
+	Projects *ProjectsCoverage `json:"projects,omitempty"`
+}
+
+// ProjectsCoverage is coverage.projects (CTO-38 §4.3).
+type ProjectsCoverage struct {
+	Search      string               `json:"search"`
+	Found       int                  `json:"found"`
+	Scanned     int                  `json:"scanned"`
+	Roots       []string             `json:"roots"`
+	Items       []ProjectItem        `json:"items"`
+	NotSearched []ProjectNotSearched `json:"not_searched"`
+	New         int                  `json:"new"`
+	Gone        int                  `json:"gone"`
+}
+
+// ProjectItem is one repository checked and where it came from.
+type ProjectItem struct {
+	Path   string `json:"path"`
+	Source string `json:"source"`
+}
+
+// ProjectNotSearched is one reason the search did not look somewhere.
+type ProjectNotSearched struct {
+	Reason string   `json:"reason"`
+	Count  int      `json:"count"`
+	Paths  []string `json:"paths,omitempty"`
+}
+
+// TildePath is p as ~/… when it is under home (CTO-38 §4.3), else p.
+func TildePath(p, home string) string {
+	if home == "" {
+		return p
+	}
+	h := strings.TrimRight(graph.CanonicalPath(home), "/")
+	c := graph.CanonicalPath(p)
+	switch {
+	case c == h:
+		return "~"
+	case strings.HasPrefix(c, h+"/") && len(c) == len(p):
+		return "~" + strings.ReplaceAll(p[len(h):], `\`, "/")
+	}
+	return p
 }
 
 // V2Legacy is the v1 findings, grouped (§3, E7).
@@ -269,6 +313,8 @@ type V2Input struct {
 	// Cursor); empty means Base alone.
 	Bases     map[string]knowledge.Base
 	RepoRoots []string
+	// Projects is this review's project search (coverage.projects, G4).
+	Projects *ProjectsCoverage
 
 	// Families are the repository families of the run (BV-33), each a list
 	// of roots; a root in none is its own family.
@@ -471,6 +517,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	}
 	v.Coverage.ScanErrors = scanErrorScopes(in.V1.Errors)
 	v.Coverage.BinarySkipped = in.BinarySkipped
+	v.Coverage.Projects = in.Projects
 	v.hidden = hiddenEntries(append(append([]config.AllowHit{}, in.AllowHits...), res.Silenced.Rotated...))
 	v.Index, v.radiusProj = buildIndex(in, res, v)
 	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8

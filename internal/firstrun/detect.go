@@ -13,12 +13,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/qtorb/rosmarops/internal/config"
-	"github.com/qtorb/rosmarops/internal/scan/repos"
+	"github.com/qtorb/rosmarops/internal/scan/projects"
 )
 
-// MaxRepos is the most repositories a first use keeps (U3).
-const MaxRepos = 100
+// MaxRepos is the most repositories a search keeps (CTO-38 G7).
+const MaxRepos = projects.MaxRepos
 
 // maxJSONBytes bounds every JSON file read (invariant 6).
 const maxJSONBytes = 2 * 1024 * 1024
@@ -44,13 +43,6 @@ const (
 	RuleOverLimit     = "over_limit"
 	RuleUnreadableSrc = "source_not_read" // a JSON file that could not be read or parsed
 )
-
-// usualFolders are the folders under the user's folder whose direct
-// subfolders are candidates (c), in U3's order.
-var usualFolders = []string{
-	filepath.Join("source", "repos"), "repos", "projects", "Projects", "code", "dev", "src", "GitHub",
-	filepath.Join("Documents", "GitHub"), "Desktop",
-}
 
 // Env is where a first use looks: the user's folder and the Windows folders
 // a project never lives in.
@@ -79,91 +71,59 @@ type Result struct {
 	Over      int // repositories left out by MaxRepos
 }
 
-// Detect is U3: the candidates of the three sources, each source in
-// alphabetical order, filtered, deduplicated without regard to case, and
-// capped at MaxRepos.
+// Detect is the first use's search (CTO-38 §2.3): the project search over
+// the user folder with the indicators, exactly as every review runs it. The
+// first configuration only needs to know whether it found any.
 func Detect(env Env) Result {
-	var res Result
-	seen := map[string]bool{}
-	for _, src := range []struct {
-		name  string
-		paths func(Env, *Result) []string
-	}{{SourceClaude, claudeProjects}, {SourceWorkspace, workspaceFolders}, {SourceFolder, usualFolderRepos}} {
-		env.keep(&res, seen, src.name, src.paths(env, &res))
+	found := projects.Search(env.Options(nil))
+	res := Result{Repos: found.Repos()}
+	for _, it := range found.Items {
+		res.Decisions = append(res.Decisions, Decision{Source: string(it.Source), Path: it.Path, Rule: RuleAccepted})
+	}
+	for _, n := range found.Skipped {
+		if n.Reason == projects.ReasonOverMax {
+			res.Over = n.Count
+		}
 	}
 	return res
 }
 
-// keep sorts one source's candidates alphabetically and applies U3's
-// filters, duplicates and limit to each, recording every decision.
-func (env Env) keep(res *Result, seen map[string]bool, source string, paths []string) {
-	// Alphabetical without regard to case; paths equal but for case in
-	// byte order, so that the order never depends on a map's (BV-79).
+// Options are the project search's inputs for env: the user folder, the
+// Windows folders a project never lives in and the indicators (CTO-38 §1.1),
+// with roots (repo_roots) to walk as well.
+func (env Env) Options(roots []string) projects.Options {
+	return projects.Options{
+		Home: env.Home, SearchHome: true, Roots: roots, Indicators: Indicators(env),
+		SystemDirs: []string{env.AppData, env.LocalAppData, env.ProgramFiles, env.ProgramFilesX86, env.SystemRoot},
+	}
+}
+
+// Indicators are the repositories other tools already name: the keys of
+// projects in ~/.claude.json (a) and the local folders of Cursor's and VS
+// Code's workspace.json (b). They are never walked; the search accepts each
+// one that passes its filters (CTO-38 §1.1, point 3).
+func Indicators(env Env) []projects.Indicator {
+	var res Result
+	var out []projects.Indicator
+	for _, p := range sorted(claudeProjects(env, &res)) {
+		out = append(out, projects.Indicator{Path: p, Source: projects.SourceClaude})
+	}
+	for _, p := range workspaceFolders(env, &res) {
+		out = append(out, projects.Indicator{Path: p, Source: projects.SourceWorkspace})
+	}
+	return out
+}
+
+// sorted orders paths alphabetically without regard to case, then in byte
+// order, so that the order never depends on a map's (BV-79).
+func sorted(paths []string) []string {
 	sort.Slice(paths, func(i, j int) bool {
 		if a, b := strings.ToLower(paths[i]), strings.ToLower(paths[j]); a != b {
 			return a < b
 		}
 		return paths[i] < paths[j]
 	})
-	for _, p := range paths {
-		rule, clean := env.check(p)
-		key := strings.ToLower(clean)
-		switch {
-		case rule != RuleAccepted:
-		case seen[key]:
-			rule = RuleDuplicate
-		case len(res.Repos) >= MaxRepos:
-			// Seen too: on a case-insensitive file system (macOS) the same
-			// repository can come twice, ~/Projects and ~/projects; it is
-			// left out once (BV-98).
-			seen[key] = true
-			rule = RuleOverLimit
-			res.Over++
-		default:
-			seen[key] = true
-			res.Repos = append(res.Repos, clean)
-		}
-		res.Decisions = append(res.Decisions, Decision{Source: source, Path: clean, Rule: rule})
-	}
-}
-
-// check normalizes p and applies U3's filters, in order.
-func (env Env) check(p string) (rule, clean string) {
-	clean = filepath.Clean(p)
-	if abs, err := filepath.Abs(clean); err == nil {
-		clean = abs
-	}
-	if info, err := os.Stat(clean); err != nil || !info.IsDir() {
-		return RuleNotFolder, clean
-	}
-	if _, err := os.Stat(filepath.Join(clean, ".git")); err != nil {
-		return RuleNoGit, clean
-	}
-	if env.Home != "" && strings.EqualFold(clean, filepath.Clean(env.Home)) || filepath.Dir(clean) == clean {
-		return RuleHomeOrRoot, clean
-	}
-	for _, dir := range []string{env.AppData, env.LocalAppData, env.ProgramFiles, env.ProgramFilesX86, env.SystemRoot} {
-		if under(clean, dir) {
-			return RuleSystemFolder, clean
-		}
-	}
-	for _, part := range strings.FieldsFunc(clean, func(r rune) bool { return r == '/' || r == '\\' }) {
-		if repos.IsForcedExclusion(part) {
-			return RuleExcluded, clean
-		}
-	}
-	return RuleAccepted, clean
-}
-
-// under reports p inside dir (or dir itself), without regard to case; an
-// empty dir holds nothing.
-func under(p, dir string) bool {
-	if dir == "" {
-		return false
-	}
-	d := strings.ToLower(filepath.Clean(dir))
-	l := strings.ToLower(p)
-	return l == d || strings.HasPrefix(l, strings.TrimRight(d, `/\`)+string(filepath.Separator))
+	return paths
 }
 
 // readJSON reads a bounded JSON file into v; false when it is missing.
@@ -238,26 +198,6 @@ func workspaceFolders(env Env, res *Result) []string {
 	return paths
 }
 
-// usualFolderRepos is c): the repositories one level under each usual
-// folder that exists, as ReposUnder finds them.
-func usualFolderRepos(env Env, _ *Result) []string {
-	if env.Home == "" {
-		return nil
-	}
-	var paths []string
-	for _, f := range usualFolders {
-		dir := filepath.Join(env.Home, f)
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			continue
-		}
-		found, err := config.ReposUnder(dir)
-		if err == nil {
-			paths = append(paths, found...)
-		}
-	}
-	return paths
-}
-
 // LocalPath is the path of a local file:// URI (file:///c%3A/Users/a/x →
 // c:/Users/a/x, file:///home/a/x → /home/a/x). Any other scheme
 // (vscode-remote://, WSL), a host (UNC, wsl.localhost) or a bad escape is
@@ -312,20 +252,4 @@ func unhex(c byte) (byte, bool) {
 		return c - 'A' + 10, true
 	}
 	return 0, false
-}
-
-// Picked is U4's repositories for the folder chosen in the picker (U11):
-// the folder itself when it has a .git entry, then the repositories one
-// level under it, as ReposUnder finds them, through U3's filters,
-// duplicates and limit. The user's-folder-or-drive-root filter applies to
-// each repository, not to the folder chosen: the user's folder is a valid
-// container.
-func Picked(env Env, dir string) Result {
-	paths := []string{dir}
-	if found, err := config.ReposUnder(dir); err == nil {
-		paths = append(paths, found...)
-	}
-	var res Result
-	env.keep(&res, map[string]bool{}, SourcePicked, paths)
-	return res
 }
