@@ -133,6 +133,23 @@ jobs:
           GOOS=linux GOARCH=amd64 go run ./tools/winres -version "$VERSION" -arch arm64 -ico "$pkgsrc/assets/windows/rosmarops.ico" -out "$pkgsrc/cmd/rosmarops/rsrc_windows_arm64.syso"
           ( cd "$pkgsrc" && CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="-X main.version=$VERSION" -o "$OLDPWD/dist-exe/arm64/rosmarops.exe" ./cmd/rosmarops )
           ls -l dist-exe/x64 dist-exe/arm64
+          # BV-222 (CTO-41 §2.2, point 1): the arm64 exe of the Store package
+          # must equal the published Windows arm64 exe, when the release has
+          # one; exact comparison. The release publishes no Windows arm64 exe
+          # today, so the step says so and checks nothing more.
+          if [ "$pkgsrc" = "src" ]; then
+            arm=$(grep -E '[0-9a-fA-F]{64}[[:space:]]+\*?rosmarops-windows-arm64\.exe$' "$RUNNER_TEMP/SHA256SUMS.txt" | grep -oE '^[0-9a-fA-F]{64}' || true)
+            if [ -n "$arm" ]; then
+              built=$(sha256sum dist-exe/arm64/rosmarops.exe | cut -d' ' -f1)
+              echo "arm64 rosmarops.exe built=$built released=$arm" >> "$GITHUB_STEP_SUMMARY"
+              if [ "$built" != "$arm" ]; then
+                echo "arm64 build does not reproduce the released Windows arm64 exe (built $built, released $arm)"; exit 1
+              fi
+              echo "arm64 reproduces the released Windows arm64 exe exactly."
+            else
+              echo "The release publishes no Windows arm64 exe: nothing to compare the packaged arm64 exe with." | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
 
       - name: Upload the built exes for the packaging job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

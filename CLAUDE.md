@@ -61,7 +61,11 @@ These cannot be violated by any code you write. They are the product.
 
 7. **Per-repo isolation.** Each repo scan runs in its own context with `defer`/`recover` for the equivalent of try/finally. One repo failing must not abort the run.
 
-8. **Self-integrity check.** On startup, the binary computes its own SHA-256 and compares against `state.integrity.vigil_binary_sha256`. Mismatch → abort with a minimal red report and one finding (`binary_hash_changed`). Same for `config_sha256`.
+8. **Self-integrity check.** On startup, the binary computes its own SHA-256 and compares it against `state.integrity.vigil_binary_sha256`, and the SHA-256 of the configuration in use against `state.integrity.config_sha256`. A mismatch, a lost state, or a reference at zero after a run aborts with a minimal red report and one finding (`binary_hash_changed` or `config_hash_changed`), unless one of these accepts it:
+   - **The person**, who confirms it in the console.
+   - **A Microsoft Store update** (Windows): the process runs with RosmarOps's own package identity, the package family name `AlbertGarciaPujadas.RosmarOps_<publisher id>` fixed in the code; its executable is inside the package's own installed folder as Windows reports it (`GetCurrentPackagePath`), never the `%LOCALAPPDATA%` alias; and its package version equals the running binary's version. The package signature is the one Windows verified when it installed the package from the Store; RosmarOps does not accept a package with any other identity.
+
+   The Store never accepts a version older than `state.engine_version`, or the same version with a different SHA-256. An accepted change records the new references and how it was accepted (`binary_accepted_via`), and the report says so. Signed releases (Authenticode, Apple) will add a signature check; until then this is the only automatic path.
 
 ---
 
