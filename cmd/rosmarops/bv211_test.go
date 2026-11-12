@@ -80,7 +80,7 @@ func TestDisableQuickEditRestores(t *testing.T) {
 
 // TestProgressElapsedAndSlow is BV-211 §3: the repositories line carries the
 // elapsed time, the slow-repository note appears once when the count has not
-// moved for 15 s and not again until it does, and nothing in the console output
+// moved for 15 s and not again in that review (BV-221), and nothing in the console output
 // is a repository name or a path.
 func TestProgressElapsedAndSlow(t *testing.T) {
 	cat := enCat(t)
@@ -111,13 +111,14 @@ func TestProgressElapsedAndSlow(t *testing.T) {
 		t.Fatalf("slow note must not repeat for the same wait, got %d", n)
 	}
 
-	// The count moves: the wait resets, and a new 15 s stall shows it again.
+	// The count moves and a new 15 s stall follows: no second note (BV-221,
+	// once per review).
 	clk = base.Add(26 * time.Second)
 	p.repos(1, 48)
 	clk = base.Add(41 * time.Second)
 	p.tick()
-	if n := strings.Count(buf.String(), slow); n != 2 {
-		t.Fatalf("after the count moved, a new stall should show the note again, got %d", n)
+	if n := strings.Count(buf.String(), slow); n != 1 {
+		t.Fatalf("a later stall must not show the note again in the same review, got %d", n)
 	}
 
 	out := buf.String()
