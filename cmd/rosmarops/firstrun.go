@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -109,7 +110,7 @@ func runNoArgs() int {
 
 	reportOpened := openReport(htmlPath)
 	if reportOpened {
-		fmt.Println(cat.Text("console.report_opened", nil))
+		printReportOpened(os.Stdout, cat, htmlPath)
 	} else {
 		fmt.Println(cat.Text("console.report_not_opened", map[string]string{"path": absPath(htmlPath)}))
 		// BV-210: the report could not be opened for the person (§1). The HTML
@@ -220,6 +221,16 @@ func openReport(path string) bool {
 	}
 	slog.Info("report opened", "path", path)
 	return true
+}
+
+// printReportOpened prints console.report_opened and, when the default
+// browser is a snap (Linux only), console.report_snap_hint with the report's
+// absolute path (BV-219 B4).
+func printReportOpened(w io.Writer, cat catalog.Catalog, htmlPath string) {
+	fmt.Fprintln(w, cat.Text("console.report_opened", nil))
+	if browserIsSnap() {
+		fmt.Fprintln(w, cat.Text("console.report_snap_hint", map[string]string{"path": absPath(htmlPath)}))
+	}
 }
 
 // priorReportsExist reports whether the reports directory already holds a

@@ -57,7 +57,7 @@ var staticKeys = []string{
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification
 	"console.first_run.detecting", "console.first_run.found", "console.first_run.none", "console.first_run.picker_title",
-	"console.first_run.agents_only", "console.checking.one", "console.checking.other", "console.checking.agents_only", "console.report_opened", "console.report_not_opened", "console.press_enter",
+	"console.first_run.agents_only", "console.checking.one", "console.checking.other", "console.checking.agents_only", "console.report_opened", "console.report_snap_hint", "console.report_not_opened", "console.press_enter",
 	"html.limit.one", "html.limit.other", "html.limit.reached",
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",

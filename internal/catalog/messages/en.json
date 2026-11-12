@@ -149,6 +149,7 @@
   "console.report": "Report: {path}",
   "console.report_not_opened": "Done. Open the report here: {path}",
   "console.report_opened": "Done. The report is open in your browser.",
+  "console.report_snap_hint": "If your browser says it cannot open the file, it is probably Firefox installed as a snap, which cannot read hidden folders. In Firefox, press Ctrl+O, then Ctrl+L, and type {path}. Or set another reports folder in ~/.rosmarops/config.json (report_directory).",
   "console.state_confirm": "Did you reset or reinstall RosmarOps yourself? (y/N): ",
   "console.state_lost": "RosmarOps cannot find its integrity reference from earlier runs: its state was lost or reset.",
   "console.summary": "{status} Red: {red} · Yellow: {yellow}. Legacy checks — red: {legacy_red} · yellow: {legacy_yellow}.",
