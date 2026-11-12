@@ -151,18 +151,29 @@ var osLinuxVariant = map[string]bool{
 	"html.assume.scope": true,
 }
 
+// osOtherVariant are the keys whose macOS and Linux text is key + ".other"
+// (BV-219 B3): the text that names no Windows program.
+var osOtherVariant = map[string]bool{
+	"html.fix.manual.open": true,
+}
+
 // homePrefix is how the agent prompt names the user's folder: "~" on
-// macOS, "%USERPROFILE%" elsewhere (decision 2026-10-29, point 6).
+// macOS (decision 2026-10-29, point 6) and on Linux (BV-219 B3),
+// "%USERPROFILE%" elsewhere.
 func (v V2) homePrefix() string {
-	if v.macOS() {
+	if v.macOS() || v.linux() {
 		return "~"
 	}
 	return "%USERPROFILE%"
 }
 
 // osKey is key, or its macOS text (key + ".macos") on macOS (decision
-// 2026-10-29, point 5).
+// 2026-10-29, point 5); off Windows, the keys of osOtherVariant take their
+// «.other» text instead (BV-219 B3).
 func (v V2) osKey(key string) string {
+	if (v.macOS() || v.linux()) && osOtherVariant[key] {
+		return key + ".other"
+	}
 	if v.macOS() {
 		return key + ".macos"
 	}

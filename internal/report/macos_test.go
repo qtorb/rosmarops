@@ -53,7 +53,7 @@ func assumeDialog(t *testing.T, page string) string {
 // not checked yet, in its order; no weekly review anywhere (no html.weekly.*
 // text, no PowerShell command, also not in the AI export the page carries);
 // the strip in two columns; the agent prompt names the user's folder with ~
-// and the manual step opens the file with TextEdit.
+// and the manual step opens the file with a text editor (BV-219 B3).
 func TestRenderHTML_MacOS(t *testing.T) {
 	v := macReport(t, "macos", allNotChecked)
 	if want := report.NotCheckedCodes; strings.Join(v.NotChecked, ",") != strings.Join(want, ",") {
@@ -98,13 +98,14 @@ func TestRenderHTML_MacOS(t *testing.T) {
 		if strings.Contains(page, "%USERPROFILE%") || !strings.Contains(page, "~/.claude/settings.json") {
 			t.Errorf("%s: the agent prompt does not name the folder with ~", lang)
 		}
-		open := strings.SplitN(cat.Text("html.fix.manual.open.macos", nil), "{", 2)[0]
+		// BV-219 B3: the manual step is html.fix.manual.open.other on macOS.
+		open := strings.SplitN(cat.Text("html.fix.manual.open.other", nil), "{", 2)[0]
 		winOpen := strings.SplitN(cat.Text("html.fix.manual.open", nil), "{", 2)[0]
 		if !strings.Contains(page, htmlEscape(open)) || (open != winOpen && strings.Contains(page, htmlEscape(winOpen))) {
-			t.Errorf("%s: the manual step does not open the file with TextEdit", lang)
+			t.Errorf("%s: the manual step does not open the file with a text editor", lang)
 		}
-		if lang == "en" && (!strings.Contains(page, "TextEdit") || strings.Contains(page, "Notepad")) {
-			t.Error("en: Notepad on macOS")
+		if lang == "en" && (strings.Contains(page, "TextEdit") || strings.Contains(page, "Notepad")) {
+			t.Error("en: TextEdit or Notepad on macOS")
 		}
 	}
 }

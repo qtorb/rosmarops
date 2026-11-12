@@ -221,6 +221,7 @@
   "html.fix.manual.create": "This file does not exist yet. Create it with exactly this content:",
   "html.fix.manual.open": "Open the file {file} with Notepad.",
   "html.fix.manual.open.macos": "Open the file {file} with TextEdit.",
+  "html.fix.manual.open.other": "Open the file {file} with a text editor.",
   "html.fix.manual.rotated": "Add this entry to the list allow_list.rotated_credentials, without deleting anything. If your file does not have that list yet, add it as shown here:",
   "html.fix.manual.save": "Save it and run RosmarOps again.",
   "html.fix.none": "RosmarOps knows no {agent} setting that prevents this.",

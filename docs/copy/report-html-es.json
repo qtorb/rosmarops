@@ -348,6 +348,7 @@
   "html.fix.manual.add": "Añade estas líneas dentro de lo que ya hay, sin borrar nada:",
   "html.fix.manual.create": "Este fichero aún no existe. Créalo con exactamente este contenido:",
   "html.fix.manual.open": "Abre el fichero {file} con el Bloc de notas.",
+  "html.fix.manual.open.other": "Abre el fichero {file} con un editor de texto.",
   "html.fix.manual.rotated": "Añade esta entrada a la lista allow_list.rotated_credentials, sin borrar nada. Si tu fichero aún no tiene esa lista, añádela como aquí:",
   "html.fix.manual.save": "Guárdalo y vuelve a ejecutar RosmarOps.",
   "html.fix.none": "RosmarOps no conoce ningún ajuste de {agent} que lo impida.",
