@@ -41,6 +41,13 @@ func GlobalTimeoutFor(projects int) time.Duration {
 	}
 }
 
+// DeadlineFor is the global deadline of a review whose project search began
+// at searchStart and found projects (invariant 6, CTO-38 G2): the limit counts
+// from the start of the search, so the search's own time is within it.
+func DeadlineFor(searchStart time.Time, projects int) time.Time {
+	return searchStart.Add(GlobalTimeoutFor(projects))
+}
+
 // LimitMinutes is the limit shown to the person: the limit in minutes, rounded
 // up.
 func LimitMinutes(d time.Duration) int {
