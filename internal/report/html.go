@@ -755,29 +755,37 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	if ok && f.Rule == rules.RulePackageKnownMalicious { // BV-100: no auto-action; bespoke hero
 		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
-			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
+		c.findingWhere(f) // BV-219 B2: where it is, below the title
+		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
+			c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
 		return
 	}
 	if ok && f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107: no auto-action; bespoke hero
 		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
-			c.title(f), c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
+		c.findingWhere(f) // BV-219 B2: where it is, below the title
+		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
+			c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
 		return
 	}
 	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124: why below the title, then the action
 		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p><p>%s</p></div></section>`,
-			c.title(f), c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
+		c.findingWhere(f) // BV-219 B2: where it is, below the title
+		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
+			c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
 		return
 	}
 	if ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) { // BV-175: why, then the steps
 		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2><p class="imp">%s</p>%s</div></section>`,
-			c.title(f), c.impact(f), c.n8nSteps(f))
+		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
+		c.findingWhere(f) // BV-219 B2: where it is, below the title
+		c.w(`<p class="imp">%s</p>%s</div></section>`,
+			c.impact(f), c.n8nSteps(f))
 		return
 	}
 	if !found {
@@ -797,8 +805,10 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	}
 	c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
 	c.stepHead(2, "p", "", c.t("html.step.2", nil), hint, true)
-	c.w(`<div class="tbox"><h2 id="today-title">%s</h2><div class="lbl">%s</div><p class="tf">%s%s%s</p><p class="imp">%s`,
-		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.rowTitle(f), c.masterHelp(f), c.others(f), c.impact(f))
+	c.w(`<div class="tbox"><h2 id="today-title">%s</h2><div class="lbl">%s</div><p class="tf">%s%s%s</p>`,
+		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.rowTitle(f), c.masterHelp(f), c.others(f))
+	c.findingWhere(f) // BV-219 B2: where it is, below the finding's title
+	c.w(`<p class="imp">%s`, c.impact(f))
 	if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
 		c.w(` %s%s`, c.t("html.today.reach", p), c.help("auto"))
 	}

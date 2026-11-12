@@ -134,7 +134,10 @@ func TestWhereLine_MergedRow(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		inner := onlyWhere(t, page) // exactly one line for the whole page
+		// Step 2 shows today's own «where» line (BV-219 B2); the merged row
+		// is in step 3, where it is the only one.
+		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
+		inner := onlyWhere(t, step3) // exactly one line for the whole of step 3
 		// Combined uniqueSorted = /aaa/.env:2, /dup/.env:1, /zzz/.env:3.
 		if !strings.HasPrefix(inner, htmlEscape(cat.Text("html.where", nil))+` <code>/aaa/.env:2</code>`) {
 			t.Errorf("%s: merged line %q does not start with the first combined location", lang, inner)
@@ -158,6 +161,41 @@ func TestWhereLine_Keys(t *testing.T) {
 		}
 		if got := cat.Text("html.where", nil); got != lit {
 			t.Errorf("%s html.where = %q, want %q", lang, got, lit)
+		}
+	}
+}
+
+// BV-219 B2: today's finding shows its «Found in» line in step 2, right
+// below its title and before «what it means», outside «Technical details».
+func TestWhereLine_Step2(t *testing.T) {
+	g := v2Graph(t)
+	v := clearLocations(buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil)))
+	found := false
+	for i := range v.Findings {
+		if v.Findings[i].ID == v.Today.FindingID {
+			v.Findings[i].Evidence.Locations = []string{"/src/today/.env:1"}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no today finding")
+	}
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		step2, _, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
+		_, step2, _ = strings.Cut(step2, `<section class="now"`)
+		inner := onlyWhere(t, step2)
+		if inner != htmlEscape(cat.Text("html.where", nil))+` <code>/src/today/.env:1</code>` {
+			t.Errorf("%s: step 2 line is %q", lang, inner)
+		}
+		_, after, _ := strings.Cut(step2, whereOpen+inner+`</p>`)
+		if !strings.HasPrefix(after, `<p class="imp">`) {
+			t.Errorf("%s: step 2's «Found in» line is not right before «what it means»: %.60q", lang, after)
+		}
+		_, before, _ := strings.Cut(step2, `<p class="tf">`)
+		if !strings.Contains(before, whereOpen) {
+			t.Errorf("%s: step 2's «Found in» line is not below the finding's title", lang)
 		}
 	}
 }
