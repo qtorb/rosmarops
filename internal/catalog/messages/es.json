@@ -155,6 +155,7 @@
   "console.report": "Informe: {path}",
   "console.report_not_opened": "Terminado. Abre el informe aquí: {path}",
   "console.report_opened": "Terminado. El informe está abierto en tu navegador.",
+  "console.report_snap_hint": "Si tu navegador dice que no puede abrir el fichero, seguramente es Firefox instalado como snap, que no puede leer carpetas ocultas. En Firefox, pulsa Ctrl+O, después Ctrl+L, y escribe {path}. O pon otra carpeta de informes en ~/.rosmarops/config.json (report_directory).",
   "console.state_confirm": "¿Has reiniciado o reinstalado tú RosmarOps? (s/N): ",
   "console.state_lost": "RosmarOps no encuentra su referencia de integridad de ejecuciones anteriores: su estado se ha perdido o reiniciado.",
   "console.summary": "{status} Urgentes: {red} · Para revisar: {yellow}. Comprobaciones antiguas — urgentes: {legacy_red} · para revisar: {legacy_yellow}.",
