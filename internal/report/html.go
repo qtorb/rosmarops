@@ -942,8 +942,9 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID))
 	// BV-153: the file each finding is in, on the card's first line, so a
 	// person can check it without opening «Technical details» (which is
-	// unchanged). Same locations the «Where» line shows there.
-	c.whereLine(c.rowLocations(f))
+	// unchanged). Same locations the «Where» line shows there; for
+	// cred_in_git, the commit and the file inside the project (BV-219).
+	c.findingWhere(f)
 	c.w(`<p>%s%s</p>`, c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
@@ -1351,6 +1352,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 		return c.cat.Text("html.f.cred.title", p)
 	}
 	if f.Rule == rules.RuleCredInGit {
+		if c.gitHistoryOnly(f) { // BV-219: no repository tracks it today
+			return c.cat.Text("html.f.cred_in_git.title.history", p)
+		}
 		return c.cat.Text("html.f.cred_in_git.title", p)
 	}
 	return c.cat.Text(execVariant(f, "html.f."+f.Rule+".title"), p)
@@ -1517,6 +1521,7 @@ func HTMLKeys() []string {
 		"html.step.1.other", "html.unknown.body.cursor", "html.unknown.body.grok-build", "html.today.projection.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
+		"html.f.cred_in_git.title.history", "html.f.cred_in_git.where.tracked", "html.f.cred_in_git.where.history", // BV-219
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
 		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
 		"html.signals.title", "html.signals.note")
