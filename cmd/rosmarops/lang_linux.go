@@ -8,15 +8,23 @@ import (
 )
 
 // uiLanguage reads the POSIX locale from LC_ALL, LC_MESSAGES and LANG, in that
-// order (BV-165). A Spanish locale (es, es_ES, es_419, es.UTF-8…) selects
-// Spanish; anything else (including C/POSIX and an unset environment) selects
-// English. It returns a Windows-style LANGID so langOf maps it like the Windows
-// path: primaryLangSpanish for Spanish, 0 for English.
+// order (BV-165). It returns a Windows-style primary LANGID so langOf maps it
+// like the Windows path: Spanish (es, es_ES, es_419, es.UTF-8…), Catalan (ca),
+// Galician (gl) and Basque (eu) by their primary language, so langOf selects
+// Spanish for them (BV-221); anything else (including C/POSIX and an unset
+// environment) is 0, English.
 func uiLanguage() uint16 {
 	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		if v, ok := os.LookupEnv(name); ok && v != "" {
-			if localeLanguage(v) == "es" {
+			switch localeLanguage(v) {
+			case "es":
 				return primaryLangSpanish
+			case "ca":
+				return primaryLangCatalan
+			case "gl":
+				return primaryLangGalician
+			case "eu":
+				return primaryLangBasque
 			}
 			return 0
 		}
