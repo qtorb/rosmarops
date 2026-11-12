@@ -1486,7 +1486,7 @@ func HTMLKeys() []string {
 		"html.unknown.body", "html.coverage.title", "html.coverage.body",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
 		"html.fix.title", "html.fix.step1", "html.fix.step2", "html.fix.step3", "html.fix.copy", "html.fix.copied",
-		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.open.macos", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
+		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.open.macos", "html.fix.manual.open.other", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
 		"html.fix.remove", "html.agent.prompt.merge", "html.agent.prompt.create",
 		"html.after.full", "html.after.radius", "html.after.partial",
 		"html.today.projection",
