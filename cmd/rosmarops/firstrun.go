@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
@@ -30,7 +29,6 @@ import (
 // The double click's seams; tests replace them.
 var (
 	detectProjects = func() firstrun.Result { return firstrun.Detect(firstrun.EnvFromOS()) }
-	pickedProjects = func(dir string) firstrun.Result { return firstrun.Picked(firstrun.EnvFromOS(), dir) }
 	pickFolder     = firstrun.Pick
 	openReportFile = notify.OpenReport
 	closeDelay     = 3 * time.Second // the window closes by itself after a run that opened the report
@@ -162,15 +160,16 @@ func offerConnect(stPath string) {
 	offerConnectAfterReport(spacePaths{store: storePath, state: stPath, reports: report.DataDir(reportDir)}, cat, stPath, time.Now())
 }
 
-// firstRunRepos is U3, and U4 when U3 finds nothing: the repositories of
-// the first configuration. Every decision goes to the log.
+// firstRunRepos is the first configuration's repo_roots (CTO-38 §2.3): empty
+// when the project search finds a repository (every review searches again);
+// when it finds none, U4's folder picker, and the folder chosen is a root.
+// Every decision goes to the log.
 func firstRunRepos(cat catalog.Catalog) []string {
 	fmt.Println(cat.Text("console.first_run.detecting", nil))
 	res := detectProjects()
 	logDecisions(res)
 	if len(res.Repos) > 0 {
-		fmt.Println(cat.Text("console.first_run.found", map[string]string{"count": strconv.Itoa(len(res.Repos))}))
-		return res.Repos
+		return []string{}
 	}
 	fmt.Println(cat.Text("console.first_run.none", nil))
 	dir, err := pickFolder(cat.Text("console.first_run.picker_title", nil))
@@ -185,15 +184,9 @@ func firstRunRepos(cat catalog.Catalog) []string {
 		fmt.Println(cat.Text("console.first_run.agents_only", nil))
 		return []string{}
 	}
-	// U11: the chosen folder's repositories through U3's filters and limit.
+	// The chosen folder is a root the search walks in every review.
 	slog.Info("first run: folder chosen", "path", dir)
-	picked := pickedProjects(dir)
-	logDecisions(picked)
-	fmt.Println(cat.Text("console.first_run.found", map[string]string{"count": strconv.Itoa(len(picked.Repos))}))
-	if picked.Repos == nil {
-		return []string{}
-	}
-	return picked.Repos
+	return []string{dir}
 }
 
 // logDecisions writes each first-run decision, and the repositories left

@@ -54,6 +54,11 @@ func TestMarkdownAlwaysEnglish(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// CTO-38: a repo_roots entry is a repository when it has a .git entry (a
+	// folder without one is walked), so the project is a git repository.
+	if out, err := exec.Command("git", "init", "-q", repo).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
 	consoles := map[string]string{} // --lang: the run's standard output
 	// init records the configuration (BV-68, J1): the repo_roots edited
 	// after it are accepted with baseline, as a person would confirm them.

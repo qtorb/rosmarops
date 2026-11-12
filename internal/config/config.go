@@ -18,8 +18,14 @@ import (
 // Config mirrors schemas/config.v1.json exactly.
 // Field tags match the JSON schema property names.
 type Config struct {
-	SchemaVersion       int             `json:"schema_version"`
-	RepoRoots           []string        `json:"repo_roots"`
+	SchemaVersion int      `json:"schema_version"`
+	RepoRoots     []string `json:"repo_roots"`
+	// SearchHome walks the whole user folder too (CTO-38 G1); nil (absent)
+	// is true. Pointer so an absent key stays absent when the program writes
+	// the file back (BV-184), and the file's hash does not change.
+	SearchHome *bool `json:"search_home,omitempty"`
+	// SkipFolders are absolute paths the project search never walks (G1).
+	SkipFolders         []string        `json:"skip_folders,omitempty"`
 	ReportDirectory     string          `json:"report_directory,omitempty"`
 	Thresholds          Thresholds      `json:"thresholds,omitempty"`
 	ScheduleHint        ScheduleHint    `json:"schedule_hint,omitempty"`
@@ -158,6 +164,10 @@ func getSchema() (*schemaval.Schema, error) {
 	return compiledSchema, nil
 }
 
+// SearchHomeOn reports whether the project search walks the whole user
+// folder: search_home, true when absent (CTO-38 §2.3).
+func (c Config) SearchHomeOn() bool { return c.SearchHome == nil || *c.SearchHome }
+
 // DefaultConfig returns a valid Config with schema_version 1 and empty repo_roots.
 // The user fills in repo_roots by editing the config file.
 func DefaultConfig() Config {
@@ -288,29 +298,4 @@ func joinLines(ss []string) string {
 		out += s
 	}
 	return out
-}
-
-// ReposUnder returns the direct subdirectories of dir that contain a .git
-// entry (a directory, or a file for worktrees and submodules), as absolute
-// paths in alphabetical order. Deeper levels are not searched. It only reads.
-func ReposUnder(dir string) ([]string, error) {
-	abs, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, fmt.Errorf("resolve %s: %w", dir, err)
-	}
-	entries, err := os.ReadDir(abs)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", abs, err)
-	}
-	repos := []string{}
-	for _, e := range entries { // os.ReadDir sorts by name
-		sub := filepath.Join(abs, e.Name())
-		if info, err := os.Stat(sub); err != nil || !info.IsDir() {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(sub, ".git")); err == nil {
-			repos = append(repos, sub)
-		}
-	}
-	return repos, nil
 }

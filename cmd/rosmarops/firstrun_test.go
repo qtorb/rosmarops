@@ -64,7 +64,9 @@ func TestDoubleClickSpanishOpensReport(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil { // a Windows path is escaped in the JSON
 		t.Fatal(err)
 	}
-	if len(cfg.RepoRoots) != 1 || cfg.RepoRoots[0] != proj {
+	// CTO-38 §2.3: a first use that finds repositories leaves repo_roots
+	// empty; every review searches again.
+	if cfg.RepoRoots == nil || len(cfg.RepoRoots) != 0 {
 		t.Errorf("config: %s", raw)
 	}
 	// The run's log is closed when runNoArgs returns: on Windows an open
@@ -74,9 +76,8 @@ func TestDoubleClickSpanishOpensReport(t *testing.T) {
 	}
 }
 
-// U4 + U11: nothing detected, the picker returns a folder: its
-// repositories go through U3's filters (node_modules out), and the log
-// keeps the decisions.
+// U4 + CTO-38 §2.3: nothing detected, the picker returns a folder: it is a
+// root of repo_roots, and the review's search walks it (node_modules out).
 func TestDoubleClickPickedFolder(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
@@ -117,17 +118,24 @@ func TestDoubleClickPickedFolder(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.RepoRoots) != 1 || cfg.RepoRoots[0] != filepath.Join(chosen, "app") {
-		t.Errorf("repo_roots %q", cfg.RepoRoots)
+	if len(cfg.RepoRoots) != 1 || cfg.RepoRoots[0] != chosen {
+		t.Errorf("repo_roots %q, want the chosen folder", cfg.RepoRoots)
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, RunLogName))
-	for _, want := range []string{
-		"source=picked_folder rule=no_git path=" + chosen,
-		"source=picked_folder rule=accepted path=" + filepath.Join(chosen, "app"),
-		"source=picked_folder rule=forced_exclusion path=" + filepath.Join(chosen, "node_modules"),
-	} {
-		if !strings.Contains(string(log), want) {
-			t.Errorf("log lacks %q", want)
-		}
+	var v2 struct {
+		Coverage struct {
+			Projects struct {
+				Items []struct {
+					Path, Source string
+				} `json:"items"`
+			} `json:"projects"`
+		} `json:"coverage"`
+	}
+	b, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, report.V2FileName))
+	if err := json.Unmarshal(b, &v2); err != nil {
+		t.Fatal(err)
+	}
+	items := v2.Coverage.Projects.Items
+	if len(items) != 1 || items[0].Path != filepath.Join(chosen, "app") || items[0].Source != "root" {
+		t.Errorf("projects checked %+v, want only %s from the chosen folder", items, filepath.Join(chosen, "app"))
 	}
 }

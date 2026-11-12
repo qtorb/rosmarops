@@ -1,14 +1,13 @@
 package integration_test
 
 import (
-	"bufio"
 	"encoding/json"
 	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -78,27 +77,6 @@ func doubleClick(t *testing.T, bin, dir string, env []string) (int, string) {
 		t.Fatal(err)
 	}
 	return 0, string(out)
-}
-
-// decisions are the log's first-run lines: path → source and rule of its
-// first decision.
-func decisions(t *testing.T, log string) map[string][2]string {
-	t.Helper()
-	re := regexp.MustCompile(`msg="first run: candidate" source=(\S+) rule=(\S+) path=(.*)$`)
-	got := map[string][2]string{}
-	sc := bufio.NewScanner(strings.NewReader(log))
-	for sc.Scan() {
-		if m := re.FindStringSubmatch(sc.Text()); m != nil {
-			p := m[3]
-			if strings.HasPrefix(p, `"`) {
-				_ = json.Unmarshal([]byte(p), &p)
-			}
-			if _, dup := got[p]; !dup {
-				got[p] = [2]string{m[1], m[2]} // the first decision for the path
-			}
-		}
-	}
-	return got
 }
 
 func catalogOf(t *testing.T, lang string) map[string]string {
@@ -171,55 +149,65 @@ func TestDoubleClickFirstUse(t *testing.T) {
 			t.Errorf("window lacks %s:\n%s", k, out)
 		}
 	}
-	if !strings.Contains(out, strings.ReplaceAll(en["console.first_run.found"], "{count}", "5")) {
-		t.Errorf("window: not 5 projects found:\n%s", out)
+	// CTO-38: the project search of the review finds the five, walking the
+	// user folder and accepting the indicators; the window lists them.
+	found := strings.NewReplacer("{count}", "5", "{roots}", "1").Replace(en["console.projects.found.other"])
+	if !strings.Contains(out, found) {
+		t.Errorf("window: not %q:\n%s", found, out)
 	}
 	reports := filepath.Join(home, ".rosmarops", "reports")
 	if want := strings.ReplaceAll(en["console.report_not_opened"], "{path}", filepath.Join(reports, "report.html")); !opened && !strings.Contains(out, want) {
 		t.Errorf("window lacks %q (no browser here):\n%s", want, out)
 	}
 
+	// CTO-38 §2.3: the first configuration has no repositories in repo_roots
+	// (every review searches again).
 	var cfg struct {
 		RepoRoots []string `json:"repo_roots"`
 	}
 	readJSON(t, filepath.Join(home, ".rosmarops", "config.json"), &cfg)
-	// a) then b) then c), each in alphabetical order.
-	if want := []string{alpha, delta, gamma, two, one}; strings.Join(cfg.RepoRoots, "|") != strings.Join(want, "|") {
-		t.Errorf("repo_roots\n got %q\nwant %q", cfg.RepoRoots, want)
+	if len(cfg.RepoRoots) != 0 {
+		t.Errorf("repo_roots %q, want empty", cfg.RepoRoots)
 	}
-
+	var v2 struct {
+		Coverage struct {
+			Projects struct {
+				Items []struct {
+					Path   string `json:"path"`
+					Source string `json:"source"`
+				} `json:"items"`
+			} `json:"projects"`
+		} `json:"coverage"`
+	}
+	readJSON(t, filepath.Join(reports, "data", "report.v2.json"), &v2)
+	var gotItems []string
+	for _, it := range v2.Coverage.Projects.Items {
+		gotItems = append(gotItems, it.Path)
+	}
+	sort.Strings(gotItems)
+	var want []string
+	for _, p := range []string{alpha, delta, gamma, one, two} {
+		rel, _ := filepath.Rel(home, p)
+		want = append(want, "~/"+filepath.ToSlash(rel))
+	}
+	sort.Strings(want)
+	if strings.Join(gotItems, "|") != strings.Join(want, "|") {
+		t.Errorf("projects checked\n got %q\nwant %q", gotItems, want)
+	}
 	log, err := os.ReadFile(filepath.Join(reports, "data", "last-run-log.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := decisions(t, string(log))
-	for p, want := range map[string][2]string{
-		alpha:                          {"claude_projects", "accepted"},
-		filepath.Join(work, "beta"):    {"claude_projects", "no_git"},
-		filepath.Join(home, "missing"): {"claude_projects", "not_a_folder"},
-		home:                           {"claude_projects", "home_or_drive_root"},
-		inAppData:                      {"claude_projects", "system_folder"},
-		inProgramFiles:                 {"claude_projects", "system_folder"},
-		inWindows:                      {"claude_projects", "system_folder"},
-		excluded:                       {"claude_projects", "forced_exclusion"},
-		gamma:                          {"editor_workspace", "accepted"},
-		delta:                          {"editor_workspace", "accepted"},
-		"vscode-remote://wsl%2Bubuntu/home/ana/x": {"editor_workspace", "not_local_folder"},
-		"file://server/share/x":                   {"editor_workspace", "not_local_folder"},
-		one:                                       {"usual_folder", "accepted"},
-		two:                                       {"usual_folder", "accepted"},
-	} {
-		if got[p] != want {
-			t.Errorf("%s: %v, want %v", p, got[p], want)
-		}
-	}
-	// alpha again from VS Code's workspace: a duplicate (the last line for
-	// the path is the duplicate's).
-	if !regexp.MustCompile(`source=editor_workspace rule=duplicate path=` + regexp.QuoteMeta(alpha)).Match(log) {
-		t.Errorf("no duplicate decision for %s", alpha)
-	}
 	if strings.Contains(string(log), "not read") || strings.Contains(string(log), "state.vscdb") {
-		t.Error("the log has what U3 must not read")
+		t.Error("the log has what the search must not read")
+	}
+	for _, p := range []string{inAppData, inProgramFiles, inWindows, excluded} {
+		rel, _ := filepath.Rel(home, p)
+		for _, it := range gotItems {
+			if it == p || it == "~/"+filepath.ToSlash(rel) {
+				t.Errorf("%s was checked", p)
+			}
+		}
 	}
 
 	// U7: five pages, report.html in the run's language (en here: no
@@ -285,16 +273,30 @@ func TestDoubleClickLimit(t *testing.T) {
 	if code, out := doubleClick(t, bin, filepath.Join(root, "work"), env); code != 0 {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
-	var cfg struct {
-		RepoRoots []string `json:"repo_roots"`
+	// CTO-38 G7: the review checks 100 (the most recently used) and the
+	// report lists the other 5 as over the limit.
+	var v2 struct {
+		Coverage struct {
+			Projects struct {
+				Scanned     int `json:"scanned"`
+				Found       int `json:"found"`
+				NotSearched []struct {
+					Reason string `json:"reason"`
+					Count  int    `json:"count"`
+				} `json:"not_searched"`
+			} `json:"projects"`
+		} `json:"coverage"`
 	}
-	readJSON(t, filepath.Join(home, ".rosmarops", "config.json"), &cfg)
-	if len(cfg.RepoRoots) != 100 || filepath.Base(cfg.RepoRoots[99]) != "r099" {
-		t.Errorf("%d repo_roots, last %q", len(cfg.RepoRoots), cfg.RepoRoots[len(cfg.RepoRoots)-1])
+	readJSON(t, filepath.Join(home, ".rosmarops", "reports", "data", "report.v2.json"), &v2)
+	p := v2.Coverage.Projects
+	over := 0
+	for _, n := range p.NotSearched {
+		if n.Reason == "over_max" {
+			over = n.Count
+		}
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", "last-run-log.txt"))
-	if n := strings.Count(string(log), "rule=over_limit"); n != 5 || !strings.Contains(string(log), "count=5 limit=100") {
-		t.Errorf("%d over_limit lines\n%s", n, log)
+	if p.Scanned != 100 || p.Found != 105 || over != 5 {
+		t.Errorf("scanned %d found %d over_max %d; want 100, 105, 5", p.Scanned, p.Found, over)
 	}
 }
 

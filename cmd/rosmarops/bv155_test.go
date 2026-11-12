@@ -10,10 +10,10 @@ import (
 )
 
 // BV-155: the scan context's deadline is the proportional global limit for the
-// number of projects.
+// number of projects, counted from the start of the project search (CTO-38 G2).
 func TestNewScanContextUsesLimit(t *testing.T) {
 	for _, projects := range []int{0, 21, 48, 500} {
-		ctx, cancel := newScanContext(projects)
+		ctx, cancel := newScanContext(time.Now(), projects)
 		dl, ok := ctx.Deadline()
 		cancel()
 		if !ok {
