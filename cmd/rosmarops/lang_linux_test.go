@@ -6,13 +6,18 @@ import "testing"
 
 func TestUILanguageLinux(t *testing.T) {
 	cases := map[string]string{
-		"es_ES.UTF-8": "es",
-		"es":          "es",
-		"es_419":      "es",
-		"en_US.UTF-8": "en",
-		"C":           "en",
-		"POSIX":       "en",
-		"":            "en",
+		"es_ES.UTF-8":    "es",
+		"es":             "es",
+		"es_419":         "es",
+		"ca_ES.UTF-8":    "es", // BV-221: Catalan, Galician and Basque → Spanish
+		"ca_ES@valencia": "es",
+		"gl_ES.UTF-8":    "es",
+		"eu_ES.UTF-8":    "es",
+		"fr_FR.UTF-8":    "en",
+		"en_US.UTF-8":    "en",
+		"C":              "en",
+		"POSIX":          "en",
+		"":               "en",
 	}
 	for _, v := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
 		t.Setenv(v, "")

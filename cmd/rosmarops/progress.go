@@ -16,7 +16,8 @@ const progressInterval = 250 * time.Millisecond
 
 // reposSlowAfter is how long the repositories count may stay still before the
 // console shows the «this one has a long history» note (BV-211 §3), so a slow
-// repository does not look like a hang.
+// repository does not look like a hang. The note is shown at most once per
+// review, for the first repository that stalls (BV-221).
 const reposSlowAfter = 15 * time.Second
 
 // progress prints the run's progress lines from the catalog: never a
@@ -41,7 +42,7 @@ type progress struct {
 	reposDone   int
 	reposTotal  int
 	lastChange  time.Time // when reposDone last moved
-	slowShown   bool      // the slow note was shown for the current wait
+	slowShown   bool      // the slow note was shown in this review (BV-221: once)
 	stopTick    chan struct{}
 }
 
@@ -118,7 +119,6 @@ func (p *progress) repos(done, total int) {
 	if done != p.reposDone {
 		p.reposDone = done
 		p.lastChange = p.now()
-		p.slowShown = false
 	}
 	p.reposTotal = total
 	last := total > 0 && done >= total
@@ -149,8 +149,9 @@ func (p *progress) repos(done, total int) {
 }
 
 // tick is the once-a-second refresh from the background goroutine: it updates
-// the elapsed time and shows the slow-repository note when the count has not
-// moved for reposSlowAfter. It does nothing outside the repositories phase.
+// the elapsed time and shows the slow-repository note the first time the count
+// has not moved for reposSlowAfter; later stalls in the same review show no
+// note (BV-221). It does nothing outside the repositories phase.
 func (p *progress) tick() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
