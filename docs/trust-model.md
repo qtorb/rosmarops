@@ -17,6 +17,7 @@ If you ever see RosmarOps doing any of these things, treat it as a critical bug.
 - **It never changes your files, settings, repositories, keys or agents.** It reads. The report tells you what to change; you, or your own agent with your approval, make the change.
 - **It never prints a secret in full.** Not in the report, not in its logs, not in its state.
 - **It never writes outside its own folders** (see claim 3).
+- **It only lists folders when it looks for your projects.** The project search never enters, below a root: a hidden folder; `AppData` (Windows), `Library` (macOS) or `snap` (Linux) under the user's folder; a symbolic link, junction or any other reparse point; a folder on another file system than its root's; a network file system; or a cloud placeholder not present on disk. It only lists folders: it never opens a file. Project search: at most 30 seconds and 200,000 folders read, at most 6 levels below each root, and at most 100 repositories found (`MaxRepos`; repositories listed by the person are always kept). A search over budget stops, keeps what it found and the previous run's repositories that still exist, and adds a yellow finding `project_search_incomplete`.
 - **It never creates scheduled tasks.** The report gives you the exact command for a weekly review; you, or your agent with your approval, create the task.
 
 ## What it sends, only with your permission
