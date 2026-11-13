@@ -8,6 +8,6 @@ Commands:
 Installers:
 - Architecture: x64
   InstallerUrl: https://github.com/qtorb/rosmarops/releases/download/v0.11.5/rosmarops.exe
-  InstallerSha256: 3F1DEA76EFAECE74B9356F23997F9A191D4EBCB1E6C852CDD0BF051B2E36C315
+  InstallerSha256: 7367F409F47919D378932DAB0FE892BDB79DC94784F3CAB9FB482C48807C202F
 ManifestType: installer
 ManifestVersion: 1.10.0
