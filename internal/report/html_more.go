@@ -135,6 +135,8 @@ func (c htmlCtx) renderMoreInfo(local time.Time) {
 		c.renderWeekly()
 		c.w(`</div>`)
 	}
+	c.renderAgentHooks()
+	c.renderInstalled()
 	c.w(`<div><h3>%s</h3>`, c.t("html.more.analysis", nil))
 	c.renderHowMade(local)
 	c.w(`</div></div></details>`)

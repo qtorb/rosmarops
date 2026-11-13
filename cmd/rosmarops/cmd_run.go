@@ -383,6 +383,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// execution alias instead. No-op for the standalone .exe and on macOS/Linux.
 	// The integrity check still hashes the real running binary (hash.Self).
 	exePath = storeAliasExe(exePath, os.Getenv("LOCALAPPDATA"))
+	// BV-226 §4: our own Claude Code hooks are recognised by the binary's
+	// current reference (the state's, or this binary's own after a baseline).
+	ownRef := st.Integrity.VigilBinarySHA256
+	if ownRef == "" || ownRef == zeroHash {
+		ownRef, _ = hash.Self()
+	}
+	setOwnBinary(ownRef, os.Getenv("LOCALAPPDATA"))
 	langs := make([]string, 0, len(runLangs))
 	for l := range runLangs {
 		langs = append(langs, l)
@@ -1016,6 +1023,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 	// Write report files.
 	progress.line("console.progress.report", nil)
+	// BV-226 §4, §5: RosmarOps inside Claude Code, for «More information».
+	v2.AgentHooks = agentHooksFor(builtSettings, v2, exePath)
 	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
 	if err != nil {
 		return "", fmt.Errorf("write report: %w", err)
@@ -1037,6 +1046,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		return "", fmt.Errorf("findings memory: %w", err)
 	}
 	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+	// BV-226 §2: the line `rosmarops statusline` shows in Claude Code.
+	writeRunStatusline(dataDir, v2, time.Now())
 
 	// BV-183: prune old sealed packages — those whose name is more than 30 days
 	// old and whose last send result is terminal. Nothing else is removed.

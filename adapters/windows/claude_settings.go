@@ -47,9 +47,13 @@ type settingsFile struct {
 	Env map[string]string `json:"env"`
 
 	Hooks map[string][]struct {
-		Hooks []struct {
+		// Matcher and If are read only to recognise RosmarOps's own hook
+		// (BV-226 §4: neither may be set on it).
+		Matcher string `json:"matcher"`
+		Hooks   []struct {
 			Type    string `json:"type"`
 			Command string `json:"command"`
+			If      string `json:"if"`
 		} `json:"hooks"`
 	} `json:"hooks"`
 	StatusLine *struct {
@@ -247,6 +251,13 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	f.EnableAllProjectMcpServers = s.EnableAllProjectMcpServers
 	f.Env = secretVars(s.Env, sortedKeys(s.Env))
 	f.Executables = executablePointers(s)
+	// BV-226 §4: RosmarOps's own SessionStart hook and status line, in user
+	// or managed settings only, are listed apart and are not executables
+	// like any other.
+	f.HasStatusLine = s.StatusLine != nil && strings.TrimSpace(s.StatusLine.Command) != ""
+	if f.Scope == platform.MCPScopeUser || f.Scope == platform.MCPScopeManaged {
+		f.OwnHooks, f.Executables = ownHooks(s, f.Executables)
+	}
 	if f.Scope == platform.MCPScopeProject || f.Scope == platform.MCPScopeLocal {
 		// BV-107: only project configuration can carry a hook that runs a
 		// script of the repository it ships in.

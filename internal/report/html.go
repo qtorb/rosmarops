@@ -1571,6 +1571,10 @@ func HTMLKeys() []string {
 	// the folded «More information» (not connected).
 	keys = append(keys, "report.space_has", "report.space_keep", "report.space_keep.console", "report.space_open_link",
 		"html.more.title", "html.more.agents", "html.more.analysis")
+	// BV-226 §5, §4: RosmarOps inside Claude Code, and what it has installed.
+	keys = append(keys, "html.agenthooks.title", "html.agenthooks.pitch", "html.agenthooks.statusline", "html.agenthooks.statusline_taken",
+		"html.agenthooks.ask", "html.agenthooks.prompt", "html.agenthooks.copy",
+		"html.installed.title", "html.installed.session", "html.installed.statusline")
 	// BV-128b: the space-view's «fixed» change line (parameterless).
 	keys = append(keys, "space.change_fixed")
 	for _, c := range knowledge.AllMCPCategories {
