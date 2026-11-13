@@ -67,6 +67,8 @@ These cannot be violated by any code you write. They are the product.
 
    The Store never accepts a version older than `state.engine_version`, or the same version with a different SHA-256. An accepted change records the new references and how it was accepted (`binary_accepted_via`), and the report says so. Signed releases (Authenticode, Apple) will add a signature check; until then this is the only automatic path.
 
+   `session-check` and `statusline` check integrity like every command, but on a mismatch they never ask and never write: they print one line saying RosmarOps changed and that running it confirms the change, and exit 0. The next `rosmarops run` handles it as today.
+
 ---
 
 ## Coding conventions

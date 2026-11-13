@@ -99,6 +99,15 @@ jobs:
       - name: CTO-38 P13 project search benchmark (does not block)
         continue-on-error: true
         run: go test -count=1 -run "^$" -bench BenchmarkProjectsSearch -benchtime 1x ./internal/scan/projects/
+      # BV-226 §0: 20 runs each of session-check and statusline, with the
+      # integrity check, median and p95 in the log. It never blocks; the signed
+      # limits (statusline 100 ms, session-check 500 ms p95) are read by hand.
+      - name: BV-226 session-check and statusline timing (does not block)
+        continue-on-error: true
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -trimpath -o "$env:RUNNER_TEMP\bench-rosmarops.exe" ./cmd/rosmarops
+          ./scripts/bench-agenthooks/bench.ps1 -Exe "$env:RUNNER_TEMP\bench-rosmarops.exe"
       # BV-202 C4 (CTO-28): the candidate must be built the same way as the
       # release (release.yml:144-155), which ci.yml did not do. Write the Windows
       # icon + version resource (.syso) with tools/winres first; winres -version

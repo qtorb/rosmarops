@@ -51,6 +51,8 @@ Integrity check (invariant 8). On startup, the binary computes its own SHA-256 a
 
 The Store never accepts a version older than `state.engine_version`, or the same version with a different SHA-256. An accepted change records the new references and how it was accepted (`binary_accepted_via`), and the report says so. Signed releases (Authenticode, Apple) will add a signature check; until then this is the only automatic path.
 
+`session-check` and `statusline` check integrity like every command, but on a mismatch they never ask and never write: they print one line saying RosmarOps changed and that running it confirms the change, and exit 0. The next `rosmarops run` handles it as today.
+
 Space key on each computer. RosmarOps keeps your space key and this computer's sending credential on each connected computer, so it can lock and send your results after each check without asking you. On Windows they are protected with DPAPI for the current user (~/.rosmarops/kit.dpapi). On macOS they are in a file only your user can read (~/.rosmarops/kit.key, 0600, in a 0700 folder), and protection on disk comes from FileVault. This protects them from other users of the computer and from copies of the disk or backups. It does not protect them from a malicious program running as you: such a program can use them the same way RosmarOps does.
 
 ---

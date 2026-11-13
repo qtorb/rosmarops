@@ -119,6 +119,10 @@ type V2 struct {
 	// SpaceSentDate is the local date this run's package was sent to the space,
 	// or empty when it was not sent this run (CTO-15 PR5). Not in the JSON.
 	SpaceSentDate string `json:"-"`
+	// AgentHooks is what the report needs to offer RosmarOps inside Claude
+	// Code and to list what it has installed there (BV-226 §4, §5). Never in
+	// the JSON: it carries a path.
+	AgentHooks AgentHooks `json:"-"`
 	// SpaceRejected is true when this run's package was refused by the area
 	// (400/403/409/413) and dropped, so the section says so instead of
 	// "pending" (CTO-15 PR5). Not in the JSON.

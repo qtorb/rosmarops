@@ -65,6 +65,12 @@ var staticKeys = []string{
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",
+	// BV-226: what session-check says in Claude Code and the status line.
+	"session.first.title", "session.changes.title", "session.item.allow_rule", "session.item.default_mode",
+	"session.item.hook", "session.item.mcp", "session.item.mcp_changed", "session.item.skill", "session.item.agent",
+	"session.item.more", "session.more", "session.integrity_changed",
+	"statusline.line", "statusline.red.one", "statusline.red.other", "statusline.yellow.one", "statusline.yellow.other",
+	"statusline.stale", "statusline.aborted", "statusline.integrity_changed",
 	// BV-93, B3: a scheduled review that could not finish
 	"notify.run_failed",
 	// BV-137: the connect window / `rosmarops connect` console texts (4 states)

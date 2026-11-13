@@ -58,6 +58,9 @@ type Command struct {
 	Flags []Flag
 	Args  int // AnyArgs, or the exact count
 	Subs  []*Command
+	// Hidden leaves the command out of the help, like a hidden flag: it has
+	// no help text (BV-226: session-check and statusline, run by Claude Code).
+	Hidden bool
 	// Before runs before Run, with the command's path from the root (the
 	// integrity check).
 	Before func(path []string) error
@@ -265,9 +268,14 @@ func (p Program) help(cmd *Command, path, args []string) error {
 		}
 		width := 0
 		for _, s := range cmd.Subs {
-			width = max(width, len(s.Name))
+			if !s.Hidden {
+				width = max(width, len(s.Name))
+			}
 		}
 		for _, s := range cmd.Subs {
+			if s.Hidden {
+				continue
+			}
 			fmt.Fprintf(&b, "  %-*s  %s\n", width, s.Name, cat.Text(s.Short, nil))
 		}
 	}

@@ -246,6 +246,12 @@ type ManagedSource struct {
 // ClaudeSettingsFile is one Claude Code settings file: user
 // (<config folder>/settings.json), project (<repo>/.claude/settings.json) or
 // local (<repo>/.claude/settings.local.json).
+// RosmarOps's own Claude Code hooks (BV-226 §4).
+const (
+	OwnHookSessionCheck = "session-check"
+	OwnHookStatusline   = "statusline"
+)
+
 type ClaudeSettingsFile struct {
 	// Scope is MCPScopeUser, MCPScopeProject or MCPScopeLocal: the settings
 	// layer, as Claude Code names it (https://code.claude.com/docs/en/settings).
@@ -282,6 +288,16 @@ type ClaudeSettingsFile struct {
 	// Claude Code run: every hooks command, statusLine.command and
 	// apiKeyHelper. The command text itself is never kept.
 	Executables []string
+
+	// OwnHooks, for a user or managed settings file only (BV-226 §4), are
+	// RosmarOps's own Claude Code hooks found in it: OwnHookSessionCheck and
+	// OwnHookStatusline, each only when all five conditions of CTO-44 §4d
+	// hold. Their pointers are not in Executables.
+	OwnHooks []string
+
+	// HasStatusLine reports that the file sets a statusLine command, ours or
+	// not (BV-226 §5: the report offers RosmarOps's only when there is none).
+	HasStatusLine bool
 
 	// HookScripts, for a project settings file only (BV-107), are the
 	// commands whose text named a regular file inside the project: the

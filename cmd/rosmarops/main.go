@@ -61,17 +61,19 @@ func newRootCmd() *cli.Command {
 	return &cli.Command{
 		Name: "rosmarops",
 		Subs: []*cli.Command{
-			newInitCmd(),       // cmd_init.go   — skips integrity check
-			newRunCmd(),        // cmd_run.go
-			newBaselineCmd(),   // cmd_baseline.go — skips integrity check
-			newStatusCmd(),     // cmd_status.go
-			newFindingsCmd(),   // cmd_findings.go — «No me afecta» (BV-184)
-			newProblemsCmd(),   // cmd_problems_cli.go — «problems ask» (BV-210, CTO-32 C4)
-			newAllowCmd(),      // stub → M4
-			newScheduleCmd(),   // stub → M8
-			newKitCmd(),        // cmd_kit.go
-			newConnectCmd(),    // cmd_space.go
-			newDisconnectCmd(), // cmd_space.go
+			newInitCmd(),         // cmd_init.go   — skips integrity check
+			newRunCmd(),          // cmd_run.go
+			newBaselineCmd(),     // cmd_baseline.go — skips integrity check
+			newStatusCmd(),       // cmd_status.go
+			newFindingsCmd(),     // cmd_findings.go — «No me afecta» (BV-184)
+			newProblemsCmd(),     // cmd_problems_cli.go — «problems ask» (BV-210, CTO-32 C4)
+			newAllowCmd(),        // stub → M4
+			newScheduleCmd(),     // stub → M8
+			newKitCmd(),          // cmd_kit.go
+			newConnectCmd(),      // cmd_space.go
+			newDisconnectCmd(),   // cmd_space.go
+			newSessionCheckCmd(), // cmd_agenthooks.go — BV-226, hidden
+			newStatuslineCmd(),   // cmd_agenthooks.go — BV-226, hidden
 		},
 	}
 }
@@ -228,6 +230,7 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 				}
 			}
 			htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+			writeAbortedStatusline(reportDir, time.Now()) // BV-226 §2
 			switch {
 			case err != nil:
 				slog.Error("integrity abort: could not write report.html", "err", err)
@@ -275,6 +278,7 @@ func abortRunFailed(o abortOptions, cause error) {
 		}
 	}
 	htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+	writeAbortedStatusline(reportDir, time.Now()) // BV-226 §2
 	if err != nil {
 		slog.Error("run_failed abort: could not write report.html", "err", err)
 		fmt.Fprintln(os.Stderr, "error:", cause)
