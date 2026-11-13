@@ -89,6 +89,7 @@ type connectServer struct {
 	connectID string
 	polls     int
 	acked     bool
+	askedCode bool // BV-227: the start request carried "code": true
 }
 
 func (s *connectServer) handler() http.Handler {
@@ -108,10 +109,14 @@ func (s *connectServer) handler() http.Handler {
 		cid := make([]byte, 16)
 		rand.Read(cid)
 		s.mu.Lock()
-		s.ep, s.hostID, s.connectID, s.polls = ep, req.HostID, hex.EncodeToString(cid), 0
+		s.ep, s.hostID, s.connectID, s.polls, s.askedCode = ep, req.HostID, hex.EncodeToString(cid), 0, req.Code
 		s.mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(startResponse{ConnectID: s.connectID, ExpiresAt: testExpiry()})
+		resp := startResponse{ConnectID: s.connectID, ExpiresAt: testExpiry()}
+		if req.Code {
+			resp.Code = "K7M2QX9P" // BA-60: 8 characters of the alphabet
+		}
+		json.NewEncoder(w).Encode(resp)
 	})
 	mux.HandleFunc("GET /api/v1/connect/{id}/result", func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") == "" {
@@ -200,10 +205,10 @@ func TestConnectProtocol(t *testing.T) {
 
 	const hostID = "host_0123456789abcdef"
 	var shownNumber int
-	var openedURL string
+	var openedURL, shownCode string
 	m, ack, err := Connect(context.Background(), grantedPermission(ts.Client(), ts.URL), hostID,
 		func(n int) { shownNumber = n },
-		func(u string) error { openedURL = u; return nil })
+		func(u, code string) error { openedURL, shownCode = u, code; return nil })
 	if err != nil {
 		t.Fatalf("Connect: %v", err)
 	}
@@ -214,6 +219,13 @@ func TestConnectProtocol(t *testing.T) {
 	}
 	if shownNumber < 10 || shownNumber > 99 {
 		t.Errorf("shown number %d", shownNumber)
+	}
+	// BV-227: the program always asks for the code and shows it as XXXX-XXXX.
+	if !srv.askedCode {
+		t.Error(`the start request did not carry "code": true`)
+	}
+	if shownCode != "K7M2-QX9P" {
+		t.Errorf("shown code %q, want K7M2-QX9P", shownCode)
 	}
 	if openedURL == "" || !hasPrefix(openedURL, ts.URL+"/connect#v1."+srv.connectID+".") {
 		t.Errorf("browser url %q", openedURL)
@@ -254,7 +266,7 @@ func TestConnectCancelled(t *testing.T) {
 	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
-	_, _, err := Connect(context.Background(), grantedPermission(ts.Client(), ts.URL), "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
+	_, _, err := Connect(context.Background(), grantedPermission(ts.Client(), ts.URL), "host_0123456789abcdef", func(int) {}, func(string, string) error { return nil })
 	if err != ErrConnectCancelled {
 		t.Fatalf("err = %v, want ErrConnectCancelled", err)
 	}
@@ -264,7 +276,7 @@ func TestConnectCancelled(t *testing.T) {
 // zero Permission (and FromState of a state with SpacePermission false) is
 // unusable (CTO-14 P3).
 func TestConnectRequiresPermission(t *testing.T) {
-	_, _, err := Connect(context.Background(), Permission{}, "host_0123456789abcdef", func(int) {}, func(string) error { return nil })
+	_, _, err := Connect(context.Background(), Permission{}, "host_0123456789abcdef", func(int) {}, func(string, string) error { return nil })
 	if err != ErrNoPermission {
 		t.Fatalf("zero Permission: err = %v, want ErrNoPermission", err)
 	}
@@ -291,3 +303,23 @@ func TestConnectRequiresPermission(t *testing.T) {
 }
 
 func hasPrefix(s, p string) bool { return len(s) >= len(p) && s[:len(p)] == p }
+
+// TestShowCode (BV-227): the server's code in two groups of 4 with a hyphen;
+// anything that is not exactly 8 characters of BA-60's alphabet shows nothing.
+func TestShowCode(t *testing.T) {
+	for in, want := range map[string]string{
+		"K7M2QX9P":  "K7M2-QX9P",
+		"23456789":  "2345-6789",
+		"":          "",
+		"K7M2QX9":   "",
+		"K7M2QX9PA": "",
+		"k7m2qx9p":  "", // lower case is not the server's
+		"K7M2QX0P":  "", // 0 is not in the alphabet
+		"K7M2-X9P":  "",
+		"K7M2\nX9P": "",
+	} {
+		if got := ShowCode(in); got != want {
+			t.Errorf("ShowCode(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

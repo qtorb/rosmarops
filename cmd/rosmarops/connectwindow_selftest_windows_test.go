@@ -223,6 +223,22 @@ func testWindowAlive(t *testing.T) {
 	if !waitFor(lines, 2*time.Second, func(l string) bool { return l == "NUMLABEL=42" }) {
 		t.Fatal("NUMLABEL=42 not shown within 2 s of sending the number")
 	}
+	// BV-227: the wait line shows connect.waiting, the address in its
+	// selectable box, the code line and connect.time.
+	cat, _ := catalog.Load("en")
+	if err := send("wait " + connectWaitLine(cat, bv227URL, bv227Code) + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"WAITLABEL=" + cat.Text("connect.waiting", nil),
+		"URLBOX=" + bv227URL,
+		"CODELABEL=" + cat.Text("connect.code", map[string]string{"code": bv227Code}),
+		"TIMELABEL=" + cat.Text("connect.time", nil),
+	} {
+		if !waitFor(lines, 2*time.Second, func(l string) bool { return l == want }) {
+			t.Fatalf("%q not shown within 2 s of sending the wait line", want)
+		}
+	}
 	if err := send("done\n"); err != nil {
 		t.Fatal(err)
 	}

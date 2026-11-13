@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -98,7 +99,7 @@ func resolveSpacePaths() (spacePaths, error) {
 // credential in the kit blob before acking. onNumber shows the number; onOpen
 // opens the browser. It returns ErrConnectCancelled / ErrConnectExpired / a
 // network error, which the caller turns into connect.expired / connect.failed.
-func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onOpen func(string) error) error {
+func spaceConnect(ctx context.Context, paths spacePaths, onNumber func(int), onOpen func(url, code string) error) error {
 	st, err := state.LoadState(paths.state)
 	if err != nil {
 		return fmt.Errorf("load state (run rosmarops init first): %w", err)
@@ -725,8 +726,8 @@ func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 	// (inside spaceConnect); onNumber is only the former on-screen display, now
 	// a no-op in the console.
 	onNumber := func(int) {}
-	onOpen := func(u string) error {
-		fmt.Fprintln(kitOutput, u)
+	onOpen := func(u, code string) error {
+		printConnectWaiting(kitOutput, cat, u, code)
 		openSpaceURL(u)
 		return nil
 	}
@@ -745,6 +746,19 @@ func connectInConsole(cat catalog.Catalog, paths spacePaths) connectResult {
 		fmt.Fprintln(kitOutput, cat.Text("connect.failed", nil))
 		return connectFailed
 	}
+}
+
+// printConnectWaiting is what the console shows while it waits for the
+// confirmation (BV-227 §4), in this order: connect.waiting, the address,
+// connect.code with the code as XXXX-XXXX (left out when the server gave none)
+// and connect.time. The code is only written here, never logged nor stored.
+func printConnectWaiting(w io.Writer, cat catalog.Catalog, u, code string) {
+	fmt.Fprintln(w, cat.Text("connect.waiting", nil))
+	fmt.Fprintln(w, u)
+	if code != "" {
+		fmt.Fprintln(w, cat.Text("connect.code", map[string]string{"code": code}))
+	}
+	fmt.Fprintln(w, cat.Text("connect.time", nil))
 }
 
 // consoleYes reports whether a console answer is a yes (BV-215): the line

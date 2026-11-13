@@ -34,7 +34,7 @@ func bv215Offer(t *testing.T, input string) (calls int, st state.State, out stri
 	kitInput, kitOutput = strings.NewReader(input), &buf
 	// The console offer itself (connectOffer minus its interactive-stdin gate).
 	connectOfferHook = func(p spacePaths, c catalog.Catalog) connectResult { return connectInConsole(c, p) }
-	connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string) error) (spacenet.Material, func(context.Context) error, error) {
+	connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string, string) error) (spacenet.Material, func(context.Context) error, error) {
 		calls++
 		return spacenet.Material{}, nil, spacenet.ErrConnectExpired
 	}

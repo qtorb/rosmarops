@@ -112,11 +112,33 @@ type startRequest struct {
 	HostID     string `json:"host_id"`
 	PickupHash string `json:"pickup_hash"`
 	NSealed    string `json:"n_sealed"`
+	// Code asks the server for the short connect code (BA-60; BV-227): always.
+	Code bool `json:"code"`
 }
 
 type startResponse struct {
 	ConnectID string `json:"connect_id"`
 	ExpiresAt string `json:"expires_at"`
+	// Code is the short connect code the server made (BA-60), returned once.
+	Code string `json:"code"`
+}
+
+// Short connect code (BA-60, qtorb/rosmarops-app Connect::CODE_ALPHABET and
+// CODE_LENGTH): 8 characters of this alphabet.
+const (
+	codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+	codeLength   = 8
+)
+
+// ShowCode is the code as the program shows it (BV-227): two groups of 4 with
+// a hyphen, XXXX-XXXX, like the connect page's code.example. "" when the
+// server gave none or one that is not exactly 8 characters of the alphabet, so
+// nothing else is ever shown in its place.
+func ShowCode(code string) string {
+	if len(code) != codeLength || strings.Trim(code, codeAlphabet) != "" {
+		return ""
+	}
+	return code[:4] + "-" + code[4:]
 }
 
 type resultResponse struct {
@@ -128,39 +150,40 @@ type resultResponse struct {
 	Credential string `json:"device_credential"`
 }
 
-// start performs POST /api/v1/connect/start and returns the connect_id and the
-// server's expiry (zero when it gave none or an unparseable one).
-func start(ctx context.Context, c *http.Client, base string, ep ecdhPub, hostID string, pickup []byte) (string, time.Time, error) {
+// start performs POST /api/v1/connect/start, always asking for the short code
+// (BV-227), and returns the connect_id, the server's expiry (zero when it gave
+// none or an unparseable one) and the code as the server gave it.
+func start(ctx context.Context, c *http.Client, base string, ep ecdhPub, hostID string, pickup []byte) (string, time.Time, string, error) {
 	nSealed, err := sealNumber(pickup, hostID)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, "", err
 	}
 	ph := sha256.Sum256(pickup)
 	body, err := json.Marshal(startRequest{
 		V: 1, EP: b64.EncodeToString(ep), HostID: hostID,
-		PickupHash: hex.EncodeToString(ph[:]), NSealed: nSealed,
+		PickupHash: hex.EncodeToString(ph[:]), NSealed: nSealed, Code: true,
 	})
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, "", err
 	}
 	resp, err := do(ctx, c, http.MethodPost, base+"/api/v1/connect/start", "", body)
 	if err != nil {
-		return "", time.Time{}, err
+		return "", time.Time{}, "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		return "", time.Time{}, fmt.Errorf("spacenet: connect/start: %s", resp.Status)
+		return "", time.Time{}, "", fmt.Errorf("spacenet: connect/start: %s", resp.Status)
 	}
 	var sr startResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&sr); err != nil {
-		return "", time.Time{}, fmt.Errorf("spacenet: connect/start response: %w", err)
+		return "", time.Time{}, "", fmt.Errorf("spacenet: connect/start response: %w", err)
 	}
 	// connect_id is 16 bytes as 32 lowercase hex characters (CTO-14 P8): it
 	// goes verbatim into the HKDF salt and the additional data, so only its
 	// lowercase form is accepted — an uppercase one would derive a different
 	// key on each side.
 	if len(sr.ConnectID) != 32 || !isLowerHex(sr.ConnectID) {
-		return "", time.Time{}, fmt.Errorf("spacenet: connect/start gave a bad connect_id")
+		return "", time.Time{}, "", fmt.Errorf("spacenet: connect/start gave a bad connect_id")
 	}
 	// expires_at bounds how long we keep asking (CTO-14 P8); an absent or
 	// unparseable value leaves the local 10-minute cap as the only bound.
@@ -168,7 +191,7 @@ func start(ctx context.Context, c *http.Client, base string, ep ecdhPub, hostID 
 	if t, err := time.Parse(time.RFC3339, sr.ExpiresAt); err == nil {
 		expiresAt = t
 	}
-	return sr.ConnectID, expiresAt, nil
+	return sr.ConnectID, expiresAt, sr.Code, nil
 }
 
 // ecdhPub is an X25519 public key as bytes.
@@ -177,13 +200,14 @@ type ecdhPub = []byte
 // Connect runs the whole program-side protocol under the person's recorded
 // permission (CTO-14 P3): it builds the one hardened client itself from perm,
 // so no caller passes a client in. onNumber is called with the number to show;
-// onOpen with the browser URL. On success it returns the recovered Material and
+// onOpen with the browser URL and the short code to show, as ShowCode gives it
+// ("" when the server gave none); the code is never logged nor stored. On success it returns the recovered Material and
 // an ack function the caller runs ONLY after it has stored the material
 // (CTO-14 P5): the area deletes the connection on ack, so storing first means a
 // failed save (e.g. DPAPI) never loses the credential — the person can retry
 // until the connection expires. It returns ErrConnectCancelled,
 // ErrConnectExpired, or ErrNoPermission.
-func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(int), onOpen func(string) error) (Material, func(context.Context) error, error) {
+func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(int), onOpen func(url, code string) error) (Material, func(context.Context) error, error) {
 	c, err := perm.httpClient()
 	if err != nil {
 		return Material{}, nil, err
@@ -200,7 +224,7 @@ func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(
 	// The bearer below is a string copy of pickup; the ack closure uses that,
 	// so the pickup bytes can be wiped as soon as Connect returns (CTO-14 P8).
 	defer zero(pickup)
-	connectID, expiresAt, err := start(ctx, c, perm.base, ep, hostID, pickup)
+	connectID, expiresAt, code, err := start(ctx, c, perm.base, ep, hostID, pickup)
 	if err != nil {
 		return Material{}, nil, err
 	}
@@ -209,7 +233,7 @@ func Connect(ctx context.Context, perm Permission, hostID string, onNumber func(
 	}
 	if onOpen != nil {
 		u := perm.url("/connect#v1." + connectID + "." + b64.EncodeToString(ep))
-		if err := onOpen(u); err != nil {
+		if err := onOpen(u, ShowCode(code)); err != nil {
 			return Material{}, nil, fmt.Errorf("spacenet: open browser: %w", err)
 		}
 	}

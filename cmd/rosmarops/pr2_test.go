@@ -37,10 +37,10 @@ func TestSpaceConnectRevertsOnFailure(t *testing.T) {
 		sp := newPaths(t)
 		orig := connectProtocol
 		t.Cleanup(func() { connectProtocol = orig })
-		connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string) error) (spacenet.Material, func(context.Context) error, error) {
+		connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string, string) error) (spacenet.Material, func(context.Context) error, error) {
 			return spacenet.Material{}, nil, spacenet.ErrConnectExpired
 		}
-		err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil })
+		err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil })
 		if err != spacenet.ErrConnectExpired {
 			t.Fatalf("err = %v, want ErrConnectExpired", err)
 		}
@@ -68,11 +68,11 @@ func TestSpaceConnectRevertsOnFailure(t *testing.T) {
 		orig := connectProtocol
 		t.Cleanup(func() { connectProtocol = orig })
 		acked := false
-		connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string) error) (spacenet.Material, func(context.Context) error, error) {
+		connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string, string) error) (spacenet.Material, func(context.Context) error, error) {
 			return spacenet.Material{Secret: sec, KitID: hex.EncodeToString(kidRaw), Credential: cred},
 				func(context.Context) error { acked = true; return nil }, nil
 		}
-		if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err != nil {
+		if err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil }); err != nil {
 			t.Fatalf("spaceConnect: %v", err)
 		}
 		if !acked {
