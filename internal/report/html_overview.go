@@ -224,7 +224,14 @@ func (o overviewText) lines(a rules.OverviewAgent, c rules.OverviewCell) []strin
 		case 1:
 			out = append(out, o.cat.Text("html.ov.data.creds.one", nil))
 		default:
-			out = append(out, o.cat.Text("html.ov.data.creds.other", map[string]string{"count": strconv.Itoa(n), "high": strconv.Itoa(high)}))
+			key := "html.ov.data.creds.other" // BV-229 §3: its own forms for 1 and 0 sensitive
+			switch high {
+			case 0:
+				key += ".high_none"
+			case 1:
+				key += ".high_one"
+			}
+			out = append(out, o.cat.Text(key, map[string]string{"count": strconv.Itoa(n), "high": strconv.Itoa(high)}))
 		}
 	}
 	if c.Row == rules.RowReadsFiles && has(d.Excluded, rules.ExcludedDefaultIgnoreFileTools) {

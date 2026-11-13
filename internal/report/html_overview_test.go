@@ -176,6 +176,16 @@ func TestRenderHTML_OverviewCombinations(t *testing.T) {
 			c.Data.CredentialsReachable, c.Data.CredentialsReachableHigh = ip(5), ip(3)
 			return c
 		}(), want: []text{{"html.ov.data.creds.other", map[string]string{"count": "5", "high": "3"}, "em"}}},
+		{name: "creds other, 1 sensitive (BV-229 §3)", row: rules.RowReadsFiles, cell: func() rules.OverviewCell {
+			c := ovc(nobody, rules.ScopeMachine, pd)
+			c.Data.CredentialsReachable, c.Data.CredentialsReachableHigh = ip(5), ip(1)
+			return c
+		}(), want: []text{{"html.ov.data.creds.other.high_one", map[string]string{"count": "5", "high": "1"}, "em"}}},
+		{name: "creds other, none sensitive (BV-229 §3)", row: rules.RowReadsFiles, cell: func() rules.OverviewCell {
+			c := ovc(nobody, rules.ScopeMachine, pd)
+			c.Data.CredentialsReachable, c.Data.CredentialsReachableHigh = ip(5), ip(0)
+			return c
+		}(), want: []text{{"html.ov.data.creds.other.high_none", map[string]string{"count": "5", "high": "0"}, "em"}}},
 		{name: "not_a_finding", row: rules.RowWritesFiles, cell: func() rules.OverviewCell {
 			c := ovc(model, rules.ScopeMachine, pd)
 			c.Assumed, c.NoFindingReason = true, sp(rules.NoFindingNotAFinding)

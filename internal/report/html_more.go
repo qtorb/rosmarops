@@ -498,7 +498,11 @@ func (c htmlCtx) renderProjects() {
 	if len(p.NotSearched) > 0 {
 		c.w(`<h4>%s</h4><ul>`, c.t("html.projects.not_searched.title", nil))
 		for _, ns := range p.NotSearched {
-			c.w(`<li>%s`, c.t("html.projects.not_searched."+ns.Reason, map[string]string{"count": n(ns.Count)}))
+			key := "html.projects.not_searched." + ns.Reason
+			if ns.Count == 1 {
+				key += ".one" // BV-229 §3: today's key is the plural form
+			}
+			c.w(`<li>%s`, c.t(key, map[string]string{"count": n(ns.Count)}))
 			if len(ns.Paths) > 0 && ns.Count <= projectPathsShown {
 				c.w(`<br>`)
 				for i, path := range ns.Paths {
