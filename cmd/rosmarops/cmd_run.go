@@ -1091,8 +1091,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		// The notice, last (J7, J9): agent, score and counts, or the report
 		// opened.
-		text, ok := report.NotificationText(v2, cat)
-		if !defaultNotifier.finish(ctx, nt, text, ok, absPath(filepath.Join(reportDir, report.HTMLFileName))) {
+		if !scheduledNotice(ctx, defaultNotifier, nt, v2, cat, absPath(filepath.Join(reportDir, report.HTMLFileName))) {
 			// BV-210: neither the notice nor the report reached the person.
 			recordProblems(dataDir, problems.Entry{Code: problems.ReportNotOpened, Step: problems.StepNotify, Day: today(start)})
 		}

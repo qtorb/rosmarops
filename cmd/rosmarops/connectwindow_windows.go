@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
@@ -99,25 +100,23 @@ func connectOffer(paths spacePaths, cat catalog.Catalog) connectResult {
 		return connectNotOffered
 	}
 	fmt.Fprintln(stdin, connectWindowInput(connectWindowConfigFrom(cat)))
-	run := func(onNumber func(int), onOpen func(string) error) error {
+	run := func(onNumber func(int), onOpen func(string, string) error) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 11*time.Minute)
 		defer cancel()
 		return spaceConnect(ctx, paths, onNumber, onOpen)
 	}
 	// If nobody answers the window within 10 minutes, close it as «Not now»
-	// and let the run go on (CTO-15 PR5). Killing the process closes its
-	// stdout, so driveConnectWindow returns.
+	// and let the run go on (CTO-15 PR5). BV-227 §3: that limit is only for
+	// answering; once «Save to my space» is pressed, the 10 minutes start
+	// again for the connection itself. Killing the process closes its stdout,
+	// so driveConnectWindow returns.
 	done := make(chan connectResult, 1)
-	go func() { done <- driveConnectWindow(stdout, stdin, run) }()
-	result := connectDeclined
-	select {
-	case result = <-done:
-	case <-time.After(10 * time.Minute):
-		slog.Info("connect window: no answer in 10 minutes; closing as «Not now» and continuing")
-		_ = cmd.Process.Kill()
-		<-done
-		result = connectDeclined
-	}
+	pressed := make(chan struct{})
+	var once sync.Once
+	go func() {
+		done <- driveConnectWindow(stdout, stdin, cat, func() { once.Do(func() { close(pressed) }) }, run)
+	}()
+	result := awaitConnectWindow(done, pressed, 10*time.Minute, time.After, func() { _ = cmd.Process.Kill() })
 	_ = stdin.Close()
 	_ = cmd.Wait()
 	return result

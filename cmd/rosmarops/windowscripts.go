@@ -752,7 +752,8 @@ if ($script:result -ne 'save' -and -not $shot -and -not $selftest) { [Console]::
 // config, read with [Console]::In.ReadLine() before the window shows (as v0.7.0
 // did). The window shows the question; on "Connect" it writes "connect", hides
 // the buttons and starts a dedicated runspace that reads the program's state
-// lines ("number <N>", then "done", "expired" or "failed") from [Console]::In on
+// lines ("number <N>", "wait <base64 JSON>" with the address and the code to
+// show while it waits (BV-227), then "done", "expired" or "failed") from [Console]::In on
 // its own thread into a concurrent queue, which a UI Timer drains - so the
 // interface thread is never blocked on a read (BV-145, BV-146, BV-147). The final
 // state shows an OK button that, clicked, writes "ok" and closes; closing stops
@@ -935,7 +936,52 @@ $script:rsps = $null
 $script:rs = $null
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 200
+# BV-227: while it waits for the confirmation, the window shows, in this order,
+# connect.waiting, the address in a read-only box the person can select and copy,
+# connect.code with the code as XXXX-XXXX (when the program sends one) and
+# connect.time. They come in one "wait <base64 JSON>" line; the final state hides
+# them.
+$waitl = New-Object System.Windows.Forms.Label
+$waitl.AutoSize = $true; $waitl.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$waitl.Font = $fBody; $waitl.ForeColor = $cInk; $waitl.BackColor = $cWhite
+$waitl.Location = New-Object System.Drawing.Point((Px 28), (Px 28)); $waitl.Visible = $false
+$form.Controls.Add($waitl)
+$urlBox = New-Object System.Windows.Forms.TextBox
+$urlBox.ReadOnly = $true; $urlBox.Multiline = $true; $urlBox.WordWrap = $true
+$urlBox.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$urlBox.Font = $fBody; $urlBox.ForeColor = $cInk; $urlBox.BackColor = $cWhite
+$urlBox.Width = Px 424; $urlBox.Visible = $false
+$form.Controls.Add($urlBox)
+$codel = New-Object System.Windows.Forms.Label
+$codel.AutoSize = $true; $codel.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$codel.Font = $fBody; $codel.ForeColor = $cInk; $codel.BackColor = $cWhite; $codel.Visible = $false
+$form.Controls.Add($codel)
+$timel = New-Object System.Windows.Forms.Label
+$timel.AutoSize = $true; $timel.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+$timel.Font = $fBody; $timel.ForeColor = $cMuted; $timel.BackColor = $cWhite; $timel.Visible = $false
+$form.Controls.Add($timel)
+function Show-Wait($b64) {
+  $w = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(([string]$b64).Trim())) | ConvertFrom-Json
+  $waitl.Text = $w.waiting; $waitl.Visible = $true
+  $urlBox.Text = $w.url
+  $lines = [System.Windows.Forms.TextRenderer]::MeasureText($w.url, $fBody, (New-Object System.Drawing.Size((Px 416), 0)), [System.Windows.Forms.TextFormatFlags]::WordBreak).Height
+  $urlBox.Height = $lines + (Px 10)
+  $urlBox.Location = New-Object System.Drawing.Point((Px 28), ($waitl.Bottom + (Px 8))); $urlBox.Visible = $true
+  $y = $urlBox.Bottom + (Px 12)
+  if ($w.code) {
+    $codel.Text = $w.code; $codel.Location = New-Object System.Drawing.Point((Px 28), $y); $codel.Visible = $true
+    $y = $codel.Bottom + (Px 8)
+  }
+  $timel.Text = $w.time; $timel.Location = New-Object System.Drawing.Point((Px 28), $y); $timel.Visible = $true
+  $need = $timel.Bottom + (Px 28)
+  if ($need -gt $form.ClientSize.Height) { $form.ClientSize = New-Object System.Drawing.Size((Px 480), $need) }
+  if ($selftest) {
+    [Console]::Out.WriteLine('WAITLABEL=' + $waitl.Text); [Console]::Out.WriteLine('URLBOX=' + $urlBox.Text)
+    [Console]::Out.WriteLine('CODELABEL=' + $codel.Text); [Console]::Out.WriteLine('TIMELABEL=' + $timel.Text); [Console]::Out.Flush()
+  }
+}
 function Show-Result($text) {
+  $waitl.Visible = $false; $urlBox.Visible = $false; $codel.Visible = $false; $timel.Visible = $false
   $resultl.Text = $text
   $resultl.Visible = $true
   $ok.Visible = $true
@@ -949,6 +995,7 @@ function Handle-Line($line) {
       $numValue.Text = $parts[1]
       if ($selftest) { [Console]::Out.WriteLine('NUMLABEL=' + $numValue.Text); [Console]::Out.Flush() }
     }
+    'wait'    { Show-Wait $parts[1] }
     'done'    { Show-Result $cfg.done }
     'expired' { Show-Result $cfg.expired }
     'failed'  { Show-Result $cfg.failed }

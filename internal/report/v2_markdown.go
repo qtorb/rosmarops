@@ -81,6 +81,8 @@ var staticKeys = []string{
 	// BV-215: the console's yes/skip prompt (macOS and Linux) after connect.text.
 	"connect.console.prompt",
 	"connect.ok", "connect.done", "connect.expired", "connect.failed",
+	// BV-227: what the connect window and console show while they wait.
+	"connect.waiting", "connect.code", "connect.time",
 	"disconnect.done",
 	// BV-184: the «No me afecta» window and the console list (chrome), the
 	// per-rule «when it doesn't apply» texts, and the report's dismissed

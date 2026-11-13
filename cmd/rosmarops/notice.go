@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/notify"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // A scheduled review's notice (decision 2026-10-26, integridad y revisión
@@ -90,6 +92,20 @@ func (n notifier) finish(ctx context.Context, nt notice, text string, ok bool, r
 	}
 	slog.Info("notify: report opened")
 	return true
+}
+
+// scheduledNotice is a finished scheduled review's notice, after its report
+// is written: nothing when nothing changed since the last review (BV-225 B:
+// no notification and no report opened, only the log says so); otherwise
+// finish with the review's text. It returns finish's delivered, true when
+// nothing was due.
+func scheduledNotice(ctx context.Context, n notifier, nt notice, v report.V2, cat catalog.Catalog, reportPath string) bool {
+	if report.NothingChanged(v) {
+		slog.Info("notify: nothing changed; no notification and no report opened")
+		return true
+	}
+	text, ok := report.NotificationText(v, cat)
+	return n.finish(ctx, nt, text, ok, reportPath)
 }
 
 // announce is probe and finish at once, for an abort's report.
