@@ -170,8 +170,8 @@ func (c htmlCtx) renderHowMade(local time.Time) {
 		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Plural("html.testdata", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
 	if c.v.Provenance.IntelVersion != "" {
-		c.w(`<p class="foot">%s</p>`, html.EscapeString(c.t("report.intel_stamp",
-			map[string]string{"version": c.v.Provenance.IntelVersion, "date": c.v.Provenance.IntelPublishedAt})))
+		c.w(`<p class="foot">%s</p>`, c.t("report.intel_stamp",
+			map[string]string{"version": c.v.Provenance.IntelVersion, "date": c.v.Provenance.IntelPublishedAt}))
 	}
 	c.w(`<p>%s</p>`, c.t("html.knowledge.reviewed", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
 	c.w(`<p class="foot"><button type="button" class="b2" id="as-open">%s</button>%s</p>`,
@@ -484,21 +484,21 @@ func (c htmlCtx) renderProjects() {
 	} else {
 		c.w(`<details><summary>%s</summary><ul>`, html.EscapeString(summary))
 		for _, it := range p.Items {
-			c.w(`<li><code>%s</code> · %s</li>`, html.EscapeString(c.t("html.projects.item", map[string]string{"path": untrusted.PlainText(it.Path)})),
-				html.EscapeString(c.t("html.projects.source."+it.Source, nil)))
+			c.w(`<li><code>%s</code> · %s</li>`, c.t("html.projects.item", map[string]string{"path": untrusted.PlainText(it.Path)}),
+				c.t("html.projects.source."+it.Source, nil))
 		}
 		c.w(`</ul></details>`)
 	}
 	if p.New > 0 {
-		c.w(`<p>%s</p>`, html.EscapeString(c.t("html.projects.new", map[string]string{"count": n(p.New)})))
+		c.w(`<p>%s</p>`, c.t("html.projects.new", map[string]string{"count": n(p.New)}))
 	}
 	if p.Gone > 0 {
-		c.w(`<p>%s</p>`, html.EscapeString(c.t("html.projects.gone", map[string]string{"count": n(p.Gone)})))
+		c.w(`<p>%s</p>`, c.t("html.projects.gone", map[string]string{"count": n(p.Gone)}))
 	}
 	if len(p.NotSearched) > 0 {
 		c.w(`<h4>%s</h4><ul>`, c.t("html.projects.not_searched.title", nil))
 		for _, ns := range p.NotSearched {
-			c.w(`<li>%s`, html.EscapeString(c.t("html.projects.not_searched."+ns.Reason, map[string]string{"count": n(ns.Count)})))
+			c.w(`<li>%s`, c.t("html.projects.not_searched."+ns.Reason, map[string]string{"count": n(ns.Count)}))
 			if len(ns.Paths) > 0 && ns.Count <= projectPathsShown {
 				c.w(`<br>`)
 				for i, path := range ns.Paths {

@@ -501,7 +501,7 @@ func (c htmlCtx) renderCoverage() {
 	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
 	// BV-193 D3: informational coverage notes render their full signed sentence.
 	for _, n := range cov.Notes {
-		c.w(`<li>%s</li>`, html.EscapeString(c.t(n, nil)))
+		c.w(`<li>%s</li>`, c.t(n, nil))
 	}
 	for _, f := range cov.SourcesFailed {
 		code, _, _ := strings.Cut(f.Reason, ": ")
