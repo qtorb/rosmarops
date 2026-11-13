@@ -1,3 +1,4 @@
+# Cada ejecución suma una descarga al contador público de GitHub.
 # winget-check (BV-162): validate and install the RosmarOps winget manifests
 # on a Windows runner, by hand only (Run workflow). It never runs on push or
 # on a tag — it is a maintainer check before Albert submits the manifests to

@@ -9,7 +9,13 @@
 # prerelease, never «latest» (.github/scripts/release-flags.sh). BV-112:
 # then the released rosmarops.exe, checked against SHA256SUMS.txt, makes the
 # sample report on Windows (scripts/sample-report/generate.ps1), and its
-# English and Spanish pages are added to the release.
+# English and Spanish pages are added to the release. BV-230: the jobs after
+# the release take rosmarops.exe from this run's release job (an Actions
+# artifact), never by downloading the published asset, so our checks do not
+# add to the public download counter. Before using it they check its SHA-256
+# against SHA256SUMS.txt of the release and against the published asset's
+# digest (from the releases API): the same published bytes, by their hash.
+# The only release asset this workflow downloads is SHA256SUMS.txt.
 #
 # Third-party actions are pinned by commit SHA (the tag in the comment).
 # The release is created with the GitHub CLI that the runner ships with.
@@ -204,6 +210,15 @@ jobs:
           gh release create "${TAG}" \
             dist/rosmarops.exe dist/rosmarops-macos-apple-silicon dist/rosmarops-macos-intel dist/rosmarops-linux-amd64 dist/rosmarops-linux-arm64 dist/SHA256SUMS.txt \
             --repo "${GITHUB_REPOSITORY}" --title "RosmarOps ${TAG}" --notes-file "docs/release-notes/${TAG}.md" --verify-tag ${flags}
+      - name: The released rosmarops.exe, for the jobs after the release
+        # BV-230: sample-report and e2e-realistic use these bytes instead of
+        # downloading the published asset; each checks them by their SHA-256.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rosmarops-exe-release
+          path: dist/rosmarops.exe
+          if-no-files-found: error
+          retention-days: 1
 
   sample-report:
     needs: release
@@ -220,12 +235,14 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ env.TAG }}
-      - name: Download the released rosmarops.exe
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rosmarops-exe-release
+          path: dist
+      - name: The released rosmarops.exe, checked by its SHA-256 (BV-230)
+        shell: pwsh
         run: |
-          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
-          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
-          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
-          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+          ./.github/scripts/check-release-exe.ps1 -Tag $env:TAG -Exe dist/rosmarops.exe
       - name: Sample report
         run: ./scripts/sample-report/generate.ps1 -Exe dist/rosmarops.exe
       - name: Add the sample report to the release
@@ -275,7 +292,8 @@ jobs:
 
   e2e-realistic:
     needs: release
-    # BV-157: after a successful release, run the just-published rosmarops.exe on
+    # BV-157: after a successful release, run the just-published rosmarops.exe
+    # (this run's release job's bytes, checked by hash: BV-230) on
     # a realistic 48-project test computer and fail — turning the whole release
     # run red — if it repeats a failure like those of 02-11 (the space package
     # tumbling the review) or 03-11 (the time limit). No network: nothing here
@@ -297,13 +315,14 @@ jobs:
         with:
           go-version: "1.27.4"
           cache: false
-      - name: Download the released rosmarops.exe and verify its SHA-256
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: rosmarops-exe-release
+          path: dist
+      - name: The released rosmarops.exe, checked by its SHA-256 (BV-230)
         shell: pwsh
         run: |
-          gh release download "$env:TAG" --repo "$env:GITHUB_REPOSITORY" --pattern rosmarops.exe --pattern SHA256SUMS.txt --dir dist
-          $want = (Select-String -Path dist/SHA256SUMS.txt -Pattern '^([0-9a-f]{64})\s+\*?rosmarops\.exe$').Matches[0].Groups[1].Value
-          $got = (Get-FileHash -Algorithm SHA256 -Path dist/rosmarops.exe).Hash.ToLowerInvariant()
-          if (-not $want -or $got -ne $want) { throw "rosmarops.exe SHA-256 $got does not match SHA256SUMS.txt ($want)" }
+          ./.github/scripts/check-release-exe.ps1 -Tag $env:TAG -Exe dist/rosmarops.exe
       - name: Build the openpkg helper (before the home is redirected)
         shell: pwsh
         run: go build -o openpkg.exe ./tests/e2e/openpkg

@@ -92,6 +92,12 @@ jobs:
         run: go test -count=1 -v -run "TestBV211b" ./cmd/rosmarops/
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
+      - name: BV-230 release scripts parse (PowerShell, not run)
+        shell: pwsh
+        run: |
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path ./.github/scripts/check-release-exe.ps1).Path, [ref]$null, [ref]$errs) | Out-Null
+          if ($errs) { $errs | ForEach-Object { Write-Host $_ }; throw "check-release-exe.ps1 does not parse" }
       # CTO-38 P13 (BV-219 A): the project search over the CTO-38 §3 tree
       # (about 200,000 folders, 50 repositories). It never blocks: it leaves
       # the time and the folders read in the log, the figure the signed

@@ -1,3 +1,4 @@
+# Cada ejecución suma una descarga al contador público de GitHub.
 # BV-134 diagnostic, non-blocking, run by hand (BV-136): the gojsonschema-oracle
 # differential tests are skipped on the normal verify-windows job (a Go runtime
 # GC fatal — "found bad pointer in Go heap" / "found pointer to free object" —
