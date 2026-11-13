@@ -827,11 +827,11 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 		c.w(`<div class="proj">%s</div>`, c.t(key, map[string]string{"agent": s.Agent, "now": strconv.Itoa(*s.Value), "then": strconv.Itoa(s.Projection.Value)}))
 	}
 	after := "html.after.full"
-	if a.Code == rules.ActionHermesIsolatedBackend {
+	if howOnly(a) {
 		mp := copyParams(p)
 		mp["file"] = userPath(a.File, c.home, c.v.homePrefix())
 		c.w(`<p class="how">%s</p><p class="after">%s</p></div></section>`,
-			c.t("html.action.hermes_isolated_backend.how", mp), c.t("html.after.full", p))
+			c.t(howKey(c.cat, a.Code), mp), c.t("html.after.full", p))
 		return
 	}
 	if a.Code == rules.ActionRotateCredential {
@@ -1173,6 +1173,18 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t("html.after.full", p))
 		return
 	}
+	after := map[string]string{
+		rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
+	}[a.Completeness]
+	if howOnly(a) {
+		// BV-229 §2: nothing to paste, so no copy button and no empty «by
+		// hand» block: the action's own .how text, as the box of today.
+		mp := copyParams(p)
+		mp["file"] = userPath(a.File, c.home, c.v.homePrefix())
+		c.w(`<p class="how">%s</p>`, c.t(howKey(c.cat, a.Code), mp))
+		c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t(after, p))
+		return
+	}
 	prompt := "html.agent.prompt.merge"
 	if !a.FileExists {
 		prompt = "html.agent.prompt.create"
@@ -1191,10 +1203,29 @@ func (c htmlCtx) renderFixBox(f rules.Finding, a rules.Action, title, gain strin
 	}
 	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
 		c.t("html.fix.manual", p), c.manualOpen(mp), c.t(add, p), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.manual.save", p))
-	after := map[string]string{
-		rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
-	}[a.Completeness]
 	c.w(`<div class="after">%s<span>%s</span></div></div>`, icon("green", "var(--grnfill)", 22), c.t(after, p))
+}
+
+// howOnlyActions are the actions with nothing to paste (BV-229 §2): their
+// change is told in words, by the action's .how text, never as a copy button
+// or a «by hand» block with an empty content.
+var howOnlyActions = map[string]bool{
+	rules.ActionHermesIsolatedBackend: true,
+	rules.ActionCodexWorkspaceSandbox: true,
+	rules.ActionCodexUntrustedProject: true,
+}
+
+// howOnly reports whether action a has nothing to paste.
+func howOnly(a rules.Action) bool { return howOnlyActions[a.Code] }
+
+// howKey is the .how text of action code: the report's own when there is
+// one (html.action.<code>.how), else the one the Markdown report shows
+// (action.<code>.how).
+func howKey(cat catalog.Catalog, code string) string {
+	if k := "html.action." + code + ".how"; cat.Has(k) {
+		return k
+	}
+	return "action." + code + ".how"
 }
 
 // manualOpen is html.fix.manual.open with the path in code.
