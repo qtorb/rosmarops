@@ -3,10 +3,15 @@ package integration_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"html"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/kit"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -30,13 +35,41 @@ func TestFullMachinePipeline(t *testing.T) {
 			name = "with_config"
 		}
 		t.Run(name, func(t *testing.T) {
-			runFullMachine(t, configured)
+			runFullMachine(t, configured, codexAsIs)
 		})
 	}
+	// BV-229 §2: Codex in danger-full-access with approval never, so its two
+	// actions with nothing to paste reach the report's fix box: with the
+	// trusted project, «untrusted project»; without it, «workspace sandbox».
+	t.Run("with_config_codex_danger", func(t *testing.T) {
+		runFullMachine(t, true, codexDangerTrusted)
+	})
+	t.Run("with_config_codex_danger_untrusted", func(t *testing.T) {
+		runFullMachine(t, true, codexDangerUntrusted)
+	})
 }
 
-func runFullMachine(t *testing.T, configured bool) {
+// The Codex variants of the full machine (BV-229 §2).
+const (
+	codexAsIs = iota
+	codexDangerTrusted
+	codexDangerUntrusted
+)
+
+func runFullMachine(t *testing.T, configured bool, codexVariant int) {
 	in, scans := fullMachineInput(configured)
+	wantHow := ""
+	if codexVariant != codexAsIs {
+		// in.Codex and scans.Codex share their layers.
+		user := &in.Codex.Layers[0]
+		user.SandboxMode = "danger-full-access"
+		user.ApprovalPolicy, user.HasApprovalPolicy = "never", true
+		wantHow = "action.codex_untrusted_project.how"
+		if codexVariant == codexDangerUntrusted {
+			in.Codex.Layers[1].Trusted = false
+			wantHow = "action.codex_workspace_sandbox.how"
+		}
+	}
 
 	// 1. The graph, through the one assembly `rosmarops run` uses. Assemble
 	// encodes and validates it against graph.v2; a bad graph is an error.
@@ -196,19 +229,90 @@ func runFullMachine(t *testing.T, configured bool) {
 	}
 	validate(t, "results.v1", schemas.ResultsSchema, pkgRaw)
 
-	// 6. The HTML pages render in each language (EN and ES).
-	for _, lang := range []string{"en", "es"} {
-		htmlDir := filepath.Join(dir, lang)
-		if err := os.MkdirAll(htmlDir, 0o755); err != nil {
-			t.Fatal(err)
+	// 6. The HTML pages render in each language (EN and ES), as each of the
+	// three systems shows them; BV-229 §4: none carries a key without its
+	// text, and no «by hand» block or copy text is empty.
+	for _, goos := range []string{"windows", "darwin", "linux"} {
+		v2.OS = goos
+		for _, lang := range []string{"en", "es"} {
+			htmlDir := filepath.Join(dir, goos, lang)
+			if err := os.MkdirAll(htmlDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			p, err := report.WriteHTMLPages(v2, lang, fmHome, nil, htmlDir)
+			if err != nil {
+				t.Fatalf("WriteHTMLPages(%s, %s): %v", goos, lang, err)
+			}
+			if st, err := os.Stat(p); err != nil || st.Size() == 0 {
+				t.Errorf("WriteHTMLPages(%s, %s) produced no page at %s", goos, lang, p)
+			}
+			checkPagesShown(t, goos+"/"+lang, htmlDir)
+			if wantHow != "" {
+				checkCodexHow(t, goos+"/"+lang, lang, wantHow, htmlDir)
+			}
 		}
-		p, err := report.WriteHTMLPages(v2, lang, fmHome, nil, htmlDir)
+	}
+}
+
+// checkCodexHow: with Codex in danger-full-access, the report tells its
+// change with the action's .how text, key (BV-229 §2).
+func checkCodexHow(t *testing.T, name, lang, key, dir string) {
+	t.Helper()
+	cat, err := catalog.Load(lang)
+	if err != nil {
+		t.Fatal(err)
+	}
+	how := cat.Text(key, map[string]string{"file": "\x00", "agent": "\x00"})
+	lead := html.EscapeString(how[:strings.Index(how, "\x00")])
+	var pages strings.Builder
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".html") {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		pages.Write(raw)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pages.String(), lead) {
+		t.Errorf("%s: the report does not tell Codex's change with %s (%q)", name, key, lead)
+	}
+}
+
+// untranslatedKey is a catalog key shown in place of its text: the catalog
+// renders a key it has no text for as "[key]".
+var untranslatedKey = regexp.MustCompile(`\[(?:html|report|console|[a-z][a-z0-9_]*)\.[a-zA-Z0-9_.-]+\]`)
+
+// emptyBlock is a «by hand» block whose content to paste is empty, or a copy
+// text with nothing after its instruction (BV-229 §2).
+var emptyBlock = regexp.MustCompile(`<pre>\s*</pre>|<pre hidden>[^<]*?\n\n\s*</pre>|<pre>[^<]*?\n\n\s*</pre>`)
+
+// checkPagesShown is BV-229 §4 on every page written in dir.
+func checkPagesShown(t *testing.T, name, dir string) {
+	t.Helper()
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
 		if err != nil {
-			t.Fatalf("WriteHTMLPages(%s): %v", lang, err)
+			return err
 		}
-		if st, err := os.Stat(p); err != nil || st.Size() == 0 {
-			t.Errorf("WriteHTMLPages(%s) produced no page at %s", lang, p)
+		for _, k := range untranslatedKey.FindAllString(string(raw), -1) {
+			t.Errorf("%s: %s shows %s without its text", name, filepath.Base(path), k)
 		}
+		if i := strings.Index(string(raw), "&amp;#"); i >= 0 {
+			t.Errorf("%s: %s escapes a text twice: %q", name, filepath.Base(path), raw[max(0, i-40):i+10])
+		}
+		if m := emptyBlock.FindString(string(raw)); m != "" {
+			t.Errorf("%s: %s has an empty block to paste: %q", name, filepath.Base(path), m)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
