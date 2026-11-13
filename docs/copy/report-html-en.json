@@ -519,5 +519,15 @@
   "space.change_fixed": "One issue was fixed since the last check.",
   "unknown.aux_model_permits": "Hermes Agent's smart mode: another AI model decides only on commands that match a dangerous pattern; other commands run without asking. RosmarOps assumes it lets them through.",
   "unknown.hermes_backend_unknown": "Hermes Agent uses a terminal backend RosmarOps does not recognize ({backend}). RosmarOps treats it as running on your computer.",
-  "unknown.remote_visibility_unknown": "Knows that a remote is declared, not whether it is public or whether these commits were pushed."
+  "unknown.remote_visibility_unknown": "Knows that a remote is declared, not whether it is public or whether these commits were pushed.",
+  "html.agenthooks.title": "RosmarOps inside Claude Code",
+  "html.agenthooks.pitch": "Each time you open a project in Claude Code, RosmarOps tells you what it brings or what changed since last time: permissions, hooks, MCP servers and skills. It only reads, and it tells you, not Claude.",
+  "html.agenthooks.statusline": "It also shows your last check in Claude Code's status line.",
+  "html.agenthooks.statusline_taken": "You already have your own status line, so RosmarOps doesn't offer its own.",
+  "html.agenthooks.ask": "Copy this text and paste it into Claude Code. It will show you the change and ask before saving it:",
+  "html.agenthooks.prompt": "Add this to my user settings ({file}), keeping everything that is already there. Show me the change before saving it:",
+  "html.agenthooks.copy": "Copy text for Claude Code",
+  "html.installed.title": "What RosmarOps has installed",
+  "html.installed.session": "Claude Code: check when you open a session",
+  "html.installed.statusline": "Claude Code: status line"
 }
