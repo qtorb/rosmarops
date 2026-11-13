@@ -243,8 +243,20 @@ func (s *sandbox) setRepoRoots(t *testing.T) {
 // (e.g. under strace) for the given step.
 func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []string) {
 	t.Helper()
-	steps := []struct{ step, args string }{
-		{"firstuse", ""}, {"init", "init"}, {"baseline", "baseline"}, {"run", "run"}, {"unattended", "run --unattended"}, {"doubleclick", ""},
+	// BV-226: the session check Claude Code runs on opening the repository
+	// (twice: the first opening and an unchanged one) and the status line, so
+	// the write test covers data/session/ and data/statusline.txt.
+	hookIn := `{"hook_event_name":"SessionStart","source":"startup","cwd":` + strconv.Quote(s.repo) + `,"session_id":"s1","transcript_path":"/t.jsonl"}`
+	steps := []struct{ step, args, stdin string }{
+		{"firstuse", "", ""},
+		{"init", "init", ""},
+		{"baseline", "baseline", ""},
+		{"run", "run", ""},
+		{"unattended", "run --unattended", ""},
+		{"doubleclick", "", ""},
+		{"session", "session-check", hookIn},
+		{"session-again", "session-check", hookIn},
+		{"statusline", "statusline", ""},
 	}
 	for _, st := range steps {
 		step := st.step
@@ -255,6 +267,9 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Dir = s.work
 		cmd.Env = s.env
+		if st.stdin != "" {
+			cmd.Stdin = strings.NewReader(st.stdin)
+		}
 		out, err := cmd.CombinedOutput()
 		var exitErr *exec.ExitError
 		switch {
@@ -284,6 +299,7 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 	for _, f := range []string{
 		"graph.v2.json", "report.v2.json", "index-history.json", "findings-memory.json",
 		"last-scheduled-run-log.txt", "last-run-log.txt",
+		"statusline.txt", "session", // BV-226: written by run and by session-check
 	} {
 		if _, err := os.Stat(filepath.Join(data, f)); err != nil {
 			t.Fatalf("run did not complete: no %s in %s: %v", f, data, err)

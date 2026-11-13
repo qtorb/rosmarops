@@ -230,6 +230,7 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 				}
 			}
 			htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+			writeAbortedStatusline(reportDir, time.Now()) // BV-226 §2
 			switch {
 			case err != nil:
 				slog.Error("integrity abort: could not write report.html", "err", err)
@@ -277,6 +278,7 @@ func abortRunFailed(o abortOptions, cause error) {
 		}
 	}
 	htmlPath, err := report.WriteAbortHTML(reportDir, pages, cat.Lang())
+	writeAbortedStatusline(reportDir, time.Now()) // BV-226 §2
 	if err != nil {
 		slog.Error("run_failed abort: could not write report.html", "err", err)
 		fmt.Fprintln(os.Stderr, "error:", cause)

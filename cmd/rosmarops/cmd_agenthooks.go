@@ -1,30 +1,28 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/agenthooks"
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
+	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
-// BV-226 §0: prototype of the two Claude Code commands, to measure them on the
-// Windows runner before the rest is written. session-check reads the hook
-// input, checks integrity without asking or writing, reads the files of
-// CTO-44 §4a point 2, fingerprints each item and compares it with the
-// project's snapshot; statusline checks integrity and prints one line of
-// data/statusline.txt. Both are hidden from the help: Claude Code runs them.
+// RosmarOps inside Claude Code (BV-226, CTO-44 §4a-§4b): two commands Claude
+// Code runs, never a person, so both are hidden from the help. They check
+// integrity like every command, but on a mismatch they never ask and never
+// write: they print one line and exit 0 (invariant 8). They never use the
+// network nor start a process.
 
 func newSessionCheckCmd() *cli.Command {
 	return &cli.Command{Name: "session-check", Hidden: true, Args: 0, Run: runSessionCheck}
@@ -34,9 +32,21 @@ func newStatuslineCmd() *cli.Command {
 	return &cli.Command{Name: "statusline", Hidden: true, Args: 0, Run: runStatusline}
 }
 
-// quietIntegrity is invariant 8 for these two commands: the same comparison
-// as every command, but it never asks, never writes and never aborts; false
-// on a mismatch.
+// sessionBudget is session-check's own limit (CTO-44 §4a): past it, it says
+// and writes nothing. A variable for the tests.
+var sessionBudget = time.Second
+
+// sessionInput and sessionOutput are the hook's streams; tests replace them.
+var (
+	sessionInput  io.Reader = os.Stdin
+	sessionOutput io.Writer = os.Stdout
+)
+
+// quietIntegrity is invariant 8 for session-check and statusline: the
+// comparison every command makes, of the binary and of the configuration
+// with the state's references, but it never asks, never writes and never
+// aborts. false on a mismatch; true when there is no reference to compare
+// with (the next `rosmarops run` handles that, as today).
 func quietIntegrity() bool {
 	stPath, err := state.StatePath()
 	if err != nil {
@@ -54,7 +64,7 @@ func quietIntegrity() bool {
 	}
 	if ref := st.Integrity.ConfigSHA256; ref != "" && ref != zeroHash {
 		if p, err := resolveCfgPath(); err == nil {
-			if h, err := hash.File(p); err == nil && h != ref {
+			if h, err := hash.File(p); err != nil || h != ref {
 				return false
 			}
 		}
@@ -62,124 +72,180 @@ func quietIntegrity() bool {
 	return true
 }
 
-type hookInput struct {
-	HookEventName string `json:"hook_event_name"`
-	Source        string `json:"source"`
-	Cwd           string `json:"cwd"`
-}
-
-func runSessionCheck(cli.Invocation) error {
-	done := make(chan struct{})
-	go func() { defer close(done); sessionCheck(os.Stdin, os.Stdout) }()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-	}
-	return nil
-}
-
-func sessionCheck(in io.Reader, out io.Writer) {
-	raw, _ := io.ReadAll(io.LimitReader(in, 1<<16))
-	var hi hookInput
-	if json.Unmarshal(raw, &hi) != nil || hi.HookEventName != "SessionStart" || (hi.Source != "startup" && hi.Source != "resume") || hi.Cwd == "" {
-		return
-	}
-	if !quietIntegrity() {
-		fmt.Fprintln(out, `{"systemMessage":"RosmarOps changed"}`)
-		return
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	items := map[string]string{}
-	for _, f := range []string{
-		filepath.Join(home, ".claude", "settings.json"),
-		filepath.Join(hi.Cwd, ".claude", "settings.json"),
-		filepath.Join(hi.Cwd, ".claude", "settings.local.json"),
-		filepath.Join(hi.Cwd, ".mcp.json"),
-		filepath.Join(home, ".claude.json"),
-	} {
-		b, err := os.ReadFile(f)
-		if err != nil || len(b) > 2<<20 {
-			continue
-		}
-		var v map[string]any
-		if json.Unmarshal(b, &v) != nil {
-			continue
-		}
-		collect(items, f, v)
-	}
-	for _, d := range []string{filepath.Join(home, ".claude", "skills"), filepath.Join(hi.Cwd, ".claude", "skills"), filepath.Join(hi.Cwd, ".claude", "agents")} {
-		es, _ := os.ReadDir(d)
-		for _, e := range es {
-			items["name|"+d+"|"+e.Name()] = ""
-		}
-	}
-	keys := make([]string, 0, len(items))
-	for k := range items {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	snap, _ := json.Marshal(keys)
-	dir := filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, "session")
-	sum := sha256.Sum256([]byte(hi.Cwd))
-	path := filepath.Join(dir, hex.EncodeToString(sum[:8])+".json")
-	prev, _ := os.ReadFile(path)
-	if !bytes.Equal(prev, snap) {
-		_ = os.MkdirAll(dir, 0o700)
-		tmp := path + ".tmp"
-		if os.WriteFile(tmp, snap, 0o600) == nil {
-			_ = os.Rename(tmp, path)
-		}
-		fmt.Fprintln(out, `{"systemMessage":"RosmarOps · changed"}`)
-	}
-}
-
-// collect fingerprints the allow rules, defaultMode, hook commands and MCP
-// servers of one parsed settings file.
-func collect(items map[string]string, file string, v map[string]any) {
-	if p, ok := v["permissions"].(map[string]any); ok {
-		if a, ok := p["allow"].([]any); ok {
-			for _, r := range a {
-				if s, ok := r.(string); ok {
-					items["allow|"+hash.Bytes([]byte(s))] = ""
-				}
+// hooksDataDir is the reports' data folder: the configured report_directory
+// (read from the configuration file as is, without the full load), or the
+// default one.
+func hooksDataDir() (string, error) {
+	if p, err := config.ResolveConfigPath(); err == nil {
+		if b, err := os.ReadFile(p); err == nil {
+			var c struct {
+				ReportDirectory string `json:"report_directory"`
+			}
+			if json.Unmarshal(b, &c) == nil && c.ReportDirectory != "" {
+				return report.DataDir(c.ReportDirectory), nil
 			}
 		}
-		if m, ok := p["defaultMode"].(string); ok {
-			items["mode|"+m] = ""
-		}
 	}
-	if h, ok := v["hooks"].(map[string]any); ok {
-		b, _ := json.Marshal(h)
-		items["hooks|"+file+"|"+hash.Bytes(b)] = ""
+	dir, err := report.DefaultReportDir()
+	if err != nil {
+		return "", err
 	}
-	if m, ok := v["mcpServers"].(map[string]any); ok {
-		for name, s := range m {
-			b, _ := json.Marshal(s)
-			items["mcp|"+name+"|"+hash.Bytes(b)] = ""
-		}
-	}
+	return report.DataDir(dir), nil
 }
 
-func runStatusline(cli.Invocation) error {
-	if !quietIntegrity() {
-		fmt.Println("RosmarOps changed")
+// sessionResult is the work session-check did, not yet acted on: the message
+// to show and the snapshot write, both left to runSessionCheck so that
+// nothing is said or written past the budget.
+type sessionResult struct {
+	message string
+	write   func() (bool, error)
+}
+
+// runSessionCheck is `rosmarops session-check` (BV-226 §1). It always exits
+// 0 and its only output is one systemMessage JSON object, or nothing.
+func runSessionCheck(cli.Invocation) error {
+	deadline := time.Now().Add(sessionBudget)
+	done := make(chan sessionResult, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				done <- sessionResult{}
+			}
+		}()
+		done <- sessionWork(sessionInput)
+	}()
+	var res sessionResult
+	select {
+	case res = <-done:
+	case <-time.After(time.Until(deadline)):
+		return nil // over budget: say nothing, write nothing
+	}
+	if time.Now().After(deadline) {
 		return nil
+	}
+	if res.write != nil {
+		if _, err := res.write(); err != nil {
+			slog.Debug("session-check: snapshot not written", "err", err)
+		}
+	}
+	if res.message != "" {
+		_ = agenthooks.Output(sessionOutput, res.message)
+	}
+	return nil
+}
+
+// sessionWork reads the hook input and does everything but act: a non-Claude
+// input or any failure is an empty result.
+func sessionWork(in io.Reader) sessionResult {
+	raw, err := io.ReadAll(io.LimitReader(in, 1<<16))
+	if err != nil {
+		return sessionResult{}
+	}
+	hi, ok := agenthooks.ParseInput(raw)
+	if !ok {
+		return sessionResult{}
+	}
+	cat, err := catalog.Load(systemLang())
+	if err != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	if !quietIntegrity() {
+		return sessionResult{message: cat.Text("session.integrity_changed", nil)}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
+		return sessionResult{}
+	}
+	data, err := hooksDataDir()
+	if err != nil {
+		return sessionResult{}
+	}
+	items := agenthooks.Collect(agenthooks.DefaultPaths(home, hi.Cwd))
+	snapPath := agenthooks.SnapshotPath(data, hi.Cwd)
+	prev, seen := agenthooks.ReadSnapshot(snapPath)
+	tell := agenthooks.Tell(items, prev, !seen)
+	snap := agenthooks.SnapshotOf(items)
+	return sessionResult{
+		message: agenthooks.Message(cat, tell, !seen),
+		write:   func() (bool, error) { return agenthooks.WriteSnapshot(snapPath, snap) },
+	}
+}
+
+// statuslineNow is the clock statusline reads; tests replace it.
+var statuslineNow = time.Now
+
+// runStatusline is `rosmarops statusline` (BV-226 §2): it checks integrity,
+// reads data/statusline.txt and prints the line in the program's language.
+// It reads and writes nothing else, and always exits 0.
+func runStatusline(cli.Invocation) error {
+	cat, err := catalog.Load(systemLang())
+	if err != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	if !quietIntegrity() {
+		fmt.Fprintln(sessionOutput, cat.Text("statusline.integrity_changed", nil))
 		return nil
 	}
-	b, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, "statusline.txt"))
+	data, err := hooksDataDir()
 	if err != nil {
 		return nil
 	}
-	for _, l := range strings.Split(string(b), "\n") {
-		if lang, text, ok := strings.Cut(l, "\t"); ok && lang == "en" {
-			fmt.Println(text)
-		}
+	raw, err := os.ReadFile(filepath.Join(data, agenthooks.StatuslineFile))
+	if err != nil {
+		return nil
+	}
+	if line := agenthooks.ShowStatusline(raw, cat.Lang(), statuslineNow(), time.Local, cat); line != "" {
+		fmt.Fprintln(sessionOutput, line)
 	}
 	return nil
+}
+
+// writeRunStatusline leaves a finished run's line for statusline (BV-226 §2):
+// the red and yellow rows as the report counts them, and the machine's score
+// (or, without one, the lowest agent score, the report's step 1). Without any
+// score there is no line to give, and the old one is removed.
+func writeRunStatusline(dataDir string, v report.V2, checked time.Time) {
+	path := filepath.Join(dataDir, agenthooks.StatuslineFile)
+	score, ok := statuslineScore(v)
+	if !ok {
+		_ = os.Remove(path)
+		return
+	}
+	red, yellow := report.RowCounts(v)
+	lines := map[string]string{}
+	for _, l := range catalog.Langs() {
+		if c, err := catalog.Load(l); err == nil {
+			lines[l] = agenthooks.StatuslineText(c, red, yellow, score)
+		}
+	}
+	if err := agenthooks.WriteStatusline(dataDir, checked, lines); err != nil {
+		slog.Warn("statusline not written", "err", err)
+	}
+}
+
+// writeAbortedStatusline leaves statusline.aborted: the last check did not
+// finish.
+func writeAbortedStatusline(reportDir string, checked time.Time) {
+	lines := map[string]string{}
+	for _, l := range catalog.Langs() {
+		if c, err := catalog.Load(l); err == nil {
+			lines[l] = c.Text("statusline.aborted", nil)
+		}
+	}
+	if err := agenthooks.WriteStatusline(report.DataDir(reportDir), checked, lines); err != nil {
+		slog.Warn("statusline not written", "err", err)
+	}
+}
+
+func statuslineScore(v report.V2) (int, bool) {
+	if m := v.Index.Machine.Value; m != nil {
+		return *m, true
+	}
+	best, ok := 0, false
+	for _, a := range v.Index.Agents {
+		if a.Value != nil && (!ok || *a.Value < best) {
+			best, ok = *a.Value, true
+		}
+	}
+	return best, ok
 }
