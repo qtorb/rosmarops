@@ -446,7 +446,7 @@ func moreKeys() []string {
 		"html.weekly.pitch.linux", "html.weekly.prompt.linux", "html.weekly.manual.step.linux", "html.weekly.no_systemd",
 		"html.assume.scope.linux",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
-		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.scope", "html.assume.scope.macos",
+		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.antigravity-cli", "html.assume.gemini-cli", "html.assume.codex", "html.assume.grok-build", "html.assume.github-copilot", "html.assume.cline", "html.assume.hermes", "html.assume.scope", "html.assume.scope.macos",
 		"html.na.title", "html.na.intro",
 		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",
 		"html.abort.run_failed", // BV-93, B3: the run-could-not-finish page

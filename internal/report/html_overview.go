@@ -543,7 +543,7 @@ func overviewKeys() []string {
 	keys := []string{
 		"html.ov.title", "html.ov.intro", "html.ov.foot", "html.ov.cell", "html.ov.changes.none",
 		"html.ov.row.reads_files.sub", "html.ov.row.model_provider.sub",
-		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.ignore_env", "html.ov.data.ignore_env.also", "html.ov.cell.changes",
+		"html.ov.data.creds.zero", "html.ov.data.creds.one", "html.ov.data.creds.other", "html.ov.data.creds.other.high_one", "html.ov.data.creds.other.high_none", "html.ov.data.ignore_env", "html.ov.data.ignore_env.also", "html.ov.cell.changes",
 		"html.ov.data.not_a_finding", "html.ov.data.preapproved.one", "html.ov.data.preapproved.other", "html.ov.data.launchers.one", "html.ov.data.launchers.other",
 		"html.ov.data.net_exceptions", "html.ov.data.no_targets_out", "html.ov.data.byo_key_routed", "html.ov.data.session_env",
 		"html.ov.data.run_everything", "html.ov.open", "html.ov.close", "html.ov.head.score", "html.ov.head.knowledge", "html.ov.head.knowledge.stale",
