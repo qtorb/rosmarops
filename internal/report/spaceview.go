@@ -617,15 +617,15 @@ func svSteps(c htmlCtx, f rules.Finding, home string) ([]string, *string) {
 		return []string{}, nil
 	}
 	p := c.params(f)
-	switch a.Code {
-	case rules.ActionHermesIsolatedBackend:
+	switch {
+	case howOnly(a):
 		pp := copyParams(p)
 		pp["file"] = userPath(a.File, c.home, "~")
 		return []string{
-			c.cat.Text("html.action.hermes_isolated_backend.how", pp),
+			c.cat.Text(howKey(c.cat, a.Code), pp),
 			c.cat.Text("html.after.full", p),
 		}, nil
-	case rules.ActionRemoveFromDisk:
+	case a.Code == rules.ActionRemoveFromDisk:
 		return []string{c.cat.Text("html.fix.remove", p)}, nil
 	}
 	prompt := "html.agent.prompt.merge"

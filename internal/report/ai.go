@@ -169,10 +169,10 @@ func (c htmlCtx) aiAction(f rules.Finding, a rules.Action) string {
 	p := c.params(f)
 	var b strings.Builder
 	after := "html.after.full"
-	if a.Code == rules.ActionHermesIsolatedBackend {
+	if howOnly(a) {
 		pp := copyParams(p)
 		pp["file"] = userPath(a.File, c.home, "~")
-		fmt.Fprintf(&b, "%s\n\n%s\n\n", c.cat.Text("html.action.hermes_isolated_backend.how", pp), c.cat.Text("html.after.full", p))
+		fmt.Fprintf(&b, "%s\n\n%s\n\n", c.cat.Text(howKey(c.cat, a.Code), pp), c.cat.Text("html.after.full", p))
 		return b.String()
 	}
 	if a.Code == rules.ActionRemoveFromDisk {
