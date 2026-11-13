@@ -106,7 +106,7 @@ func bv180ConnectStub(t *testing.T, m spacenet.Material) {
 	t.Helper()
 	orig := connectProtocol
 	t.Cleanup(func() { connectProtocol = orig })
-	connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string) error) (spacenet.Material, func(context.Context) error, error) {
+	connectProtocol = func(context.Context, spacenet.Permission, string, func(int), func(string, string) error) (spacenet.Material, func(context.Context) error, error) {
 		return m, func(context.Context) error { return nil }, nil
 	}
 }
@@ -146,7 +146,7 @@ func TestConnectAfterResetTakesNewKeyAndSends(t *testing.T) {
 	bv180ConnectStub(t, spacenet.Material{Secret: newKey, KitID: newKitID, Credential: cred})
 
 	// Connect: the space hands out the new key.
-	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err != nil {
+	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil }); err != nil {
 		t.Fatalf("spaceConnect: %v", err)
 	}
 
@@ -258,7 +258,7 @@ func TestConnectSameKeyUnchanged(t *testing.T) {
 	// Same key, same kit_id: a reconnect that just refreshes the credential.
 	bv180ConnectStub(t, spacenet.Material{Secret: key, KitID: kitID, Credential: cred})
 
-	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err != nil {
+	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil }); err != nil {
 		t.Fatalf("spaceConnect: %v", err)
 	}
 
@@ -331,7 +331,7 @@ func TestConnectAfterResetSendsDespiteRejectedLog(t *testing.T) {
 			rand.Read(cred)
 			bv180ConnectStub(t, spacenet.Material{Secret: spaceKey, KitID: spaceKitID, Credential: cred})
 
-			if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err != nil {
+			if err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil }); err != nil {
 				t.Fatalf("spaceConnect: %v", err)
 			}
 
@@ -399,7 +399,7 @@ func TestConnectFailedSaveRevertsPermission(t *testing.T) {
 	rand.Read(cred)
 	bv180ConnectStub(t, spacenet.Material{Secret: newKey, KitID: hex.EncodeToString(kidRaw), Credential: cred})
 
-	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string) error { return nil }); err == nil {
+	if err := spaceConnect(context.Background(), sp, func(int) {}, func(string, string) error { return nil }); err == nil {
 		t.Fatal("spaceConnect returned nil although the save fails")
 	}
 	got, err := state.LoadState(sp.state)

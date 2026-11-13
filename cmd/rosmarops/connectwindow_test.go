@@ -16,12 +16,12 @@ func TestDriveConnectWindow_Connected(t *testing.T) {
 	out := strings.NewReader("connect\nok\n")
 	var in strings.Builder
 	var gotNumber int
-	run := func(onNumber func(int), onOpen func(string) error) error {
+	run := func(onNumber func(int), onOpen func(string, string) error) error {
 		onNumber(42)
-		_ = onOpen("https://app.rosmarops.com/connect#v1.x.y")
+		_ = onOpen("https://app.rosmarops.com/connect#v1.x.y", "K7M2-QX9P")
 		return nil
 	}
-	got := driveConnectWindow(out, &writerTo{&in}, run)
+	got := driveConnectWindow(out, &writerTo{&in}, testCat(t), nil, run)
 	if got != connectConnected {
 		t.Errorf("want connectConnected on a successful protocol, got %d", got)
 	}
@@ -38,8 +38,8 @@ func TestDriveConnectWindow_Connected(t *testing.T) {
 // connected.
 func TestDriveConnectWindow_NotNow(t *testing.T) {
 	ran := false
-	run := func(func(int), func(string) error) error { ran = true; return nil }
-	if got := driveConnectWindow(strings.NewReader("no\n"), &writerTo{&strings.Builder{}}, run); got != connectDeclined {
+	run := func(func(int), func(string, string) error) error { ran = true; return nil }
+	if got := driveConnectWindow(strings.NewReader("no\n"), &writerTo{&strings.Builder{}}, testCat(t), nil, run); got != connectDeclined {
 		t.Errorf("want connectDeclined on «Not now», got %d", got)
 	}
 	if ran {
@@ -51,8 +51,8 @@ func TestDriveConnectWindow_NotNow(t *testing.T) {
 // connected.
 func TestDriveConnectWindow_Expired(t *testing.T) {
 	var in strings.Builder
-	run := func(func(int), func(string) error) error { return spacenet.ErrConnectExpired }
-	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run); got != connectFailed {
+	run := func(func(int), func(string, string) error) error { return spacenet.ErrConnectExpired }
+	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, testCat(t), nil, run); got != connectFailed {
 		t.Errorf("want connectFailed on expiry, got %d", got)
 	}
 	if !strings.Contains(in.String(), "expired") {
@@ -63,8 +63,8 @@ func TestDriveConnectWindow_Expired(t *testing.T) {
 // Any other error tells the window "failed".
 func TestDriveConnectWindow_Failed(t *testing.T) {
 	var in strings.Builder
-	run := func(func(int), func(string) error) error { return errors.New("boom") }
-	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, run); got != connectFailed {
+	run := func(func(int), func(string, string) error) error { return errors.New("boom") }
+	if got := driveConnectWindow(strings.NewReader("connect\nok\n"), &writerTo{&in}, testCat(t), nil, run); got != connectFailed {
 		t.Errorf("want connectFailed on failure, got %d", got)
 	}
 	if !strings.Contains(in.String(), "failed") {
