@@ -31,16 +31,17 @@ const (
 // server): the values of agents_overview.services[].approval.
 const (
 	MCPApprovalNobody       = "nobody"        // used without asking
-	MCPApprovalAnotherModel = "another_model" // another model decides (Hermes smart)
+	MCPApprovalAnotherModel = "another_model" // another model decides (Hermes smart, Claude Code auto, Cursor Auto-review, Codex auto_review, Grok auto)
 	MCPApprovalPerson       = "person"        // asks a person first
 	MCPApprovalDeny         = "deny"          // the agent's permission denies it
 )
 
 // mcpExternal builds the mcp_external_action findings and the per-agent
-// services list of agents_overview. It evaluates only the agents RosmarOps
-// scores (Claude Code, Cursor, Hermes Agent); a catalog server loaded by a
-// detected-only agent still shows in the report's MCP destinations, but not
-// here (its disposition is not read). One finding per (agent, server); the
+// services list of agents_overview. It evaluates the five agents whose MCP
+// disposition RosmarOps reads (Claude Code, Cursor, Hermes Agent, Codex and
+// Grok Build, mcpDisposition); a catalog server loaded by any other agent
+// still shows in the report's MCP destinations, but not here (its disposition
+// is not read). One finding per (agent, server); the
 // weight is the index's.
 func mcpExternal(in Input, nodes map[string]graph.Node, view func(string) *agentView) ([]Finding, map[string][]OverviewService) {
 	g := in.Graph
@@ -134,7 +135,7 @@ func mcpFinding(in Input, client, server graph.Node, edge graph.Edge, disp, scop
 	assumptions := []string{}
 	if disp == MCPApprovalAnotherModel {
 		confidence = ConfidenceMedium
-		assumptions = []string{AssumeAuxModelPermits}
+		assumptions = mcpModelAssumptions(client.Platform)
 	}
 	locations := mcpLocations(edge, server)
 	f := Finding{
@@ -275,10 +276,27 @@ func codexMCPDisposition(v *agentView) string {
 	}
 }
 
+// mcpModelAssumptions are the assumptions of a server another model decides
+// on, by agent (BV-233, CTO-48 §1): Claude Code's auto-mode classifier;
+// Cursor's Auto-review, its mode not readable at rest; Hermes Agent's smart
+// mode (and the others that map to it).
+func mcpModelAssumptions(product string) []string {
+	switch product {
+	case knowledge.ClaudeCodeProduct:
+		return []string{graph.AssumeAutoClassifierPermits}
+	case knowledge.CursorProduct:
+		return []string{graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits}
+	}
+	return []string{AssumeAuxModelPermits}
+}
+
 // claudeMCPDisposition reads Claude Code's invoke_mcp_tool rules
 // (permissions.go): a server-wide deny (mcp__<server> or mcp__<server>__*) wins,
-// then a server-wide allow; otherwise the effective mode decides
-// (bypassPermissions never asks, dontAsk blocks, anything else asks).
+// then a server-wide allow; otherwise the effective mode decides:
+// bypassPermissions never asks, dontAsk blocks, auto sends the call to its
+// classifier (BV-233: an MCP call that changes something has no rule, is not
+// read-only and is not a project edit, so «everything else goes to the
+// classifier», permission-modes), and default, acceptEdits and plan ask.
 func claudeMCPDisposition(v *agentView, serverName string) string {
 	allow, deny := false, false
 	for _, c := range v.inForce {
@@ -304,6 +322,8 @@ func claudeMCPDisposition(v *agentView, serverName string) string {
 		return MCPApprovalNobody
 	case v.dontAsk():
 		return MCPApprovalDeny
+	case v.mode == modeAuto:
+		return MCPApprovalAnotherModel
 	default:
 		return MCPApprovalPerson
 	}
@@ -323,7 +343,10 @@ func mcpRuleCoversServer(rule, server string) bool {
 
 // cursorMCPDisposition reads Cursor's mcpAllowlist: an entry that covers the
 // whole server (server:* , the bare server name, or *:*) means it is used
-// without asking; otherwise Cursor asks.
+// without asking; otherwise Auto-review, the mode RosmarOps assumes (its
+// setting is not read at rest), sends the call to Cursor's classifier
+// (BV-233, run-modes: «Auto-review applies to shell, MCP, and Fetch tool
+// calls»).
 func cursorMCPDisposition(v *agentView, serverName string) string {
 	for _, c := range v.inForce {
 		if c.Type != graph.CapInvokeMCPTool || c.Approval != graph.ApprovalAllow || !c.InForce {
@@ -333,7 +356,7 @@ func cursorMCPDisposition(v *agentView, serverName string) string {
 			return MCPApprovalNobody
 		}
 	}
-	return MCPApprovalPerson
+	return MCPApprovalAnotherModel
 }
 
 // cursorAllowlistCoversServer reports whether a Cursor mcpAllowlist entry

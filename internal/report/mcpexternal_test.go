@@ -134,3 +134,52 @@ func TestMCPExternal_HTMLServices(t *testing.T) {
 		}
 	}
 }
+
+// BV-233: Claude Code in its factory mode (auto): the services line says
+// another AI model decides, and the money finding is red. (Cursor without an
+// mcpAllowlist entry is in the rules tests and the R2 case: its report row
+// needs its readable state.)
+func TestMCPExternal_AnotherModelDecides(t *testing.T) {
+	for _, product := range []string{knowledge.ClaudeCodeProduct} {
+		client := "agent_client_" + product
+		seen := v2Now.UTC().Format("2006-01-02T15:04:05Z07:00")
+		nodes := []graph.Node{
+			{ID: client, Kind: graph.KindAgent, Type: graph.AgentAIClient, Name: product, Platform: product, ConfigPath: "/home/a/." + product, DiscoveredAt: seen},
+			{
+				ID: "mcp_stripe", Kind: graph.KindAgent, Type: graph.AgentMCPServer, Name: "stripe", Platform: product, ConfigPath: "/home/a/mcp.json",
+				ExternalAction: &graph.ExternalActionMatch{ID: "stripe", Service: "Stripe", Category: "money", Writes: true},
+			},
+		}
+		edges := []graph.Edge{{ID: "loads_stripe", Type: graph.EdgeLoads, From: client, To: "mcp_stripe", Source: "/home/a/mcp.json", Certainty: graph.CertaintyObserved, AppliesIn: "user"}}
+		{
+			nodes = append(nodes, graph.Node{ID: "cap_mode", Kind: graph.KindCapability, Type: graph.CapPermissionMode, Approval: graph.ApprovalAllow, TargetScope: "auto", InForce: true, Basis: graph.BasisProductDefault})
+			edges = append(edges, graph.Edge{ID: "has_mode", Type: graph.EdgeHas, From: client, To: "cap_mode"})
+		}
+		g := graph.Graph{Nodes: nodes, Edges: edges}
+		v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
+		red := false
+		for _, f := range v.Findings {
+			red = red || f.Rule == "mcp_external_action" && f.Severity == "red"
+		}
+		if !red {
+			t.Errorf("%s: no red Stripe finding", product)
+		}
+		approval := ""
+		for _, a := range v.AgentsOverview {
+			for _, s := range a.Services {
+				if s.Service == "Stripe" {
+					approval = s.Approval
+				}
+			}
+		}
+		if approval != "another_model" {
+			t.Errorf("%s: Stripe's approval %q, want another_model", product, approval)
+		}
+		for _, lang := range []string{"en", "es"} {
+			cat, _ := catalog.Load(lang)
+			if page := renderHTML(t, lang, v); !strings.Contains(page, htmlEscape(cat.Text("approval.another_model", nil))) {
+				t.Errorf("%s %s: the services line does not say another model decides", product, lang)
+			}
+		}
+	}
+}
