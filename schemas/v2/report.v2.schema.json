@@ -258,7 +258,8 @@
         "evidence",
         "group",
         "actions",
-        "memory"
+        "memory",
+        "accepted"
       ],
       "properties": {
         "id": {
@@ -474,6 +475,27 @@
         },
         "memory": {
           "$ref": "#/definitions/findingMemory"
+        },
+        "accepted": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "date"
+              ],
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+                }
+              }
+            }
+          ],
+          "description": "«Lo asumo» (R3): null, or the date the user accepted it. An accepted finding still counts in the index."
         }
       }
     },
@@ -957,6 +979,30 @@
                 "open_gaps",
                 "contained"
               ]
+            },
+            "letter": {
+              "$ref": "#/definitions/exposureClass",
+              "description": "The class of the agent that gives machine.value (the agent with least control), so number and letter name the same agent."
+            },
+            "factory_value": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              ]
+            },
+            "factory_letter": {
+              "$ref": "#/definitions/exposureClass"
+            },
+            "worst_letter_agent_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "BV-235: the agent with the worst class of the computer, when it is not the agent that gives machine.value; absent otherwise."
             }
           },
           "description": "Only when every agent present has a score: the worst of them."
@@ -1005,7 +1051,10 @@
         "red",
         "yellow",
         "weights",
-        "comparison"
+        "comparison",
+        "letter",
+        "factory",
+        "groups"
       ],
       "properties": {
         "agent": {
@@ -1132,6 +1181,84 @@
             "prev_index_version": {
               "type": "integer",
               "minimum": 1
+            }
+          }
+        },
+        "letter": {
+          "$ref": "#/definitions/exposureClass",
+          "description": "R0′: the class from the six axes on this computer (internal/exposure, rule weighted_v1), not from value."
+        },
+        "factory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "band",
+            "letter",
+            "unavailable"
+          ],
+          "description": "R1: the score on this computer with every agent at its product defaults (same credentials, projects, MCP servers, extensions and project trust).",
+          "properties": {
+            "value": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              ]
+            },
+            "band": {
+              "enum": [
+                "exposed",
+                "open_gaps",
+                "contained",
+                null
+              ]
+            },
+            "letter": {
+              "$ref": "#/definitions/exposureClass"
+            },
+            "unavailable": {
+              "enum": [
+                "coverage",
+                "not_applicable",
+                "agents_not_evaluated",
+                null
+              ]
+            }
+          }
+        },
+        "groups": {
+          "type": "array",
+          "description": "R2: per group of this agent's findings, the score without the whole group. Not additive.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "group",
+              "finding_ids",
+              "without"
+            ],
+            "properties": {
+              "group": {
+                "$ref": "#/definitions/findingGroupKind"
+              },
+              "finding_ids": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/definitions/findingId"
+                }
+              },
+              "without": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
             }
           }
         }
@@ -1421,7 +1548,8 @@
         "evaluated",
         "not_evaluated_reason",
         "knowledge",
-        "rows"
+        "rows",
+        "kinds"
       ],
       "properties": {
         "agent": {
@@ -1491,6 +1619,13 @@
             "$ref": "#/definitions/overviewService"
           },
           "description": "The known external MCP servers the agent is configured to use (BV-121): every catalog server it loads, read-only and denied included. Only scored agents carry it; absent when none."
+        },
+        "kinds": {
+          "type": "array",
+          "description": "R5: the five risk types of the v1 (no publish).",
+          "items": {
+            "$ref": "#/definitions/riskKindCell"
+          }
         }
       },
       "description": "One detected agent (§6): an ai_client and an extension of one product are one agent."
@@ -2052,6 +2187,138 @@
         }
       },
       "description": "Ids, numbers and codes a cell's text may cite (§2.4, T6, T12); each field only where it makes sense."
+    },
+    "findingGroupKind": {
+      "enum": [
+        "keys",
+        "agent_config",
+        "agent_instructions",
+        "external_service",
+        "repository",
+        "computer_use",
+        "n8n",
+        "package"
+      ],
+      "description": "R2 groups: keys = cred_read_and_send + cred_readable; agent_config = foreign_agent_config_writable + own_config_writable; agent_instructions = foreign_agent_instructions_writable + own_instructions_writable; external_service = mcp_external_action; repository = cred_in_git + project_hook_runs_repo_script; computer_use = computer_use_app_allowed; n8n = n8n_mcp_bridge + n8n_key_with_data; package = package_known_malicious."
+    },
+    "exposureClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "f",
+        "status",
+        "missing_axes",
+        "rule",
+        "coherent"
+      ],
+      "description": "R0′: classify() over the six axes. class null for a detected-only agent.",
+      "properties": {
+        "class": {
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D",
+            null
+          ]
+        },
+        "f": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Σ weight·level / Σ weight·3 over the axes with data."
+        },
+        "status": {
+          "enum": [
+            "final",
+            "provisional",
+            null
+          ],
+          "description": "provisional while any axis has no data, as on the map."
+        },
+        "missing_axes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "autonomy",
+              "reach",
+              "contagion",
+              "delegation",
+              "opacity",
+              "complexity"
+            ]
+          }
+        },
+        "rule": {
+          "const": "weighted_v1"
+        },
+        "coherent": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Class within AllowedClasses(band) of this same score (exposed → C/D, open_gaps → B/C, contained → A/B); null without a class or a band."
+        }
+      }
+    },
+    "riskKindCell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "state",
+        "scope",
+        "assumed",
+        "source"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "money",
+            "sends_out",
+            "keys",
+            "runs_commands",
+            "changes_files"
+          ]
+        },
+        "state": {
+          "enum": [
+            "blocked",
+            "you",
+            "bounded",
+            "model",
+            "nobody",
+            "none_known",
+            "unknown"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "machine",
+            "same_project",
+            "sandbox",
+            "listed_commands",
+            "any_destination",
+            "none"
+          ]
+        },
+        "assumed": {
+          "type": "boolean",
+          "description": "The state rests on a premise that is not readable at rest."
+        },
+        "source": {
+          "enum": [
+            "overview_row",
+            "credential_findings",
+            "mcp_catalog"
+          ]
+        }
+      }
     }
   }
 }

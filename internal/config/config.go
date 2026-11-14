@@ -66,6 +66,13 @@ type AllowList struct {
 	// own computer (BV-184): the id stops counting in the score and is dropped
 	// from the report and the space package.
 	Dismissed []AllowEntryDismissed `json:"dismissed,omitempty"`
+
+	// Accepted are the findings the person accepted from their own computer
+	// («Lo asumo», BV-235 R3): the id keeps counting in the score and the
+	// report says since when. An id is never in both Accepted and Dismissed.
+	// Written only when it has an entry, so a configuration that never used
+	// it still loads in older versions (CTO-48 §2.1).
+	Accepted []AllowEntryAccepted `json:"accepted,omitempty"`
 }
 
 // AllowHit is one warning an allow_list entry hid in this run (decision
@@ -87,6 +94,7 @@ const (
 	ListSecretsInHistory   = "secrets_in_history"
 	ListRotatedCredentials = "rotated_credentials"
 	ListDismissed          = "dismissed"
+	ListAccepted           = "accepted"
 )
 
 // AllowEntryRotated declares a credential rotated by its id: it stops
@@ -104,6 +112,28 @@ type AllowEntryRotated struct {
 type AllowEntryDismissed struct {
 	ID   string `json:"id"`
 	Date string `json:"date"`
+}
+
+// AllowEntryAccepted declares a finding accepted by its id («Lo asumo»,
+// BV-235 R3): one exact id, with the date the person accepted it.
+type AllowEntryAccepted struct {
+	ID   string `json:"id"`
+	Date string `json:"date"`
+}
+
+// checkAccepted refuses an id in both allow_list.accepted and
+// allow_list.dismissed (CTO-48 §2.1).
+func checkAccepted(cfg Config) error {
+	dismissed := map[string]bool{}
+	for _, d := range cfg.AllowList.Dismissed {
+		dismissed[d.ID] = true
+	}
+	for _, a := range cfg.AllowList.Accepted {
+		if dismissed[a.ID] {
+			return fmt.Errorf("allow_list: %s is both accepted and dismissed", a.ID)
+		}
+	}
+	return nil
 }
 
 // AllowEntryTestFixture silences test data: the secrets committed in the
@@ -253,6 +283,9 @@ func LoadConfig(path string) (Config, error) {
 		return Config{}, fmt.Errorf("decode config %s: %w", path, err)
 	}
 	if err := checkFixtures(cfg, time.Now()); err != nil {
+		return Config{}, fmt.Errorf("config %s: %w", path, err)
+	}
+	if err := checkAccepted(cfg); err != nil {
 		return Config{}, fmt.Errorf("config %s: %w", path, err)
 	}
 	return cfg, nil

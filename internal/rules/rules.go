@@ -239,6 +239,9 @@ type Input struct {
 	// scored findings into Result.Dismissed, so it no longer counts in the
 	// score nor reaches the report's «what remains» or the space package.
 	Dismissed []config.AllowEntryDismissed
+	// Accepted are allow_list.accepted («Lo asumo», BV-235 R3): a finding
+	// whose id is here stays in the scored findings, marked with the date.
+	Accepted []config.AllowEntryAccepted
 
 	// ClaudeSettings is the Claude Code settings scan, for the model
 	// provider's variables (T12); Home the user's home folder, for the
@@ -321,6 +324,11 @@ type LauncherRule struct {
 	Form       string
 }
 
+// Accepted is the «Lo asumo» mark of a finding: the date, YYYY-MM-DD.
+type Accepted struct {
+	Date string `json:"date"`
+}
+
 // Finding is one finding of the v2 report (§6).
 type Finding struct {
 	ID          string   `json:"id"`
@@ -337,6 +345,10 @@ type Finding struct {
 	// Memory is the finding's verdict against the last checked run (memoria,
 	// M3), set by the report from findings-memory.json.
 	Memory *FindingMemory `json:"memory,omitempty"`
+
+	// Accepted is «Lo asumo» (BV-235 R3): null, or the date the person
+	// accepted the finding. An accepted finding still counts in the index.
+	Accepted *Accepted `json:"accepted"`
 
 	class    string
 	credType string // the credential's type, for its label
@@ -658,6 +670,18 @@ func Evaluate(in Input) Result {
 			kept = append(kept, f)
 		}
 		res.Findings = kept
+	}
+	// BV-235 R3: an accepted finding keeps counting; it only carries the date.
+	if len(in.Accepted) > 0 {
+		accepted := make(map[string]string, len(in.Accepted))
+		for _, a := range in.Accepted {
+			accepted[a.ID] = a.Date
+		}
+		for i := range res.Findings {
+			if d, ok := accepted[res.Findings[i].ID]; ok {
+				res.Findings[i].Accepted = &Accepted{Date: d}
+			}
+		}
 	}
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none

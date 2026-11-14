@@ -68,13 +68,13 @@ func TestOneAxisMissingIsProvisional(t *testing.T) {
 		}
 		return m
 	}
-	if c, st, miss := classify(full()); st != "final" || len(miss) != 0 || c == "" {
+	if c, st, miss, _ := classify(full()); st != "final" || len(miss) != 0 || c == "" {
 		t.Fatalf("all axes with data: class %q status %q missing %v; want a final class", c, st, miss)
 	}
 	for _, ax := range AxisOrder {
 		axes := full()
 		axes[ax] = noData(NoDataRegistryMissing)
-		c, st, miss := classify(axes)
+		c, st, miss, _ := classify(axes)
 		if st != "provisional" || !reflect.DeepEqual(miss, []string{ax}) {
 			t.Errorf("%s with no data: status %q missing %v; want provisional [%s]", ax, st, miss, ax)
 		}

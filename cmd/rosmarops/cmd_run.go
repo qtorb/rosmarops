@@ -451,6 +451,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		credFiles       platform.CredentialFileScan
 		built           *graph.Graph // the graph written this run, for the v2 report
 		builtSHA        string
+		builtFactory    *graph.Graph // BV-235 R1: the factory pass's graph, never written
 		// builtSettings is the Claude Code settings scan the graph was built
 		// from, for the model provider row (T12).
 		builtSettings *platform.ClaudeSettingsScan
@@ -652,9 +653,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
-						built, builtSHA, builtSettings = g, graphSHA, &settingsScan
+						built, builtSHA, builtSettings, builtFactory = g, graphSHA, &settingsScan, factoryGraph
 					}
 					if graphErr != nil {
 						slog.Warn("graph: v2 graph not written", "err", graphErr)
@@ -909,7 +910,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
-		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, ConfigFile: absPath(cfgPath),
+		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
+		FactoryGraph:   builtFactory,
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan,
 		IntegrityNotChecked: integrityNotChecked,
 		StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
@@ -1161,12 +1163,12 @@ func writeGraph(
 	pkgObs []graph.PackageObservation,
 	n8nFolder string,
 	n8nKeyData bool,
-) (*graph.Graph, string, string, error) {
-	fail := func(err error) (*graph.Graph, string, string, error) {
+) (*graph.Graph, string, string, *graph.Graph, error) {
+	fail := func(err error) (*graph.Graph, string, string, *graph.Graph, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
 			err = errors.Join(err, rmErr)
 		}
-		return nil, "", "", err
+		return nil, "", "", nil, err
 	}
 	if listErr != nil {
 		return fail(fmt.Errorf("agent config sources could not be listed: %w", listErr))
@@ -1178,7 +1180,7 @@ func writeGraph(
 	// The whole graph assembly lives in internal/pipeline (E3, CTO-24): the one
 	// function the real run, the full-machine test and the factory-note test
 	// all call, so no test builds the graph on a path of its own.
-	res, err := pipeline.Assemble(pipeline.Input{
+	pin := pipeline.Input{
 		MCP:          scan,
 		Settings:     settings,
 		Cursor:       cursor,
@@ -1208,7 +1210,8 @@ func writeGraph(
 		PkgObs:     pkgObs,
 		N8NFolder:  n8nFolder,
 		N8NKeyData: n8nKeyData,
-	})
+	}
+	res, err := pipeline.Assemble(pin)
 	if err != nil {
 		return fail(err)
 	}
@@ -1225,7 +1228,16 @@ func writeGraph(
 	if err != nil {
 		return fail(fmt.Errorf("hash graph: %w", err))
 	}
-	return &g, sha, path, nil
+	// BV-235 R1: the same computer with every agent at its product defaults,
+	// assembled in memory for the factory score and never written. A failure
+	// only leaves the factory score unavailable.
+	var factory *graph.Graph
+	if fres, ferr := pipeline.Assemble(pipeline.Factory(pin)); ferr != nil {
+		slog.Warn("graph: factory pass not built", "err", ferr)
+	} else {
+		factory = &fres.Graph
+	}
+	return &g, sha, path, factory, nil
 }
 
 // intelVersion and intelPublishedAt are the snapshot stamp for the report, or

@@ -39,6 +39,36 @@
                 "finding_id": { "type": ["string", "null"] }
               }
             }
+          },
+          "letter": { "$ref": "#/$defs/exposureClass" },
+          "factory_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "factory_letter": { "$ref": "#/$defs/exposureClass" },
+          "groups": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["group", "without"],
+              "properties": {
+                "group": { "enum": ["keys", "agent_config", "agent_instructions", "external_service", "repository", "computer_use", "n8n", "package"] },
+                "without": { "type": "integer", "minimum": 0, "maximum": 100 }
+              }
+            }
+          },
+          "kinds": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "state", "assumed"],
+              "properties": {
+                "kind": { "enum": ["money", "sends_out", "keys", "runs_commands", "changes_files"] },
+                "state": { "enum": ["blocked", "you", "bounded", "model", "nobody", "none_known", "unknown"] },
+                "assumed": { "type": "boolean" }
+              }
+            }
           }
         }
       }
@@ -57,6 +87,7 @@
           "weight": { "type": "number", "minimum": 0 },
           "score_after_fix": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
           "file": { "type": ["string", "null"], "maxLength": 400 },
+          "accepted_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
           "text": {
             "type": "object",
             "additionalProperties": false,
@@ -300,6 +331,10 @@
               },
               "gain": {
                 "$ref": "#/$defs/t300n"
+              },
+              "accepted_date": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
               }
             }
           }
@@ -328,6 +363,17 @@
     }
   },
   "$defs": {
+    "exposureClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "provisional"],
+      "description": "BV-235 (CTO-48 §2.3, BA-90): the class from the six axes. No type unions for the space's validator: f is absent when there is none, and a field holding no class is absent.",
+      "properties": {
+        "class": { "enum": ["A", "B", "C", "D", null] },
+        "f": { "type": "number", "minimum": 0, "maximum": 1 },
+        "provisional": { "type": "boolean" }
+      }
+    },
     "t200n": {
       "type": [
         "object",

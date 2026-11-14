@@ -56,7 +56,7 @@ type Index struct {
 	RulesVersion     string       `json:"rules_version"`
 	KnowledgeVersion string       `json:"knowledge_version"`
 	Agents           []AgentIndex `json:"agents"`
-	Machine          Score        `json:"machine"`
+	Machine          MachineScore `json:"machine"`
 	Scope            Scope        `json:"scope"`
 
 	// HistoryReset: index-history.json did not validate and was set aside
@@ -69,6 +69,98 @@ type Score struct {
 	Value       *int   `json:"value"`
 	Unavailable string `json:"unavailable,omitempty"`
 	Band        string `json:"band,omitempty"`
+}
+
+// MachineScore is the machine score (I5): the worst agent's score, and (BV-235,
+// R0′/R1) that same agent's class and factory score, and the agent with the
+// worst class when it is another one. The report fills the class and factory
+// fields; index.Compute only the score and AgentID.
+type MachineScore struct {
+	Score
+	// AgentID is the agent that gives Value; empty without a value.
+	AgentID string `json:"-"`
+
+	Letter        *Class `json:"letter,omitempty"`
+	FactoryValue  *int   `json:"factory_value,omitempty"`
+	FactoryLetter *Class `json:"factory_letter,omitempty"`
+	// WorstLetterAgentID is the agent with the worst class of the computer
+	// when it is not the one that gives Value (BV-235 point 2); omitted
+	// otherwise.
+	WorstLetterAgentID string `json:"worst_letter_agent_id,omitempty"`
+}
+
+// Class rules (BV-235, R0′).
+const ClassRule = "weighted_v1"
+
+// Class is an agent's class from the six axes (internal/exposure, R0′), as
+// report.v2 carries it: class, F, status and missing axes are null or empty
+// for an agent with no class; Coherent compares the class with the band of
+// the same review (null without a class or a band).
+type Class struct {
+	Class       *string  `json:"class"`
+	F           *float64 `json:"f"`
+	Status      *string  `json:"status"`
+	MissingAxes []string `json:"missing_axes"`
+	Rule        string   `json:"rule"`
+	Coherent    *bool    `json:"coherent"`
+}
+
+// NoClass is the class of an agent with none.
+func NoClass() Class { return Class{MissingAxes: []string{}, Rule: ClassRule} }
+
+// Factory is an agent's score on this computer with every agent at its
+// product defaults (BV-235, R1).
+type Factory struct {
+	Value       *int    `json:"value"`
+	Band        *string `json:"band"`
+	Letter      Class   `json:"letter"`
+	Unavailable *string `json:"unavailable"`
+}
+
+// Group is one group of an agent's findings (BV-235, R2) and the score
+// without the whole group. Groups are not additive.
+type Group struct {
+	Group      string   `json:"group"`
+	FindingIDs []string `json:"finding_ids"`
+	Without    int      `json:"without"`
+}
+
+// Finding groups (report.v2 findingGroupKind): one per family of rules.
+const (
+	GroupKeys              = "keys"
+	GroupAgentConfig       = "agent_config"
+	GroupAgentInstructions = "agent_instructions"
+	GroupExternalService   = "external_service"
+	GroupRepository        = "repository"
+	GroupComputerUse       = "computer_use"
+	GroupN8N               = "n8n"
+	GroupPackage           = "package"
+)
+
+// GroupOrder is the order of the groups in agent_index.groups.
+var GroupOrder = []string{GroupKeys, GroupAgentConfig, GroupAgentInstructions, GroupExternalService, GroupRepository, GroupComputerUse, GroupN8N, GroupPackage}
+
+// GroupOf is the group of a rule; "" for a rule in none.
+func GroupOf(rule string) string {
+	switch rule {
+	case rules.RuleCredReadAndSend, rules.RuleCredReadable:
+		return GroupKeys
+	case rules.RuleForeignAgentConfigWritable, rules.RuleOwnConfigWritable:
+		return GroupAgentConfig
+	case rules.RuleForeignAgentInstructionsWritable, rules.RuleOwnInstructionsWritable:
+		return GroupAgentInstructions
+	case rules.RuleMCPExternalAction:
+		return GroupExternalService
+	case rules.RuleCredInGit, rules.RuleProjectHookRunsRepoScript:
+		return GroupRepository
+	case rules.RuleComputerUseAppAllowed:
+		return GroupComputerUse
+	case rules.RuleN8NMCPBridge, rules.RuleN8NKeyWithData:
+		return GroupN8N
+	case rules.RulePackageKnownMalicious:
+		return GroupPackage
+	}
+	return ""
 }
 
 // AgentIndex is the score of one evaluated agent.
@@ -88,6 +180,15 @@ type AgentIndex struct {
 	Projection *Projection `json:"projection,omitempty"`
 
 	Comparison Comparison `json:"comparison"`
+
+	// Letter is the agent's class from the six axes on this computer
+	// (BV-235, R0′); Factory its score with every agent at its product
+	// defaults (R1). The report fills both.
+	Letter  Class   `json:"letter"`
+	Factory Factory `json:"factory"`
+	// Groups are, per group of its findings, the score without the whole
+	// group (R2).
+	Groups []Group `json:"groups"`
 }
 
 // Weight is one finding's weight and the score without it.
@@ -299,12 +400,12 @@ func Compute(in Input) Index {
 	default:
 		for _, a := range idx.Agents {
 			if a.Value == nil {
-				idx.Machine = Score{Unavailable: ReasonCoverage}
+				idx.Machine = MachineScore{Score: Score{Unavailable: ReasonCoverage}}
 				break
 			}
 			if idx.Machine.Value == nil || *a.Value < *idx.Machine.Value {
 				v := *a.Value
-				idx.Machine = Score{Value: &v, Band: a.Band}
+				idx.Machine = MachineScore{Score: Score{Value: &v, Band: a.Band}, AgentID: a.AgentID}
 			}
 		}
 	}
@@ -334,7 +435,10 @@ func covered(in Input, a Agent) bool {
 }
 
 func agentIndex(in Input, a Agent, fs []rules.Finding) AgentIndex {
-	ai := AgentIndex{Agent: a.Name, AgentID: a.ID, Weights: []Weight{}}
+	ai := AgentIndex{
+		Agent: a.Name, AgentID: a.ID, Weights: []Weight{}, Groups: []Group{},
+		Letter: NoClass(), Factory: Factory{Letter: NoClass()},
+	}
 	for _, f := range fs {
 		switch f.Severity {
 		case rules.SeverityRed:
@@ -359,6 +463,23 @@ func agentIndex(in Input, a Agent, fs []rules.Finding) AgentIndex {
 		rest := append(append([]item{}, items[:i]...), items[i+1:]...)
 		without, _ := score(rest, posture)
 		ai.Weights = append(ai.Weights, Weight{FindingID: f.ID, Weight: items[i].weight, Without: without})
+	}
+	// R2: the score without each whole group, in GroupOrder.
+	for _, grp := range GroupOrder {
+		var ids []string
+		var rest []item
+		for i, f := range fs {
+			if GroupOf(f.Rule) == grp {
+				ids = append(ids, f.ID)
+				continue
+			}
+			rest = append(rest, items[i])
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		without, _ := score(rest, posture)
+		ai.Groups = append(ai.Groups, Group{Group: grp, FindingIDs: ids, Without: without})
 	}
 	if p, ok := project(fs, in.Today, posture); ok {
 		ai.Projection = &p

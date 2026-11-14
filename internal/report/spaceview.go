@@ -113,6 +113,42 @@ type SVAgent struct {
 	NotEvaluatedReason *string     `json:"not_evaluated_reason"`
 	TopFindingID       *string     `json:"top_finding_id"`
 	Services           []SVService `json:"services"`
+
+	// BV-235 (CTO-48 §2.3), all optional so packages saved before stay
+	// valid, and a value with no data is absent (the space's validator takes
+	// no type unions): the class from the six axes, the factory score and
+	// class, the score without each group, and the five risk kinds.
+	Letter        *SVClass  `json:"letter,omitempty"`
+	FactoryScore  *int      `json:"factory_score,omitempty"`
+	FactoryLetter *SVClass  `json:"factory_letter,omitempty"`
+	Groups        []SVGroup `json:"groups,omitempty"`
+	Kinds         []SVKind  `json:"kinds,omitempty"`
+}
+
+// SVClass is an agent's class in the space view: class (null for a detected
+// agent), F when there is one, and whether it is provisional.
+type SVClass struct {
+	Class       *string  `json:"class"`
+	F           *float64 `json:"f,omitempty"`
+	Provisional bool     `json:"provisional"`
+}
+
+// SVGroup is one group of an agent's findings and the score without it.
+type SVGroup struct {
+	Group   string `json:"group"`
+	Without int    `json:"without"`
+}
+
+// SVKind is one of an agent's five risk kinds.
+type SVKind struct {
+	Kind    string `json:"kind"`
+	State   string `json:"state"`
+	Assumed bool   `json:"assumed"`
+}
+
+// svClass is c as the space view carries it.
+func svClass(c index.Class) *SVClass {
+	return &SVClass{Class: c.Class, F: c.F, Provisional: c.Status != nil && *c.Status == "provisional"}
 }
 
 // SVService is one external service an agent is configured to reach (the
@@ -128,14 +164,17 @@ type SVService struct {
 // SVFinding is one finding with its texts by language, exactly as the report
 // writes them from the catalog.
 type SVFinding struct {
-	ID            string            `json:"id"`
-	Rule          string            `json:"rule"`
-	Severity      string            `json:"severity"`
-	AgentID       *string           `json:"agent_id"`
-	Weight        float64           `json:"weight"`
-	ScoreAfterFix *int              `json:"score_after_fix"`
-	File          *string           `json:"file"`
-	Text          map[string]SVText `json:"text"`
+	ID            string  `json:"id"`
+	Rule          string  `json:"rule"`
+	Severity      string  `json:"severity"`
+	AgentID       *string `json:"agent_id"`
+	Weight        float64 `json:"weight"`
+	ScoreAfterFix *int    `json:"score_after_fix"`
+	File          *string `json:"file"`
+	// AcceptedDate is «Lo asumo» (BV-235 R3): the date, absent when the
+	// finding is not accepted.
+	AcceptedDate string            `json:"accepted_date,omitempty"`
+	Text         map[string]SVText `json:"text"`
 }
 
 // SVText is a finding's text in one language (the four parts the report shows).
@@ -486,6 +525,16 @@ func svAgents(v V2, ctxs map[string]htmlCtx) []SVAgent {
 		if ai := byAgentID[oa.AgentID]; ai != nil && ai.Value != nil {
 			a.Score, a.Band = ai.Value, svBand(ai.Band)
 		}
+		if ai := byAgentID[oa.AgentID]; ai != nil {
+			a.Letter, a.FactoryLetter = svClass(ai.Letter), svClass(ai.Factory.Letter)
+			a.FactoryScore = ai.Factory.Value
+			for _, g := range ai.Groups {
+				a.Groups = append(a.Groups, SVGroup{Group: g.Group, Without: g.Without})
+			}
+		}
+		for _, k := range oa.Kinds {
+			a.Kinds = append(a.Kinds, SVKind{Kind: k.Kind, State: k.State, Assumed: k.Assumed})
+		}
 		if id, ok := top[oa.AgentID]; ok {
 			a.TopFindingID = &id
 		}
@@ -542,6 +591,9 @@ func svFindings(v V2, ctxs map[string]htmlCtx, home string) []SVFinding {
 		}
 		if file := svFile(f, home); file != "" {
 			sf.File = &file
+		}
+		if f.Accepted != nil {
+			sf.AcceptedDate = f.Accepted.Date
 		}
 		for lang, c := range ctxs {
 			steps, paste := svSteps(c, f, home)

@@ -107,7 +107,7 @@ func r2AllReport(t *testing.T) (report.V2, graph.Graph) {
 		Graph: &g, GraphSHA256: strings0(64), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		RepoRoots: []string{fcRepo}, V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: fcNow,
 		ClaudeSettings: &settings, Home: fcHome,
-		Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Hermes: in.Hermes,
+		Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Hermes: in.Hermes, FactoryGraph: r2FactoryOf(t),
 	})
 	return v, g
 }

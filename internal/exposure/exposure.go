@@ -68,6 +68,9 @@ type Agent struct {
 	Axes        map[string]Axis
 	Class       string // "", "A".."D"
 	ClassStatus string // "provisional" | "final" | "" (not evaluated)
+	// F is Σ weight·level / Σ weight·3 over the axes with data (BV-235: the
+	// report carries it); nil when no axis has data.
+	F           *float64
 	MissingAxes []string
 	FactoryBand string
 }
@@ -79,7 +82,8 @@ type Inputs struct {
 
 	// Single is the agent's agents_overview row on R2 (one agent): autonomy (1)
 	// and reach (2). SingleAssumptions are the hidden-at-rest codes its findings
-	// carry on R2: opacity (5).
+	// carry on R2: opacity (5), together with those of Single's cells (BV-235,
+	// CTO-48 §4.2: an agent with few findings is not more transparent).
 	Single            rules.OverviewAgent
 	SingleAssumptions []string
 
@@ -111,9 +115,9 @@ func Compute(in Inputs) Agent {
 	a.Axes[AxisReach] = reach(in.Single)
 	a.Axes[AxisContagion] = contagion(in.All, in.AllGraph, in.ClientID)
 	a.Axes[AxisDelegation] = delegation(in.All)
-	a.Axes[AxisOpacity] = opacity(in.SingleAssumptions)
+	a.Axes[AxisOpacity] = opacity(append(append([]string{}, in.SingleAssumptions...), cellAssumptions(in.Single)...))
 	a.Axes[AxisComplexity] = complexity(in.Product)
-	a.Class, a.ClassStatus, a.MissingAxes = classify(a.Axes)
+	a.Class, a.ClassStatus, a.MissingAxes, a.F = classify(a.Axes)
 	return a
 }
 
@@ -257,6 +261,15 @@ func delegation(a rules.OverviewAgent) Axis {
 
 // --- axis 5: opacity, from R2 with one agent ---
 
+// cellAssumptions are the assumptions of every cell of a's rows.
+func cellAssumptions(a rules.OverviewAgent) []string {
+	var out []string
+	for _, c := range a.Rows {
+		out = append(out, c.Data.Assumptions...)
+	}
+	return out
+}
+
 func opacity(assumptions []string) Axis {
 	seen := map[string]bool{}
 	var hidden []string
@@ -395,7 +408,7 @@ func missing(axes map[string]Axis) []string {
 // classify is rule B: F = Σ weight·level / Σ weight·3 over the axes with data;
 // cuts <0.25 A, <0.50 B, <0.75 C, ≥0.75 D. Provisional while any axis has no
 // data.
-func classify(axes map[string]Axis) (class, status string, missingAxes []string) {
+func classify(axes map[string]Axis) (class, status string, missingAxes []string, fp *float64) {
 	points, maxPossible := 0, 0
 	for _, ax := range AxisOrder {
 		a := axes[ax]
@@ -411,9 +424,10 @@ func classify(axes map[string]Axis) (class, status string, missingAxes []string)
 		status = "provisional"
 	}
 	if maxPossible == 0 {
-		return "", status, missingAxes
+		return "", status, missingAxes, nil
 	}
 	f := float64(points) / float64(maxPossible)
+	fp = &f
 	switch {
 	case f < 0.25:
 		class = "A"
@@ -424,7 +438,21 @@ func classify(axes map[string]Axis) (class, status string, missingAxes []string)
 	default:
 		class = "D"
 	}
-	return class, status, missingAxes
+	return class, status, missingAxes, fp
+}
+
+// Coherent reports whether the class is within AllowedClasses(band) of the
+// same review (BV-235, CTO-48 §4.3); nil without a class or a band.
+func (a Agent) Coherent(band string) *bool {
+	allowed := AllowedClasses(band)
+	if a.Class == "" || allowed == nil {
+		return nil
+	}
+	ok := false
+	for _, c := range allowed {
+		ok = ok || c == a.Class
+	}
+	return &ok
 }
 
 // AllowedClasses returns the classes coherent with a factory band (CTO-26 §4):
