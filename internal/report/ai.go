@@ -67,7 +67,7 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 			p := c.params(f)
 			fmt.Fprintf(&head, "## %s\n\n### %s\n\n%s", cat.Text("ai.today", nil), c.titleText(f), c.impactText(f))
 			if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
-				fmt.Fprintf(&head, " %s", cat.Text("html.today.reach", p))
+				fmt.Fprintf(&head, " %s", cat.Text(cat.One("html.today.reach", c.v.repos), p))
 			}
 			head.WriteString("\n\n" + c.aiAction(f, a))
 		}

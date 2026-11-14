@@ -151,7 +151,7 @@ func TestDoubleClickFirstUse(t *testing.T) {
 	}
 	// CTO-38: the project search of the review finds the five, walking the
 	// user folder and accepting the indicators; the window lists them.
-	found := strings.NewReplacer("{count}", "5", "{roots}", "1").Replace(en["console.projects.found.other"])
+	found := strings.NewReplacer("{count}", "5", "{roots}", "1").Replace(en["console.projects.found.other.one_folder"]) // BV-232 §6
 	if !strings.Contains(out, found) {
 		t.Errorf("window: not %q:\n%s", found, out)
 	}

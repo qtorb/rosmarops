@@ -102,7 +102,7 @@ func TestCTO7Report(t *testing.T) {
 			`<h3>` + htmlEscape(cat.Text("html.signals.title", nil)) + `</h3>`,
 			htmlEscape(cat.Text("html.signal.git_hook_with_network", nil)) + ` <span class="n">· 2</span>`,
 			htmlEscape(cat.Text("html.signal.av_exclusion_new", nil)) + `</li>`,
-			htmlEscape(cat.Text("html.card.silenced", map[string]string{"count": "1"})),
+			htmlEscape(cat.Text("html.card.silenced.one", map[string]string{"count": "1"})), // BV-232 §6
 		} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: no %q", lang, want)

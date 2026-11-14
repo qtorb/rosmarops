@@ -53,8 +53,12 @@ func printProjects(w io.Writer, cat catalog.Catalog, res projects.Result, width 
 		if n == 1 {
 			fmt.Fprintln(w, cat.Text("console.projects.found.one", nil))
 		} else {
-			fmt.Fprintln(w, cat.Text("console.projects.found.other", map[string]string{
-				"count": strconv.Itoa(n), "roots": strconv.Itoa(projectRoots(res)),
+			key, roots := "console.projects.found.other", projectRoots(res)
+			if roots == 1 {
+				key = "console.projects.found.other.one_folder" // BV-232 §6
+			}
+			fmt.Fprintln(w, cat.Text(key, map[string]string{
+				"count": strconv.Itoa(n), "roots": strconv.Itoa(roots),
 			}))
 		}
 		names := consoleNames(res.Repos())
@@ -65,7 +69,7 @@ func printProjects(w io.Writer, cat catalog.Catalog, res projects.Result, width 
 		}
 	}
 	if t := res.NotSearchedTotal(); t > 0 {
-		fmt.Fprintln(w, cat.Text("console.projects.not_searched", map[string]string{"count": strconv.Itoa(t)}))
+		fmt.Fprintln(w, cat.Text(cat.One("console.projects.not_searched", t), map[string]string{"count": strconv.Itoa(t)}))
 	}
 	if !res.Complete() {
 		fmt.Fprintln(w, cat.Text("console.projects.incomplete", nil))

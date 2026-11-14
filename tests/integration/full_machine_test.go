@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -289,6 +290,40 @@ var untranslatedKey = regexp.MustCompile(`\[(?:html|report|console|[a-z][a-z0-9_
 // text with nothing after its instruction (BV-229 §2).
 var emptyBlock = regexp.MustCompile(`<pre>\s*</pre>|<pre hidden>[^<]*?\n\n\s*</pre>|<pre>[^<]*?\n\n\s*</pre>`)
 
+// numberedPlural matches «1 » followed by a plural word that the catalog puts
+// after a number marker ({count}, {repos}, {roots}, {found}, {n}, {left},
+// {projects}, {groups}) in English or Spanish (BV-232 §7, extending BV-229 §4).
+var numberedPlural = func() *regexp.Regexp {
+	marker := regexp.MustCompile(`\{(?:count|repos|roots|found|n|left|projects|groups)\}\s+(\p{L}+)`)
+	words := map[string]bool{}
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			panic(err)
+		}
+		keys, err := catalog.Keys()
+		if err != nil {
+			panic(err)
+		}
+		for _, k := range keys {
+			for _, m := range marker.FindAllStringSubmatch(cat.Text(k, nil), -1) {
+				w := m[1]
+				// A plural noun or adjective: ends in s, and is not a word that
+				// does with one too.
+				if strings.HasSuffix(w, "s") && !map[string]bool{"más": true, "has": true, "was": true, "is": true}[w] {
+					words[w] = true
+				}
+			}
+		}
+	}
+	alts := make([]string, 0, len(words))
+	for w := range words {
+		alts = append(alts, regexp.QuoteMeta(w))
+	}
+	sort.Strings(alts)
+	return regexp.MustCompile(`(?:^|[\s>(])1 (` + strings.Join(alts, "|") + `)\b`)
+}()
+
 // checkPagesShown is BV-229 §4 on every page written in dir.
 func checkPagesShown(t *testing.T, name, dir string) {
 	t.Helper()
@@ -305,6 +340,9 @@ func checkPagesShown(t *testing.T, name, dir string) {
 		}
 		if i := strings.Index(string(raw), "&amp;#"); i >= 0 {
 			t.Errorf("%s: %s escapes a text twice: %q", name, filepath.Base(path), raw[max(0, i-40):i+10])
+		}
+		if m := numberedPlural.FindString(string(raw)); m != "" {
+			t.Errorf("%s: %s says %q: a count of one in a plural form", name, filepath.Base(path), strings.TrimSpace(m))
 		}
 		if m := emptyBlock.FindString(string(raw)); m != "" {
 			t.Errorf("%s: %s has an empty block to paste: %q", name, filepath.Base(path), m)

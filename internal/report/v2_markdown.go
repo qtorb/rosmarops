@@ -38,7 +38,7 @@ var staticKeys = []string{
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
 	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "coverage.claude_desktop_two_configs", "legacy.none",
-	"legacy.vscode.first_run", "legacy.vscode.first_run.recent",
+	"legacy.vscode.first_run", "legacy.vscode.first_run.one", "legacy.vscode.first_run.recent", "finding.cred_in_git.what.one",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",
 	"console.title.running", "console.title.question", "console.title.done", "console.title.failed",
@@ -54,8 +54,8 @@ var staticKeys = []string{
 	"test_fixture." + rules.FixtureIgnoredScope, "test_fixture." + rules.FixtureFingerprintMatch, "memory.new_agent", "memory.new_mcp", "memory.mcp_changed",
 	"console.progress.agents", "console.progress.repos", "console.progress.repos_slow", "console.progress.report",
 	// CTO-38 §4.1: the project search's console lines
-	"console.projects.found.one", "console.projects.found.other", "console.projects.list", "console.projects.more",
-	"console.projects.not_searched", "console.projects.incomplete", "console.projects.none",
+	"console.projects.found.one", "console.projects.found.other", "console.projects.found.other.one_folder", "console.projects.list", "console.projects.more",
+	"console.projects.not_searched", "console.projects.not_searched.one", "console.projects.incomplete", "console.projects.none",
 	"console.config_changed", "console.config_change.rotated", "console.config_change.fixture", "console.config_change.other",
 	"console.config_confirm", "console.config_accepted", "console.config_rejected", "console.config_unconfirmed",
 	// BV-68: the integrity questions and a scheduled review's notification
@@ -117,7 +117,7 @@ var staticKeys = []string{
 	"report.problems.sent.one", "report.problems.sent.other",
 	// CTO-32 C3/C4: the terminal send prompt, the auto-send untick box and the
 	// «ask again» command confirmation.
-	"problems.terminal.send", "problems.autosent.body", "problems.ok", "problems.ask_again", "problems.ask.done",
+	"problems.terminal.send", "problems.autosent.body", "problems.autosent.body.one", "problems.ok", "problems.ask_again", "problems.ask.done",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
@@ -307,7 +307,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("%s\n\n", cat.Plural("html.limit", v.repos, map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)}))
 	}
 	if v.limitReached {
-		w("%s\n\n", t("html.limit.reached", map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)}))
+		w("%s\n\n", t(limitReachedKey(v.notReviewed, v.repos), map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)}))
 	}
 
 	byID := map[string]rules.Finding{}
@@ -333,7 +333,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 		w("**%s**\n\n%s\n\n%s", t("finding."+f.Rule+".title", p), t("finding."+f.Rule+".what", p), n8nMarkdownSteps(t, f, p))
 	} else if f, ok := byID[v.Today.FindingID]; ok {
 		p := findingParams(f)
-		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(execVariant(f, "finding."+f.Rule+".what"), p))
+		w("**%s**\n\n%s\n\n", t(execVariant(f, "finding."+f.Rule+".title"), p), t(oneOf(cat, execVariant(f, "finding."+f.Rule+".what"), p), p))
 		for _, a := range f.Actions {
 			if a.ID != v.Today.ActionID {
 				continue
@@ -469,7 +469,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			meta = append(meta, t("radius."+f.Radius, p))
 		}
 		w("%s\n\n", strings.Join(meta, " · "))
-		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(multi(execVariant(f, "finding."+f.Rule+".what")), p))
+		w("#### %s\n\n%s\n\n", t("finding.part.what", p), t(oneOf(cat, multi(execVariant(f, "finding."+f.Rule+".what")), p), p))
 		w("#### %s\n\n%s\n\n", t("finding.part.why", p), t(multi(whyKey(f)), p))
 		head := func(m rules.Finding) { // the agent's name, in a merged row
 			if len(members) > 1 {
@@ -673,7 +673,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	w("## %s\n\n", t("section.legacy", nil))
 	// A first run of the extensions collector says so (A5).
 	if fr := v.vscodeFirstRun; fr != nil {
-		key := "legacy.vscode.first_run"
+		key := cat.One("legacy.vscode.first_run", fr.Recorded) // BV-232 §6
 		if fr.Recent > 0 {
 			key = "legacy.vscode.first_run.recent"
 		}

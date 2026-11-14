@@ -225,7 +225,7 @@ func svWarnings(c htmlCtx) []string {
 		out = append(out, c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)}))
 	}
 	if v.limitReached {
-		out = append(out, c.cat.Text("html.limit.reached", map[string]string{
+		out = append(out, c.cat.Text(limitReachedKey(v.notReviewed, v.repos), map[string]string{
 			"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos),
 		}))
 	}

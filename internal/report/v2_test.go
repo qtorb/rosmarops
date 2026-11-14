@@ -124,6 +124,8 @@ var reservedKeys = []string{
 	// gone from the HTML in informe HTML v3 (traffic light, counters, today
 	// tag and chip)
 	"html.status.sub", "html.count.red", "html.count.yellow", "html.counts.label",
+	// BV-232 §6: the forms for one of two keys the HTML no longer shows
+	"html.status.sub.one", "html.legacy.body.one", "html.legacy.body.one_group",
 	"html.today.tag", "html.today.time", "html.today.chip",
 	// gone from the footer: the agents not evaluated are in step 1 (v3 §13.1)
 	"html.index.not_evaluated",
