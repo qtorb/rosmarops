@@ -1,6 +1,7 @@
 package windows
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -164,5 +165,44 @@ func TestReadGrok_InvalidTOML(t *testing.T) {
 	user, _ := grokLayerByKindRoot(scan, platform.GrokLayerUser, "")
 	if user.Status != platform.MCPSourceFailed || !strings.Contains(user.Reason, "parse_error") {
 		t.Errorf("invalid TOML should fail with a parse reason: %+v", user)
+	}
+}
+
+// BV-237: [permission] rules as CTO-50's P0 profile writes them (an array of
+// inline tables over several lines) are read; an unknown tool is skipped.
+func TestReadGrok_PermissionRules(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(p, []byte(`[ui]
+permission_mode = "ask"
+
+[permission]
+rules = [
+  { action = "deny", tool = "edit" },
+  { action = "deny", tool = "bash" },
+  { action = "allow", tool = "bash", pattern = "git status" },
+  { action = "deny", tool = "websearch" },
+]
+
+[sandbox]
+profile = "read-only"
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l := readGrokLayer(p, platform.GrokLayerUser, "", false)
+	if l.Status != platform.MCPSourceRead {
+		t.Fatalf("status %s: %s", l.Status, l.Reason)
+	}
+	want := []platform.GrokRule{{Action: "deny", Tool: "edit"}, {Action: "deny", Tool: "bash"}, {Action: "allow", Tool: "bash", Pattern: "git status"}}
+	if len(l.Rules) != len(want) {
+		t.Fatalf("rules %+v, want %+v", l.Rules, want)
+	}
+	for i := range want {
+		if l.Rules[i] != want[i] {
+			t.Errorf("rule %d: %+v, want %+v", i, l.Rules[i], want[i])
+		}
+	}
+	if l.PermissionMode != "ask" || l.SandboxProfile != "read-only" {
+		t.Errorf("mode %q profile %q", l.PermissionMode, l.SandboxProfile)
 	}
 }

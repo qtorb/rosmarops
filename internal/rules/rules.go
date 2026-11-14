@@ -975,6 +975,20 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 			boundary[c.AppliesIn] = true
 		}
 	}
+	if n.Platform == knowledge.ClaudeCodeProduct {
+		// BV-237: blockReadsOutsideWorkingDirectories in a project's settings
+		// counts only in that project; the per-agent radius takes it only
+		// from the user or managed settings, or when every project sets it.
+		v.blockReads = boundary["user"] || boundary["managed"]
+		if !v.blockReads && len(repoRoots) > 0 {
+			all := true
+			for _, r := range repoRoots {
+				cr := graph.CanonicalPath(r)
+				all = all && (boundary["project:"+cr] || boundary["local:"+cr])
+			}
+			v.blockReads = all
+		}
+	}
 	switch n.Platform {
 	case knowledge.CursorProduct:
 		// readBoundary workspace narrows the radius when the user's
@@ -1016,8 +1030,16 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 func (v *agentView) webMCPEgress() []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}
 	var out []way
+	grok := v.node.Platform == knowledge.GrokBuildProduct
 	for _, c := range v.inForce {
 		if c.Approval != graph.ApprovalAllow || !broadDestination(c.TargetScope) {
+			continue
+		}
+		// BV-237: a Grok Build deny of web search, of web fetch or of MCP
+		// closes that tool (deny > ask > allow).
+		if grok && ((grokWebSearchDefault(c) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebSearch)) ||
+			(c.Type == graph.CapNetwork && !grokWebSearchDefault(c) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebFetch)) ||
+			(c.Type == graph.CapInvokeMCPTool && v.grokDenied(graph.CapInvokeMCPTool, scopeAll))) {
 			continue
 		}
 		switch c.Type {
@@ -1073,6 +1095,23 @@ func grokBypassMode(mode string) bool {
 	return false
 }
 
+// grokDenied reports a Grok Build deny of a whole tool in force (BV-237): typ
+// and target as the graph writes them (write_files, execute_shell or
+// invoke_mcp_tool with "*"; network with web_fetch or web_search).
+func (v *agentView) grokDenied(typ, target string) bool {
+	for _, c := range v.inForce {
+		if c.Type == typ && c.Approval == graph.ApprovalDeny && c.Basis == graph.BasisConfigured && c.TargetScope == target {
+			return true
+		}
+	}
+	return false
+}
+
+// grokWebSearchDefault reports Grok Build's built-in web_search capability.
+func grokWebSearchDefault(c graph.Node) bool {
+	return c.Basis == graph.BasisProductDefault && c.Type == graph.CapNetwork && strings.Contains(c.Source, "/web_search_default@")
+}
+
 // grokEgress are Grok Build's mode ways to send data out without a person
 // (CTO-16 Grok §4): with an approve-everything mode (bypassPermissions,
 // always-approve, yolo) the shell sends without asking; with auto a classifier
@@ -1082,6 +1121,11 @@ func (v *agentView) grokEgress() []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, AssumeLaunchFlagsNotReadable}
 	mode, modeCap := grokMode(v)
 	var out []way
+	// BV-237: with the shell and web fetch both denied, the mode has no way
+	// left to send data out (web search and MCP come through their own rule).
+	if v.grokDenied(graph.CapExecuteShell, scopeAll) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebFetch) {
+		return nil
+	}
 	switch {
 	case grokBypassMode(mode) && modeCap != nil:
 		out = append(out, way{id: modeCap.ID, code: "egress_network", cap: modeCap.ID, assumptions: append([]string{}, baseA...)})

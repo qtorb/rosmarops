@@ -114,6 +114,7 @@ func readGrokLayer(path, kind, root string, project bool) platform.GrokLayer {
 		l.Allow = tomlStringArray(perm, "allow")
 		l.Deny = tomlStringArray(perm, "deny")
 		l.Ask = tomlStringArray(perm, "ask")
+		l.Rules = grokRules(perm)
 	}
 	if project {
 		// The project layer contributes nothing else (CTO-16 Grok §2); [ui],
@@ -320,4 +321,37 @@ func envFlagOff(env agentdirs.Env, name string) bool {
 		return true
 	}
 	return false
+}
+
+// grokRules reads [permission] rules, the verbose form (BV-237): an array of
+// { action, tool, pattern? } tables. An entry with an unknown action or tool,
+// or that is not a table, is skipped: it grants nothing the engine would read.
+func grokRules(perm tomlsubset.Map) []platform.GrokRule {
+	arr, ok := perm["rules"].(tomlsubset.Array)
+	if !ok {
+		return nil
+	}
+	var out []platform.GrokRule
+	for _, e := range arr {
+		t, ok := e.(tomlsubset.Map)
+		if !ok {
+			continue
+		}
+		action, _ := tomlString(t, "action")
+		tool, _ := tomlString(t, "tool")
+		pattern, _ := tomlString(t, "pattern")
+		action, tool = strings.ToLower(strings.TrimSpace(action)), strings.ToLower(strings.TrimSpace(tool))
+		switch action {
+		case "allow", "deny", "ask":
+		default:
+			continue
+		}
+		switch tool {
+		case "any", "bash", "edit", "read", "grep", "mcp", "webfetch":
+		default:
+			continue
+		}
+		out = append(out, platform.GrokRule{Action: action, Tool: tool, Pattern: strings.TrimSpace(pattern)})
+	}
+	return out
 }
