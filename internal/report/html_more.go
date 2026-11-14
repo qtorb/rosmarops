@@ -471,6 +471,20 @@ const projectPathsShown = 10
 // repositories with where each came from, new and gone since the previous
 // review, and where the search did not look. Absent when the report has no
 // project search (not built by a review).
+// projectsSummaryKey is html.projects.summary's form for found projects in
+// roots folders (BV-232 §6): one project, one folder, both, or several of each.
+func projectsSummaryKey(found, roots int) string {
+	switch {
+	case found == 1 && roots == 1:
+		return "html.projects.summary.one_project_one_folder"
+	case found == 1:
+		return "html.projects.summary.one_project"
+	case roots == 1:
+		return "html.projects.summary.one_folder"
+	}
+	return "html.projects.summary"
+}
+
 func (c htmlCtx) renderProjects() {
 	p := c.v.Coverage.Projects
 	if p == nil {
@@ -478,11 +492,11 @@ func (c htmlCtx) renderProjects() {
 	}
 	n := strconv.Itoa
 	c.w(`<div><h3>%s</h3>`, c.t("html.projects.title", nil))
-	summary := c.t("html.projects.summary", map[string]string{"found": n(p.Found), "roots": n(len(p.Roots)), "scanned": n(p.Scanned)})
+	summary := c.t(projectsSummaryKey(p.Found, len(p.Roots)), map[string]string{"found": n(p.Found), "roots": n(len(p.Roots)), "scanned": n(p.Scanned)})
 	if len(p.Items) == 0 {
-		c.w(`<p>%s</p>`, html.EscapeString(summary))
+		c.w(`<p>%s</p>`, summary)
 	} else {
-		c.w(`<details><summary>%s</summary><ul>`, html.EscapeString(summary))
+		c.w(`<details><summary>%s</summary><ul>`, summary)
 		for _, it := range p.Items {
 			c.w(`<li><code>%s</code> · %s</li>`, c.t("html.projects.item", map[string]string{"path": untrusted.PlainText(it.Path)}),
 				c.t("html.projects.source."+it.Source, nil))
@@ -490,10 +504,10 @@ func (c htmlCtx) renderProjects() {
 		c.w(`</ul></details>`)
 	}
 	if p.New > 0 {
-		c.w(`<p>%s</p>`, c.t("html.projects.new", map[string]string{"count": n(p.New)}))
+		c.w(`<p>%s</p>`, c.t(c.cat.One("html.projects.new", p.New), map[string]string{"count": n(p.New)}))
 	}
 	if p.Gone > 0 {
-		c.w(`<p>%s</p>`, c.t("html.projects.gone", map[string]string{"count": n(p.Gone)}))
+		c.w(`<p>%s</p>`, c.t(c.cat.One("html.projects.gone", p.Gone), map[string]string{"count": n(p.Gone)}))
 	}
 	if len(p.NotSearched) > 0 {
 		c.w(`<h4>%s</h4><ul>`, c.t("html.projects.not_searched.title", nil))

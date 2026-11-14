@@ -107,8 +107,13 @@ func TestListClaudeSettings_LayersConfigDirAndTrust(t *testing.T) {
 			t.Errorf("%s: config dir %q, want CLAUDE_CONFIG_DIR", f.ConfigPath, f.ConfigDir)
 		}
 	}
-	if len(scan.Files) != 5 {
-		t.Errorf("files considered: got %d, want 5 (user + 2 per repo)", len(scan.Files))
+	if len(scan.Files) != 6 {
+		t.Errorf("files considered: got %d, want 6 (user + 2 per repo + the home folder's settings.local.json)", len(scan.Files))
+	}
+	// BV-232 §5: ~/.claude/settings.local.json (never under CLAUDE_CONFIG_DIR)
+	// is the local settings of the home folder, which is not a project here.
+	if h := got[filepath.Join(e.home, ".claude", "settings.local.json")]; h.Scope != platform.MCPScopeLocal || h.ScopePath != e.home || !h.HomeLocalOnly {
+		t.Errorf("home settings.local.json: %+v", h)
 	}
 	user := got[filepath.Join(custom, "settings.json")]
 	if user.Scope != platform.MCPScopeUser || !reflect.DeepEqual(user.Permissions.Allow, []string{"Bash(ls)"}) {

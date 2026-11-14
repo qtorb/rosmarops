@@ -241,7 +241,7 @@ func showProblemOutcome(cat catalog.Catalog, delivered bool, email string) {
 // closes itself after 60 seconds as «OK» (false).
 func showProblemAutoSent(cat catalog.Catalog, n int) bool {
 	return runProblemBox(problemBoxConfig{
-		Body:      cat.Text("problems.autosent.body", map[string]string{"n": strconv.Itoa(n)}),
+		Body:      cat.Text(cat.One("problems.autosent.body", n), map[string]string{"n": strconv.Itoa(n)}),
 		Primary:   cat.Text("problems.ok", nil),
 		Secondary: cat.Text("problems.ask_again", nil),
 		Icon:      problemBoxIcon(),

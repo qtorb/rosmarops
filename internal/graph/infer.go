@@ -126,7 +126,7 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 			in := p.codexInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		case knowledge.GrokBuildProduct:
-			in := p.grokInference(client)
+			in := p.grokInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
 		case knowledge.GitHubCopilotProduct:
 			in := p.copilotInference(client, repoRoots)
@@ -237,10 +237,10 @@ func (p prepared) cursorInference(client Node, repoRoots []string) cursorInferen
 // inference holds what one Claude Code client's edges are inferred from.
 type inference struct {
 	client    Node
-	inForce   []Node // capabilities in force
-	mode      string // effective permission mode
-	modeCap   *Node  // the permission_mode capability of mode, if configured
-	roots     []string
+	inForce   []Node          // capabilities in force
+	sessions  []claudeSession // one per project (BV-232 §4): its mode and sandbox
+	addDirs   []string        // additionalDirectories, a working root of every session
+	roots     []string        // the project roots and addDirs
 	home      string
 	protected protectedPaths
 	bashVia   *Node // product_default shell_readonly_bash_commands
@@ -257,7 +257,8 @@ func newInference(client Node, caps []Node, nodes map[string]Node, base knowledg
 		}
 	}
 	sort.Slice(in.inForce, func(i, j int) bool { return in.inForce[i].ID < in.inForce[j].ID })
-	in.mode, in.modeCap = effectiveMode(in.inForce)
+	in.sessions = claudeSessions(in.inForce, repoRoots, home)
+	in.addDirs = workRoots(nil, in.inForce, home)
 	in.roots = workRoots(repoRoots, in.inForce, home)
 	pd := func(id string) *Node {
 		e, ok := base.Entry(id)
@@ -272,38 +273,6 @@ func newInference(client Node, caps []Node, nodes map[string]Node, base knowledg
 	}
 	in.bashVia, in.fileVia = pd(kbShellReadonly), pd(kbReadInWorkDirs)
 	return in
-}
-
-// effectiveMode is the defaultMode of the permission_mode allow capability in
-// force of highest precedence, managed over user (project and local do not
-// set the global mode), and then the built-in default mode of the product
-// (permission_mode allow, product_default; decision 2026-10-24, D5). A mode
-// that a permission_mode deny in force disables is not effective: the mode
-// is then "default", as when none is set. IDE-only layers (ide:vscode) do
-// not set the terminal's mode.
-func effectiveMode(inForce []Node) (string, *Node) {
-	var chosen *Node
-	pick := func(match func(Node) bool) {
-		for i := range inForce {
-			c := inForce[i]
-			if chosen == nil && c.Type == CapPermissionMode && c.Approval == ApprovalAllow && match(c) {
-				chosen = &inForce[i]
-			}
-		}
-	}
-	for _, layer := range []string{"managed", "user"} {
-		pick(func(c Node) bool { return c.Basis == BasisConfigured && c.AppliesIn == layer })
-	}
-	pick(func(c Node) bool { return c.Basis == BasisProductDefault })
-	if chosen == nil {
-		return permissionModeDefault, nil
-	}
-	for _, c := range inForce {
-		if c.Type == CapPermissionMode && c.Approval == ApprovalDeny && c.TargetScope == chosen.TargetScope {
-			return permissionModeDefault, nil
-		}
-	}
-	return chosen.TargetScope, chosen
 }
 
 // workRoots are the configured repository roots and the target_scope of
@@ -339,12 +308,26 @@ func workRoots(repoRoots []string, inForce []Node, home string) []string {
 // app is not readable at rest (ui_mode_choice_unknown), and the built-in
 // auto mode needs a supported model and no server-side switch-off
 // (auto_mode_available).
-func (in inference) modeAssumptions() []string {
+func modeAssumptions(s claudeSession) []string {
 	a := []string{AssumeUIModeChoiceUnknown}
-	if in.modeCap != nil && in.modeCap.Basis == BasisProductDefault && in.mode == permissionModeAuto {
+	if s.modeCap != nil && s.modeCap.Basis == BasisProductDefault && s.mode == permissionModeAuto {
 		a = append(a, AssumeAutoModeAvailable)
 	}
 	return a
+}
+
+// insideSession reports file is inside one of the working roots of a session
+// in s.root: the project itself and the additional directories.
+func (in inference) insideSession(s claudeSession, file string) bool {
+	if s.root != "" && within(s.root, file) {
+		return true
+	}
+	for _, r := range in.addDirs {
+		if within(r, file) {
+			return true
+		}
+	}
+	return false
 }
 
 func (in inference) withinRoots(file string) bool {
@@ -488,63 +471,112 @@ type inferredWay struct {
 }
 
 // readWays are the ways Claude Code reads one of files, as reaches describes
-// (the edges of a credential holding them). Probe asks it the same.
+// (the edges of a credential holding them). Probe asks it the same. Each way
+// is evaluated in every session (BV-232 §4): a file is inside a session when
+// it is in its project or an additional directory.
+//
+// A Read deny or ask rule covers the built-in file tools and the file
+// commands Claude Code recognizes in Bash (cat, head, tail, sed, tee and
+// redirections), not a program the agent launches that opens files itself
+// (permissions#read-and-edit, BV-232 §2): on a covered file the read-only Bash
+// way is cut, and a program way stays open where the agent can launch a
+// program without a person (bypassPermissions, auto, a Bash "*" allow or a
+// code launcher allow), marked read_deny_partial. An effective sandbox (only
+// on macOS, Linux and WSL2, sure and closed, BV-232 §1) merges the Read deny
+// rules and its own denyRead paths into what every command can read, so it
+// cuts the program way too, and the Bash way on its denyRead paths.
 func (in inference) readWays(files []string) []inferredWay {
 	blockReads := false
 	for _, c := range in.inForce {
 		blockReads = blockReads || c.Rule == ruleBlockReadsOutside
 	}
-	// use reports whether a way uses f, and collects the rules R(f) of
-	// the files it uses.
-	way := func(use func(f string, inside bool) bool) (bool, []string) {
-		used, rules := false, []string(nil)
-		for _, f := range files {
-			if use(f, in.withinRoots(f)) {
-				used = true
-				rules = union(rules, in.readRules(f))
-			}
+	covered := map[string][]string{} // file -> the Read rules covering it
+	for _, f := range files {
+		if r := in.readRules(f); len(r) > 0 {
+			covered[f] = r
 		}
-		return used, rules
 	}
-	var out []inferredWay
-	add := func(v via, partial bool, rules []string) {
-		a := append([]string{}, v.assumptions...)
-		if partial && len(rules) > 0 {
-			a = append(a, AssumeReadDenyPartial)
-		} else {
-			rules = nil
+	// acc gathers one way per capability across sessions: whether it is
+	// used, its assumptions, and the rules of the covered files it uses.
+	type acc struct {
+		v       via
+		used    bool
+		partial bool
+		extra   []string
+		rules   []string
+	}
+	var order []string
+	ways := map[string]*acc{}
+	use := func(v via, partial bool, rules []string, extra ...string) {
+		a := ways[v.cap.ID]
+		if a == nil {
+			a = &acc{v: v}
+			ways[v.cap.ID] = a
+			order = append(order, v.cap.ID)
 		}
-		out = append(out, inferredWay{v, a, rules})
+		a.used = true
+		a.partial = a.partial || partial
+		a.rules = union(a.rules, rules)
+		a.extra = union(a.extra, extra)
 	}
 	if in.fileVia != nil {
-		if ok, _ := way(func(f string, inside bool) bool { return inside && len(in.readRules(f)) == 0 }); ok {
-			add(via{*in.fileVia, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, false, nil)
+		for _, f := range files {
+			if in.withinRoots(f) && covered[f] == nil {
+				use(via{*in.fileVia, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, false, nil)
+			}
 		}
 	}
-	if in.bashVia != nil && !in.shellRules("Bash") {
-		if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
-			assume := baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)
-			// CTO-27 §3 / BV-208: in auto mode the read-only Bash commands can
-			// also wait for the classifier's review, so a model decides that way
-			// too (the read cell becomes model, not nobody). Moves no factory
-			// note or class: the reach and the finding are the same.
-			if in.mode == permissionModeAuto {
-				assume = append(assume, AssumeAutoClassifierPermits)
+	bash := in.bashVia != nil && !in.shellRules("Bash")
+	for _, s := range in.sessions {
+		eff := s.sandboxEffective()
+		for _, f := range files {
+			inside := in.insideSession(s, f)
+			cov := covered[f]
+			// The read-only Bash commands: not on a covered file, nor on a
+			// sandbox denyRead path of an effective sandbox.
+			if bash && cov == nil && (inside || !blockReads) && !(eff && s.sandboxDenies(f, in.home)) {
+				var extra []string
+				// CTO-27 §3 / BV-208: in auto mode the read-only Bash commands
+				// can also wait for the classifier's review.
+				if s.mode == permissionModeAuto {
+					extra = append(extra, AssumeAutoClassifierPermits)
+				}
+				use(via{*in.bashVia, baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)}, false, nil, extra...)
 			}
-			add(via{*in.bashVia, assume}, true, rules)
+			// The modes: the file tools and any command, on a covered file
+			// only through a program, which an effective sandbox stops.
+			if s.modeCap != nil && !(cov != nil && eff) {
+				switch {
+				case s.mode == permissionModeBypass && (inside || !blockReads):
+					use(via{*s.modeCap, append(baseAssumptions(), modeAssumptions(s)...)}, cov != nil, cov)
+				case s.mode == permissionModeAuto && inside:
+					use(via{*s.modeCap, append(baseAssumptions(AssumeAutoClassifierPermits), modeAssumptions(s)...)}, cov != nil, cov)
+				}
+			}
+			// A program the agent launches without a person reads a covered
+			// file, unless an effective sandbox contains it (BV-232 §2).
+			if cov != nil && !eff {
+				for _, c := range in.inForce {
+					switch {
+					case c.Type == CapExecuteShell && c.Approval == ApprovalAllow && c.Basis == BasisConfigured && c.TargetScope == scopeAll &&
+						!in.shellRules(shellTool(c.Rule)):
+						use(via{c, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, true, cov)
+					case in.launcher(c):
+						use(via{c, baseAssumptions(AssumeNoPreToolUseHookBlocks, AssumeCodeLauncherRule)}, true, cov)
+					}
+				}
+			}
 		}
 	}
-	if in.modeCap != nil {
-		switch in.mode {
-		case permissionModeBypass:
-			if ok, rules := way(func(_ string, inside bool) bool { return inside || !blockReads }); ok {
-				add(via{*in.modeCap, append(baseAssumptions(), in.modeAssumptions()...)}, true, rules)
-			}
-		case permissionModeAuto:
-			if ok, rules := way(func(_ string, inside bool) bool { return inside }); ok {
-				add(via{*in.modeCap, append(baseAssumptions(AssumeAutoClassifierPermits), in.modeAssumptions()...)}, true, rules)
-			}
+	var out []inferredWay
+	for _, id := range order {
+		a := ways[id]
+		assume := append(append([]string{}, a.v.assumptions...), a.extra...)
+		rules := []string(nil)
+		if a.partial && len(a.rules) > 0 {
+			assume, rules = append(assume, AssumeReadDenyPartial), a.rules
 		}
+		out = append(out, inferredWay{a.v, assume, rules})
 	}
 	return out
 }
@@ -607,14 +639,22 @@ func (in inference) writeWays(file string) []inferredWay {
 		}
 		out = append(out, inferredWay{v, a, rules})
 	}
-	if in.modeCap != nil {
+	// The modes, in every session (BV-232 §4), one way per mode capability.
+	seen := map[string]bool{}
+	for _, sess := range in.sessions {
+		if sess.modeCap == nil || seen[sess.modeCap.ID] {
+			continue
+		}
 		switch {
-		case in.mode == permissionModeAcceptEdits && in.withinRoots(file) && !protected:
-			blocked(via{*in.modeCap, hook(in.modeAssumptions()...)})
-		case in.mode == permissionModeBypass:
-			partial(via{*in.modeCap, hook(in.modeAssumptions()...)})
-		case in.mode == permissionModeAuto && !protected:
-			partial(via{*in.modeCap, hook(append([]string{AssumeAutoClassifierPermits}, in.modeAssumptions()...)...)})
+		case sess.mode == permissionModeAcceptEdits && in.insideSession(sess, file) && !protected:
+			seen[sess.modeCap.ID] = true
+			blocked(via{*sess.modeCap, hook(modeAssumptions(sess)...)})
+		case sess.mode == permissionModeBypass:
+			seen[sess.modeCap.ID] = true
+			partial(via{*sess.modeCap, hook(modeAssumptions(sess)...)})
+		case sess.mode == permissionModeAuto && !protected:
+			seen[sess.modeCap.ID] = true
+			partial(via{*sess.modeCap, hook(append([]string{AssumeAutoClassifierPermits}, modeAssumptions(sess)...)...)})
 		}
 	}
 	for _, c := range in.inForce {

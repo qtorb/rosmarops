@@ -40,6 +40,19 @@ type settingsFile struct {
 	} `json:"permissions"`
 	DisableAutoMode string `json:"disableAutoMode"`
 
+	// Sandbox is the sandbox object (BV-232 §1): the keys the engine models.
+	Sandbox struct {
+		Enabled                  *bool `json:"enabled"`
+		FailIfUnavailable        *bool `json:"failIfUnavailable"`
+		AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
+		Network                  struct {
+			AllowedDomains []string `json:"allowedDomains"`
+		} `json:"network"`
+		Filesystem struct {
+			DenyRead []string `json:"denyRead"`
+		} `json:"filesystem"`
+	} `json:"sandbox"`
+
 	EnabledMcpjsonServers      []string `json:"enabledMcpjsonServers"`
 	DisabledMcpjsonServers     []string `json:"disabledMcpjsonServers"`
 	EnableAllProjectMcpServers *bool    `json:"enableAllProjectMcpServers"`
@@ -91,11 +104,24 @@ func (w *WindowsPlatform) ListClaudeSettings(ctx context.Context, repoRoots []st
 
 	var scan platform.ClaudeSettingsScan
 	scan.Files = append(scan.Files, ReadClaudeSettings(filepath.Join(dir, "settings.json"), platform.MCPScopeUser, "", dir))
+	homeIsRoot := false
 	for _, root := range repoRoots {
 		scan.Files = append(scan.Files,
 			ReadClaudeSettings(filepath.Join(root, ".claude", "settings.json"), platform.MCPScopeProject, root, dir),
 			ReadClaudeSettings(filepath.Join(root, ".claude", "settings.local.json"), platform.MCPScopeLocal, root, dir),
 		)
+		homeIsRoot = homeIsRoot || sameDir(root, home)
+	}
+	// BV-232 §5: ~/.claude/settings.local.json is the local settings of the
+	// project that is the home folder itself: Claude Code reads it only in
+	// sessions started there, not in every project (permissions,
+	// configuration-home exception). It is read like any settings file, so it
+	// is a configuration the report knows; its rules count only when the home
+	// folder is one of the projects, where the loop above already read it.
+	if !homeIsRoot {
+		f := ReadClaudeSettings(filepath.Join(home, ".claude", "settings.local.json"), platform.MCPScopeLocal, home, dir)
+		f.HomeLocalOnly = true
+		scan.Files = append(scan.Files, f)
 	}
 	scan.Trust = readProjectTrust(filepath.Join(home, ".claude.json"))
 	appData := os.Getenv("APPDATA")
@@ -200,6 +226,16 @@ func (m *managedLocations) readRegistry(ctx context.Context, hive, configDir str
 	return parseClaudeSettings(value, f)
 }
 
+// sameDir reports two folders are the same one, by their cleaned path
+// (case-insensitively on Windows, where paths are).
+func sameDir(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if filepath.Separator == '\\' {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
 // ReadClaudeSettings reads one Claude Code settings file. The outcome follows
 // readMCPFile: missing, failed (read_error, parse_error,
 // size_limit_exceeded; files over 2 MB are not opened) or read.
@@ -238,6 +274,17 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 		DisableBypassPermissionsMode:        p.DisableBypassPermissionsMode,
 		AdditionalDirectories:               p.AdditionalDirectories,
 		BlockReadsOutsideWorkingDirectories: p.BlockReadsOutsideWorkingDirectories,
+	}
+	sb := s.Sandbox
+	f.Permissions.Sandbox = platform.ClaudeSandbox{AllowedDomains: sb.Network.AllowedDomains, DenyRead: sb.Filesystem.DenyRead}
+	if sb.Enabled != nil {
+		f.Permissions.Sandbox.Enabled, f.Permissions.Sandbox.EnabledSet = *sb.Enabled, true
+	}
+	if sb.FailIfUnavailable != nil {
+		f.Permissions.Sandbox.FailIfUnavailable, f.Permissions.Sandbox.FailIfUnavailableSet = *sb.FailIfUnavailable, true
+	}
+	if sb.AllowUnsandboxedCommands != nil {
+		f.Permissions.Sandbox.AllowUnsandboxedCommands, f.Permissions.Sandbox.AllowUnsandboxedCommandsSet = *sb.AllowUnsandboxedCommands, true
 	}
 	switch {
 	case s.DisableAutoMode != "":

@@ -158,6 +158,16 @@ func (c Catalog) Plural(key string, n int, params map[string]string) string {
 	return c.Text(key+".other", params)
 }
 
+// One is key's form for exactly one (key + ".one") when n is 1 and the
+// catalog has it, else key itself, which is the form for several (BV-229 §3,
+// BV-232 §6: today's keys stay as the plural form).
+func (c Catalog) One(key string, n int) string {
+	if n == 1 && c.Has(key+".one") {
+		return key + ".one"
+	}
+	return key
+}
+
 // Lang is the catalog's language.
 func (c Catalog) Lang() string { return c.lang }
 

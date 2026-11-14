@@ -404,10 +404,11 @@ func TestInfer_EffectiveMode(t *testing.T) {
 	if len(writeTargets(es, "defaultMode=bypassPermissions")) != 0 || len(writeTargets(es, "defaultMode=acceptEdits")) == 0 {
 		t.Errorf("managed acceptEdits does not win over user bypass: %+v", es)
 	}
-	// Project and local modes do not set the global mode.
+	// BV-232 §4: a project's mode is the mode of that project's sessions: its
+	// acceptEdits writes inside the project, never outside it.
 	es = inferredEdges(t, inferGraph(t, settingsOf(projectFile(platform.ClaudePermissions{DefaultMode: "acceptEdits"}))))
-	if len(writeTargets(es, "defaultMode=acceptEdits")) != 0 {
-		t.Error("project acceptEdits is the global mode")
+	if w := writeTargets(es, "defaultMode=acceptEdits"); !contains(w, repoClaudeMD) || contains(w, cursorMCPJSON) {
+		t.Errorf("project acceptEdits writes: %v", w)
 	}
 }
 
@@ -550,8 +551,10 @@ func TestInfer_ShellDenyOrAskRemovesShellWay(t *testing.T) {
 	}
 }
 
-// R(f): the file tools way is gone; the Bash and mode ways keep the edge
-// with read_deny_partial and the rule (deny or ask) in derived_from.
+// R(f): the file tools way and the read-only Bash way are gone (BV-232 §2:
+// a Read rule covers the file commands Claude Code recognizes in Bash); the
+// mode way, a program the agent launches, keeps the edge with
+// read_deny_partial and the rule (deny or ask) in derived_from.
 func TestInfer_ReadRulesOnReaches(t *testing.T) {
 	for _, list := range []string{"deny", "ask"} {
 		p := platform.ClaudePermissions{}
@@ -564,10 +567,10 @@ func TestInfer_ReadRulesOnReaches(t *testing.T) {
 		g := inferGraph(t, settingsOf(user, projectFile(p)))
 		rule := capID(t, g, "Read(./.mcp.json)")
 		es := inferredEdges(t, g)
-		if got := vias(edgesTo(es, graph.EdgeReaches, repoMCPJSON)); contains(got, "read_in_working_dirs") {
-			t.Errorf("%s: file tools way despite R: %v", list, got)
+		if got := vias(edgesTo(es, graph.EdgeReaches, repoMCPJSON)); contains(got, "read_in_working_dirs") || contains(got, "shell_readonly_bash_commands") {
+			t.Errorf("%s: file tools or Bash way despite R: %v", list, got)
 		}
-		for _, v := range []string{"shell_readonly_bash_commands", "defaultMode=bypassPermissions"} {
+		for _, v := range []string{"defaultMode=bypassPermissions"} {
 			var e graph.Edge
 			var ok bool
 			for _, x := range g.Edges {

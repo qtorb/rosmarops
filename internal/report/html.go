@@ -641,7 +641,7 @@ func (c htmlCtx) renderStep1() {
 		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Plural("html.silenced.config", n, map[string]string{"count": strconv.Itoa(n)})))
 	}
 	if v.limitReached { // BV-155: the global time limit expired before every project was checked
-		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Text("html.limit.reached",
+		c.w(`<p class="meta warn">%s</p>`, html.EscapeString(c.cat.Text(limitReachedKey(v.notReviewed, v.repos),
 			map[string]string{"left": strconv.Itoa(v.notReviewed), "projects": strconv.Itoa(v.repos)})))
 	}
 	if v.integrityNotChecked { // v3 §17.5: the state could not be read (J1)
@@ -813,7 +813,7 @@ func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
 	c.findingWhere(f) // BV-219 B2: where it is, below the finding's title
 	c.w(`<p class="imp">%s`, c.impact(f))
 	if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
-		c.w(` %s%s`, c.t("html.today.reach", p), c.help("auto"))
+		c.w(` %s%s`, c.t(c.cat.One("html.today.reach", c.v.repos), p), c.help("auto"))
 	}
 	c.w(`%s</p>`, c.gitEnvHelp(f))
 	// The projection (BV-41): only with a score, a rise, and an action that
@@ -963,7 +963,7 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.w(`<p>%s</p>`, o)
 	}
 	if f.Radius == rules.RadiusAnyProject {
-		c.w(`<p><span class="chip-any">%s</span></p>`, c.t("html.chip.any_project", p))
+		c.w(`<p><span class="chip-any">%s</span></p>`, c.t(c.cat.One("html.chip.any_project", c.v.repos), p))
 	}
 	if c.multi(f) {
 		c.renderMultiRow(f)
@@ -1226,6 +1226,27 @@ func howKey(cat catalog.Catalog, code string) string {
 		return k
 	}
 	return "action." + code + ".how"
+}
+
+// oneOf is key's form for exactly one (key + ".one") when the text's {count}
+// is 1 and the catalog has it (BV-232 §6), else key.
+func oneOf(cat catalog.Catalog, key string, p map[string]string) string {
+	if p["count"] == "1" && cat.Has(key+".one") {
+		return key + ".one"
+	}
+	return key
+}
+
+// limitReachedKey is html.limit.reached's form (BV-232 §6): your one project,
+// one of several, or several of several.
+func limitReachedKey(left, projects int) string {
+	switch {
+	case projects == 1:
+		return "html.limit.reached.one_project"
+	case left == 1:
+		return "html.limit.reached.one_left"
+	}
+	return "html.limit.reached"
 }
 
 // manualOpen is html.fix.manual.open with the path in code.
@@ -1495,7 +1516,7 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 		return c.cat.Text("html.f.cred_in_git.impact.local", p)
 	}
 	if f.Rule != rules.RuleCredReadAndSend && f.Rule != rules.RuleCredReadable {
-		return c.cat.Text(execVariant(f, "html.f."+f.Rule+".impact"), p)
+		return c.cat.Text(oneOf(c.cat, execVariant(f, "html.f."+f.Rule+".impact"), p), p)
 	}
 	k := c.credKey(f)
 	key := "html.cred." + k + ".impact"
@@ -1580,7 +1601,11 @@ func HTMLKeys() []string {
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.f.cred_in_git.title.history", "html.f.cred_in_git.where.tracked", "html.f.cred_in_git.where.history", // BV-219
 		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
-		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.memory.new_agent",
+		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.card.silenced.one", "html.memory.new_agent",
+		// BV-232 §6: the forms for one.
+		"html.today.reach.one", "html.chip.any_project.one", "html.limit.reached.one_left", "html.limit.reached.one_project",
+		"html.projects.summary.one_project_one_folder", "html.projects.summary.one_project", "html.projects.summary.one_folder",
+		"html.projects.new.one", "html.projects.gone.one", "html.f.own_instructions_writable.impact.one",
 		"html.signals.title", "html.signals.note")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")

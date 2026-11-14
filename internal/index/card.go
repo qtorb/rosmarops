@@ -50,7 +50,7 @@ func Card(a AgentIndex, silenced int, day time.Time, cat catalog.Catalog) (svg, 
 	// #A3A098.
 	sil, silText := "", ""
 	if silenced > 0 {
-		t := cat.Text("html.card.silenced", map[string]string{"count": strconv.Itoa(silenced)})
+		t := cat.Text(cat.One("html.card.silenced", silenced), map[string]string{"count": strconv.Itoa(silenced)})
 		sil = `<tspan font-size="14" fill="#A3A098"> · ` + esc(t) + `</tspan>`
 		silText = " · " + t
 	}

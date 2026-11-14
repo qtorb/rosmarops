@@ -166,7 +166,7 @@ func TestConsoleProjectNamesOnly(t *testing.T) {
 				t.Errorf("%s: the console shows %q:\n%s", lang, bad, out)
 			}
 		}
-		for _, want := range []string{"acme/api", "beta/api", "web", cat.Text("console.projects.found.other", map[string]string{"count": "3", "roots": "1"})} {
+		for _, want := range []string{"acme/api", "beta/api", "web", cat.Text("console.projects.found.other.one_folder", map[string]string{"count": "3", "roots": "1"})} {
 			if !strings.Contains(out, want) {
 				t.Errorf("%s: missing %q:\n%s", lang, want, out)
 			}
