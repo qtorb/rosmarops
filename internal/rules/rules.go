@@ -975,6 +975,20 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 			boundary[c.AppliesIn] = true
 		}
 	}
+	if n.Platform == knowledge.ClaudeCodeProduct {
+		// BV-237: blockReadsOutsideWorkingDirectories in a project's settings
+		// counts only in that project; the per-agent radius takes it only
+		// from the user or managed settings, or when every project sets it.
+		v.blockReads = boundary["user"] || boundary["managed"]
+		if !v.blockReads && len(repoRoots) > 0 {
+			all := true
+			for _, r := range repoRoots {
+				cr := graph.CanonicalPath(r)
+				all = all && (boundary["project:"+cr] || boundary["local:"+cr])
+			}
+			v.blockReads = all
+		}
+	}
 	switch n.Platform {
 	case knowledge.CursorProduct:
 		// readBoundary workspace narrows the radius when the user's

@@ -330,15 +330,14 @@ func claudeMCPDisposition(v *agentView, serverName string) string {
 }
 
 // mcpRuleCoversServer reports whether a Claude Code rule covers every tool of
-// the server: mcp__<server> or mcp__<server>__* (a single-tool rule such as
+// the server: mcp__<server>, mcp__<server>__*, or mcp__*, which covers every
+// MCP tool of every server (cli-reference, --disallowedTools: «"mcp__*"
+// removes every MCP tool»; BV-237). A single-tool rule such as
 // mcp__<server>__pay is not server-wide: it does not tell whether the write
-// tools ask).
+// tools ask.
 func mcpRuleCoversServer(rule, server string) bool {
 	rule = strings.TrimSpace(rule)
-	if !strings.EqualFold(rule, "mcp__"+server) && !strings.EqualFold(rule, "mcp__"+server+"__*") {
-		return false
-	}
-	return true
+	return rule == "mcp__*" || strings.EqualFold(rule, "mcp__"+server) || strings.EqualFold(rule, "mcp__"+server+"__*")
 }
 
 // cursorMCPDisposition reads Cursor's mcpAllowlist: an entry that covers the
