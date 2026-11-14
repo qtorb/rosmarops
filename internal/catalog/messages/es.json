@@ -228,6 +228,7 @@
   "finding.project_hook_runs_repo_script.title.large": "Un proyecto hace que {agent} ejecute un script grande del propio proyecto",
   "finding.project_hook_runs_repo_script.what": "{file} le dice a {agent} que ejecute {script}, un fichero de este proyecto, cuando salta un hook (por ejemplo, al empezar una sesión). Quien pueda cambiar este proyecto puede cambiar lo que se ejecuta en tu ordenador.",
   "finding.project_hook_runs_repo_script.what.large": "{file} le dice a {agent} que ejecute {script}, un fichero de este proyecto de más de 1 MB, cuando salta un hook (por ejemplo, al empezar una sesión). Un script tan grande es difícil de revisar.",
+  "findings.config_outside": "Tu configuración viene de {path}, fuera de la carpeta de RosmarOps, así que RosmarOps no la cambia. Marca ahí los avisos a mano, o borra ese fichero para usar ~/.rosmarops/config.json.",
   "findings.console.dismissed": "descartado por ti",
   "findings.console.prompt": "Escribe los números que quieras cambiar, separados por comas: los marcados se descartan y los descartados se recuperan (Enter para no cambiar nada): ",
   "findings.count.one": "1 marcado",

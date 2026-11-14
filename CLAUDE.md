@@ -35,9 +35,10 @@ These cannot be violated by any code you write. They are the product.
 <!-- Albert signed the connected-space change (CTO-13, the nine points, one program) on 2026-11-01 at 11:51; this replaces the former "no outbound network" invariant. -->
 1. **Network only in `internal/spacenet`, only with permission.** No package except `internal/spacenet` imports `net`, `net/*` or `crypto/tls`, or opens a socket. `internal/spacenet` may only use HTTPS to the fixed host `app.rosmarops.com` (port 443, standard TLS verification, no redirects, no other host except an `HTTPS_PROXY` tunnel to that host); only with the person's permission: for the space, the permission recorded in the state; for the problem list, pressing «Send» at that moment or «Send the next ones without asking» recorded in the state. Only to connect this computer, send locked results packages of this computer, disconnect, and send the problem list (format problems.v1). Results packages are always encrypted end to end; the problem list carries only the problems.v1 fields. Any other network use: stop and ask the human owner.
 
-2. **No writes outside scope.** Only three write targets allowed:
+2. **No writes outside scope.** Only four write targets allowed:
    - `~/.rosmarops/state.json`
    - the kit key file: `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS and Linux)
+   - `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted.
    - the configured reports directory (default `~/.rosmarops/reports/`).
    No other `os.Create`, `os.WriteFile`, `os.OpenFile`, or `os.MkdirAll` calls outside these paths.
 
@@ -145,7 +146,7 @@ tests/
 
 - adding any third-party Go dependency;
 - changing any schema or creating a new schema version (the v2 graph schema at `schemas/v2/` is approved; any change to it, or a future v3, requires an explicit decision from the human owner);
-- writing any code path that opens a socket or writes outside the two allowed paths;
+- writing any code path that opens a socket or writes outside the allowed paths of invariant 2;
 - relaxing any of the forced-exclusion paths or the resource limits;
 - removing or weakening any of the trust tests;
 - adding any code that calls out to a network service "just for telemetry" / "anonymous usage" / "crash reports" — the answer is always no.

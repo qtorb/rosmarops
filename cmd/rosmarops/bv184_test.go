@@ -101,12 +101,20 @@ func TestBV184_RecomputeDismissed(t *testing.T) {
 	}
 }
 
-// bv184CmdSetup lays out a temp config, state and last report (the valid
-// fixture) and returns their paths. The config points its reports at the temp
+// bv184CmdSetup lays out a temp home with its config, state and last report
+// (the valid fixture) and returns their paths. The config points its reports at the temp
 // reports directory, so the dismiss flow writes only inside it.
 func bv184CmdSetup(t *testing.T) (cfgPath, stPath, reports string) {
 	t.Helper()
-	dir := t.TempDir()
+	// CTO-49 v2: the dismiss flow writes only ~/.rosmarops/config.json, so the
+	// fixture lives in a temp home.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	dir := filepath.Join(home, ".rosmarops")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	cfgPath = filepath.Join(dir, "config.json")
 	stPath = filepath.Join(dir, "state.json")
 	reports = filepath.Join(dir, "reports")
