@@ -198,13 +198,66 @@ func recomputeDismissed(old []config.AllowEntryDismissed, cards []report.Finding
 	return out
 }
 
-// writeDismissed writes allow_list.dismissed into config.json and re-points the
-// integrity reference, so the next review does not ask about the change (BV-184
-// point 2): config.json atomically (a temp file in the same directory, then a
-// rename), its new SHA-256 into state.integrity.config_sha256, the accepted
-// copy in data/ rewritten, and the state saved. Only allow_list.dismissed is
-// touched; every other key of the file is kept as written.
+// writeDismissed writes allow_list.dismissed into config.json (BV-184 point 2)
+// through writeFindingLists. An id it dismisses leaves allow_list.accepted in
+// the same write (BV-235: an id is never in both lists).
 func writeDismissed(cfgPath, reportDir, stPath string, list []config.AllowEntryDismissed) error {
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	in := map[string]bool{}
+	for _, d := range list {
+		in[d.ID] = true
+	}
+	var accepted []config.AllowEntryAccepted
+	for _, a := range cfg.AllowList.Accepted {
+		if !in[a.ID] {
+			accepted = append(accepted, a)
+		}
+	}
+	return writeFindingLists(cfgPath, reportDir, stPath, list, accepted)
+}
+
+// writeAccepted writes allow_list.accepted («Lo asumo», BV-235 R3) into
+// config.json through writeFindingLists, the same path and the same file as
+// writeDismissed. An id it accepts leaves allow_list.dismissed in the same
+// write.
+func writeAccepted(cfgPath, reportDir, stPath string, list []config.AllowEntryAccepted) error {
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+	in := map[string]bool{}
+	for _, a := range list {
+		in[a.ID] = true
+	}
+	var dismissed []config.AllowEntryDismissed
+	for _, d := range cfg.AllowList.Dismissed {
+		if !in[d.ID] {
+			dismissed = append(dismissed, d)
+		}
+	}
+	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, list)
+}
+
+// writeFindingLists writes allow_list.dismissed and allow_list.accepted into
+// config.json and re-points the integrity reference, so the next review does
+// not ask about the change (BV-184 point 2): config.json atomically (a temp
+// file in the same directory, then a rename), its new SHA-256 into
+// state.integrity.config_sha256, the accepted copy in data/ rewritten, and the
+// state saved. Only those two lists are touched, each absent when empty; every
+// other key of the file is kept as written. An id in both lists is refused.
+func writeFindingLists(cfgPath, reportDir, stPath string, list []config.AllowEntryDismissed, accepted []config.AllowEntryAccepted) error {
+	both := map[string]bool{}
+	for _, d := range list {
+		both[d.ID] = true
+	}
+	for _, a := range accepted {
+		if both[a.ID] {
+			return fmt.Errorf("finding %s cannot be both dismissed and accepted", a.ID)
+		}
+	}
 	// CTO-49 v2 (invariant 2): never write a configuration outside
 	// ~/.rosmarops/config.json.
 	if outside, err := dismissConfigOutside(cfgPath); outside {
@@ -233,6 +286,15 @@ func writeDismissed(cfgPath, reportDir, stPath string, list []config.AllowEntryD
 			arr = append(arr, map[string]any{"id": e.ID, "date": e.Date})
 		}
 		al["dismissed"] = arr
+	}
+	if len(accepted) == 0 {
+		delete(al, "accepted")
+	} else {
+		arr := make([]any, 0, len(accepted))
+		for _, e := range accepted {
+			arr = append(arr, map[string]any{"id": e.ID, "date": e.Date})
+		}
+		al["accepted"] = arr
 	}
 	if len(al) == 0 {
 		delete(m, "allow_list")

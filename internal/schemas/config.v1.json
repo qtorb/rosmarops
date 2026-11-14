@@ -91,7 +91,8 @@
         "secrets_in_history": { "$ref": "#/$defs/allow_entries_secret_history" },
         "rotated_credentials": { "$ref": "#/$defs/allow_entries_rotated_credential" },
         "test_fixtures": { "$ref": "#/$defs/allow_entries_test_fixture" },
-        "dismissed": { "$ref": "#/$defs/allow_entries_dismissed" }
+        "dismissed": { "$ref": "#/$defs/allow_entries_dismissed" },
+        "accepted": { "$ref": "#/$defs/allow_entries_accepted" }
       }
     },
     "extra_secret_patterns": {
@@ -173,6 +174,20 @@
           "id":   { "type": "string", "pattern": "^cred_[0-9a-f]{16}$", "description": "Credential id printed by the report; derived from the salted fingerprint, reveals nothing." },
           "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
           "note": { "type": "string", "description": "May be empty when an agent adds the entry from the report; the user confirms the change at the next run." }
+        }
+      }
+    },
+    "allow_entries_accepted": {
+      "type": "array",
+      "description": "Findings the user accepted on their own computer («Lo asumo»): the id keeps counting in the score, stops showing as pending, and the report says when it was accepted. One exact id; an id is never in both accepted and dismissed. The space never decides what is accepted.",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "date"],
+        "additionalProperties": false,
+        "properties": {
+          "id":   { "type": "string", "minLength": 1, "description": "The finding id printed by the report (f_… or cred_…); reveals nothing." },
+          "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
         }
       }
     },

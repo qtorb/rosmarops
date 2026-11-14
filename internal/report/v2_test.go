@@ -326,7 +326,7 @@ func TestRenderV2JSON_ValidatesSchema(t *testing.T) {
 		r := reason
 		v.AgentsOverview = append(v.AgentsOverview, rules.OverviewAgent{
 			Agent: "Detected " + reason, AgentID: "agent_detected_" + reason, Evaluated: false,
-			NotEvaluatedReason: &r, Rows: rules.NotEvaluatedRows(),
+			NotEvaluatedReason: &r, Rows: rules.NotEvaluatedRows(), Kinds: []rules.RiskKindCell{},
 		})
 		if _, err := report.RenderV2JSON(v); err != nil {
 			t.Errorf("not_evaluated_reason %q fails schema: %v", reason, err)

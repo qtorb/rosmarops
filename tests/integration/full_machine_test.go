@@ -119,11 +119,17 @@ func runFullMachine(t *testing.T, configured bool, codexVariant int) {
 		t.Fatal(err)
 	}
 	v1 := report.Build("0.10.3-test", nil, nil, len(in.RepoRoots), 0, 0, 0, nil)
+	// BV-235 R1: the factory pass, as `rosmarops run` builds it.
+	fres, err := pipeline.Assemble(pipeline.Factory(in))
+	if err != nil {
+		t.Fatalf("pipeline.Assemble(Factory): %v", err)
+	}
 	v2, _ := report.BuildV2(report.V2Input{
 		Graph: &g, GraphSHA256: graphSHA(res.Encoded), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		RepoRoots: in.RepoRoots, V1: v1, GeneratedAt: fmNow, Salt: fmSalt,
 		ClaudeSettings: &scans.Settings, Home: fmHome,
 		Hermes: scans.Hermes, Codex: scans.Codex, Grok: scans.Grok, Cline: scans.Cline,
+		FactoryGraph: &fres.Graph,
 	})
 
 	// Every scored agent present on the machine has a note (an evaluated
@@ -177,6 +183,16 @@ func runFullMachine(t *testing.T, configured bool, codexVariant int) {
 	svJSON, err := report.RenderSpaceViewJSON(sv)
 	if err != nil {
 		t.Fatalf("space-view.v1 fails schema validation: %v", err)
+	}
+	// BV-235: the sample report.v2.json and space package of the full test
+	// computer, written only when asked (go generate-style, by hand).
+	if dir := os.Getenv("ROSMAROPS_BV235_SAMPLE_DIR"); dir != "" && configured && codexVariant == codexAsIs {
+		if err := os.WriteFile(filepath.Join(dir, "report.v2.json"), v2JSON, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "space-view.v1.json"), svJSON, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if len(svJSON) == 0 {
 		t.Fatal("empty space view")

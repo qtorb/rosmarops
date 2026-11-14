@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -68,7 +69,7 @@ func r2BuildV2(t *testing.T, g *graph.Graph, settings *platform.ClaudeSettingsSc
 	in := report.V2Input{
 		Graph: g, GraphSHA256: strings0(64), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		RepoRoots: []string{fcRepo}, V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: fcNow,
-		ClaudeSettings: settings, Home: fcHome,
+		ClaudeSettings: settings, Home: fcHome, FactoryGraph: r2FactoryOf(t),
 	}
 	if extra != nil {
 		extra(&in)
@@ -98,7 +99,24 @@ func r2Assemble(t *testing.T, in pipeline.Input) graph.Graph {
 	if err != nil {
 		t.Fatalf("pipeline.Assemble: %v", err)
 	}
+	// BV-235 R1: the factory pass, as `rosmarops run` builds it.
+	fres, err := pipeline.Assemble(pipeline.Factory(in))
+	if err != nil {
+		t.Fatalf("pipeline.Assemble(Factory): %v", err)
+	}
+	r2Factories.Store(t, &fres.Graph)
 	return res.Graph
+}
+
+// r2Factories are the factory graphs r2Assemble built, by test, for
+// r2BuildV2 (tests run in parallel).
+var r2Factories sync.Map
+
+func r2FactoryOf(t *testing.T) *graph.Graph {
+	if g, ok := r2Factories.Load(t); ok {
+		return g.(*graph.Graph)
+	}
+	return nil
 }
 
 func r2ClaudeCode(t *testing.T) report.V2 {

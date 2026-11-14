@@ -378,8 +378,16 @@ type V2Input struct {
 	Fixtures []config.AllowEntryTestFixture
 	// Dismissed is allow_list.dismissed (BV-184): findings the person marked
 	// «No me afecta», moved out of the scored findings.
-	Dismissed  []config.AllowEntryDismissed
+	Dismissed []config.AllowEntryDismissed
+	// Accepted is allow_list.accepted («Lo asumo», BV-235 R3): findings that
+	// keep counting, marked with the date.
+	Accepted   []config.AllowEntryAccepted
 	ConfigFile string
+
+	// FactoryGraph is the graph of this computer with every agent at its
+	// product defaults (pipeline.Factory, BV-235 R1), built in memory and
+	// never written; nil skips the factory pass.
+	FactoryGraph *graph.Graph
 
 	// VSCodeFirstRun is set on the first run of the VS Code extensions
 	// collector (decision 2026-10-26, agentes y MCP nuevos, A5).
@@ -511,11 +519,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		v.committed = committedPlaces(g)
 		prov, sha := g.Provenance, in.GraphSHA256
 		v.Provenance.Graph, v.Provenance.GraphSHA256 = &prov, &sha
-		res = rules.Evaluate(rules.Input{
-			Graph: g, Base: in.Base, Bases: in.bases(), RepoRoots: in.RepoRoots, Families: fams,
-			Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures, Dismissed: in.Dismissed,
-			ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home, Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline,
-		})
+		res = evaluate(in, g, fams)
 		v.Silenced, v.TestData = res.Silenced, res.TestData
 		v.agentNames = map[string]string{}
 		for _, n := range g.Nodes {
@@ -552,6 +556,10 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	v.Index, v.radiusProj = buildIndex(in, res, v)
 	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8
 	v.AgentsOverview = agentsOverview(res.AgentsOverview, v.Index)
+	// BV-235: the classes from the six axes, and the factory pass (R0′, R1).
+	if in.Graph != nil {
+		applyClasses(&v, classes(v.AgentsOverview, v.Findings, *in.Graph, v.Index), factoryPass(in, fams))
+	}
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.
 	tech := technicalFindings(in.V1.Findings)
@@ -611,7 +619,7 @@ func agentsOverview(ov []rules.OverviewAgent, idx index.Index) []rules.OverviewA
 		for _, ai := range idx.Agents {
 			if a.Evaluated && ai.AgentID == a.AgentID && ai.Unavailable == index.ReasonCoverage {
 				r := rules.NotEvaluatedCoverage
-				a.Evaluated, a.NotEvaluatedReason, a.Rows = false, &r, rules.NotEvaluatedRows()
+				a.Evaluated, a.NotEvaluatedReason, a.Rows, a.Kinds = false, &r, rules.NotEvaluatedRows(), []rules.RiskKindCell{}
 			}
 		}
 		out = append(out, a)
@@ -811,7 +819,7 @@ func buildIndex(in V2Input, res rules.Result, v V2) (index.Index, map[string]map
 	if in.Graph == nil {
 		// No graph: no agent is known; the score is unavailable, not "not
 		// applicable" (fail-secure, I5).
-		idx.Machine = index.Score{Unavailable: index.ReasonCoverage}
+		idx.Machine = index.MachineScore{Score: index.Score{Unavailable: index.ReasonCoverage}}
 	}
 	idx.HistoryReset = in.HistoryReset
 	return idx, index.ActionProjections(ii)

@@ -147,6 +147,11 @@ type OverviewAgent struct {
 	// included, with who approves its use and the finding it gave, if any.
 	// Only scored agents carry it; omitted when none.
 	Services []OverviewService `json:"services,omitempty"`
+
+	// Kinds are the five risk kinds of the v1 report (BV-235, R5), computed
+	// from Rows, the credential findings and the MCP catalog; empty for an
+	// agent that is not evaluated.
+	Kinds []RiskKindCell `json:"kinds"`
 }
 
 // OverviewService is one catalog MCP server an agent is configured to use
@@ -263,7 +268,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 			continue
 		}
 		seen[n.Platform] = len(out)
-		a := OverviewAgent{Agent: n.Name, AgentID: n.ID, Product: n.Platform, Rows: []OverviewCell{}}
+		a := OverviewAgent{Agent: n.Name, AgentID: n.ID, Product: n.Platform, Rows: []OverviewCell{}, Kinds: []RiskKindCell{}}
 		if base.Product == "" || n.Type != graph.AgentAIClient {
 			r := notEvaluatedReasonFor(n.Platform)
 			a.NotEvaluatedReason = &r
@@ -276,6 +281,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Knowledge = OverviewKnowledge{Date: &date, Stale: stale(date, oi.in.Now)}
 		a.Rows = oi.cells(oi.view(n.ID))
 		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
+		a.Kinds = oi.kinds(a, oi.view(n.ID))
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
@@ -2082,4 +2088,15 @@ func claudeRecipient(scan *platform.ClaudeSettingsScan) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// ProviderEnvKeys are the env variables of Claude Code's settings that choose
+// the model provider (T12): an env setting, not a credential. The factory pass
+// (BV-235, R1) leaves them out.
+func ProviderEnvKeys() []string {
+	out := make([]string, len(providerVars))
+	for i, pv := range providerVars {
+		out[i] = pv.key
+	}
+	return out
 }

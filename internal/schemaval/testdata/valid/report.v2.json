@@ -70,7 +70,41 @@
         "comparison": {
           "status": "direct",
           "previous": 30
-        }
+        },
+        "letter": {
+          "class": "C",
+          "f": 0.625,
+          "status": "provisional",
+          "missing_axes": [
+            "complexity"
+          ],
+          "rule": "weighted_v1",
+          "coherent": true
+        },
+        "factory": {
+          "value": 27,
+          "band": "exposed",
+          "letter": {
+            "class": "C",
+            "f": 0.625,
+            "status": "provisional",
+            "missing_axes": [
+              "complexity"
+            ],
+            "rule": "weighted_v1",
+            "coherent": true
+          },
+          "unavailable": null
+        },
+        "groups": [
+          {
+            "group": "keys",
+            "finding_ids": [
+              "f_4c41374f0dc3c329"
+            ],
+            "without": 37
+          }
+        ]
       },
       {
         "agent": "Cursor",
@@ -109,12 +143,67 @@
         "comparison": {
           "status": "direct",
           "previous": 26
-        }
+        },
+        "letter": {
+          "class": "C",
+          "f": 0.625,
+          "status": "provisional",
+          "missing_axes": [
+            "complexity"
+          ],
+          "rule": "weighted_v1",
+          "coherent": true
+        },
+        "factory": {
+          "value": 24,
+          "band": "exposed",
+          "letter": {
+            "class": "C",
+            "f": 0.625,
+            "status": "provisional",
+            "missing_axes": [
+              "complexity"
+            ],
+            "rule": "weighted_v1",
+            "coherent": true
+          },
+          "unavailable": null
+        },
+        "groups": [
+          {
+            "group": "keys",
+            "finding_ids": [
+              "f_9f40a968877ab343"
+            ],
+            "without": 34
+          }
+        ]
       }
     ],
     "machine": {
       "value": 24,
-      "band": "exposed"
+      "band": "exposed",
+      "letter": {
+        "class": "C",
+        "f": 0.625,
+        "status": "provisional",
+        "missing_axes": [
+          "complexity"
+        ],
+        "rule": "weighted_v1",
+        "coherent": true
+      },
+      "factory_value": 24,
+      "factory_letter": {
+        "class": "C",
+        "f": 0.625,
+        "status": "provisional",
+        "missing_axes": [
+          "complexity"
+        ],
+        "rule": "weighted_v1",
+        "coherent": true
+      }
     },
     "scope": {
       "evaluated": [
@@ -269,6 +358,9 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
+      },
+      "accepted": {
+        "date": "2026-11-14"
       }
     },
     {
@@ -355,7 +447,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_c3189c8f5f9c12a9",
@@ -413,7 +506,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_1103abaa313208e9",
@@ -495,7 +589,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_5235a0371cab3ae8",
@@ -547,7 +642,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_dde3508b4b96df4e",
@@ -626,7 +722,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_5b6d856c7749cd84",
@@ -730,7 +827,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_40e8b48e65e9be57",
@@ -848,7 +946,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     },
     {
       "id": "f_629cd862b63ecc85",
@@ -927,7 +1026,8 @@
         "open_since": "2026-10-25",
         "first_seen": "2026-10-25",
         "reappeared": 0
-      }
+      },
+      "accepted": null
     }
   ],
   "posture": [
@@ -1119,6 +1219,43 @@
           "no_finding_reason": null,
           "pending": null
         }
+      ],
+      "kinds": [
+        {
+          "kind": "money",
+          "state": "none_known",
+          "scope": "none",
+          "assumed": false,
+          "source": "mcp_catalog"
+        },
+        {
+          "kind": "sends_out",
+          "state": "model",
+          "scope": "any_destination",
+          "assumed": false,
+          "source": "overview_row"
+        },
+        {
+          "kind": "keys",
+          "state": "bounded",
+          "scope": "same_project",
+          "assumed": false,
+          "source": "credential_findings"
+        },
+        {
+          "kind": "runs_commands",
+          "state": "bounded",
+          "scope": "listed_commands",
+          "assumed": false,
+          "source": "overview_row"
+        },
+        {
+          "kind": "changes_files",
+          "state": "nobody",
+          "scope": "machine",
+          "assumed": false,
+          "source": "overview_row"
+        }
       ]
     },
     {
@@ -1286,6 +1423,43 @@
           "no_finding_reason": null,
           "pending": null
         }
+      ],
+      "kinds": [
+        {
+          "kind": "money",
+          "state": "none_known",
+          "scope": "none",
+          "assumed": false,
+          "source": "mcp_catalog"
+        },
+        {
+          "kind": "sends_out",
+          "state": "model",
+          "scope": "any_destination",
+          "assumed": false,
+          "source": "overview_row"
+        },
+        {
+          "kind": "keys",
+          "state": "bounded",
+          "scope": "same_project",
+          "assumed": false,
+          "source": "credential_findings"
+        },
+        {
+          "kind": "runs_commands",
+          "state": "bounded",
+          "scope": "listed_commands",
+          "assumed": false,
+          "source": "overview_row"
+        },
+        {
+          "kind": "changes_files",
+          "state": "nobody",
+          "scope": "machine",
+          "assumed": false,
+          "source": "overview_row"
+        }
       ]
     },
     {
@@ -1364,7 +1538,8 @@
           "no_finding_reason": null,
           "pending": null
         }
-      ]
+      ],
+      "kinds": []
     }
   ],
   "coverage": {

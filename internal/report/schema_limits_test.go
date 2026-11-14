@@ -118,6 +118,7 @@ var limitsAllowlist = map[limit]string{
 	{"maxItems", 5}:      "report.rows[].assumptions: at most a handful of assumption lines per finding, never 5",
 	{"maxItems", 6}:      "report step2.lines / rows[].fix_steps: catalog-driven, never 6",
 	{"maxItems", 8}:      "report step1.warnings: at most a few run warnings, never 8",
+	{"maxItems", 12}:     "agents[].groups (BV-235): one per finding group, and there are eight groups, never 12",
 	{"maxItems", 20}:     "since.score_changes / overview / signals: bounded by the nine scored agents and the signal categories, never 20",
 	{"maxItems", 50}:     "report.coverage: one line per coverage topic, never 50",
 }

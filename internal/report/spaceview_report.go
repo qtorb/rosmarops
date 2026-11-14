@@ -63,6 +63,8 @@ type SVRow struct {
 	Assumptions []SVT    `json:"assumptions"`
 	FixSteps    []SVT    `json:"fix_steps"`
 	Gain        *SVT     `json:"gain"`
+	// AcceptedDate is «Lo asumo» (BV-235 R3); absent when not accepted.
+	AcceptedDate string `json:"accepted_date,omitempty"`
 }
 
 // Schema limits (BA-54 $defs and maxItems).
@@ -372,7 +374,7 @@ func svRows(v V2, ctxs map[string]htmlCtx, home string) []SVRow {
 			more = len(locs) - svMaxLocs
 			locs = locs[:svMaxLocs]
 		}
-		out = append(out, SVRow{
+		row := SVRow{
 			FindingID:   f.ID,
 			Verdict:     svtPtr(ctxs, func(c htmlCtx) string { return c.verdict(f) }),
 			Locations:   locs,
@@ -381,7 +383,11 @@ func svRows(v V2, ctxs map[string]htmlCtx, home string) []SVRow {
 			Assumptions: zipT(ctxs, func(c htmlCtx) []string { return svAssumptions(c, f) }),
 			FixSteps:    zipT(ctxs, func(c htmlCtx) []string { return svFixStepsText(c, f) }),
 			Gain:        svtPtr(ctxs, func(c htmlCtx) string { return svGain(c, f) }),
-		})
+		}
+		if f.Accepted != nil {
+			row.AcceptedDate = f.Accepted.Date
+		}
+		out = append(out, row)
 	}
 	return out
 }
