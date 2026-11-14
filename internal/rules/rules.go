@@ -1035,10 +1035,10 @@ func (v *agentView) webMCPEgress() []way {
 		if c.Approval != graph.ApprovalAllow || !broadDestination(c.TargetScope) {
 			continue
 		}
-		// BV-237: a Grok Build deny of web search, of web fetch or of MCP
-		// closes that tool (deny > ask > allow).
-		if grok && ((grokWebSearchDefault(c) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebSearch)) ||
-			(c.Type == graph.CapNetwork && !grokWebSearchDefault(c) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebFetch)) ||
+		// BV-237: a Grok Build deny of web fetch or of MCP closes that tool
+		// (deny > ask > allow). Web search stays open: its deny is documented
+		// only as a launch option (--deny "WebSearch"), not read at rest.
+		if grok && ((c.Type == graph.CapNetwork && !grokWebSearchDefault(c) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebFetch)) ||
 			(c.Type == graph.CapInvokeMCPTool && v.grokDenied(graph.CapInvokeMCPTool, scopeAll))) {
 			continue
 		}

@@ -158,13 +158,16 @@ func TestBV237GrokRules(t *testing.T) {
 		}
 	})
 
-	t.Run("deny WebSearch, compact", func(t *testing.T) {
+	// Albert, 14-11: a WebSearch rule in config.toml does not close web
+	// search; only the launch option --deny "WebSearch" is documented, and it
+	// is not read at rest. The way stays open, as without the rule.
+	t.Run("deny WebSearch in the file", func(t *testing.T) {
 		a, score := bv237Agent(t, bv237Grok(t, false, func(l *platform.GrokLayer) { l.Deny = []string{"WebSearch"} }), "grok-build")
-		if score <= baseScore {
-			t.Errorf("deny WebSearch: score %d, want above R2's %d (no egress left)", score, baseScore)
+		if score != baseScore {
+			t.Errorf("deny WebSearch in the file: score %d, want R2's %d (web search stays open)", score, baseScore)
 		}
-		if d := bv237Row(t, a, rules.RowSendsOut).Decider; d == rules.DeciderNobody {
-			t.Errorf("sends: %s, want not nobody", d)
+		if d := bv237Row(t, a, rules.RowSendsOut).Decider; d != rules.DeciderNobody {
+			t.Errorf("sends: %s, want nobody (web search stays open)", d)
 		}
 	})
 

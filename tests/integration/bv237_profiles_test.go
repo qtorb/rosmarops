@@ -70,9 +70,14 @@ func bv237Profiles() []bv237Profile {
 			Deny: []string{"WebFetch", "WebSearch", "Bash(curl *)", "Bash(wget *)"},
 		})},
 		{"grok-build", "P0", grokProfile([]platform.GrokRule{deny("edit"), deny("bash"), deny("webfetch"), deny("mcp")}, "read-only")},
-		{"grok-build", "P1", grokProfile([]platform.GrokRule{
-			allow("npm run lint"), allow("npm run test *"), allow("git status"), allow("git diff"), deny("webfetch"),
-		}, "rosmarops-p1")},
+		// P1 as signed on 14-11: the built-in workspace profile (sandbox.toml is
+		// not read) and deny = ["WebSearch"] in [permission].
+		{"grok-build", "P1", func(in *pipeline.Input) {
+			grokProfile([]platform.GrokRule{
+				allow("npm run lint"), allow("npm run test *"), allow("git status"), allow("git diff"), deny("webfetch"),
+			}, "workspace")(in)
+			in.Grok.Layers[0].Deny = append(in.Grok.Layers[0].Deny, "WebSearch")
+		}},
 	}
 }
 

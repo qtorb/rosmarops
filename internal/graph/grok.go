@@ -482,12 +482,9 @@ func GrokMCPServers(scan platform.GrokScan) []platform.MCPServer {
 	return out
 }
 
-// Grok Build's per-tool rule targets (BV-237): the network tools are told
-// apart by their target scope.
-const (
-	GrokTargetWebFetch  = "web_fetch"
-	GrokTargetWebSearch = "web_search"
-)
+// GrokTargetWebFetch is the target of a Grok Build web fetch rule (BV-237):
+// the network tools are told apart by their target scope.
+const GrokTargetWebFetch = "web_fetch"
 
 // grokRule is one per-tool rule of one layer, compact or verbose.
 type grokRule struct {
@@ -536,12 +533,14 @@ func grokCompactRule(r string) (tool, pattern string, ok bool) {
 // grokToolTypes are the capability types (and their target) a rule's tool
 // covers.
 func grokToolTypes(tool string) [][2]string {
+	// Web search has no type here: the documentation confirms its deny only
+	// as a launch option (--deny "WebSearch"), not read at rest, so no rule
+	// of the file closes it (BV-237, signed by Albert 14-11).
 	all := [][2]string{
 		{CapWriteFiles, scopeAll},
 		{CapExecuteShell, scopeAll},
 		{CapReadFiles, scopeAll},
 		{CapNetwork, GrokTargetWebFetch},
-		{CapNetwork, GrokTargetWebSearch},
 		{CapInvokeMCPTool, scopeAll},
 	}
 	switch tool {
@@ -555,10 +554,8 @@ func grokToolTypes(tool string) [][2]string {
 		return all[2:3]
 	case "webfetch":
 		return all[3:4]
-	case "websearch":
-		return all[4:5]
 	case "mcp":
-		return all[5:6]
+		return all[4:5]
 	}
 	return nil
 }
@@ -567,8 +564,9 @@ func grokToolTypes(tool string) [][2]string {
 // docs.x.ai/build/settings/reference, [permission], «Evaluation order: deny >
 // ask > allow»):
 //   - a deny of a whole tool (no pattern, or "*") is a deny capability of the
-//     tool's type, target "*" (web_fetch / web_search for the network tools):
-//     the rules layer closes that way;
+//     tool's type, target "*" (web_fetch for web fetch): the rules layer
+//     closes that way. A WebSearch rule in the file closes nothing: its deny
+//     is documented only as a launch option;
 //   - an allow of a whole tool, when no layer asks for or denies that tool, is
 //     an allow capability, as a wildcard is today (the "*" allow keeps its own
 //     path above);
