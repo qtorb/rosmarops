@@ -131,6 +131,12 @@ func readGrokLayer(path, kind, root string, project bool) platform.GrokLayer {
 			l.DisableBypass = b
 		}
 	}
+	// BV-232 §1: [sandbox] profile (docs.x.ai/build/features/sandbox).
+	if sb, ok := m["sandbox"].(tomlsubset.Map); ok {
+		if s, ok := tomlString(sb, "profile"); ok {
+			l.SandboxProfile = strings.TrimSpace(s)
+		}
+	}
 	l.Compat = grokCompatCells(m)
 	if cc, ok := m["claude_compat"].(tomlsubset.Map); ok {
 		if b, ok := tomlBool(cc, "imported"); ok {

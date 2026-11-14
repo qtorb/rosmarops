@@ -10,16 +10,35 @@ import (
 
 // EffectiveMode returns the effective permission mode of a Claude Code client
 // and the permission_mode capability it comes from (nil for "default" with
-// none), from its capabilities in force, as Infer computes it.
-func EffectiveMode(inForce []Node) (string, *Node) {
+// none), from its capabilities in force: the most permissive mode of its
+// sessions, one per project in repoRoots (BV-232 §4), as Infer computes them.
+func EffectiveMode(inForce []Node, repoRoots []string) (string, *Node) {
 	sorted := append([]Node{}, inForce...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
-	mode, cap := effectiveMode(sorted)
+	mode, cap := worstMode(claudeSessions(sorted, repoRoots, ""))
 	if cap == nil {
 		return mode, nil
 	}
 	c := *cap
 	return mode, &c
+}
+
+// ShellNetworkSandboxed reports that, in every session of a Claude Code client
+// (one per project in repoRoots), an effective sandbox contains the network of
+// its shell commands with no allowed domain that opens any host (BV-232 §1): a
+// command then reaches no host outside the list without a person, so a shell
+// allow is no egress there.
+func ShellNetworkSandboxed(inForce []Node, repoRoots []string) bool {
+	sorted := append([]Node{}, inForce...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	for _, s := range claudeSessions(sorted, repoRoots, "") {
+		// bypassPermissions lets a sandboxed command reach a host outside the
+		// list without a prompt (sandboxing, hosts outside your allowed domains).
+		if !s.sandboxEffective() || s.broadNetwork() || s.mode == permissionModeBypass {
+			return false
+		}
+	}
+	return true
 }
 
 // CredentialFiles returns the distinct files of a credential's locations.

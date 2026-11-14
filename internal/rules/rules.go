@@ -453,6 +453,7 @@ type agentView struct {
 	inForce    []graph.Node
 	mode       string
 	modeCap    *graph.Node
+	repoRoots  []string
 	blockReads bool
 	egress     []way
 	base       knowledge.Base
@@ -934,9 +935,15 @@ func findingID(rule string, key ...string) string {
 }
 
 func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoots []string, launchers *[]LauncherRule) *agentView {
-	v := &agentView{node: n, inForce: caps, base: base}
+	v := &agentView{node: n, inForce: caps, base: base, repoRoots: repoRoots}
 	sort.Slice(v.inForce, func(i, j int) bool { return v.inForce[i].ID < v.inForce[j].ID })
-	v.mode, v.modeCap = graph.EffectiveMode(v.inForce)
+	// BV-232 §4: a Claude Code session starts in its project's mode; the
+	// other agents keep the user-level mode (no project roots).
+	sessionRoots := []string(nil)
+	if n.Platform == knowledge.ClaudeCodeProduct {
+		sessionRoots = repoRoots
+	}
+	v.mode, v.modeCap = graph.EffectiveMode(v.inForce, sessionRoots)
 	boundary := map[string]bool{}
 	for _, c := range v.inForce {
 		if c.Basis == graph.BasisConfigured && c.Type == graph.CapReadFiles && c.Approval == graph.ApprovalDeny && c.TargetScope == outsideWorkingDirectories {
@@ -1175,21 +1182,61 @@ func (v *agentView) egressWays(base knowledge.Base, launchers *[]LauncherRule) [
 			})
 		}
 	}
+	// BV-232 §1: an effective sandbox in every session, with no allowed domain
+	// that opens any host, keeps a shell command from reaching a host outside
+	// the list without a person, so a shell allow is no egress.
+	sandboxed := v.node.Platform == knowledge.ClaudeCodeProduct && graph.ShellNetworkSandboxed(v.inForce, v.repoRoots)
 	for _, c := range v.inForce {
 		if c.Type != graph.CapExecuteShell || c.Approval != graph.ApprovalAllow || c.Basis != graph.BasisConfigured || v.shellDenied(shellTool(c.Rule)) {
 			continue
 		}
 		a := append(append([]string{}, baseA...), graph.AssumeNoPreToolUseHookBlocks)
 		if c.TargetScope == scopeAll {
-			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: a})
+			if !sandboxed {
+				out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: a})
+			}
 			continue
 		}
 		if l, ok := knowledge.LauncherOf(c.TargetScope, base.CodeLaunchers); ok {
 			*launchers = append(*launchers, LauncherRule{Capability: c.ID, Rule: c.Rule, Form: l.Form})
-			out = append(out, way{id: c.ID, code: "egress_launcher", cap: c.ID, assumptions: append(a, AssumeCodeLauncherRule)})
+			if !sandboxed {
+				out = append(out, way{id: c.ID, code: "egress_launcher", cap: c.ID, assumptions: append(a, AssumeCodeLauncherRule)})
+			}
+			continue
+		}
+		// BV-232 §3: Bash(curl *) and Bash(wget *) send data out without a
+		// person: a network command allowed with any argument is egress.
+		if shellTool(c.Rule) == "Bash" && networkCommand(c.TargetScope) && !sandboxed {
+			out = append(out, way{id: c.ID, code: "egress_shell", cap: c.ID, assumptions: a})
 		}
 	}
 	return out
+}
+
+// networkCommands are the shell commands whose allow with any argument is
+// egress (BV-232 §3, CTO-46 §4.3.4).
+var networkCommands = map[string]bool{"curl": true, "wget": true}
+
+// networkCommand reports a Bash rule specifier that allows curl or wget with
+// any argument: the program (by its name, without a path or .exe) followed by
+// a wildcard, as in "curl *" or "curl:*".
+func networkCommand(spec string) bool {
+	spec = strings.TrimSpace(spec)
+	star := strings.Index(spec, "*")
+	if star < 0 {
+		return false
+	}
+	head := strings.TrimRight(strings.TrimSpace(spec[:star]), ":")
+	fields := strings.Fields(head)
+	if len(fields) != 1 {
+		return false
+	}
+	prog := strings.ToLower(fields[0])
+	if i := strings.LastIndexAny(prog, `/\`); i >= 0 {
+		prog = prog[i+1:]
+	}
+	prog = strings.TrimSuffix(prog, ".exe")
+	return networkCommands[prog]
 }
 
 // shellDenied reports a configured deny or ask in force for tool without a

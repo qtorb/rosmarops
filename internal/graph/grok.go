@@ -89,6 +89,28 @@ func FromGrok(scan platform.GrokScan, settings platform.ClaudeSettingsScan, curs
 		}
 	}
 
+	// BV-232 §1: [sandbox] profile, from the user and managed layers (the
+	// managed one wins). Not in force on native Windows, where the sandbox
+	// does not exist (Landlock on Linux, Seatbelt on macOS).
+	profile, profilePath := "", ""
+	for _, l := range scan.Layers {
+		if l.Status != platform.MCPSourceRead || l.SandboxProfile == "" {
+			continue
+		}
+		switch {
+		case l.Kind == platform.GrokLayerManaged, l.Kind == platform.GrokLayerUser && profilePath == "":
+			profile, profilePath = l.SandboxProfile, l.Path
+		}
+	}
+	if profile != "" {
+		id := grokCapID(client, "sandbox", profilePath, CapExecuteShell, profile)
+		src := profilePath + "#/sandbox/profile"
+		n := sandboxCap(CapExecuteShell, profile)
+		n.ID, n.Kind, n.Basis, n.AppliesIn, n.Rule, n.Source = id, KindCapability, BasisConfigured, platform.MCPScopeUser, ruleGrokSandboxProfile+profile, src
+		b.node(n)
+		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+	}
+
 	// 2. The effective permission mode: Grok's own [ui] mode, else Claude Code's
 	// defaultMode (Grok reads ~/.claude/settings.json always, and the project
 	// one when the folder is trusted); a wildcard in a project [permission]
@@ -251,10 +273,50 @@ type grokInference struct {
 	readCap     *Node    // read_files allow, in force
 	writeCap    *Node    // the capability a write goes through, if any
 	writeAssume []string // extra assumptions of a write edge (auto mode's classifier)
+
+	// BV-232 §1: the [sandbox] profile in force and the project roots (the
+	// working directory of a session is one of them).
+	profile string
+	roots   []string
 }
 
-func (p prepared) grokInference(client Node) grokInference {
-	in := grokInference{client: client}
+// Grok Build's built-in sandbox profiles (docs.x.ai/build/features/sandbox):
+// what each lets the agent and its children read and write.
+const (
+	grokProfileWorkspace = "workspace" // reads everywhere; writes the CWD, ~/.grok and temp
+	grokProfileReadOnly  = "read-only" // reads everywhere; writes ~/.grok and temp only
+	grokProfileStrict    = "strict"    // reads the CWD and system paths; writes the CWD, ~/.grok and temp
+)
+
+// readsOnlyProjects reports a profile that limits reads to the working
+// directory (and system paths, where no credential of the person lives).
+func (in grokInference) readsOnlyProjects() bool { return in.profile == grokProfileStrict }
+
+// writable reports whether the profile lets Grok write file: every profile
+// keeps its own folder (~/.grok) writable; workspace and strict add the
+// project; read-only adds nothing else; off, devbox and custom profiles
+// (whose rules are not read) limit nothing.
+func (in grokInference) writable(file string) bool {
+	switch in.profile {
+	case grokProfileWorkspace, grokProfileStrict:
+		return within(in.client.ConfigPath, file) || in.inProject(file)
+	case grokProfileReadOnly:
+		return within(in.client.ConfigPath, file)
+	}
+	return true
+}
+
+func (in grokInference) inProject(file string) bool {
+	for _, r := range in.roots {
+		if within(r, file) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p prepared) grokInference(client Node, repoRoots []string) grokInference {
+	in := grokInference{client: client, roots: repoRoots, profile: grokSandboxProfile(p.caps[client.ID])}
 	var modeCap *Node
 	bypassMode, autoMode, wildcardWrite := false, false, false
 	for i := range p.caps[client.ID] {
@@ -314,6 +376,9 @@ func (in grokInference) reaches(all []Node) []Edge {
 		if cred.Kind != KindCredential {
 			continue
 		}
+		if in.readsOnlyProjects() && !credFileInWorkspace(cred, in.inProject) {
+			continue
+		}
 		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
 	}
 	return out
@@ -331,7 +396,8 @@ func (in grokInference) writes(all []Node) []Edge {
 		if res.Kind != KindResource || !isAgentResource(res.Type) {
 			continue
 		}
-		if _, ok := resourceFile(res.Path); !ok {
+		file, ok := resourceFile(res.Path)
+		if !ok || !in.writable(file) {
 			continue
 		}
 		out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.writeCap))

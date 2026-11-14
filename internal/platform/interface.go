@@ -274,6 +274,12 @@ type ClaudeSettingsFile struct {
 	// Permissions holds the permission keys read.
 	Permissions ClaudePermissions
 
+	// HomeLocalOnly marks ~/.claude/settings.local.json read while the home
+	// folder is not one of the projects (BV-232 §5): Claude Code applies it
+	// only to sessions started in the home folder itself, so it is a known
+	// configuration file whose rules count in no project.
+	HomeLocalOnly bool
+
 	// .mcp.json approvals (https://code.claude.com/docs/en/settings-reference#enabledmcpjsonservers).
 	// EnableAllProjectMcpServers is nil when the key is unset.
 	EnabledMcpjsonServers      []string
@@ -350,6 +356,29 @@ type ClaudePermissions struct {
 	// read from ("/disableAutoMode" or "/permissions/disableAutoMode").
 	DisableAutoMode        string
 	DisableAutoModePointer string
+
+	// Sandbox holds the sandbox keys of this file (BV-232 §1,
+	// https://code.claude.com/docs/en/settings-reference#sandbox-settings).
+	Sandbox ClaudeSandbox
+}
+
+// ClaudeSandbox is the sandbox object of one Claude Code settings file, read at
+// rest: whether each boolean key is set and its value, and the two lists the
+// engine models. The sandbox runs only on macOS, Linux and WSL2; on native
+// Windows Claude Code runs commands unsandboxed (sandboxing).
+type ClaudeSandbox struct {
+	// Enabled is sandbox.enabled; EnabledSet reports the key is present.
+	Enabled, EnabledSet bool
+	// FailIfUnavailable is sandbox.failIfUnavailable: without it, a sandbox
+	// that cannot start leaves commands unsandboxed.
+	FailIfUnavailable, FailIfUnavailableSet bool
+	// AllowUnsandboxedCommands is sandbox.allowUnsandboxedCommands (true by
+	// default): false closes the unsandboxed retry.
+	AllowUnsandboxedCommands, AllowUnsandboxedCommandsSet bool
+	// AllowedDomains is sandbox.network.allowedDomains; DenyRead is
+	// sandbox.filesystem.denyRead. Both merge across the settings files.
+	AllowedDomains []string
+	DenyRead       []string
 }
 
 // InstructionScan lists the instruction files agents load (decision
@@ -956,6 +985,11 @@ type GrokLayer struct {
 	PermissionMode    string
 	HasPermissionMode bool
 	Yolo              bool
+
+	// SandboxProfile is [sandbox] profile (off, workspace, devbox, read-only,
+	// strict, or a custom name), from the user and managed layers only; ""
+	// absent (BV-232 §1, docs.x.ai/build/features/sandbox).
+	SandboxProfile string
 
 	// Allow, Deny, Ask are the [permission] rules of this layer (merged across
 	// layers by the graph; deny > ask > allow). A "*" is the wildcard.

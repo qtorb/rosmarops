@@ -74,15 +74,17 @@ func Assemble(in Input) (Result, error) {
 		return Result{}, err
 	}
 	g, err := BuildGraph(frag, GraphOpts{
-		Provenance:   in.Provenance,
-		RepoRoots:    in.RepoRoots,
-		Home:         in.Home,
-		Now:          in.Now,
-		Codex:        in.Codex,
-		Gemini:       in.Gemini,
-		IntelServers: in.MCP.Servers,
-		IntelPkgs:    in.PkgObs,
-		IntelMatcher: in.Matcher,
+		Provenance: in.Provenance,
+		RepoRoots:  in.RepoRoots,
+		Home:       in.Home,
+		Now:        in.Now,
+		Codex:      in.Codex,
+		Gemini:     in.Gemini,
+		// BV-232 §4: the Claude Code extension for VS Code.
+		ClaudeVSCodeExtension: ClaudeCodeExtensionPresent(in.Extensions),
+		IntelServers:          in.MCP.Servers,
+		IntelPkgs:             in.PkgObs,
+		IntelMatcher:          in.Matcher,
 	})
 	if err != nil {
 		return Result{}, err
@@ -154,6 +156,11 @@ type GraphOpts struct {
 	Codex  platform.CodexScan
 	Gemini platform.GeminiScan
 
+	// ClaudeVSCodeExtension: the Claude Code extension for VS Code is
+	// installed, so each project takes the less restrictive of its own mode
+	// and the user's (BV-232 §4, graph.MarkClaudeVSCodeModes).
+	ClaudeVSCodeExtension bool
+
 	// SkipInfer returns the built-and-marked graph without inferring reaches and
 	// writes_config_of edges. For callers that assert on the built graph alone.
 	SkipInfer bool
@@ -171,6 +178,7 @@ func BuildGraph(frag graph.Fragment, o GraphOpts) (graph.Graph, error) {
 	g := graph.Build(frag, o.Provenance, o.Now)
 	graph.MarkCodexUntrusted(&g, o.Codex)
 	graph.MarkGeminiUntrusted(&g, o.Gemini, o.RepoRoots)
+	graph.MarkClaudeVSCodeModes(&g, o.ClaudeVSCodeExtension)
 	if !o.SkipInfer {
 		var err error
 		g, err = graph.Infer(g, o.RepoRoots, o.Home)
@@ -191,6 +199,18 @@ func CopilotExtensionPresent(exts []platform.VSCodeExtension) bool {
 	for _, e := range exts {
 		switch strings.ToLower(e.ID) {
 		case "github.copilot", "github.copilot-chat":
+			return true
+		}
+	}
+	return false
+}
+
+// ClaudeCodeExtensionPresent reports the Claude Code extension for VS Code
+// (anthropic.claude-code) among the installed extensions (BV-232 §4): its
+// sessions do not read a project's starting mode.
+func ClaudeCodeExtensionPresent(exts []platform.VSCodeExtension) bool {
+	for _, e := range exts {
+		if strings.EqualFold(e.ID, "anthropic.claude-code") {
 			return true
 		}
 	}

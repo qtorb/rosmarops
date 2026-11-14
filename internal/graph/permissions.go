@@ -44,6 +44,9 @@ const (
 	ReasonWorkspaceUntrusted    = "workspace_untrusted"
 	ReasonManagedRulesOnly      = "managed_rules_only"
 	ReasonModeDisabled          = "mode_disabled"
+	// ReasonSandboxUnsupportedOnPlatform: a sandbox setting on a system where
+	// the agent's sandbox does not exist (native Windows, BV-232 §1).
+	ReasonSandboxUnsupportedOnPlatform = "sandbox_unsupported_on_platform"
 )
 
 // Settings vocabulary of Claude Code (https://code.claude.com/docs/en/settings-reference).
@@ -151,6 +154,12 @@ func fromClaudeSettings(scan platform.ClaudeSettingsScan, policy managedPolicy, 
 
 	for _, file := range layered {
 		client := ensure(file)
+		if file.HomeLocalOnly {
+			// BV-232 §5: ~/.claude/settings.local.json while the home folder is
+			// not a project: a known configuration, whose rules load in no
+			// project's session.
+			continue
+		}
 		c := capContext{
 			b: b, client: client, file: file.ConfigPath,
 			appliesIn:   settingsLayer(file),
@@ -211,6 +220,28 @@ func fromClaudeSettings(scan platform.ClaudeSettingsScan, policy managedPolicy, 
 		if p.BlockReadsOutsideWorkingDirectories {
 			c.add(Node{Type: CapReadFiles, Approval: ApprovalDeny, TargetScope: outsideWorkingDirectoryScope, InForce: true},
 				"blockReadsOutsideWorkingDirectories=true", "/permissions/blockReadsOutsideWorkingDirectories", patterns)
+		}
+		// BV-232 §1: the sandbox keys, read at rest.
+		sb := p.Sandbox
+		for _, k := range []struct {
+			rule, ptr  string
+			set, value bool
+		}{
+			{ruleSandboxEnabled, "/sandbox/enabled", sb.EnabledSet, sb.Enabled},
+			{ruleSandboxFail, "/sandbox/failIfUnavailable", sb.FailIfUnavailableSet, sb.FailIfUnavailable},
+			{ruleSandboxUnsandboxed, "/sandbox/allowUnsandboxedCommands", sb.AllowUnsandboxedCommandsSet, sb.AllowUnsandboxedCommands},
+		} {
+			if k.set {
+				c.add(sandboxCap(CapExecuteShell, boolText(k.value)), k.rule+boolText(k.value), k.ptr, patterns)
+			}
+		}
+		for i, d := range sb.AllowedDomains {
+			d = secrets.RedactMatches(d, patterns)
+			c.add(sandboxCap(CapNetwork, d), ruleSandboxDomain+d, "/sandbox/network/allowedDomains/"+strconv.Itoa(i), patterns)
+		}
+		for i, path := range sb.DenyRead {
+			path = secrets.RedactMatches(path, patterns)
+			c.add(sandboxCap(CapReadFiles, path), ruleSandboxDenyRead+path, "/sandbox/filesystem/denyRead/"+strconv.Itoa(i), patterns)
 		}
 	}
 	return b.fragment(), stats
