@@ -44,6 +44,14 @@ var dismissUIHook = showDismiss
 // passes false. A missing or unreadable report just means no offer. now is the
 // clock (tests pass a fixed one).
 func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now time.Time) {
+	// CTO-49 v2: what is dismissed is only ever written to
+	// ~/.rosmarops/config.json. A configuration read from anywhere else (a
+	// ./rosmarops.config.json in the working directory) is never offered for
+	// change; `rosmarops findings` says so (findings.config_outside).
+	if outside, err := dismissConfigOutside(cfgPath); outside {
+		slog.Info("dismiss: configuration outside ~/.rosmarops; not offering", "path", cfgPath, "err", err)
+		return
+	}
 	cat, err := catalog.Load(lang)
 	if err != nil {
 		cat, _ = catalog.Load(catalog.DefaultLang)
@@ -197,6 +205,14 @@ func recomputeDismissed(old []config.AllowEntryDismissed, cards []report.Finding
 // copy in data/ rewritten, and the state saved. Only allow_list.dismissed is
 // touched; every other key of the file is kept as written.
 func writeDismissed(cfgPath, reportDir, stPath string, list []config.AllowEntryDismissed) error {
+	// CTO-49 v2 (invariant 2): never write a configuration outside
+	// ~/.rosmarops/config.json.
+	if outside, err := dismissConfigOutside(cfgPath); outside {
+		if err != nil {
+			return fmt.Errorf("resolve RosmarOps's configuration: %w", err)
+		}
+		return fmt.Errorf("configuration %s is outside RosmarOps's folder: not written", cfgPath)
+	}
 	raw, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
@@ -247,6 +263,22 @@ func writeDismissed(cfgPath, reportDir, stPath string, list []config.AllowEntryD
 		return fmt.Errorf("save state: %w", err)
 	}
 	return nil
+}
+
+// dismissConfigOutside reports whether cfgPath is not ~/.rosmarops/config.json
+// (config.HomeConfigPath), the only configuration the dismiss flow may write
+// (CTO-49 v2, invariant 2). If the home path cannot be resolved, it reports
+// outside, so nothing is written.
+func dismissConfigOutside(cfgPath string) (bool, error) {
+	home, err := config.HomeConfigPath()
+	if err != nil {
+		return true, err
+	}
+	abs, err := filepath.Abs(cfgPath)
+	if err != nil {
+		return true, err
+	}
+	return filepath.Clean(abs) != filepath.Clean(home), nil
 }
 
 // atomicWriteFile writes data to path through a temporary file in the same

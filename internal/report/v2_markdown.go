@@ -94,7 +94,7 @@ var staticKeys = []string{
 	"findings.what", "findings.when",
 	"findings.count.zero", "findings.count.one", "findings.count.other",
 	"findings.no", "findings.save",
-	"findings.console.dismissed", "findings.console.prompt",
+	"findings.config_outside", "findings.console.dismissed", "findings.console.prompt",
 	"findings.when.cred_in_git", "findings.when.cred_readable", "findings.when.cred_read_and_send",
 	"findings.when.foreign_agent_config_writable", "findings.when.foreign_agent_instructions_writable",
 	"findings.when.own_config_writable", "findings.when.own_instructions_writable",
