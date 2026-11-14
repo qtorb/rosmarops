@@ -494,3 +494,65 @@ func walkStrings(v any, fn func(string)) {
 		}
 	}
 }
+
+// --- BV-233 (CTO-48 §1.3): R2 with a payment MCP server ---
+
+// r2Stripe is Stripe's remote MCP server at user level, loaded by client
+// (claude-code or cursor) from its user configuration.
+func r2Stripe(client, configPath, configDir string) platform.MCPServer {
+	return platform.MCPServer{
+		Client: client, Name: "stripe", URL: "https://mcp.stripe.com", LoadsMCP: true,
+		ConfigPath: configPath, ConfigDir: configDir, Scope: platform.MCPScopeUser,
+	}
+}
+
+func r2ClaudeCodeStripe(t *testing.T) report.V2 {
+	settings := r2Settings(platform.ClaudeSettingsFile{Scope: platform.MCPScopeUser, ConfigPath: fcClaudeDir + "/settings.json", ConfigDir: fcClaudeDir, Status: platform.MCPSourceRead})
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: []platform.MCPServer{r2Stripe("claude-code", fcHome+"/.claude.json", fcClaudeDir)}},
+		Settings:     settings,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("claude-code", fcClaudeDir)},
+	})
+	return r2BuildV2(t, &g, &settings, nil)
+}
+
+func r2CursorStripe(t *testing.T) report.V2 {
+	settings := r2Settings()
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: []platform.MCPServer{r2Stripe("cursor", fcHome+"/.cursor/mcp.json", fcHome+"/.cursor")}},
+		Settings:     settings,
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("cursor", fcHome+"/.cursor")},
+	})
+	return r2BuildV2(t, &g, &settings, nil)
+}
+
+// TestR2StripeScores (BV-233): «Claude Code + stripe» and «Cursor + stripe»,
+// the payment server at user level, with their scores pinned. They are not in
+// factory-scores.json (the map's nine agents stay as they are): another model
+// decides on Stripe's write tools (Claude Code's auto classifier, Cursor's
+// Auto-review), so the money finding is red.
+func TestR2StripeScores(t *testing.T) {
+	for _, c := range []r2Case{
+		{"claude-code", r2ClaudeCodeStripe, 25, "exposed"}, // 29 before BV-233
+		{"cursor", r2CursorStripe, 22, "exposed"},          // 26 before BV-233
+	} {
+		v := c.build(t)
+		got, band, id := r2AgentIndexID(t, v, c.product)
+		t.Logf("R2 %s + stripe = %d (%s)", c.product, got, band)
+		red := false
+		for _, f := range v.Findings {
+			if f.Rule == "mcp_external_action" && len(f.Evidence.Nodes) > 0 && f.Evidence.Nodes[0] == id {
+				red = f.Severity == "red" && f.Params.Disposition == "another_model"
+			}
+		}
+		if !red {
+			t.Errorf("R2 %s + stripe: no red mcp_external_action decided by another model", c.product)
+		}
+		if got != c.score || band != c.band {
+			t.Errorf("R2 %s + stripe = %d (%s), want %d (%s)", c.product, got, band, c.score, c.band)
+		}
+	}
+}
