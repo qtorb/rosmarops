@@ -590,6 +590,9 @@ func (oi overviewInputs) grokReadsCell(v *agentView) OverviewCell {
 
 func (oi overviewInputs) grokWritesCell(v *agentView, mode string) OverviewCell {
 	decider, scope, assume := grokWriteDecider(v, mode)
+	if v.grokDenied(graph.CapWriteFiles, scopeAll) {
+		decider, scope, assume = DeciderBlocked, ScopeNone, nil // BV-237: deny of edit
+	}
 	cell := OverviewCell{Row: RowWritesFiles, Decider: decider, Scope: scope, Origin: OriginConfigured}
 	cell.Data.Projects = intp(len(oi.in.RepoRoots))
 	edit := 0
@@ -617,6 +620,9 @@ func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
 		if c.Type == graph.CapExecuteShell && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
 			decider, assume = DeciderNobody, nil
 		}
+	}
+	if v.grokDenied(graph.CapExecuteShell, scopeAll) {
+		decider, assume = DeciderBlocked, nil // BV-237: deny of bash
 	}
 	scope := ScopeMachine
 	if decider == DeciderBlocked {
@@ -655,6 +661,9 @@ func (oi overviewInputs) grokSendsCell(v *agentView, mode string) OverviewCell {
 		}
 	} else {
 		d, a := grokEscalationDecider(mode)
+		if v.grokDenied(graph.CapExecuteShell, scopeAll) && v.grokDenied(graph.CapNetwork, graph.GrokTargetWebFetch) {
+			d, a = DeciderBlocked, nil // BV-237: no shell, no web fetch, no web search way left
+		}
 		cell.Decider, assume = d, grokBaseAssumptions(a...)
 		cell.Scope = ScopeAnyDestination
 		if d == DeciderBlocked {

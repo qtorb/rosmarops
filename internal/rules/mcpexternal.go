@@ -249,6 +249,10 @@ func mcpDisposition(v *agentView, serverName string) string {
 func grokMCPDisposition(v *agentView) string {
 	mode, _ := grokMode(v)
 	switch {
+	case v.grokDenied(graph.CapInvokeMCPTool, scopeAll):
+		return MCPApprovalDeny // BV-237: deny of the mcp tool
+	case grokMCPAllowed(v):
+		return MCPApprovalNobody // BV-237: allow of the whole mcp tool
 	case grokBypassMode(mode):
 		return MCPApprovalNobody
 	case mode == "auto":
@@ -256,6 +260,16 @@ func grokMCPDisposition(v *agentView) string {
 	default:
 		return MCPApprovalPerson
 	}
+}
+
+// grokMCPAllowed reports an allow of the whole mcp tool in force (BV-237).
+func grokMCPAllowed(v *agentView) bool {
+	for _, c := range v.inForce {
+		if c.Type == graph.CapInvokeMCPTool && c.Approval == graph.ApprovalAllow && c.Basis == graph.BasisConfigured && c.TargetScope == scopeAll {
+			return true
+		}
+	}
+	return false
 }
 
 // codexMCPDisposition maps Codex's escalation decider (its approval policy and

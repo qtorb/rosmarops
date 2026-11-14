@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -88,6 +89,10 @@ func FromGrok(scan platform.GrokScan, settings platform.ClaudeSettingsScan, curs
 			}
 		}
 	}
+
+	// BV-237: the per-tool rules of every layer ([permission] rules and the
+	// compact allow/deny/ask lists), evaluated deny > ask > allow.
+	b.grokToolRules(client, scan)
 
 	// BV-232 §1: [sandbox] profile, from the user and managed layers (the
 	// managed one wins). Not in force on native Windows, where the sandbox
@@ -359,6 +364,14 @@ func (p prepared) grokInference(client Node, repoRoots []string) grokInference {
 	case bypassMode || autoMode:
 		in.writeCap = modeCap
 	}
+	// BV-237: a deny of the whole edit tool closes every write, in every mode
+	// (deny > ask > allow; under always-approve «they run unless you add a
+	// deny»).
+	for _, c := range p.caps[client.ID] {
+		if c.InForce && c.Type == CapWriteFiles && c.Approval == ApprovalDeny && c.TargetScope == scopeAll {
+			in.writeCap = nil
+		}
+	}
 	if autoMode && !bypassMode && !wildcardWrite {
 		in.writeAssume = []string{AssumeAutoClassifierPermits}
 	}
@@ -467,4 +480,164 @@ func GrokMCPServers(scan platform.GrokScan) []platform.MCPServer {
 		}
 	}
 	return out
+}
+
+// Grok Build's per-tool rule targets (BV-237): the network tools are told
+// apart by their target scope.
+const (
+	GrokTargetWebFetch  = "web_fetch"
+	GrokTargetWebSearch = "web_search"
+)
+
+// grokRule is one per-tool rule of one layer, compact or verbose.
+type grokRule struct {
+	action, tool, pattern string
+	layer                 platform.GrokLayer
+	rule                  string // as written, for the capability's rule
+}
+
+// grokCompactRule parses one compact rule: Tool or Tool(pattern), with Tool
+// one of Bash, Edit, Read, Grep, MCPTool, WebFetch, WebSearch
+// (docs.x.ai/build/features/permissions, «Supported filters»). "*" is any
+// tool. Unknown tools give ok false.
+func grokCompactRule(r string) (tool, pattern string, ok bool) {
+	r = strings.TrimSpace(r)
+	if r == "*" {
+		return "any", "", true
+	}
+	name, rest, hasPattern := strings.Cut(r, "(")
+	if hasPattern {
+		if !strings.HasSuffix(rest, ")") {
+			return "", "", false
+		}
+		pattern = strings.TrimSpace(strings.TrimSuffix(rest, ")"))
+	}
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "bash":
+		tool = "bash"
+	case "edit":
+		tool = "edit"
+	case "read":
+		tool = "read"
+	case "grep":
+		tool = "grep"
+	case "mcptool":
+		tool = "mcp"
+	case "webfetch":
+		tool = "webfetch"
+	case "websearch":
+		tool = "websearch"
+	default:
+		return "", "", false
+	}
+	return tool, pattern, true
+}
+
+// grokToolTypes are the capability types (and their target) a rule's tool
+// covers.
+func grokToolTypes(tool string) [][2]string {
+	all := [][2]string{
+		{CapWriteFiles, scopeAll},
+		{CapExecuteShell, scopeAll},
+		{CapReadFiles, scopeAll},
+		{CapNetwork, GrokTargetWebFetch},
+		{CapNetwork, GrokTargetWebSearch},
+		{CapInvokeMCPTool, scopeAll},
+	}
+	switch tool {
+	case "any":
+		return all
+	case "edit":
+		return all[:1]
+	case "bash":
+		return all[1:2]
+	case "read", "grep":
+		return all[2:3]
+	case "webfetch":
+		return all[3:4]
+	case "websearch":
+		return all[4:5]
+	case "mcp":
+		return all[5:6]
+	}
+	return nil
+}
+
+// grokToolRules turns every layer's per-tool rules into capabilities (BV-237,
+// docs.x.ai/build/settings/reference, [permission], «Evaluation order: deny >
+// ask > allow»):
+//   - a deny of a whole tool (no pattern, or "*") is a deny capability of the
+//     tool's type, target "*" (web_fetch / web_search for the network tools):
+//     the rules layer closes that way;
+//   - an allow of a whole tool, when no layer asks for or denies that tool, is
+//     an allow capability, as a wildcard is today (the "*" allow keeps its own
+//     path above);
+//   - a bash allow with a pattern is an execute_shell allow scoped to the
+//     pattern: a closed list of commands.
+//
+// A project layer's rules are in force only when the folder is trusted.
+// Patterned deny and ask rules, and read and grep rules, are not modelled.
+func (b *fragmentBuilder) grokToolRules(client string, scan platform.GrokScan) {
+	var rules []grokRule
+	for _, l := range scan.Layers {
+		if l.Status != platform.MCPSourceRead {
+			continue
+		}
+		for _, r := range l.Rules {
+			rules = append(rules, grokRule{r.Action, r.Tool, r.Pattern, l, fmt.Sprintf("permission.rules: %s %s %s", r.Action, r.Tool, r.Pattern)})
+		}
+		for _, list := range []struct {
+			action string
+			rules  []string
+		}{{"allow", l.Allow}, {"deny", l.Deny}, {"ask", l.Ask}} {
+			for _, r := range list.rules {
+				if tool, pattern, ok := grokCompactRule(r); ok && !(tool == "any" && list.action == "allow") {
+					rules = append(rules, grokRule{list.action, tool, pattern, l, "permission." + list.action + ": " + r})
+				}
+			}
+		}
+	}
+	wide := func(r grokRule) bool { return r.pattern == "" || r.pattern == "*" }
+	// A tool a layer in force denies or asks for, as a whole or not, keeps an
+	// allow of the whole tool from counting.
+	held := map[[2]string]bool{}
+	for _, r := range rules {
+		if _, in, _ := grokLayerForce(r.layer); in && r.action != "allow" {
+			for _, t := range grokToolTypes(r.tool) {
+				held[t] = true
+			}
+		}
+	}
+	for _, r := range rules {
+		appliesIn, inForce, notInForce := grokLayerForce(r.layer)
+		emit := func(typ, target, approval string) {
+			id := grokCapID(client, r.layer.Kind, r.layer.Path, typ, approval+":"+target+":"+r.pattern)
+			src := "grok:" + r.layer.Kind + ":" + r.rule
+			b.node(Node{
+				ID: id, Kind: KindCapability, Type: typ, Basis: BasisConfigured,
+				InForce: inForce, NotInForceReason: notInForce,
+				Approval: approval, TargetScope: target, AppliesIn: appliesIn, Rule: strings.TrimSpace(r.rule), Source: src,
+			})
+			b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+		}
+		switch {
+		case r.action == "deny" && wide(r):
+			for _, t := range grokToolTypes(r.tool) {
+				emit(t[0], t[1], ApprovalDeny)
+			}
+		case r.action == "allow" && wide(r):
+			for _, t := range grokToolTypes(r.tool) {
+				if held[t] {
+					continue
+				}
+				target := t[1]
+				if t[0] == CapNetwork {
+					target = "any_destination"
+				}
+				emit(t[0], target, ApprovalAllow)
+			}
+		case r.action == "allow" && r.tool == "bash":
+			emit(CapExecuteShell, r.pattern, ApprovalAllow)
+		}
+	}
 }
