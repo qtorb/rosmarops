@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/state"
@@ -28,6 +30,16 @@ func runFindings(inv cli.Invocation) error {
 	cfgPath, err := config.ResolveConfigPath()
 	if err != nil {
 		return fmt.Errorf("resolve config path: %w", err)
+	}
+	// CTO-49 v2: a configuration outside ~/.rosmarops (a ./rosmarops.config.json
+	// in the working directory) is never changed: say so and write nothing.
+	if outside, _ := dismissConfigOutside(cfgPath); outside {
+		cat, err := catalog.Load(inv.Flags["lang"])
+		if err != nil {
+			cat, _ = catalog.Load(catalog.DefaultLang)
+		}
+		fmt.Fprintln(os.Stdout, cat.Text("findings.config_outside", map[string]string{"path": cfgPath}))
+		return nil
 	}
 	stPath, err := state.StatePath()
 	if err != nil {

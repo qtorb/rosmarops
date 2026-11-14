@@ -309,6 +309,7 @@
   "finding.project_hook_runs_repo_script.title.large": "A project makes {agent} run a large script of its own",
   "finding.project_hook_runs_repo_script.what": "{file} tells {agent} to run {script}, a file inside this project, when a hook fires (for example, when a session starts). Whoever can change this project can change what runs on your computer.",
   "finding.project_hook_runs_repo_script.what.large": "{file} tells {agent} to run {script}, a file inside this project of more than 1 MB, when a hook fires (for example, when a session starts). A script that large is hard to review.",
+  "findings.config_outside": "Your settings come from {path}, outside RosmarOps's folder, so RosmarOps will not change them. Mark findings there by hand, or remove that file to use ~/.rosmarops/config.json.",
   "findings.console.dismissed": "dismissed by you",
   "findings.console.prompt": "Type the numbers you want to change, separated by commas: ticked ones are dismissed and dismissed ones come back (Enter to change nothing): ",
   "findings.count.one": "1 ticked",

@@ -285,6 +285,7 @@
   "findings.count.other": "{n} ticked",
   "findings.no": "Not now",
   "findings.save": "Save",
+  "findings.config_outside": "Your settings come from {path}, outside RosmarOps's folder, so RosmarOps will not change them. Mark findings there by hand, or remove that file to use ~/.rosmarops/config.json.",
   "findings.console.dismissed": "dismissed by you",
   "findings.console.prompt": "Type the numbers you want to change, separated by commas: ticked ones are dismissed and dismissed ones come back (Enter to change nothing): ",
   "report.dismissed.title": "Dismissed by you ({n})",
