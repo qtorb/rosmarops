@@ -1,6 +1,7 @@
 package trust_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -162,12 +163,19 @@ func TestBV237GrokRules(t *testing.T) {
 	// search; only the launch option --deny "WebSearch" is documented, and it
 	// is not read at rest. The way stays open, as without the rule.
 	t.Run("deny WebSearch in the file", func(t *testing.T) {
-		a, score := bv237Agent(t, bv237Grok(t, false, func(l *platform.GrokLayer) { l.Deny = []string{"WebSearch"} }), "grok-build")
+		v := bv237Grok(t, false, func(l *platform.GrokLayer) { l.Deny = []string{"WebSearch"} })
+		a, score := bv237Agent(t, v, "grok-build")
 		if score != baseScore {
 			t.Errorf("deny WebSearch in the file: score %d, want R2's %d (web search stays open)", score, baseScore)
 		}
 		if d := bv237Row(t, a, rules.RowSendsOut).Decider; d != rules.DeciderNobody {
 			t.Errorf("sends: %s, want nobody (web search stays open)", d)
+		}
+		// Albert, 14-11: no new assumption; the way keeps the one it carries,
+		// launch_flags_not_readable (the --deny option is not read at rest).
+		_, assume := r2Detail(v, a.AgentID)
+		if !slices.Contains(assume, rules.AssumeLaunchFlagsNotReadable) {
+			t.Errorf("assumptions %v, want launch_flags_not_readable", assume)
 		}
 	})
 
