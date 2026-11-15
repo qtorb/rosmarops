@@ -269,7 +269,9 @@ func (c htmlCtx) renderSheet() {
 	switch {
 	case len(rows) > 3:
 		count = c.t("sheet.findings.count.first", map[string]string{"n": strconv.Itoa(len(rows))})
-	case len(rows) != 1:
+	case len(rows) == 1:
+		count = c.t("sheet.findings.count.one", nil)
+	default:
 		count = c.t("sheet.findings.count", map[string]string{"n": strconv.Itoa(len(rows))})
 	}
 	if count != "" {
@@ -560,11 +562,22 @@ func (c htmlCtx) renderProfileViews() {
 	}
 	c.w(`</div></div><div class="pc-main"><h3>%s</h3><div class="plist"><div class="prow hd" aria-hidden="true"><span>%s</span><span>%s</span><span>%s</span><span>%s</span><span></span></div>`,
 		c.t("pc.suggest", nil), c.t("pc.col.agent", nil), c.t("pc.col.today", nil), c.t("pc.col.suggest", nil), c.t("pc.col.nc", nil))
-	ev := c.evaluated()
-	sort.SliceStable(ev, func(i, j int) bool {
-		return ev[i].Product == knowledge.ClaudeCodeProduct && ev[j].Product != knowledge.ClaudeCodeProduct
+	// Claude Code first; then Cursor and Grok Build, which have their own
+	// row while they have a phrase (N2, N1); every other evaluated agent goes
+	// in one row «The others» at the end (BV-236, Albert 15-11).
+	var own, others []rules.OverviewAgent
+	for _, o := range c.evaluated() {
+		switch o.Product {
+		case knowledge.ClaudeCodeProduct, knowledge.CursorProduct, knowledge.GrokBuildProduct:
+			own = append(own, o)
+		default:
+			others = append(others, o)
+		}
+	}
+	sort.SliceStable(own, func(i, j int) bool {
+		return own[i].Product == knowledge.ClaudeCodeProduct && own[j].Product != knowledge.ClaudeCodeProduct
 	})
-	for _, o := range ev {
+	for _, o := range own {
 		a := c.score[o.AgentID]
 		var now index.Class
 		var val *int
@@ -591,14 +604,25 @@ func (c htmlCtx) renderProfileViews() {
 			c.w(`<a class="chgl" href="#v-cc" data-view="v-cc">%s</a></div>`, c.t("pc.change", nil))
 			continue
 		}
-		nc := ""
-		switch o.Product {
-		case knowledge.GrokBuildProduct:
+		nc := c.t("pc.N2", nil)
+		if o.Product == knowledge.GrokBuildProduct {
 			nc = c.t("pc.N1", nil)
-		case knowledge.CursorProduct:
-			nc = c.t("pc.N2", nil)
 		}
-		c.w(`<span class="soon">%s</span><div class="nc2%s">%s</div><span></span></div>`, c.t("pc.soon", nil), map[bool]string{true: " empty", false: ""}[nc == ""], nc)
+		c.w(`<span class="soon">%s</span><div class="nc2">%s</div><span></span></div>`, c.t("pc.soon", nil), nc)
+	}
+	if len(others) > 0 {
+		c.w(`<div class="prow oth"><span class="ag">%s</span><span class="now"></span><div class="olist"><div class="onames">`, c.t("pc.others", nil))
+		for i, o := range others {
+			if i > 0 {
+				c.w(`<span class="sep"> · </span>`)
+			}
+			now, val, band := index.NoClass(), (*int)(nil), ""
+			if a := c.score[o.AgentID]; a != nil {
+				now, val, band = a.Letter, a.Value, a.Band
+			}
+			c.w(`<span class="oname">%s %s%s</span>`, html.EscapeString(o.Agent), cls(now, " sm"), ntOf(val, band))
+		}
+		c.w(`</div><span class="soon">%s</span></div></div>`, c.t("pc.soon", nil))
 	}
 	c.w(`</div>`)
 	c.renderApply("pc")
@@ -826,7 +850,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .js .view{display:none}
 .js.alt .view.on{display:block}
 .js.alt .rep{display:none}
-.pc{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);min-height:724px}
+.pc{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);min-height:723px}
 @media (max-width:1099px){.pc{grid-template-columns:minmax(0,1fr)}}
 .pc-side{border-right:1px solid var(--s-line);background:var(--s-paper);padding:22px 26px;display:flex;flex-direction:column;gap:16px;min-width:0}
 .pc-side h2{font-size:24px;line-height:1.2;margin:2px 0 0;text-wrap:balance}
@@ -862,6 +886,12 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .prow .chg .c2{font-weight:650;color:var(--ink)}
 .apply .nb b,.proof b{color:var(--ink)}
 .soon{color:var(--s-ink2);font-size:13px}
+.prow.oth .olist{grid-column:3/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.onames{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;font-weight:650}
+.oname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.onames .sep{color:var(--s-ink3);font-weight:400;white-space:pre}
+.cls.sm{min-width:22px;height:22px;font-size:14px;border-radius:6px;padding:0 4px;border-width:1.5px}
+.onames .nt{font-size:12px;height:22px;display:inline-grid;place-items:center;padding:0 6px}
 .apply{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:center;background:var(--s-brand-bg);border:1px solid color-mix(in srgb,var(--s-brand) 35%,transparent);border-radius:14px;padding:12px 18px}
 @media (max-width:760px){.apply{grid-template-columns:minmax(0,1fr)}}
 .steps{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13.5px}
@@ -877,7 +907,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .apply .live{grid-column:1/-1;margin:0;font-size:13px}
 .apply .live:empty{display:none}
 .proof{font-size:12.5px;color:var(--s-ink2);margin:0}
-.pf{display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);min-height:724px}
+.pf{display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);min-height:723px}
 @media (max-width:1099px){.pf{grid-template-columns:minmax(0,1fr)}}
 .pf-side{border-right:1px solid var(--s-line);background:var(--s-paper);padding:24px;display:flex;flex-direction:column;gap:16px;min-width:0}
 .pf-side h2{font-size:23px;line-height:1.2;margin:2px 0 0;text-wrap:balance}
@@ -956,7 +986,7 @@ func sheetKeys() []string {
 		"cc.P0.no.3", "cc.P0.nc", "cc.P1.does.1", "cc.P1.does.2", "cc.P1.asks.1", "cc.P1.asks.2", "cc.P1.no.1", "cc.P1.no.2", "cc.P1.nc",
 		"cc.P1b.nc", "cc.P3.does.1", "cc.P3.no.1", "cc.P3.no.2", "cc.P3.no.3", "cc.P3.nc", "cc.nomeasure", "cc.S1", "cc.S2", "cc.S3", "cc.S4",
 		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
-		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back",
+		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "sheet.findings.count.one", "pc.others",
 	}
 }
 

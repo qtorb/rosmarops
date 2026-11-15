@@ -308,8 +308,8 @@ func TestNoise_CountsByRow(t *testing.T) {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
 			// BV-236 §1: the sheet replaces step 1; the counts line (html.step.1.counts) is no longer in the HTML.
-			// The sheet's «Findings» count rows too: its count (shown
-			// unless there is one row) and at most three rows.
+			// The sheet's «Findings» count rows too: its count («1 finding»
+			// with one row, Albert 15-11) and at most three rows.
 			_, sheet, _ := strings.Cut(page, `<h2 class="sh-h" id="sh-findings">`)
 			sheet, _, _ = strings.Cut(sheet, `</section>`)
 			rows := red + yellow
@@ -317,10 +317,12 @@ func TestNoise_CountsByRow(t *testing.T) {
 			switch {
 			case rows > 3:
 				count = cat.Text("sheet.findings.count.first", map[string]string{"n": fmt.Sprint(rows)})
-			case rows != 1:
+			case rows == 1:
+				count = cat.Text("sheet.findings.count.one", nil)
+			default:
 				count = cat.Text("sheet.findings.count", map[string]string{"n": fmt.Sprint(rows)})
 			}
-			if count != "" && !strings.Contains(sheet, `<em>`+htmlEscape(count)+`</em>`) {
+			if !strings.Contains(sheet, `<em>`+htmlEscape(count)+`</em>`) {
 				t.Errorf("%s %s: the sheet lacks %q", name, lang, count)
 			}
 			if n := strings.Count(sheet, `<tr><td>`); n != min(rows, 3) {

@@ -8,8 +8,8 @@ import (
 )
 
 // bv236Texts are BV-236 §7's texts, literal (ES | EN), with the forms of 1.
-// cc.back is built from §7's «← Informe» and «Perfil del ordenador» /
-// «Computer profile».
+// cc.back, sheet.findings.count.one and pc.others are Albert's answers of
+// 15-11.
 var bv236Texts = []struct{ key, es, en string }{
 	{"sheet.title", "Control de tus agentes de IA", "Control of your AI agents"},
 	{"sheet.sub", "Qué pueden hacer sin preguntarte en este ordenador, y qué cambiar.", "What they can do without asking you on this computer, and what to change."},
@@ -160,6 +160,8 @@ var bv236Texts = []struct{ key, es, en string }{
 	{"findings.console.prompt.accept", "Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente (Enter para no cambiar nada): ", "Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again (Enter to change nothing): "},
 	{"findings.console.accepted", "asumido por ti", "accepted by you"},
 	{"cc.back", "← Perfil del ordenador", "← Computer profile"},
+	{"sheet.findings.count.one", "1 aviso", "1 finding"},
+	{"pc.others", "Los demás", "The others"},
 }
 
 // TestBV236Texts: every text of §7 is in the catalog, literal, in EN and ES.

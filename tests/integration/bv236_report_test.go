@@ -179,6 +179,21 @@ func TestBV236ProfileViewWithoutJS(t *testing.T) {
 				t.Errorf("%s: «Your computer» has no after", lang)
 			}
 		}
+		// «The others»: every evaluated agent but Claude Code, Cursor and Grok
+		// Build, in one row at the end, each with its class and score.
+		oth := between(t, cc, `<div class="prow oth">`, `</div></div></div>`)
+		if !strings.Contains(oth, esc(cat.Text("pc.others", nil))) || !strings.Contains(oth, esc(cat.Text("pc.soon", nil))) {
+			t.Errorf("%s: no «The others» row", lang)
+		}
+		for _, o := range v.AgentsOverview {
+			if !o.Evaluated {
+				continue
+			}
+			in := strings.Contains(oth, `<span class="oname">`+esc(o.Agent)+` `)
+			if want := o.Product != "claude-code" && o.Product != "cursor" && o.Product != "grok-build"; in != want {
+				t.Errorf("%s: %s in «The others» = %v", lang, o.Agent, in)
+			}
+		}
 		for _, k := range []string{"pc.N1", "pc.N2", "pc.B3", "cc.P1.nc"} {
 			if !strings.Contains(cc, esc(cat.Text(k, nil))) {
 				t.Errorf("%s: the profile view lacks %s", lang, k)
@@ -285,6 +300,8 @@ const [file, c1] = process.argv.slice(1);
   if (await p.isVisible('#v-pc')) fail('the profile view shows with JavaScript before it is opened');
   await p.click('a[data-view="v-pc"]');
   if (!(await p.isVisible('#v-pc')) || await p.isVisible('.sheet')) fail('the profile view does not open');
+  const h = await p.evaluate(() => document.documentElement.scrollHeight);
+  if (h > 800) fail('«Computer profile» is ' + h + 'px tall, over 800');
   await p.click('#v-pc .apply:not([hidden]) button[data-copy]');
   const pre = '#v-pc .apply:not([hidden]) pre.ptext';
   if (!(await p.isVisible(pre))) fail('denied: the text is not shown');

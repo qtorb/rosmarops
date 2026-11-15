@@ -238,7 +238,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .js .view{display:none}
 .js.alt .view.on{display:block}
 .js.alt .rep{display:none}
-.pc{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);min-height:724px}
+.pc{display:grid;grid-template-columns:minmax(0,320px) minmax(0,1fr);min-height:723px}
 @media (max-width:1099px){.pc{grid-template-columns:minmax(0,1fr)}}
 .pc-side{border-right:1px solid var(--s-line);background:var(--s-paper);padding:22px 26px;display:flex;flex-direction:column;gap:16px;min-width:0}
 .pc-side h2{font-size:24px;line-height:1.2;margin:2px 0 0;text-wrap:balance}
@@ -274,6 +274,12 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .prow .chg .c2{font-weight:650;color:var(--ink)}
 .apply .nb b,.proof b{color:var(--ink)}
 .soon{color:var(--s-ink2);font-size:13px}
+.prow.oth .olist{grid-column:3/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.onames{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;font-weight:650}
+.oname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.onames .sep{color:var(--s-ink3);font-weight:400;white-space:pre}
+.cls.sm{min-width:22px;height:22px;font-size:14px;border-radius:6px;padding:0 4px;border-width:1.5px}
+.onames .nt{font-size:12px;height:22px;display:inline-grid;place-items:center;padding:0 6px}
 .apply{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 20px;align-items:center;background:var(--s-brand-bg);border:1px solid color-mix(in srgb,var(--s-brand) 35%,transparent);border-radius:14px;padding:12px 18px}
 @media (max-width:760px){.apply{grid-template-columns:minmax(0,1fr)}}
 .steps{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:13.5px}
@@ -289,7 +295,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .apply .live{grid-column:1/-1;margin:0;font-size:13px}
 .apply .live:empty{display:none}
 .proof{font-size:12.5px;color:var(--s-ink2);margin:0}
-.pf{display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);min-height:724px}
+.pf{display:grid;grid-template-columns:minmax(0,270px) minmax(0,1fr);min-height:723px}
 @media (max-width:1099px){.pf{grid-template-columns:minmax(0,1fr)}}
 .pf-side{border-right:1px solid var(--s-line);background:var(--s-paper);padding:24px;display:flex;flex-direction:column;gap:16px;min-width:0}
 .pf-side h2{font-size:23px;line-height:1.2;margin:2px 0 0;text-wrap:balance}
