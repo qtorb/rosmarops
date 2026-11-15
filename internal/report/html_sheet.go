@@ -933,3 +933,28 @@ func boldLead(s, sep string) string {
 	n := i + len(strings.TrimRight(sep, " "))
 	return "<b>" + s[:n] + "</b>" + s[n:]
 }
+
+// sheetKeys are the catalog codes of the sheet and the profile views
+// (BV-236 §7).
+func sheetKeys() []string {
+	return []string{
+		"sheet.title", "sheet.sub", "sheet.meta.date", "sheet.meta.computer", "sheet.meta.scope", "sheet.meta.program", "sheet.scope",
+		"sheet.scope.agents.one", "sheet.scope.agents.other", "sheet.scope.projects.one", "sheet.scope.projects.other", "sheet.result",
+		"sheet.result.label", "sheet.provisional", "sheet.class.A", "sheet.class.B", "sheet.class.C", "sheet.class.D", "sheet.reference",
+		"sheet.reference.value", "sheet.reading", "sheet.reading.L1", "sheet.reading.L2.one", "sheet.reading.L2.other", "sheet.reading.L3.one",
+		"sheet.reading.L3.other", "sheet.reading.L4", "sheet.reading.L5", "sheet.reading.L6", "sheet.reading.L7", "sheet.kind.money",
+		"sheet.kind.sends_out", "sheet.kind.keys", "sheet.kind.runs_commands", "sheet.kind.changes_files", "sheet.state.bounded",
+		"sheet.state.none_known", "sheet.who.agents", "sheet.assumed.note", "sheet.findings", "sheet.findings.count.first",
+		"sheet.findings.count", "sheet.col.no", "sheet.col.finding", "sheet.col.affects", "sheet.col.level", "sheet.col.change",
+		"sheet.col.change.sub", "sheet.would", "sheet.act", "sheet.act.A1", "sheet.act.profile", "sheet.act.profile.sub", "sheet.act.findings",
+		"sheet.act.findings.sub", "sheet.foot.P1", "sheet.foot.P2", "sheet.foot.P2.final", "pc.back", "pc.kicker", "pc.q", "pc.use.code",
+		"pc.use.docs", "pc.use.mail", "pc.use.tasks", "pc.computer", "pc.B1", "pc.B1.noprofile", "pc.B2", "pc.B3", "pc.suggest", "pc.col.agent",
+		"pc.col.today", "pc.col.suggest", "pc.col.nc", "pc.change", "pc.soon", "pc.N1", "pc.N2", "pc.score", "pc.class", "cc.title", "cc.lead",
+		"cc.today", "cc.use", "cc.use.where", "cc.name.P0", "cc.name.P1", "cc.name.P3", "cc.rec", "cc.use.lc.code", "cc.use.lc.docs",
+		"cc.use.lc.mail", "cc.use.lc.tasks", "cc.row.does", "cc.row.asks", "cc.row.no", "cc.row.nc", "cc.P0.does.1", "cc.P0.no.1", "cc.P0.no.2",
+		"cc.P0.no.3", "cc.P0.nc", "cc.P1.does.1", "cc.P1.does.2", "cc.P1.asks.1", "cc.P1.asks.2", "cc.P1.no.1", "cc.P1.no.2", "cc.P1.nc",
+		"cc.P1b.nc", "cc.P3.does.1", "cc.P3.no.1", "cc.P3.no.2", "cc.P3.no.3", "cc.P3.nc", "cc.nomeasure", "cc.S1", "cc.S2", "cc.S3", "cc.S4",
+		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
+		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back",
+	}
+}

@@ -89,6 +89,8 @@ var staticKeys = []string{
 	// section and score-line note.
 	"findings.q", "findings.text",
 	"findings.group.new", "findings.group.rest", "findings.group.dismissed",
+	// BV-236 §5: «Lo asumo» in the window and the console.
+	"findings.q.accept", "findings.text.accept", "findings.accept", "findings.dismiss", "findings.group.accepted", "findings.tally", "findings.tally.accepted.one", "findings.tally.accepted.other", "findings.tally.dismissed.one", "findings.tally.dismissed.other", "findings.tally.none", "findings.console.prompt.accept", "findings.console.accepted",
 	"findings.red", "findings.yellow",
 	"findings.sub.new", "findings.sub.since",
 	"findings.what", "findings.when",

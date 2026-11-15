@@ -1668,6 +1668,7 @@ func HTMLKeys() []string {
 		"finding.n8n_key_with_data.title", "finding.n8n_key_with_data.what",
 		"finding.n8n_key_with_data.step1")
 	sort.Strings(keys)
+	keys = append(keys, sheetKeys()...) // BV-236
 	return keys
 }
 

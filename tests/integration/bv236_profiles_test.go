@@ -19,7 +19,7 @@ import (
 
 // bv236V2 is the v2 report of the full test computer with the factory pass
 // and the profile passes, as rosmarops run builds them.
-func bv236V2(t *testing.T) report.V2 {
+func bv236V2(t *testing.T, opts ...func(*report.V2Input)) report.V2 {
 	t.Helper()
 	in, scans := fullMachineInput(true)
 	res, err := pipeline.Assemble(in)
@@ -47,13 +47,17 @@ func bv236V2(t *testing.T) report.V2 {
 		t.Fatal(err)
 	}
 	g := res.Graph
-	v2, _ := report.BuildV2(report.V2Input{
+	vin := report.V2Input{
 		Graph: &g, GraphSHA256: graphSHA(res.Encoded), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		RepoRoots: in.RepoRoots, V1: report.Build("0.12.0", nil, nil, len(in.RepoRoots), 0, 0, 0, nil), GeneratedAt: fmNow, Salt: fmSalt,
 		ClaudeSettings: &scans.Settings, Home: fmHome,
 		Hermes: scans.Hermes, Codex: scans.Codex, Grok: scans.Grok, Cline: scans.Cline,
 		FactoryGraph: &fres.Graph, Profiles: ps,
-	})
+	}
+	for _, o := range opts {
+		o(&vin)
+	}
+	v2, _ := report.BuildV2(vin)
 	return v2
 }
 
