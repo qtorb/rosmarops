@@ -34,6 +34,15 @@ Run it again after you change something: the report remembers the previous run a
 
 To run it every week without thinking about it, the report gives you the exact command to schedule a review every Friday at 09:00 (or your agent can run it for you). RosmarOps does not create the task itself. When the scheduled review finishes, Windows shows a notification; if notifications are turned off, the report opens in your browser.
 
+## Install and run with Homebrew (macOS and Linux)
+
+    brew install qtorb/rosmarops/rosmarops
+    rosmarops
+
+Homebrew builds RosmarOps on your computer from the source code of the release, so macOS does not show its warning for downloaded programs. Because it is built on your computer, its SHA-256 is not the one in SHA256SUMS.txt: Homebrew checks the SHA-256 of the source code instead.
+
+To update: `brew upgrade rosmarops`. The first run after an update asks you to confirm that RosmarOps changed.
+
 ## Install and run (macOS, preview)
 
 1. Download `rosmarops-macos-apple-silicon` (Mac with Apple silicon: M1, M2, M3, M4) or `rosmarops-macos-intel` (Mac with Intel) from the [latest release](https://github.com/qtorb/rosmarops/releases/latest). Not sure? Apple menu > About This Mac: «Chip» means Apple silicon, «Processor» means Intel.
