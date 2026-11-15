@@ -164,6 +164,12 @@ func factoryCopilot(s platform.CopilotScan) platform.CopilotScan {
 	return out
 }
 
+// FactoryAntigravity is the Antigravity CLI scan at its product defaults, as
+// the factory graph builds it (BV-244: the factory pass's overview reads it).
+func FactoryAntigravity(s platform.AntigravityScan) platform.AntigravityScan {
+	return factoryAntigravity(s)
+}
+
 func factoryAntigravity(s platform.AntigravityScan) platform.AntigravityScan {
 	out := s
 	st := s.Settings

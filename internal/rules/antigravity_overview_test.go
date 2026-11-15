@@ -57,7 +57,7 @@ func antigravityEvaluate(t *testing.T, scan platform.AntigravityScan, servers []
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := rules.Evaluate(rules.Input{Graph: g, Base: bases[knowledge.ClaudeCodeProduct], Bases: bases, RepoRoots: roots, Home: home, Now: now, ClaudeSettings: &settings})
+	res := rules.Evaluate(rules.Input{Graph: g, Base: bases[knowledge.ClaudeCodeProduct], Bases: bases, RepoRoots: roots, Home: home, Now: now, ClaudeSettings: &settings, Antigravity: scan})
 	var client string
 	for _, n := range g.Nodes {
 		if n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient && n.Platform == knowledge.AntigravityCLIProduct {
