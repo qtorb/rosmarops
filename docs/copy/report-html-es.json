@@ -887,5 +887,6 @@
   "findings.tally.dismissed.other": "{n} descartados",
   "findings.tally.none": "Ninguno cambiado",
   "findings.console.prompt.accept": "Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente (Enter para no cambiar nada): ",
-  "findings.console.accepted": "asumido por ti"
+  "findings.console.accepted": "asumido por ti",
+  "cc.back": "← Perfil del ordenador"
 }

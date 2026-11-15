@@ -108,6 +108,9 @@ type V2 struct {
 	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
 	// sections (decision 2026-10-29, macOS vista previa).
 	OS string `json:"-"`
+	// engineVersion is the program's version, for the sheet's «Program»
+	// (BV-236 §1); empty when the report is read back.
+	engineVersion string
 	// NotChecked are the checks that do not apply on this system yet, by
 	// code (NotCheckedCodes), in that order: shown, not in the JSON
 	// (decision 2026-10-29, macOS vista previa, point 3).
@@ -511,6 +514,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		weekly:              in.Weekly,
 		weeklyNoSystemd:     in.WeeklyNoSystemd,
 		OS:                  in.V1.Platform.OS,
+		engineVersion:       in.V1.EngineVersion,
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
 		NotificationUnavailable: in.NotificationUnavailable,

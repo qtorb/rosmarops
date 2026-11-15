@@ -180,7 +180,7 @@ button.i::after{content:"";position:absolute;inset:-8px}
 // from its templates, with a Blob; copy or download the export for your AI
 // (copying falls back to downloading); open and close a help «i». No
 // network, no storage, no timer but the copy notices'.
-const htmlJS = `document.querySelectorAll('button[data-copied]').forEach(function(b){b.addEventListener('click',function(){var p=b.previousElementSibling;var l=b.nextElementSibling;function sel(){var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}try{navigator.clipboard.writeText(p.innerText).then(function(){l.textContent=b.dataset.copied;setTimeout(function(){l.textContent=''},1500)},sel)}catch(e){sel()}})});
+const htmlJS = `document.querySelectorAll('button[data-copied]').forEach(function(b){b.addEventListener('click',function(){var p=b.previousElementSibling;var l=b.nextElementSibling;function sel(){p.hidden=false;var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r);l.textContent=document.body.getAttribute('data-copyfail')}try{navigator.clipboard.writeText(p.innerText).then(function(){l.textContent=b.dataset.copied;setTimeout(function(){l.textContent=''},1500)},sel)}catch(e){sel()}})});
 var cb=document.getElementById('card-button');
 function save(c,type,name){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
 if(cb){cb.addEventListener('click',function(){save(document.getElementById('card-svg').innerHTML,'image/svg+xml',cb.dataset.svg);save(document.getElementById('card-txt').content.textContent,'text/plain',cb.dataset.txt)})}
@@ -315,28 +315,29 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	for i := range v.Index.Agents {
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
-	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><style>%s</style></head><body><main>`,
-		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS())
+	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><script>document.documentElement.classList.add('js')</script><style>%s</style></head><body id="top" data-copyfail="%s">`,
+		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS()+sheetCSS(), c.t("copy.C1", nil))
 
-	// §1.1 Header. On a run that actually sent this review's package (and any
-	// pending one), the promise line says so; otherwise — no permission, or a
-	// pending or rejected send — it keeps the «sent nothing» line (BV-142). The
-	// text follows the real send result, not the permission.
-	headerKey := "html.header"
-	if c.v.SpaceSentDate != "" {
-		headerKey = "html.header_sent"
-	}
-	c.w(`<div class="hdr"><span>%s</span>%s</div>`, c.t(headerKey, map[string]string{"date": cat.DayLabel(local)}), c.langLinks())
+	// BV-236 §1: the top bar and the sheet replace the old header and step 1.
+	c.renderBar()
+	c.w(`<div class="rep">`)
+	c.renderSheet()
+	c.renderSheetNotes()
+	c.w(`</div>`)
+	// BV-236 §2–§3: «Computer profile» and Claude Code in detail, views of the
+	// same page; without JavaScript they show here, below the sheet.
+	c.renderProfileViews()
+	c.w(`<main class="rep">`)
 
-	// §2 The flow: 1 → 2 → 3, all three as direct children of a single
-	// `.flow` grid, so the three columns start at the same height (BV-141;
-	// as in v0.6.0, before BV-132 split the grid in two).
+	// §2 The flow: «What to do first» and «What remains», direct children of a
+	// single `.flow` grid (BV-141), and the folded dismissed and accepted
+	// findings.
 	today, hasToday := c.todayFinding()
-	c.w(`<div class="flow">`)
-	c.renderStep1()
+	c.w(`<div class="flow" id="todo">`)
 	c.renderStep2(today, hasToday)
 	c.renderStep3(today.ID)
 	c.renderDismissed()
+	c.renderAccepted()
 	c.w(`</div>`)
 
 	// BV-158 part 3: below the flow, in this order.
@@ -361,7 +362,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.renderOverviewDialog()
 		c.renderAssumeDialog()
 	}
-	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS)
+	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS+"\n"+sheetJS)
 	return sb.String()
 }
 
@@ -544,93 +545,28 @@ func (c htmlCtx) renderSignals() {
 	c.w(`</ul></div>`)
 }
 
-// renderStep1 is v3 §3: your situation.
-func (c htmlCtx) renderStep1() {
+// renderSheetNotes are the warnings the old step 1 carried, kept under the
+// sheet (BV-236 §1 replaces step 1, not what the person must know): what
+// this run sent (BV-142), test data and what the configuration hides, the time limit, the
+// integrity check and an old knowledge base.
+func (c htmlCtx) renderSheetNotes() {
+	var sb strings.Builder
+	cc := c
+	cc.sb = &sb
+	cc.renderNotes()
+	c.w(`<div class="sheetnotes">%s</div>`, sb.String())
+}
+
+func (c htmlCtx) renderNotes() {
 	v := c.v
-	c.w(`<section class="s1" aria-labelledby="step1">`)
-	c.stepHead(1, "h2", "step1", c.t("html.step.1", nil), "", true)
-	c.w(`<div class="iname"><span>%s</span>%s</div>`, c.t("html.index.name", nil), c.help("score"))
-	a, scored := c.scored()
-	switch {
-	case scored:
-		of := c.cat.Text("html.index.of", nil)
-		c.w(`<div class="score" role="img" aria-label="%s" style="color:%s">%d<span class="of">%s</span></div>`,
-			html.EscapeString(strconv.Itoa(*a.Value)+of), bandVar[a.Band], *a.Value, html.EscapeString(of))
-	default:
-		// No graph: nothing was read, never «no AI agent found» (J14).
-		// Agents detected and none evaluated: not «no AI agent found»
-		// either (U12); that is only when there is no agent at all.
-		reason := index.ReasonNotApplicable
-		switch {
-		case !v.Coverage.GraphBuilt:
-			reason = index.ReasonCoverage
-		case len(v.Index.Agents) > 0:
-			reason = v.Index.Agents[0].Unavailable
-		case len(v.Index.Scope.NotEvaluated) > 0:
-			reason = index.ReasonAgentsNotEvaluated
-		}
-		c.w(`<div class="unavail">%s</div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
+	// BV-142: the promise line follows the real send result: «sent only your
+	// encrypted results» only when this review's package was sent, else «sent
+	// nothing».
+	headerKey := "html.header"
+	if v.SpaceSentDate != "" {
+		headerKey = "html.header_sent"
 	}
-
-	// The score's agent and band, right under it (v3 §10.1).
-	if scored {
-		c.w(`<p class="sagent">%s · %s%s</p>`, html.EscapeString(a.Agent), c.t("band."+a.Band, nil), c.help("agent"))
-		c.w(`<p class="scale">%s</p>`, c.t("html.index.scale", nil)) // v3 §13.1
-	}
-
-	// The headline (h1): the first finding of the score's agent (v3 §10.2),
-	// else the report's first; without findings, the perfect line at 100,
-	// else the status.
-	headline := c.t("html.status."+v.Status, nil)
-	switch {
-	case len(v.Findings) > 0:
-		f := v.Findings[0]
-		if scored {
-			for _, x := range v.Findings {
-				if c.ofScoredAgent(x, a) {
-					f = x
-					break
-				}
-			}
-		}
-		if f.Rule == rules.RulePackageKnownMalicious { // BV-100: no html.headline key
-			headline = c.t("finding.package_known_malicious.title", malParams(f))
-			break
-		}
-		if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: the signed sentence is the headline, no html.headline key
-			headline = c.cat.Text(computerUseKey(f), computerUseParams(f))
-			break
-		}
-		key := "html.headline." + f.Rule
-		if f.Rule == rules.RuleCredInGit && c.countRule(rules.RuleCredInGit) == 1 {
-			key = "html.headline.cred_in_git.one" // v3 §15.4
-		}
-		headline = c.t(key, map[string]string{"agent": f.Params.Agent})
-	case scored && *a.Value == 100:
-		headline = c.t("html.index.perfect", nil)
-	}
-	c.w(`<h1 class="hl">%s</h1><p class="meta">`, headline)
-	red, yellow := RowCounts(v)
-	counts := "html.step.1.counts"
-	if len(v.Index.Scope.Evaluated) > 1 { // v3 §15.4
-		counts = "html.step.1.counts.multi"
-	}
-	c.w(`%s`, c.t(counts, map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
-	// BV-158 part 2: the meta block is only these two lines — the counts above
-	// and the projects-checked line (which replaces html.count.repos and the
-	// old limit line). Everything else that used to sit here (test-data keys,
-	// coverage, the score comparison, the other agents, knowledge-reviewed, the
-	// silenced and history notes) leaves step 1: what the report keeps now lives
-	// in «More information» (and in your space), the rest is gone.
-	projects := c.cat.Plural("html.meta.projects", v.repos,
-		map[string]string{"projects": strconv.Itoa(v.repos), "minutes": strconv.Itoa(v.limitMinutes)})
-	// BV-184: when the person has dismissed findings, the score meta line says
-	// so, right after the projects line: « · sin los avisos que descartaste».
-	if len(v.Dismissed) > 0 {
-		projects += " · " + c.cat.Text("report.dismissed.note", nil)
-	}
-	c.w(`<br>%s`, html.EscapeString(projects))
-	c.w(`</p>`)
+	c.w(`<p class="meta promise">%s</p>`, c.t(headerKey, map[string]string{"date": c.cat.DayLabel(c.local)}))
 	// BV-158: the silenced counts are not dropped — they are warnings after the
 	// two-line meta block, like the others (never in the block). Test data first,
 	// then what the configuration hides; nothing when the count is 0.
@@ -656,7 +592,6 @@ func (c htmlCtx) renderStep1() {
 	if knowledgeOld(c.local, knowledge.ReviewedOn) {
 		c.w(`<p class="meta warn">%s</p>`, c.t("html.knowledge.old", map[string]string{"date": knowledgeDate(c.cat, knowledge.ReviewedOn)}))
 	}
-	c.w(`</section>`)
 }
 
 // knowledgeOld reports whether the run's local date is more than 14 days after
@@ -884,7 +819,7 @@ const step3Cap = 8
 func (c htmlCtx) renderStep3(todayID string) {
 	var list []rules.Finding
 	for _, f := range c.v.Findings {
-		if r := c.rows[f.ID]; !slices.Contains(r.ids, todayID) {
+		if r := c.rows[f.ID]; !slices.Contains(r.ids, todayID) && f.Accepted == nil {
 			list = append(list, f)
 		}
 	}
@@ -943,6 +878,31 @@ func (c htmlCtx) renderDismissed() {
 		html.EscapeString(c.cat.Text("report.dismissed.title", map[string]string{"n": strconv.Itoa(len(c.v.Dismissed))})))
 	for _, f := range c.v.Dismissed {
 		c.w(`<li>%s</li>`, c.title(f))
+	}
+	c.w(`</ul></details></section>`)
+}
+
+// renderAccepted is the folded «Accepted by you» group (BV-236 §5), below
+// «Dismissed by you» and like it: each accepted finding with the date the
+// person accepted it. They keep counting in the score.
+func (c htmlCtx) renderAccepted() {
+	var acc []rules.Finding
+	for _, f := range c.v.Findings {
+		if f.Accepted != nil {
+			acc = append(acc, f)
+		}
+	}
+	if len(acc) == 0 {
+		return
+	}
+	c.w(`<section aria-labelledby="accepted"><details class="rest"><summary><span class="chev" aria-hidden="true">›</span><span id="accepted">%s</span></summary><ul>`,
+		html.EscapeString(c.cat.Text("report.accepted.title", map[string]string{"n": strconv.Itoa(len(acc))})))
+	for _, f := range acc {
+		date := f.Accepted.Date
+		if t, err := time.Parse("2006-01-02", date); err == nil {
+			date = c.cat.LongDate(t)
+		}
+		c.w(`<li>%s <span class="mut">· %s</span></li>`, c.title(f), c.t("report.accepted.on", map[string]string{"date": date}))
 	}
 	c.w(`</ul></details></section>`)
 }

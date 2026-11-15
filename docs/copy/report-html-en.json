@@ -713,5 +713,6 @@
   "findings.tally.dismissed.other": "{n} dismissed",
   "findings.tally.none": "None changed",
   "findings.console.prompt.accept": "Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again (Enter to change nothing): ",
-  "findings.console.accepted": "accepted by you"
+  "findings.console.accepted": "accepted by you",
+  "cc.back": "← Computer profile"
 }

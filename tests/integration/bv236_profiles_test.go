@@ -1,8 +1,13 @@
 package integration_test
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
+
+	"github.com/qtorb/rosmarops/internal/catalog"
 
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -44,7 +49,7 @@ func bv236V2(t *testing.T) report.V2 {
 	g := res.Graph
 	v2, _ := report.BuildV2(report.V2Input{
 		Graph: &g, GraphSHA256: graphSHA(res.Encoded), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
-		RepoRoots: in.RepoRoots, V1: report.Build("t", nil, nil, len(in.RepoRoots), 0, 0, 0, nil), GeneratedAt: fmNow, Salt: fmSalt,
+		RepoRoots: in.RepoRoots, V1: report.Build("0.12.0", nil, nil, len(in.RepoRoots), 0, 0, 0, nil), GeneratedAt: fmNow, Salt: fmSalt,
 		ClaudeSettings: &scans.Settings, Home: fmHome,
 		Hermes: scans.Hermes, Codex: scans.Codex, Grok: scans.Grok, Cline: scans.Cline,
 		FactoryGraph: &fres.Graph, Profiles: ps,
@@ -136,5 +141,29 @@ func TestBV236ProfilePass(t *testing.T) {
 	// The passes change nothing of today's report.
 	if v2.Index.Machine.Value == nil || *v2.Index.Machine.Value > 11 {
 		t.Errorf("machine today: %v", v2.Index.Machine.Value)
+	}
+}
+
+// TestBV236SampleReport writes the sample report of the full test computer
+// (sample-report.en.html and .es.html) when ROSMAROPS_BV236_SAMPLE_DIR is set.
+func TestBV236SampleReport(t *testing.T) {
+	dir := os.Getenv("ROSMAROPS_BV236_SAMPLE_DIR")
+	if dir == "" {
+		t.Skip("ROSMAROPS_BV236_SAMPLE_DIR not set")
+	}
+	prev := graph.HostOS
+	defer func() { graph.HostOS = prev }()
+	graph.HostOS = "windows"
+	v2 := bv236V2(t)
+	v2.OS = "windows"
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page := report.RenderHTML(v2, cat, fmHome, time.UTC)
+		if err := os.WriteFile(filepath.Join(dir, "sample-report."+lang+".html"), []byte(page), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
