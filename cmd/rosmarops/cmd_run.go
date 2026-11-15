@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -384,6 +385,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// execution alias instead. No-op for the standalone .exe and on macOS/Linux.
 	// The integrity check still hashes the real running binary (hash.Self).
 	exePath = storeAliasExe(exePath, os.Getenv("LOCALAPPDATA"))
+	// BV-243: likewise from a Homebrew install, the stable <prefix>/bin link
+	// instead of the versioned Cellar keg. No-op elsewhere.
+	exePath = brewStableExe(exePath, runtime.GOOS, osBrewFS{})
 	// BV-226 §4: our own Claude Code hooks are recognised by the binary's
 	// current reference (the state's, or this binary's own after a baseline).
 	ownRef := st.Integrity.VigilBinarySHA256
