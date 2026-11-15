@@ -26,8 +26,10 @@ type FindingCard struct {
 	New         bool   // memory verdict «new»: not in the last checked run
 	Since       string // the localized «open since» date; empty when New
 	Agent       string // the agent of the finding; empty for a machine finding
-	// Group is "new", "rest" or "dismissed" — the window's three sections, in
-	// that order; red before yellow and then the report's order inside each.
+	// Group is "new", "rest", "accepted" or "dismissed" — the window's four
+	// sections, in that order (BV-236 §5); red before yellow and then the
+	// report's order inside each. An accepted finding («Lo asumo») is in
+	// «accepted», never in «new» or «the rest».
 	Group string
 }
 
@@ -35,12 +37,14 @@ type FindingCard struct {
 const (
 	CardGroupNew       = "new"
 	CardGroupRest      = "rest"
+	CardGroupAccepted  = "accepted"
 	CardGroupDismissed = "dismissed"
 )
 
 // FindingCards renders, from a built v2 report, the cards the dismiss window
 // and the console list show: the active findings split into «new» and «the
-// rest», then the dismissed findings that appeared this run. Within each
+// rest», then the accepted findings («Lo asumo», BV-236 §5), then the
+// dismissed findings that appeared this run. Within each
 // group red comes before yellow and then the report's own order, exactly as
 // the window lays them out. It renders the title and «what it means» with the
 // same htmlCtx the report uses, so they match the report word for word.
@@ -82,9 +86,13 @@ func FindingCards(v V2, cat catalog.Catalog, home string) []FindingCard {
 		}
 		return append(reds, yellows...)
 	}
-	isNew := func(f rules.Finding) bool { return f.Memory != nil && f.Memory.Verdict == memory.VerdictNew }
+	accepted := func(f rules.Finding) bool { return f.Accepted != nil }
+	isNew := func(f rules.Finding) bool {
+		return !accepted(f) && f.Memory != nil && f.Memory.Verdict == memory.VerdictNew
+	}
 	out := group(v.Findings, isNew, CardGroupNew)
-	out = append(out, group(v.Findings, func(f rules.Finding) bool { return !isNew(f) }, CardGroupRest)...)
+	out = append(out, group(v.Findings, func(f rules.Finding) bool { return !accepted(f) && !isNew(f) }, CardGroupRest)...)
+	out = append(out, group(v.Findings, accepted, CardGroupAccepted)...)
 	out = append(out, group(v.Dismissed, nil, CardGroupDismissed)...)
 	return out
 }
