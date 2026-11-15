@@ -2,6 +2,7 @@ package report
 
 import (
 	"encoding/json"
+	"fmt"
 	"html"
 
 	"github.com/qtorb/rosmarops/internal/index"
@@ -32,6 +33,8 @@ type guidedProfile struct {
 type guidedAgent struct {
 	key, product string // profiles.Guided*, the knowledge product ("" for Grok Bot)
 	side         string // the side text's key
+	g3           string // the cards' «can't measure» sentence's key
+	docsRead     [3]int // year, month, day the agent's documentation was read (G4, BV-239)
 	uses         map[string]string
 	profiles     []guidedProfile
 }
@@ -40,7 +43,7 @@ const noProfile = "!" // a use's value starting with it is a sentence key
 
 var guidedAgents = []guidedAgent{
 	{
-		key: profiles.GuidedCursor, product: knowledge.CursorProduct, side: "gp.side",
+		key: profiles.GuidedCursor, product: knowledge.CursorProduct, side: "gp.side", g3: "gp.G3", docsRead: [3]int{2026, 11, 15},
 		uses: map[string]string{"code": profiles.P1, "docs": noProfile + "gp.cursor.use.none", "mail": noProfile + "gp.cursor.use.none", "tasks": noProfile + "gp.cursor.use.tasks"},
 		profiles: []guidedProfile{
 			{
@@ -66,7 +69,7 @@ var guidedAgents = []guidedAgent{
 		},
 	},
 	{
-		key: profiles.GuidedGrok, product: knowledge.GrokBuildProduct, side: "gp.side",
+		key: profiles.GuidedGrok, product: knowledge.GrokBuildProduct, side: "gp.side", g3: "gp.G3", docsRead: [3]int{2026, 11, 15},
 		uses: map[string]string{"code": profiles.P1, "docs": noProfile + "gp.grok.use.none", "mail": noProfile + "gp.grok.use.none", "tasks": profiles.P3},
 		profiles: []guidedProfile{
 			{
@@ -99,7 +102,7 @@ var guidedAgents = []guidedAgent{
 		},
 	},
 	{
-		key: profiles.GuidedBot, side: "gp.bot.side",
+		key: profiles.GuidedBot, side: "gp.bot.side", g3: "gp.bot.G3", docsRead: [3]int{2026, 11, 14},
 		uses: map[string]string{"code": "cloud", "docs": "cloud", "mail": "cloud", "tasks": noProfile + "gp.bot.use.tasks"},
 		profiles: []guidedProfile{
 			{
@@ -264,6 +267,7 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 	}
 	js, _ := json.Marshal(m)
 	ag := map[string]string{"agent": name}
+	g4 := map[string]string{"agent": name, "date": c.docsDate(g)}
 	c.w(`<section class="view gv" id="v-%s" data-ga="%s" data-gmap="%s" aria-labelledby="gt-%s"><div class="pf"><div class="pf-side">`, g.key, g.key, html.EscapeString(string(js)), g.key)
 	c.w(`<div><a class="back" href="#v-pc" data-view="v-pc">%s</a></div><div><div class="k">%s</div><h2 id="gt-%s">%s</h2></div><p>%s</p>`,
 		c.t("cc.back", nil), html.EscapeString(name), g.key, c.t("gp.title", ag), c.t(g.side, ag))
@@ -286,7 +290,7 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 			checked = " checked"
 		}
 		c.w(`<label class="card"><input type="radio" name="gp-%s" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s</h4></div><p class="g3">%s</p>`,
-			g.key, p.id, checked, c.t(p.name, nil), c.t("gp.G3", nil))
+			g.key, p.id, checked, c.t(p.name, nil), c.t(g.g3, nil))
 		for _, u := range sheetUses {
 			if g.uses[u.id] == p.id {
 				c.w(`<span class="rectag" data-use="%s"%s>%s</span>`, u.id, hide(u.id == sheetUses[0].id), c.t("cc.rec", map[string]string{"use": c.cat.Text("cc.use.lc."+u.id, nil)}))
@@ -314,9 +318,19 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 		}
 		c.w(`</div>`)
 		c.w(`<p class="proof" data-ga="%s" data-gs="%s"%s>%s %s</p>`, g.key, p.id, hide(p.id == def),
-			boldLead(c.t("cc.lab", map[string]string{"profile": c.cat.Text(p.name, nil)}), ": "), c.t("gp.G4", ag))
+			boldLead(c.t("cc.lab", map[string]string{"profile": c.cat.Text(p.name, nil)}), ": "), c.t("gp.G4", g4))
 	}
 	c.w(`</div></div></section>`)
+}
+
+// docsDate is the day the agent's documentation was read, as G4 writes it:
+// 15-11-2026 in Spanish, 2026-11-15 otherwise.
+func (c htmlCtx) docsDate(g guidedAgent) string {
+	y, m, d := g.docsRead[0], g.docsRead[1], g.docsRead[2]
+	if c.cat.Lang() == "es" {
+		return fmt.Sprintf("%02d-%02d-%04d", d, m, y)
+	}
+	return fmt.Sprintf("%04d-%02d-%02d", y, m, d)
 }
 
 // guidedText is what a guided profile copies: the sentence and its block
@@ -349,7 +363,7 @@ func (c htmlCtx) renderRowsOf(r [3][][2]string, nc string) {
 
 // guidedKeys are the catalog codes of the guided profiles (BV-238 §4).
 func guidedKeys() []string {
-	keys := []string{"gp.G1", "gp.G2", "gp.G3", "gp.G4", "gp.see_steps", "gp.bot.q", "gp.title", "gp.side", "gp.bot.side"}
+	keys := []string{"gp.G1", "gp.G2", "gp.G3", "gp.bot.G3", "gp.G4", "gp.see_steps", "gp.bot.q", "gp.title", "gp.side", "gp.bot.side"}
 	seen := map[string]bool{}
 	for _, k := range keys {
 		seen[k] = true

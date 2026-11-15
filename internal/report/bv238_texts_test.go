@@ -7,12 +7,14 @@ import (
 )
 
 // bv238Texts are BV-238 §4's texts, literal (ES | EN), with Albert's
-// changes of 15-11 to Grok Build (T3 and the three «Doesn't cover»).
+// changes of 15-11 to Grok Build (T3 and the three «Doesn't cover») and
+// BV-239 (Grok Bot's G3 and «Doesn't cover», G4 with the date).
 var bv238Texts = []struct{ key, es, en string }{
 	{"gp.G1", "Sin medir", "Not measured"},
 	{"gp.G2", "Los perfiles sin medir no cuentan aquí: RosmarOps todavía no puede medir su efecto.", "Profiles that aren't measured don't count here: RosmarOps can't measure their effect yet."},
 	{"gp.G3", "RosmarOps todavía no puede medir el efecto de este perfil.", "RosmarOps can't measure this profile's effect yet."},
-	{"gp.G4", "Los pasos salen de la documentación de {agent} leída el 14-11-2026.", "The steps come from {agent}'s documentation, read on 2026-11-14."},
+	{"gp.bot.G3", "RosmarOps todavía no puede medir el efecto de esta forma de trabajar.", "RosmarOps can't measure the effect of this way of working yet."},
+	{"gp.G4", "Los pasos salen de la documentación de {agent} leída el {date}.", "The steps come from {agent}'s documentation, read on {date}."},
 	{"gp.see_steps", "Ver los pasos", "See the steps"},
 	{"gp.bot.q", "¿Usas Grok Bot?", "Do you use Grok Bot?"},
 	{"gp.title", "Elige cómo trabaja {agent}", "Choose how {agent} works"},
@@ -70,7 +72,7 @@ var bv238Texts = []struct{ key, es, en string }{
 	{"gp.bot.local.step.1", "En los ajustes de Grok Bot, pon «Execution on this computer» en «Ask every time».", "In Grok Bot's settings, set «Execution on this computer» to «Ask every time»."},
 	{"gp.bot.local.does.1", "Trabajar en la nube", "Work in the cloud"},
 	{"gp.bot.local.asks.1", "Cada orden en tu ordenador, enseñándote la orden exacta", "Each command on your computer, showing you the exact command"},
-	{"gp.bot.local.nc", "Si un contenido engañoso le pide una orden, solo te protege leer la tarjeta antes de aceptar. «Always allow» no tiene un perfil seguro.", "If deceptive content asks it for a command, only reading the card before you accept protects you. «Always allow» has no safe profile."},
+	{"gp.bot.local.nc", "Si un contenido engañoso le pide una orden, solo te protege leer la tarjeta antes de aceptar. «Always allow» no tiene perfil: ejecuta cualquier orden sin preguntarte.", "If deceptive content asks it for a command, only reading the card before you accept protects you. «Always allow» has no profile: it runs any command without asking you."},
 }
 
 // TestBV238Texts: every text of BV-238 §4 is in the catalog, literal, in EN

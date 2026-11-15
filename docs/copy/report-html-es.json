@@ -892,7 +892,7 @@
   "gp.G1": "Sin medir",
   "gp.G2": "Los perfiles sin medir no cuentan aquí: RosmarOps todavía no puede medir su efecto.",
   "gp.G3": "RosmarOps todavía no puede medir el efecto de este perfil.",
-  "gp.G4": "Los pasos salen de la documentación de {agent} leída el 14-11-2026.",
+  "gp.G4": "Los pasos salen de la documentación de {agent} leída el {date}.",
   "gp.see_steps": "Ver los pasos",
   "gp.bot.q": "¿Usas Grok Bot?",
   "gp.title": "Elige cómo trabaja {agent}",
@@ -950,5 +950,6 @@
   "gp.bot.local.step.1": "En los ajustes de Grok Bot, pon «Execution on this computer» en «Ask every time».",
   "gp.bot.local.does.1": "Trabajar en la nube",
   "gp.bot.local.asks.1": "Cada orden en tu ordenador, enseñándote la orden exacta",
-  "gp.bot.local.nc": "Si un contenido engañoso le pide una orden, solo te protege leer la tarjeta antes de aceptar. «Always allow» no tiene un perfil seguro."
+  "gp.bot.local.nc": "Si un contenido engañoso le pide una orden, solo te protege leer la tarjeta antes de aceptar. «Always allow» no tiene perfil: ejecuta cualquier orden sin preguntarte.",
+  "gp.bot.G3": "RosmarOps todavía no puede medir el efecto de esta forma de trabajar."
 }
