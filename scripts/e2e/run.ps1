@@ -203,10 +203,6 @@ $isRed = $false
 foreach ($m in $runFailed) { if ($page.Contains($m)) { $isRed = $true } }
 Check 'report is a normal report (not the red page)' (-not $isRed) 'the report shows the run-could-not-finish page'
 
-# The report states the limit: «48 proyectos revisados · límite de 12 minutos».
-Check 'report states the 48-project limit' `
-    ($page -match "$expectedProjects proyectos revisados · límite de 12 minutos") `
-    'report line "48 proyectos revisados · límite de 12 minutos"'
 
 # Coherence of the limit warning: the top warning «llegó a su límite de tiempo»
 # must be present if and only if the run actually hit the limit. The ground
@@ -247,13 +243,24 @@ Check 'report has the «Encontrado en:» line' ($page.Contains('Encontrado en:')
 $pkgs = @(Get-ChildItem -Path (Join-Path $reports 'data') -Filter 'rosmarops-results-*.locked.json' -ErrorAction SilentlyContinue)
 Check 'space package sealed' ($pkgs.Count -ge 1) ("packages in reports: " + ($pkgs.Count))
 if ($pkgs.Count -ge 1) {
+    # BV-246: openpkg also writes the space view's Spanish projects line
+    # (html.meta.projects), which BV-236 took out of report.es.html.
+    $metaFile = Join-Path ([System.IO.Path]::GetTempPath()) 'rosmarops-e2e-meta-es.txt'
+    if (Test-Path $metaFile) { Remove-Item $metaFile }
     if ($OpenPkg) {
-        $open = & $OpenPkg $pkgs[0].FullName 2>&1
+        $open = & $OpenPkg $pkgs[0].FullName $metaFile 2>&1
     } else {
-        $open = & go run ./tests/e2e/openpkg $pkgs[0].FullName 2>&1
+        $open = & go run ./tests/e2e/openpkg $pkgs[0].FullName $metaFile 2>&1
     }
     Check 'space package opens with the kit key' ($LASTEXITCODE -eq 0) ("$open")
     $summary.Add("INFO  openpkg: $open")
+    # The space view states the limit: «48 proyectos revisados · límite de 12 minutos».
+    $meta = if (Test-Path $metaFile) { [System.IO.File]::ReadAllText($metaFile, [System.Text.Encoding]::UTF8) } else { '' }
+    Check 'report states the 48-project limit' `
+        ($meta -match "$expectedProjects proyectos revisados · límite de 12 minutos") `
+        "space view line ""48 proyectos revisados · límite de 12 minutos"" (got ""$meta"")"
+} else {
+    Check 'report states the 48-project limit' $false 'no sealed space package to read the projects line from'
 }
 
 # --- No full fake secret in any output or in the log ------------------------
