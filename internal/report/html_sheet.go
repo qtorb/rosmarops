@@ -200,7 +200,7 @@ func (c htmlCtx) renderBar() {
 // renderSheet is the sheet (BV-236 §1, w0).
 func (c htmlCtx) renderSheet() {
 	v := c.v
-	m := v.Index.Machine
+	m := c.sheetScore()
 	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1><div class="sh-sub">%s</div></div><dl class="sh-meta">`,
 		c.t("sheet.title", nil), c.t("sheet.sub", nil))
 	program := "RosmarOps"
@@ -506,7 +506,7 @@ func hide(on bool) string {
 // both show below the sheet with the use «I write code».
 func (c htmlCtx) renderProfileViews() {
 	cc := c.claudeAgent()
-	m := c.v.Index.Machine
+	m := c.sheetScore()
 	before := index.NoClass()
 	if m.Letter != nil {
 		before = *m.Letter
@@ -957,4 +957,24 @@ func sheetKeys() []string {
 		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
 		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back",
 	}
+}
+
+// sheetScore is the score the sheet shows: the machine's (index.machine);
+// when the machine has none because an agent present was not evaluated
+// (I5) but another one was, the lowest evaluated agent's, with its class and
+// factory score, as the old step 1 showed it (v3 §3 point 6).
+func (c htmlCtx) sheetScore() index.MachineScore {
+	m := c.v.Index.Machine
+	if m.Value != nil {
+		return m
+	}
+	a, ok := c.scored()
+	if !ok {
+		return m
+	}
+	out := index.MachineScore{Score: index.Score{Value: a.Value, Band: a.Band}, AgentID: a.AgentID}
+	l := a.Letter
+	out.Letter = &l
+	out.FactoryValue = a.Factory.Value
+	return out
 }

@@ -47,7 +47,7 @@ func TestNoExternalInHTML(t *testing.T) {
 		// search, like the SVG attribute. Any other URL, and any other
 		// app.rosmarops.com URL, still fails.
 		const spaceHref = `href="https://app.rosmarops.com/space"`
-		spaceStart := strings.Index(page, `<section class="space" id="your-space">`) // BV-236 §1: the top bar links to it
+		spaceStart := strings.Index(page, `<section class="space">`)
 		spaceEnd := -1
 		if spaceStart >= 0 {
 			if rel := strings.Index(page[spaceStart:], `</section>`); rel >= 0 {
