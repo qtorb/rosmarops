@@ -1045,7 +1045,7 @@
   "gp.G1": "Not measured",
   "gp.G2": "Profiles that aren't measured don't count here: RosmarOps can't measure their effect yet.",
   "gp.G3": "RosmarOps can't measure this profile's effect yet.",
-  "gp.G4": "The steps come from {agent}'s documentation, read on 2026-11-14.",
+  "gp.G4": "The steps come from {agent}'s documentation, read on {date}.",
   "gp.see_steps": "See the steps",
   "gp.bot.q": "Do you use Grok Bot?",
   "gp.title": "Choose how {agent} works",
@@ -1103,5 +1103,6 @@
   "gp.bot.local.step.1": "In Grok Bot's settings, set «Execution on this computer» to «Ask every time».",
   "gp.bot.local.does.1": "Work in the cloud",
   "gp.bot.local.asks.1": "Each command on your computer, showing you the exact command",
-  "gp.bot.local.nc": "If deceptive content asks it for a command, only reading the card before you accept protects you. «Always allow» has no safe profile."
+  "gp.bot.local.nc": "If deceptive content asks it for a command, only reading the card before you accept protects you. «Always allow» has no profile: it runs any command without asking you.",
+  "gp.bot.G3": "RosmarOps can't measure the effect of this way of working yet."
 }

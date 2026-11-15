@@ -1,9 +1,11 @@
 package integration_test
 
 import (
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -68,8 +70,22 @@ func TestBV238NoClassOrScore(t *testing.T) {
 			if strings.Contains(view, `class="arrow"`) || strings.Contains(view, "→") {
 				t.Errorf("%s: %s's view shows a before → after", lang, key)
 			}
-			if !strings.Contains(view, esc(cat.Text("gp.G3", nil))) || !strings.Contains(view, esc(cat.Text("gp.G4", map[string]string{"agent": map[string]string{"cursor": "Cursor", "grok-build": "Grok Build", "grok-bot": "Grok Bot"}[key]}))) {
-				t.Errorf("%s: %s's view lacks G3 or G4", lang, key)
+			// BV-239: G4 carries the day each agent's documentation was read,
+			// and Grok Bot's cards have their own G3.
+			date := map[string]map[string]string{
+				"cursor": {"es": "15-11-2026", "en": "2026-11-15"}, "grok-build": {"es": "15-11-2026", "en": "2026-11-15"},
+				"grok-bot": {"es": "14-11-2026", "en": "2026-11-14"},
+			}[key][lang]
+			g3 := "gp.G3"
+			if key == "grok-bot" {
+				g3 = "gp.bot.G3"
+			}
+			agent := map[string]string{"cursor": "Cursor", "grok-build": "Grok Build", "grok-bot": "Grok Bot"}[key]
+			if !strings.Contains(view, esc(cat.Text(g3, nil))) || !strings.Contains(view, esc(cat.Text("gp.G4", map[string]string{"agent": agent, "date": date}))) {
+				t.Errorf("%s: %s's view lacks its G3 or G4 with %s", lang, key, date)
+			}
+			if key == "grok-bot" && strings.Contains(view, esc(cat.Text("gp.G3", nil))) {
+				t.Errorf("%s: Grok Bot still shows the profiles' G3", lang)
 			}
 		}
 		if strings.Index(pc, `<div class="plist gbotlist">`) < strings.Index(pc, `<div class="prow oth">`) {
@@ -150,3 +166,35 @@ const [file, c1] = process.argv.slice(1);
   if (errs.length) fail('page errors: ' + errs.join('; '));
   await b.close();
 })();`
+
+// safeWord is «seguro», «segura», «safe» or «safely» as a word (BV-239).
+var safeWord = regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}])(seguro|segura|safe|safely)([^\p{L}\p{N}]|$)`)
+
+// visibleText is a page's text as the person reads it: no script, no style,
+// no tags, entities decoded.
+func visibleText(page string) string {
+	page = regexp.MustCompile(`(?s)<script.*?</script>|<style.*?</style>`).ReplaceAllString(page, " ")
+	return html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(page, " "))
+}
+
+// TestBV239NoSafeWord: no page of the report, in Spanish or English, says
+// «seguro», «segura», «safe» or «safely» as a word: the full test computer
+// (every view) and the one-agent golden pages.
+func TestBV239NoSafeWord(t *testing.T) {
+	pages := map[string]string{}
+	for _, lang := range []string{"en", "es"} {
+		_, page, _ := bv236Page(t, lang)
+		pages["full test computer, "+lang] = page
+		raw, err := os.ReadFile(filepath.Join("..", "..", "internal", "report", "testdata", "html_one_agent_bv56."+lang+".html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		pages["one agent, "+lang] = string(raw)
+	}
+	for name, page := range pages {
+		text := visibleText(page)
+		for _, m := range safeWord.FindAllStringSubmatchIndex(text, -1) {
+			t.Errorf("%s: %q", name, text[max(0, m[0]-60):min(len(text), m[1]+30)])
+		}
+	}
+}
