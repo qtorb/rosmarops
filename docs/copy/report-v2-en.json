@@ -243,6 +243,7 @@
   "today.what_remains": "This narrows the exposure; it does not remove it. What remains:",
   "today.why_this": "Why this one: of the changes that apply, it cuts the most exposure for the least disruption to how you work.",
   "unknown.agent_model_judges_command_safety": "Commands the agent's own model judges harmless run without asking; RosmarOps cannot check that judgement at rest.",
+  "unknown.default_mode_depends_on_version": "Antigravity CLI changed its default mode to «Auto» in version 1.5.7 (2026-11-12), according to its changelog, but its documentation still says it asks you first. RosmarOps can't read which version you have: if it's 1.5.7 or later and you haven't chosen a mode, another AI model decides, not you.",
   "unknown.auto_classifier_permits": "Depends on auto mode's classifier allowing the step. The classifier is a model, not a person, and RosmarOps cannot predict its decision.",
   "unknown.auto_mode_available": "Assumes auto mode is available to your account and model; if it is not, {agent} starts in manual mode.",
   "unknown.bash_tool_available": "Assumes {agent} has its shell tool available in your sessions.",

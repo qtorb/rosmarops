@@ -949,7 +949,7 @@ func antigravityBaseAssumptions(extra ...string) []string {
 func (oi overviewInputs) antigravityCells(v *agentView) []OverviewCell {
 	level := antigravityMode(v)
 	machine := antigravityMachine(v)
-	return []OverviewCell{
+	cells := []OverviewCell{
 		oi.antigravityReadsCell(v, machine),
 		oi.antigravityWritesCell(v, level, machine),
 		oi.antigravityRunsCell(v, level),
@@ -957,6 +957,25 @@ func (oi overviewInputs) antigravityCells(v *agentView) []OverviewCell {
 		oi.antigravityChangesCell(v, level),
 		oi.providerCell(v),
 	}
+	if oi.antigravityDefaultModeUnknown(level) {
+		for i := range cells {
+			switch cells[i].Row {
+			case RowWritesFiles, RowRunsCommands, RowSendsOut:
+				cells[i].Data.Assumptions = sortedUnique(append(cells[i].Data.Assumptions, AssumeDefaultModeDependsOnVersion))
+				cells[i].Assumed = true
+			}
+		}
+	}
+	return cells
+}
+
+// antigravityDefaultModeUnknown (BV-244, CTO-54): agentMode is not written and
+// nothing else sets the level, so the CLI runs in its default mode, which 1.5.7
+// changed to auto; RosmarOps keeps request-review (its documentation) and marks
+// the rows whose decider would change under auto: writing files, running
+// commands and sending out.
+func (oi overviewInputs) antigravityDefaultModeUnknown(level string) bool {
+	return level == agRequestReview && oi.in.Antigravity.Present && oi.in.Antigravity.Settings.AgentMode == ""
 }
 
 func (oi overviewInputs) antigravityReadsCell(v *agentView, machine bool) OverviewCell {

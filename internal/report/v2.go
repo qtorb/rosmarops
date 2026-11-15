@@ -423,6 +423,10 @@ type V2Input struct {
 	// Optional.
 	Cline platform.ClineScan
 
+	// Antigravity is the Antigravity CLI scan (BV-244): whether agentMode is
+	// written, for default_mode_depends_on_version. Optional.
+	Antigravity platform.AntigravityScan
+
 	// IntegrityNotChecked: the state could not be read, so this run checked
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).

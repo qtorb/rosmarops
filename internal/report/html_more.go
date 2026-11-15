@@ -10,6 +10,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/notify"
+	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/scan/scheduledtasks"
 	"github.com/qtorb/rosmarops/internal/untrusted"
 )
@@ -416,6 +417,12 @@ func (c htmlCtx) renderAssumeDialog() {
 			continue
 		}
 		c.w(`<li>%s</li>`, c.t("html.assume."+product, nil))
+		// BV-244: an assumption of the agent's own rows, with its text.
+		for _, code := range rowAssumptionsInDialog {
+			if agentRowsCarry(a, code) {
+				c.w(`<li>%s</li>`, c.t("unknown."+code, nil))
+			}
+		}
 	}
 	c.w(`<li>%s</li>`, c.t(c.v.osKey("html.assume.scope"), nil))
 	if len(c.v.NotChecked) > 0 {
@@ -426,6 +433,23 @@ func (c htmlCtx) renderAssumeDialog() {
 		c.w(`</ul></li>`)
 	}
 	c.w(`</ul></dialog>`)
+}
+
+// rowAssumptionsInDialog are the row assumptions whose text the window of the
+// analysis assumptions lists under their agent, when one of its rows carries
+// it (BV-244).
+var rowAssumptionsInDialog = []string{rules.AssumeDefaultModeDependsOnVersion}
+
+// agentRowsCarry reports whether a row of a carries the assumption code.
+func agentRowsCarry(a rules.OverviewAgent, code string) bool {
+	for _, c := range a.Rows {
+		for _, x := range c.Data.Assumptions {
+			if x == code {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // dialogJS opens and closes a window (v3 §16.2, §17.5): showModal, close,

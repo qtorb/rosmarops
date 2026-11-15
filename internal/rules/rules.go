@@ -95,6 +95,12 @@ const (
 	// model decided which command was "safe"; RosmarOps cannot check that
 	// judgement at rest (BV-193, CTO-22 Cline §4, signed point 5). A premise.
 	AssumeAgentModelJudgesCommandSafety = "agent_model_judges_command_safety"
+	// AssumeDefaultModeDependsOnVersion: Antigravity CLI changed its default
+	// agentMode to auto in 1.5.7, its documentation still says it asks, and
+	// RosmarOps cannot read the installed version; with agentMode not written,
+	// the rows whose decider depends on that default carry it (BV-244, CTO-54).
+	// Not a premise and not hidden-at-rest: it changes no score and no class.
+	AssumeDefaultModeDependsOnVersion = "default_mode_depends_on_version"
 )
 
 // AllAssumptions lists every assumption a finding can carry: the graph's and
@@ -109,6 +115,7 @@ var AllAssumptions = []string{
 	AssumeAuxModelPermits, AssumeHermesBackendUnknown,
 	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
 	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown, AssumeAgentModelJudgesCommandSafety,
+	AssumeDefaultModeDependsOnVersion,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -271,6 +278,11 @@ type Input struct {
 	// own model judge command safety (agent_model_judges_command_safety).
 	// Optional.
 	Cline platform.ClineScan
+
+	// Antigravity is the Antigravity CLI scan (BV-244): the overview reads
+	// whether agentMode is written, for default_mode_depends_on_version.
+	// Optional: without it (Present false) the assumption is not added.
+	Antigravity platform.AntigravityScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
