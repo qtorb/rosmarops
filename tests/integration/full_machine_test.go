@@ -302,6 +302,9 @@ func checkCodexHow(t *testing.T, name, lang, key, dir string) {
 // renders a key it has no text for as "[key]".
 var untranslatedKey = regexp.MustCompile(`\[(?:html|report|console|[a-z][a-z0-9_]*)\.[a-zA-Z0-9_.-]+\]`)
 
+// copyText is a profile's literal text to paste (BV-236, BV-238).
+var copyText = regexp.MustCompile(`(?s)<pre class="ptext"[^>]*>.*?</pre>`)
+
 // emptyBlock is a «by hand» block whose content to paste is empty, or a copy
 // text with nothing after its instruction (BV-229 §2).
 var emptyBlock = regexp.MustCompile(`<pre>\s*</pre>|<pre hidden>[^<]*?\n\n\s*</pre>|<pre>[^<]*?\n\n\s*</pre>`)
@@ -351,7 +354,10 @@ func checkPagesShown(t *testing.T, name, dir string) {
 		if err != nil {
 			return err
 		}
-		for _, k := range untranslatedKey.FindAllString(string(raw), -1) {
+		// BV-238: a profile's text to paste is literal configuration (Grok
+		// Build's [compat.claude] / [compat.cursor] TOML sections), not
+		// catalog text; only it is left out of the untranslated-key check.
+		for _, k := range untranslatedKey.FindAllString(copyText.ReplaceAllString(string(raw), ""), -1) {
 			t.Errorf("%s: %s shows %s without its text", name, filepath.Base(path), k)
 		}
 		if i := strings.Index(string(raw), "&amp;#"); i >= 0 {

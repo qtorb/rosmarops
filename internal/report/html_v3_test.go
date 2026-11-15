@@ -31,9 +31,9 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 		labels := regexp.MustCompile(`<section[^>]*aria-labelledby="([^"]+)"`).FindAllStringSubmatch(page, -1)
 		// BV-236 §1–§3: the sheet's three sections, «Computer profile» and
 		// Claude Code's view, steps 2 and 3 and §11's section (the sheet
-		// replaces step 1's section).
-		if len(labels) != 8 {
-			t.Errorf("%s: %d labelled sections, want 8", lang, len(labels))
+		// replaces step 1's section); BV-238: Grok Bot's view, always there.
+		if len(labels) != 9 {
+			t.Errorf("%s: %d labelled sections, want 9", lang, len(labels))
 		}
 		for _, l := range labels {
 			if !strings.Contains(page, `id="`+l[1]+`"`) {

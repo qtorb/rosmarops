@@ -78,8 +78,9 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 		// assumptions' window. (The overview and the windows are in «More
 		// information», not connected.) BV-236 §1–§3: the sheet's title is
 		// the h1 and its three sections are h2, replacing step 1's h2; the
-		// «Computer profile» and Claude Code views add two: twelve h2.
-		if strings.Count(page, "<h1") != 1 || strings.Count(page, `<h1 class="sh-title"`) != 1 || strings.Count(page, "<h2") != 12 {
+		// «Computer profile» and Claude Code views add two; BV-238: Grok
+		// Bot's view, always there, one more: thirteen h2.
+		if strings.Count(page, "<h1") != 1 || strings.Count(page, `<h1 class="sh-title"`) != 1 || strings.Count(page, "<h2") != 13 {
 			t.Errorf("%s: headings h1 %d, h2 %d", lang, strings.Count(page, "<h1"), strings.Count(page, "<h2"))
 		}
 		// BV-236 §1: the score is the sheet's, as text: its value.
