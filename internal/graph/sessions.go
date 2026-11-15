@@ -85,6 +85,18 @@ func (s claudeSession) sandboxEffective() bool {
 	return s.sb.noEscape || (s.mode != permissionModeBypass && s.mode != permissionModeAuto)
 }
 
+// blocksReadsOutside reports a blockReadsOutsideWorkingDirectories in force
+// in a layer this session loads (BV-237: a project's rule counts only in that
+// project).
+func (s claudeSession) blocksReadsOutside(inForce []Node) bool {
+	for _, c := range inForce {
+		if c.Rule == ruleBlockReadsOutside && appliesTo(c, s.root) {
+			return true
+		}
+	}
+	return false
+}
+
 // sandboxDenies reports f is under one of the session's sandbox denyRead
 // paths (~/ resolved against home).
 func (s claudeSession) sandboxDenies(f, home string) bool {
@@ -218,8 +230,11 @@ func sessionMode(inForce []Node, root string) (string, *Node) {
 	if chosen == nil {
 		return permissionModeDefault, nil
 	}
+	// A deny counts only in the sessions its layer loads (BV-237): a
+	// disableAutoMode in one project's settings does not disable auto in the
+	// others.
 	for _, c := range inForce {
-		if c.Type == CapPermissionMode && c.Approval == ApprovalDeny && c.TargetScope == chosen.TargetScope {
+		if c.Type == CapPermissionMode && c.Approval == ApprovalDeny && c.TargetScope == chosen.TargetScope && appliesTo(c, root) {
 			return permissionModeDefault, nil
 		}
 	}

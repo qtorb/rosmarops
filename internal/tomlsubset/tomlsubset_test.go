@@ -168,3 +168,23 @@ func TestParse_OverMaxBytes(t *testing.T) {
 		t.Error("expected size error")
 	}
 }
+
+// BV-237: Grok Build's [permission] rules as its documentation writes them,
+// an array of inline tables over several lines, with comments and a trailing
+// comma.
+func TestParse_MultiLineArrayOfInlineTables(t *testing.T) {
+	m, err := Parse([]byte("[permission]\nrules = [\n  { action = \"deny\", tool = \"edit\" }, # no edits\n  { action = \"allow\", tool = \"bash\", pattern = \"git [s]tatus\" },\n]\n[ui]\npermission_mode = \"ask\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := m["permission"].(Map)["rules"].(Array)
+	if len(rules) != 2 || rules[1].(Map)["pattern"] != "git [s]tatus" || rules[0].(Map)["tool"] != "edit" {
+		t.Errorf("rules = %v", rules)
+	}
+	if m["ui"].(Map)["permission_mode"] != "ask" {
+		t.Errorf("ui = %v", m["ui"])
+	}
+	if _, err := Parse([]byte("a = [\n 1,\n")); err == nil {
+		t.Error("an unterminated multi-line array parsed")
+	}
+}

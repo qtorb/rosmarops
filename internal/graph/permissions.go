@@ -620,8 +620,11 @@ func withDisabledBuiltinMode(f Fragment, base knowledge.Base) Fragment {
 	disabled := map[string]bool{}
 	for _, edge := range f.Edges {
 		c, ok := nodes[edge.To]
-		if edge.Type == EdgeHas && ok && c.Type == CapPermissionMode && c.Approval == ApprovalDeny &&
-			c.TargetScope == permissionModeAuto && c.InForce {
+		// BV-237: only a user or managed disableAutoMode disables the
+		// built-in mode for every session; a project's or local one counts in
+		// its own project's sessions (sessionMode).
+		if scope, _ := layerRoot(c.AppliesIn); edge.Type == EdgeHas && ok && c.Type == CapPermissionMode && c.Approval == ApprovalDeny &&
+			c.TargetScope == permissionModeAuto && c.InForce && (scope == "user" || scope == "managed") {
 			disabled[productDefaultID(edge.From, e)] = true
 		}
 	}

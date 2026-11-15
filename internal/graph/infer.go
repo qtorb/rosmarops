@@ -486,10 +486,6 @@ type inferredWay struct {
 // rules and its own denyRead paths into what every command can read, so it
 // cuts the program way too, and the Bash way on its denyRead paths.
 func (in inference) readWays(files []string) []inferredWay {
-	blockReads := false
-	for _, c := range in.inForce {
-		blockReads = blockReads || c.Rule == ruleBlockReadsOutside
-	}
 	covered := map[string][]string{} // file -> the Read rules covering it
 	for _, f := range files {
 		if r := in.readRules(f); len(r) > 0 {
@@ -529,6 +525,7 @@ func (in inference) readWays(files []string) []inferredWay {
 	bash := in.bashVia != nil && !in.shellRules("Bash")
 	for _, s := range in.sessions {
 		eff := s.sandboxEffective()
+		blockReads := s.blocksReadsOutside(in.inForce)
 		for _, f := range files {
 			inside := in.insideSession(s, f)
 			cov := covered[f]

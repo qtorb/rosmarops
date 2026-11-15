@@ -991,6 +991,12 @@ type GrokLayer struct {
 	// absent (BV-232 §1, docs.x.ai/build/features/sandbox).
 	SandboxProfile string
 
+	// Rules is [permission] rules, the verbose form (BV-237,
+	// docs.x.ai/build/settings/reference): { action, tool, pattern? }, with
+	// action allow | deny | ask and tool any | bash | edit | read | grep | mcp
+	// | webfetch. Evaluated deny > ask > allow, like the compact lists.
+	Rules []GrokRule
+
 	// Allow, Deny, Ask are the [permission] rules of this layer (merged across
 	// layers by the graph; deny > ask > allow). A "*" is the wildcard.
 	Allow []string
@@ -1026,6 +1032,13 @@ type GrokLayer struct {
 }
 
 // GrokMCPServer is one [mcp_servers.<id>] of a Grok config layer.
+// GrokRule is one [permission] rules entry of Grok Build (BV-237).
+type GrokRule struct {
+	Action  string // allow | deny | ask
+	Tool    string // any | bash | edit | read | grep | mcp | webfetch
+	Pattern string // "" when the rule has none
+}
+
 type GrokMCPServer struct {
 	ID         string
 	Command    string

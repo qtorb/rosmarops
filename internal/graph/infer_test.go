@@ -668,11 +668,18 @@ func TestInfer_BuiltinAutoMode(t *testing.T) {
 // disableAutoMode "disable" in force: the built-in mode capability is not
 // in force (mode_disabled), and the mode is Manual.
 func TestInfer_BuiltinAutoModeDisabled(t *testing.T) {
-	for _, f := range []platform.ClaudeSettingsFile{
-		userFile(platform.ClaudePermissions{DisableAutoMode: "disable", DisableAutoModePointer: "/disableAutoMode"}),
-		projectFile(platform.ClaudePermissions{DisableAutoMode: "disable", DisableAutoModePointer: "/permissions/disableAutoMode"}),
+	// BV-237: a user disableAutoMode disables the built-in mode for every
+	// session; a project's one counts only in that project's sessions, so the
+	// built-in mode stays in force (for the other projects) but this project's
+	// session starts in default and writes nothing through it.
+	for _, c := range []struct {
+		f       platform.ClaudeSettingsFile
+		inForce bool
+	}{
+		{userFile(platform.ClaudePermissions{DisableAutoMode: "disable", DisableAutoModePointer: "/disableAutoMode"}), false},
+		{projectFile(platform.ClaudePermissions{DisableAutoMode: "disable", DisableAutoModePointer: "/permissions/disableAutoMode"}), true},
 	} {
-		g := inferGraph(t, settingsOf(f))
+		g := inferGraph(t, settingsOf(c.f))
 		var builtin []graph.Node
 		for _, n := range g.Nodes {
 			// Claude Code's built-in mode (Cursor's run mode is its own, BV-48).
@@ -680,11 +687,11 @@ func TestInfer_BuiltinAutoModeDisabled(t *testing.T) {
 				builtin = append(builtin, n)
 			}
 		}
-		if len(builtin) != 1 || builtin[0].InForce || builtin[0].NotInForceReason != graph.ReasonModeDisabled {
-			t.Errorf("built-in mode while disabled: %+v, want in_force false, mode_disabled", builtin)
+		if len(builtin) != 1 || builtin[0].InForce != c.inForce || (!c.inForce && builtin[0].NotInForceReason != graph.ReasonModeDisabled) {
+			t.Errorf("%s: built-in mode %+v, want in_force %v", c.f.Scope, builtin, c.inForce)
 		}
 		if got := writeTargets(inferredEdges(t, g), "builtin_default_mode"); len(got) != 0 {
-			t.Errorf("writes through the disabled built-in mode: %v", got)
+			t.Errorf("%s: writes through the disabled built-in mode: %v", c.f.Scope, got)
 		}
 	}
 }

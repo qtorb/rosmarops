@@ -7,12 +7,13 @@
 // Read: comments (#); bare, quoted ("..."/'...') and dotted keys; standard
 // tables [a.b.c] with bare, basic and literal-string segments; key = value with
 // basic strings (with the standard escapes), literal strings, integers, floats,
-// booleans; single-line arrays of those scalars ([a, "b", 'c']); single-line
+// booleans; arrays of those scalars and of inline tables ([a, "b", 'c']),
+// on one line or over several (BV-237: Grok Build's [permission] rules, as its
+// documentation writes them), with comments and a trailing comma; single-line
 // inline tables ({ a = 1, b = "x" }).
 //
 // Refused (the whole document errors, so the agent shows as detected, never
-// half-read): multi-line arrays, inline tables or
-// strings; multi-line (""" / ”') strings; dates and times; a value that is not
+// half-read): multi-line inline tables or strings; multi-line (""" / ”') strings; dates and times; a value that is not
 // one of the kinds above; a duplicate key or a key written both as a leaf and a
 // table; a table segment that is empty; more than MaxDepth nesting and more than
 // MaxBytes.
@@ -55,10 +56,22 @@ func Parse(b []byte) (Map, error) {
 	defined := map[string]bool{}
 	cur := root // the table new keys go into
 	lines := splitLines(string(b))
-	for i, raw := range lines {
-		line := stripComment(strings.TrimSpace(raw))
+	for i := 0; i < len(lines); i++ {
+		line := stripComment(strings.TrimSpace(lines[i]))
 		if line == "" {
 			continue
+		}
+		// A key = [ ... array spread over several lines: join its lines (each
+		// without its comment) until the brackets close.
+		if !strings.HasPrefix(line, "[") {
+			start := i
+			for openBrackets(line) > 0 {
+				i++
+				if i >= len(lines) {
+					return nil, lineErr(start, "unterminated array")
+				}
+				line += " " + stripComment(strings.TrimSpace(lines[i]))
+			}
 		}
 		if strings.HasPrefix(line, "[[") {
 			path, err := arrayTableHeader(line)
@@ -111,6 +124,34 @@ func Parse(b []byte) (Map, error) {
 		}
 	}
 	return root, nil
+}
+
+// openBrackets is the depth of [ left open at the end of s, outside strings.
+func openBrackets(s string) int {
+	depth, inBasic, inLit := 0, false, false
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case inBasic:
+			if c == '\\' {
+				i++
+			} else if c == '"' {
+				inBasic = false
+			}
+		case inLit:
+			if c == '\'' {
+				inLit = false
+			}
+		case c == '"':
+			inBasic = true
+		case c == '\'':
+			inLit = true
+		case c == '[':
+			depth++
+		case c == ']':
+			depth--
+		}
+	}
+	return depth
 }
 
 func splitLines(s string) []string {

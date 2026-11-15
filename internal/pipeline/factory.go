@@ -146,6 +146,7 @@ func FactoryGrok(s platform.GrokScan) platform.GrokScan {
 		l.Allow, l.Deny, l.Ask = nil, nil, nil
 		l.Compat, l.ClaudeImported, l.DisableBypass = nil, false, false
 		l.FolderTrustEnabled = nil
+		l.Rules = nil
 		out.Layers = append(out.Layers, l)
 	}
 	return out
