@@ -426,13 +426,20 @@ func sortFindings(fs []Finding) {
 // reduction per magnitude (points / magnitude). Ties: the action that touches
 // more findings of the list, then the one that changes a single file, then the
 // larger reduction, then the action id. When no finding has an action it is
-// the first finding, with no action, as before.
+// the first finding, with no action, as before. An accepted finding («Lo
+// asumo», BV-236 §5) keeps counting but is not pending: it is never today's.
 func pickToday(fs []Finding) Today {
-	if len(fs) == 0 {
+	var pending []Finding
+	for _, x := range fs {
+		if x.Accepted == nil {
+			pending = append(pending, x)
+		}
+	}
+	if len(pending) == 0 {
 		return Today{Code: TodayNothingUrgent}
 	}
-	f := fs[0]
-	for _, x := range fs {
+	f := pending[0]
+	for _, x := range pending {
 		if len(x.Actions) > 0 {
 			f = x
 			break
