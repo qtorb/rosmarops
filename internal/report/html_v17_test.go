@@ -296,10 +296,9 @@ func TestRenderHTML_StripAndAssumptions(t *testing.T) {
 		if n := strings.Count(dlg, "<li>"); n != 3 || strings.Contains(dlg, htmlEscape(cat.Text("html.assume.cursor", nil))) {
 			t.Errorf("%s: one agent, %d lines", lang, n)
 		}
-		_, step1, _ := strings.Cut(page, `<section class="s1" aria-labelledby="step1">`)
-		step1, _, _ = strings.Cut(step1, `</section>`)
-		if !strings.Contains(step1, `<p class="meta warn">`+htmlEscape(cat.Text("html.integrity.not_checked", nil))+`</p>`) {
-			t.Errorf("%s: no integrity line in step 1", lang)
+		// BV-236 §1: step 1's warnings are now right under the sheet.
+		if !strings.Contains(sheetNotes(page), `<p class="meta warn">`+htmlEscape(cat.Text("html.integrity.not_checked", nil))+`</p>`) {
+			t.Errorf("%s: no integrity line under the sheet", lang)
 		}
 	}
 }

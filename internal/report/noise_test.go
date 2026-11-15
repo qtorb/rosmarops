@@ -138,7 +138,15 @@ func TestNoise_RealCase(t *testing.T) {
 			"cred_name": cat.Text("html.cred.supabase.service_role.name", nil),
 			"agent":     listNames(cat, rowAgents(v)),
 		}))
-		if n := strings.Count(page, want); n != 1 {
+		// BV-236 §1: the sheet's «Findings» repeat the first rows' titles;
+		// the row is one, in the sheet and in the flow.
+		_, sheet, _ := strings.Cut(page, `<article class="sheet"`)
+		sheet, flow, _ := strings.Cut(sheet, `</article>`)
+		if n := strings.Count(sheet, want); n > 1 {
+			t.Errorf("%s: %d rows %q in the sheet", lang, n, want)
+		}
+		_, flow, _ = strings.Cut(flow, `<main class="rep">`)
+		if n := strings.Count(flow, want); n != 1 {
 			t.Errorf("%s: %d rows %q", lang, n, want)
 		}
 		for _, a := range []string{"Claude Code", "Cursor"} {
@@ -299,9 +307,24 @@ func TestNoise_CountsByRow(t *testing.T) {
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
-			counts := htmlEscape(cat.Text("html.step.1.counts", map[string]string{"red": fmt.Sprint(red), "yellow": fmt.Sprint(yellow)}))
-			if !strings.Contains(page, `<p class="meta">`+counts) {
-				t.Errorf("%s %s: step 1 lacks %q", name, lang, counts)
+			// BV-236 §1: the sheet replaces step 1; the counts line (html.step.1.counts) is no longer in the HTML.
+			// The sheet's «Findings» count rows too: its count (shown
+			// unless there is one row) and at most three rows.
+			_, sheet, _ := strings.Cut(page, `<h2 class="sh-h" id="sh-findings">`)
+			sheet, _, _ = strings.Cut(sheet, `</section>`)
+			rows := red + yellow
+			count := ""
+			switch {
+			case rows > 3:
+				count = cat.Text("sheet.findings.count.first", map[string]string{"n": fmt.Sprint(rows)})
+			case rows != 1:
+				count = cat.Text("sheet.findings.count", map[string]string{"n": fmt.Sprint(rows)})
+			}
+			if count != "" && !strings.Contains(sheet, `<em>`+htmlEscape(count)+`</em>`) {
+				t.Errorf("%s %s: the sheet lacks %q", name, lang, count)
+			}
+			if n := strings.Count(sheet, `<tr><td>`); n != min(rows, 3) {
+				t.Errorf("%s %s: %d rows in the sheet, counts %d+%d", name, lang, n, red, yellow)
 			}
 			shown := strings.Count(page, `<div class="tbox">`)
 			_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
@@ -345,15 +368,14 @@ func TestNoise_Wording(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		_, head, _ := strings.Cut(page, `<body><main>`)
+		// BV-236 §1: the promise line is right under the sheet.
+		_, head, _ := strings.Cut(sheetNotes(page), `<p class="meta promise">`)
 		head, _, _ = strings.Cut(head, `</p>`)
 		if strings.Contains(head, "nada ha salido") || strings.Contains(head, "nothing left") ||
 			!strings.Contains(head, htmlEscape(cat.Text("html.header", map[string]string{"date": ""}))[:20]) {
 			t.Errorf("%s: header %q", lang, head)
 		}
-		if !strings.Contains(page, `</p><p class="scale">`+htmlEscape(cat.Text("html.index.scale", nil))+`</p>`) {
-			t.Errorf("%s: no scale under the score's agent line", lang)
-		}
+		// BV-236 §1: the sheet replaces step 1; the scale line (html.index.scale) is no longer in the HTML.
 		if all := htmlEscape(cat.Text("html.step.1.coverage.all", map[string]string{"evaluated": listNames(cat, []string{"Claude Code", "Cursor"})})); !strings.Contains(page, "<p>"+all+"</p>") {
 			t.Errorf("%s: no coverage line %q", lang, all)
 		}

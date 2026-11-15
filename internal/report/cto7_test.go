@@ -91,7 +91,7 @@ func TestCTO7Report(t *testing.T) {
 			t.Errorf("%s: key rendered %s", lang, m)
 		}
 		for _, want := range []string{
-			`<h1 class="hl">` + htmlEscape(cat.Text("html.headline.cred_in_git.one", nil)) + `</h1>`, // one key in git (v3 §15.4)
+			// BV-236 §1: the sheet replaces step 1; the headline (html.headline.cred_in_git.one) is no longer in the HTML.
 			`<h2 id="today-title">` + htmlEscape(cat.Text("html.action.rotate_credential.title", nil)) + `</h2>`,
 			htmlEscape(cat.Text("html.f.cred_in_git.title", map[string]string{"cred_name": cat.Text("html.cred.stripe.name", nil)})),
 			htmlEscape(cat.Text("html.f.cred_in_git.impact.remote", nil)),

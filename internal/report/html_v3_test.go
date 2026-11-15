@@ -10,7 +10,6 @@ import (
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/report"
-	"github.com/qtorb/rosmarops/internal/rules"
 )
 
 // informe HTML v3 §8, structure: one h1; three step sections, each labelled
@@ -30,8 +29,11 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 			t.Errorf("%s: %d h1", lang, strings.Count(page, "<h1"))
 		}
 		labels := regexp.MustCompile(`<section[^>]*aria-labelledby="([^"]+)"`).FindAllStringSubmatch(page, -1)
-		if len(labels) != 4 { // the three steps and §11's section
-			t.Errorf("%s: %d labelled sections, want 4", lang, len(labels))
+		// BV-236 §1–§3: the sheet's three sections, «Computer profile» and
+		// Claude Code's view, steps 2 and 3 and §11's section (the sheet
+		// replaces step 1's section).
+		if len(labels) != 8 {
+			t.Errorf("%s: %d labelled sections, want 8", lang, len(labels))
 		}
 		for _, l := range labels {
 			if !strings.Contains(page, `id="`+l[1]+`"`) {
@@ -76,49 +78,7 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 	}
 }
 
-// informe HTML v3 §8, headline: with a first finding of each rule, the h1
-// is html.headline.<rule>; without findings, html.index.perfect at 100 and
-// html.status.<status> otherwise.
-func TestRenderHTML_V3Headline(t *testing.T) {
-	g := v2Graph(t)
-	base := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	h1 := regexp.MustCompile(`<h1 class="hl">([^<]*)</h1>`)
-	for _, lang := range []string{"en", "es"} {
-		cat, _ := catalog.Load(lang)
-		for _, r := range rules.AllRules {
-			if r == rules.RulePackageKnownMalicious {
-				continue // BV-100: renders the finding title, not an html.headline key
-			}
-			if r == rules.RuleComputerUseAppAllowed {
-				continue // BV-193: renders the signed finding sentence, not an html.headline key
-			}
-			v := cloneV2(base)
-			v.Findings[0].Rule = r
-			v.Findings[0].Params.Agent = "Agent X"
-			key := "html.headline." + r
-			if r == rules.RuleCredInGit { // one cred_in_git finding: the singular (v3 §15.4)
-				key += ".one"
-			}
-			want := htmlEscape(cat.Text(key, map[string]string{"agent": "Agent X"}))
-			if m := h1.FindStringSubmatch(renderHTML(t, lang, v)); m == nil || m[1] != want {
-				t.Errorf("%s %s: h1 %v, want %q", lang, r, m, want)
-			}
-		}
-		v := cloneV2(base)
-		v.Findings = []rules.Finding{}
-		v.Today = rules.Today{}
-		hundred := 100
-		v.Index.Agents[0].Value = &hundred
-		if m := h1.FindStringSubmatch(renderHTML(t, lang, v)); m == nil || m[1] != htmlEscape(cat.Text("html.index.perfect", nil)) {
-			t.Errorf("%s: perfect h1 %v", lang, m)
-		}
-		v.Index.Agents[0].Value = nil
-		v.Index.Agents[0].Unavailable = index.ReasonCoverage
-		if m := h1.FindStringSubmatch(renderHTML(t, lang, v)); m == nil || m[1] != htmlEscape(cat.Text("html.status."+v.Status, nil)) {
-			t.Errorf("%s: status h1 %v", lang, m)
-		}
-	}
-}
+// BV-236 §1: the sheet replaces step 1; the headline (h1.hl, html.headline.*, html.index.perfect, html.status.*) is no longer in the HTML, so TestRenderHTML_V3Headline, whose every assertion was on it, is gone.
 
 // informe HTML v3 §3 point 6: with two evaluated agents, the lowest score
 // is the big one (and the card's), the other one a html.step.1.other line,
@@ -132,19 +92,24 @@ func TestRenderHTML_TwoScores(t *testing.T) {
 	cursor := index.AgentIndex{Agent: "Cursor", AgentID: "agent_client_cursor", Score: index.Score{Value: &low, Band: index.BandExposed}}
 	v.Index.Agents = append(v.Index.Agents, cursor)
 	v.Index.Scope.Evaluated = []string{"Claude Code", "Cursor"}
+	v.Index.Scope.NotEvaluated = nil
+	// The machine score is the worst agent's (I5), as index.Compute sets it:
+	// the sheet's big score (BV-236 §1).
+	v.Index.Machine = index.MachineScore{Score: cursor.Score, AgentID: cursor.AgentID}
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		of := cat.Text("html.index.of", nil)
-		if !strings.Contains(page, `<div class="score" role="img" aria-label="`+htmlEscape(strconv.Itoa(low)+of)+`"`) {
+		if n, _, ok := sheetScore(page); !ok || n != low {
 			t.Errorf("%s: the big score is not the lowest", lang)
 		}
 		other := htmlEscape(cat.Text("html.step.1.other", map[string]string{"agent": "Claude Code", "score": strconv.Itoa(*cc.Value), "band": cat.Text("band."+cc.Band, nil)}))
 		if !strings.Contains(page, `<p>`+other+`</p>`) {
 			t.Errorf("%s: no line %q", lang, other)
 		}
-		if !strings.Contains(page, `<p class="sagent">Cursor · `) {
-			t.Errorf("%s: agent · band line not Cursor's", lang)
+		// BV-236 §1: the agent · band line (.sagent) is gone; the sheet's
+		// score label names the agent that sets it.
+		if !strings.Contains(sheetLabel(page), "Cursor") {
+			t.Errorf("%s: the score's label is not Cursor's: %q", lang, sheetLabel(page))
 		}
 		// What we don't know left the HTML (v3 §17.1): the .ai.md keeps a
 		// paragraph per agent; the HTML has the assumptions' window.

@@ -61,9 +61,11 @@ func TestRenderHTML(t *testing.T) {
 			t.Errorf("%s: html lang", lang)
 		}
 		last := -1
-		// BV-158: the three steps, then «How to fix it», then «More information»'s
+		// BV-158: the steps, then «How to fix it», then «More information»'s
 		// cells (since the last check, the weekly review) when not connected.
-		for _, k := range []string{"html.step.1", "html.index.name", "html.step.2", "html.today.fixes", "html.step.3", "html.agentfix.title", "html.since.title", "html.weekly.title"} {
+		// BV-236 §1: the sheet (its title and «Result») replaces step 1's
+		// title (html.step.1) and the score's name (html.index.name), first.
+		for _, k := range []string{"sheet.title", "sheet.result", "html.step.2", "html.today.fixes", "html.step.3", "html.agentfix.title", "html.since.title", "html.weekly.title"} {
 			i := strings.Index(page, htmlEscape(cat.Text(k, nil)))
 			if i <= last {
 				t.Errorf("%s: %s out of order (%d after %d)", lang, k, i, last)
@@ -91,6 +93,37 @@ func TestRenderHTML(t *testing.T) {
 
 func htmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;").Replace(s)
+}
+
+// sheetScoreRE is the sheet's score (BV-236 §1): the machine score in its
+// band's colour, in `.res-num`.
+var sheetScoreRE = regexp.MustCompile(`<div class="res-num"><b class="nt ([rag]) big">(\d+)</b>`)
+
+// sheetScore is the sheet's score and its band letter (r, a, g); ok is false
+// when the sheet shows no score.
+func sheetScore(page string) (value int, band string, ok bool) {
+	m := sheetScoreRE.FindStringSubmatch(page)
+	if m == nil {
+		return 0, "", false
+	}
+	n, _ := strconv.Atoi(m[2])
+	return n, m[1], true
+}
+
+// sheetLabel is the sheet score's label (`.res-lab`): the agent that sets
+// it and, with dismissed findings, the dismissed note.
+func sheetLabel(page string) string {
+	_, lab, _ := strings.Cut(page, `<div class="res-lab">`)
+	lab, _, _ = strings.Cut(lab, `</div>`)
+	return lab
+}
+
+// sheetNotes is what stays right under the sheet (BV-236 §1): the promise
+// line and the warnings the old step 1 carried.
+func sheetNotes(page string) string {
+	_, notes, _ := strings.Cut(page, `<div class="sheetnotes">`)
+	notes, _, _ = strings.Cut(notes, `</div>`)
+	return notes
 }
 
 // J14 (decision 2026-10-26, integridad y revisión semanal, §7): with no

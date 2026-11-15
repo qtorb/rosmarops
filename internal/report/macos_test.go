@@ -80,8 +80,17 @@ func TestRenderHTML_MacOS(t *testing.T) {
 		if strings.Contains(dlg, htmlEscape(cat.Text("html.assume.scope", nil))) {
 			t.Errorf("%s: the Windows scope on macOS", lang)
 		}
+		// BV-236 §2–§3: the «Computer profile» and Claude Code views have
+		// their own «Copy the command» (cc.copy.cmd, Claude Code's command,
+		// not the weekly task's), so the weekly texts are looked for outside
+		// them.
+		views := regexp.MustCompile(`(?s)<section class="view pcv".*?<main class="rep">`)
+		if !views.MatchString(page) {
+			t.Fatalf("%s: no «Computer profile» views", lang)
+		}
+		noViews := views.ReplaceAllString(page, "")
 		for _, k := range []string{"html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.agent_note", "html.weekly.copy_command"} {
-			if strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
+			if strings.Contains(noViews, htmlEscape(cat.Text(k, nil))) {
 				t.Errorf("%s: %s on macOS", lang, k)
 			}
 		}

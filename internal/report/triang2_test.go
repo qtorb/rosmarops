@@ -171,7 +171,6 @@ func rowFor(page string, f rules.Finding) string {
 func TestTriang2_Step1(t *testing.T) {
 	g := v2Graph(t)
 	one := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	two := twoAgents(t)
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		multi := htmlEscape(cat.Text("html.step.1.counts.multi", map[string]string{"red": "", "yellow": ""}))
@@ -179,11 +178,7 @@ func TestTriang2_Step1(t *testing.T) {
 		if strings.Contains(renderHTML(t, lang, one), multi) {
 			t.Errorf("%s: .multi with one agent", lang)
 		}
-		red, yellow := report.RowCounts(two)
-		want := htmlEscape(cat.Text("html.step.1.counts.multi", map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
-		if !strings.Contains(renderHTML(t, lang, two), want) {
-			t.Errorf("%s: no %q with two agents", lang, want)
-		}
+		// BV-236 §1: the sheet replaces step 1; the counts line with two agents (html.step.1.counts.multi) is no longer in the HTML.
 	}
 }
 

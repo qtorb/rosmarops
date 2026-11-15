@@ -53,6 +53,9 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 			t.Errorf("%s: %d «i», %d well formed", lang, n, len(ids))
 		}
 		for _, term := range q {
+			if term == "agent" || term == "score" {
+				continue // BV-236 §1: the sheet replaces step 1; step 1's «i» of score and agent is no longer in the HTML.
+			}
 			if !seen[term] {
 				t.Errorf("%s: no «i» of %s", lang, term)
 			}
@@ -62,8 +65,7 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 		reach := htmlEscape(cat.Text("html.today.reach", map[string]string{"agent": "Claude Code", "repos": "2"}))
 		a := v.Index.Agents[0]
 		for _, want := range []string{
-			`<div class="iname"><span>` + htmlEscape(cat.Text("html.index.name", nil)) + `</span><button type="button" class="i"`,
-			`<p class="sagent">Claude Code · ` + htmlEscape(cat.Text("band."+a.Band, nil)) + `<button type="button" class="i"`,
+			// BV-236 §1: the sheet replaces step 1; the score's name (.iname) and the agent · band line (.sagent), with their «i», are no longer in the HTML.
 			reach + `<button type="button" class="i"`,
 		} {
 			if !strings.Contains(page, want) {
@@ -71,16 +73,18 @@ func TestRenderHTML_HelpAndAccessibility(t *testing.T) {
 			}
 		}
 
-		// BV-158: one h1, eight h2 — step 1, today's action, step 3, «How to
-		// fix it», «Your space», «How your agents work» and its window, and the
-		// assumptions' window — the score an image named by its value. (The
-		// overview and the windows are in «More information», not connected.)
-		if strings.Count(page, "<h1") != 1 || strings.Count(page, "<h2") != 8 {
+		// BV-158: one h1, and the h2 — today's action, step 3, «How to fix
+		// it», «Your space», «How your agents work» and its window, and the
+		// assumptions' window. (The overview and the windows are in «More
+		// information», not connected.) BV-236 §1–§3: the sheet's title is
+		// the h1 and its three sections are h2, replacing step 1's h2; the
+		// «Computer profile» and Claude Code views add two: twelve h2.
+		if strings.Count(page, "<h1") != 1 || strings.Count(page, `<h1 class="sh-title"`) != 1 || strings.Count(page, "<h2") != 12 {
 			t.Errorf("%s: headings h1 %d, h2 %d", lang, strings.Count(page, "<h1"), strings.Count(page, "<h2"))
 		}
-		of := cat.Text("html.index.of", nil)
-		if !strings.Contains(page, `<div class="score" role="img" aria-label="`+htmlEscape(strconv.Itoa(*a.Value)+of)+`"`) {
-			t.Errorf("%s: score not an image named by its value", lang)
+		// BV-236 §1: the score is the sheet's, as text: its value.
+		if n, _, ok := sheetScore(page); !ok || n != *a.Value {
+			t.Errorf("%s: the sheet's score is not %d", lang, *a.Value)
 		}
 		if !strings.Contains(page, `</button><span class="live" aria-live="polite"></span>`) {
 			t.Errorf("%s: no copy notice", lang)

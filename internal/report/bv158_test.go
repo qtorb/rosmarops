@@ -153,14 +153,7 @@ func TestBV158_ReportStructure(t *testing.T) {
 	if !strings.Contains(un, "How to fix it") {
 		t.Error("the agent-fix block is not retitled «How to fix it»")
 	}
-	meta := un[strings.Index(un, `<p class="meta">`):]
-	meta = meta[:strings.Index(meta, "</p>")]
-	if n := strings.Count(meta, "<br>"); n != 1 {
-		t.Errorf("step 1 meta has %d <br>, want 1 (counts + projects line):\n%s", n, meta)
-	}
-	if !strings.Contains(meta, "projects checked") {
-		t.Errorf("step 1 meta lacks the projects line:\n%s", meta)
-	}
+	// BV-236 §1: the sheet replaces step 1; the two-line meta block (counts + projects line) is no longer in the HTML.
 
 	v.SpaceConnected = true
 	con := renderHTML(t, "en", v)
@@ -192,15 +185,15 @@ func TestBV158_SilencedWarningsInStep1(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		_, step1, _ := strings.Cut(page, `<section class="s1" aria-labelledby="step1">`)
-		step1, _, _ = strings.Cut(step1, `</section>`)
+		// BV-236 §1: step 1's warnings are now right under the sheet.
+		step1 := sheetNotes(page)
 		testdata := escapeHTML(cat.Plural("html.silenced", 2, map[string]string{"count": "2"}))
 		hidden := escapeHTML(cat.Plural("html.silenced.config", 1, map[string]string{"count": "1"}))
 		if !strings.Contains(step1, `<p class="meta warn">`+testdata+`</p>`) {
-			t.Errorf("%s: step 1 lacks the test-data silenced warning", lang)
+			t.Errorf("%s: the sheet notes lack the test-data silenced warning", lang)
 		}
 		if !strings.Contains(step1, `<p class="meta warn">`+hidden+`</p>`) {
-			t.Errorf("%s: step 1 lacks the configuration-hidden warning", lang)
+			t.Errorf("%s: the sheet notes lack the configuration-hidden warning", lang)
 		}
 	}
 
