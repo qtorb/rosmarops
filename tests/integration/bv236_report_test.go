@@ -130,7 +130,7 @@ func TestBV236Sheet(t *testing.T) {
 			t.Errorf("%s: the «sent nothing» line is gone", lang)
 		}
 		// «Your space» leads to today's section.
-		if !strings.Contains(page, `<a class="spacego" href="#your-space">`) || !strings.Contains(page, `<section class="space" id="your-space">`) {
+		if !strings.Contains(page, `<a class="spacego" href="#your-space">`) || !strings.Contains(page, `<span id="your-space"></span><section class="space">`) {
 			t.Errorf("%s: «Your space» does not lead to its section", lang)
 		}
 	}

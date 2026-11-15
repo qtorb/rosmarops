@@ -76,7 +76,7 @@ func (c htmlCtx) renderHowFix(local time.Time) {
 // «Create your space» button. Its only external URL is the exact
 // https://app.rosmarops.com/space the trust test allows, at most once, here.
 func (c htmlCtx) renderYourSpace() {
-	c.w(`<section class="space" id="your-space"><h2>%s</h2>`, c.t("report.space_h2", nil))
+	c.w(`<span id="your-space"></span><section class="space"><h2>%s</h2>`, c.t("report.space_h2", nil))
 	if c.v.SpaceConnected {
 		line := c.t("report.space_pending", nil)
 		switch {
