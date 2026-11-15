@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"encoding/json"
 	"html"
 	"os"
 	"os/exec"
@@ -167,8 +168,19 @@ const [file, c1] = process.argv.slice(1);
   await b.close();
 })();`
 
-// safeWord is «seguro», «segura», «safe» or «safely» as a word (BV-239).
-var safeWord = regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}])(seguro|segura|safe|safely)([^\p{L}\p{N}]|$)`)
+// safeWord is a word that would promise safety (BV-239, BV-240): seguro,
+// segura, seguros, seguras, safe, safely or safety, as a whole word, in any
+// case.
+var safeWord = regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}])(seguro|segura|seguros|seguras|safe|safely|safety)([^\p{L}\p{N}]|$)`)
+
+// safeWordExceptions are the catalog keys allowed to use one of those words
+// (BV-240): they are not promises of the product. kit.recovery_code tells
+// the person to keep their recovery code somewhere safe; findings.when.default
+// asks whether the person is sure («Si estás seguro…») before dismissing.
+var safeWordExceptions = map[string]bool{
+	"kit.recovery_code":     true,
+	"findings.when.default": true,
+}
 
 // visibleText is a page's text as the person reads it: no script, no style,
 // no tags, entities decoded.
@@ -177,9 +189,11 @@ func visibleText(page string) string {
 	return html.UnescapeString(regexp.MustCompile(`<[^>]+>`).ReplaceAllString(page, " "))
 }
 
-// TestBV239NoSafeWord: no page of the report, in Spanish or English, says
-// «seguro», «segura», «safe» or «safely» as a word: the full test computer
-// (every view) and the one-agent golden pages.
+// TestBV239NoSafeWord: no page of the report, in Spanish or English, and no
+// text of any catalog (every language; the values, not the keys) says
+// seguro, segura, seguros, seguras, safe, safely or safety as a word, but
+// for the two exceptions above. The pages are the full test computer (every
+// view) and the one-agent golden pages.
 func TestBV239NoSafeWord(t *testing.T) {
 	pages := map[string]string{}
 	for _, lang := range []string{"en", "es"} {
@@ -195,6 +209,25 @@ func TestBV239NoSafeWord(t *testing.T) {
 		text := visibleText(page)
 		for _, m := range safeWord.FindAllStringSubmatchIndex(text, -1) {
 			t.Errorf("%s: %q", name, text[max(0, m[0]-60):min(len(text), m[1]+30)])
+		}
+	}
+	files, err := filepath.Glob(filepath.Join("..", "..", "internal", "catalog", "messages", "*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no catalogs: %v", err)
+	}
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var msgs map[string]string
+		if err := json.Unmarshal(raw, &msgs); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		for k, v := range msgs {
+			if !safeWordExceptions[k] && safeWord.MatchString(v) {
+				t.Errorf("%s: %s: %q", filepath.Base(f), k, v)
+			}
 		}
 	}
 }
