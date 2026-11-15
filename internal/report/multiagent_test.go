@@ -159,7 +159,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // (blindaje B7, checked: nothing else changes), at BV-148 with the knowledge
 // review date line in step 1's meta (checked: the one added line), at
 // BV-236 with the sheet, the profile views and the bar in place of the
-// header and step 1 (signed, reviewed against prototipo-v6);
+// header and step 1 (signed, reviewed against prototipo-v6), at BV-238
+// with the guided profiles (Grok Bot's row and view are always there);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

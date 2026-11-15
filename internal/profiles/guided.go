@@ -7,12 +7,12 @@ package profiles
 // cursorBlock is the literal ~/.cursor/sandbox.json of Cursor's P0 and P1.
 const cursorBlock = `{ "readBoundary": "workspace" }`
 
-// grokP0 and grokP1 are Grok Build's ~/.grok/config.toml and
-// ~/.grok/requirements.toml for P0 and P1, each file under its own comment
-// line: CTO-50 §3 with deny = ["WebSearch"] after rules, and P1 on the
-// built-in "workspace" sandbox profile, without sandbox.toml.
-const grokP0 = `# ~/.grok/config.toml
-[ui]
+// grokP0 and grokP1 are Grok Build's ~/.grok/config.toml for P0 and P1, a
+// single file: CTO-50 §3 with deny = ["WebSearch"] after rules, and P1 on the
+// built-in "workspace" sandbox profile, without sandbox.toml. No
+// requirements.toml: today's documentation honours its lock only from
+// root-owned sources (Albert, 15-11).
+const grokP0 = `[ui]
 permission_mode = "ask"
 
 [permission]
@@ -31,14 +31,9 @@ profile = "read-only"
 hooks = false
 
 [compat.cursor]
-hooks = false
+hooks = false`
 
-# ~/.grok/requirements.toml
-[ui]
-disable_bypass_permissions_mode = true`
-
-const grokP1 = `# ~/.grok/config.toml
-[ui]
+const grokP1 = `[ui]
 permission_mode = "ask"
 
 [permission]
@@ -58,11 +53,7 @@ profile = "workspace"
 hooks = false
 
 [compat.cursor]
-hooks = false
-
-# ~/.grok/requirements.toml
-[ui]
-disable_bypass_permissions_mode = true`
+hooks = false`
 
 // grokP3 is Grok Build's launch command of CTO-50 §3 P3, literal.
 const grokP3 = `grok -p "<tarea>" --permission-mode dontAsk --sandbox strict --deny "WebFetch"`

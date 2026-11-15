@@ -194,7 +194,9 @@ func TestBV236ProfileViewWithoutJS(t *testing.T) {
 				t.Errorf("%s: %s in «The others» = %v", lang, o.Agent, in)
 			}
 		}
-		for _, k := range []string{"pc.N1", "pc.N2", "pc.B3", "cc.P1.nc"} {
+		// BV-238: N1 and N2 are gone; Cursor's and Grok Build's rows carry
+		// their profile's «Doesn't cover».
+		for _, k := range []string{"gp.cursor.P1.nc", "gp.grok.P1.nc", "pc.B3", "cc.P1.nc"} {
 			if !strings.Contains(cc, esc(cat.Text(k, nil))) {
 				t.Errorf("%s: the profile view lacks %s", lang, k)
 			}

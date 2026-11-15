@@ -88,8 +88,6 @@ var bv236Texts = []struct{ key, es, en string }{
 	{"pc.col.nc", "Lo que no cubre", "What it doesn't cover"},
 	{"pc.change", "Cambiar", "Change"},
 	{"pc.soon", "Perfil en la próxima versión", "Profile in the next version"},
-	{"pc.N1", "Su búsqueda web no se puede cerrar todavía desde su configuración.", "Its web search can't be turned off from its settings yet."},
-	{"pc.N2", "Lo principal se cambia en su pantalla, y RosmarOps no puede leerlo.", "The main settings are changed on its screen, and RosmarOps can't read them."},
 	{"pc.score", "Nota {a} → {b}", "Score {a} → {b}"},
 	{"pc.class", "Clase", "Class"},
 	{"cc.title", "Elige cómo trabaja Claude Code", "Choose how Claude Code works"},

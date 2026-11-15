@@ -560,6 +560,12 @@ func (c htmlCtx) renderProfileViews() {
 		}
 		c.w(`</p></div>`)
 	}
+	// BV-238: guided profiles don't count in before → after (G2).
+	for _, u := range sheetUses {
+		if c.guidedProposes(u.id) {
+			c.w(`<p class="g2" data-use="%s"%s>%s</p>`, u.id, hide(u.id == def.id), c.t("gp.G2", nil))
+		}
+	}
 	c.w(`</div></div><div class="pc-main"><h3>%s</h3><div class="plist"><div class="prow hd" aria-hidden="true"><span>%s</span><span>%s</span><span>%s</span><span>%s</span><span></span></div>`,
 		c.t("pc.suggest", nil), c.t("pc.col.agent", nil), c.t("pc.col.today", nil), c.t("pc.col.suggest", nil), c.t("pc.col.nc", nil))
 	// Claude Code first; then Cursor and Grok Build, which have their own
@@ -568,8 +574,9 @@ func (c htmlCtx) renderProfileViews() {
 	var own, others []rules.OverviewAgent
 	for _, o := range c.evaluated() {
 		switch o.Product {
-		case knowledge.ClaudeCodeProduct, knowledge.CursorProduct, knowledge.GrokBuildProduct:
+		case knowledge.ClaudeCodeProduct:
 			own = append(own, o)
+		case knowledge.CursorProduct, knowledge.GrokBuildProduct: // BV-238: guided rows
 		default:
 			others = append(others, o)
 		}
@@ -604,11 +611,13 @@ func (c htmlCtx) renderProfileViews() {
 			c.w(`<a class="chgl" href="#v-cc" data-view="v-cc">%s</a></div>`, c.t("pc.change", nil))
 			continue
 		}
-		nc := c.t("pc.N2", nil)
-		if o.Product == knowledge.GrokBuildProduct {
-			nc = c.t("pc.N1", nil)
+	}
+	// BV-238: Cursor and Grok Build, when evaluated, with their guided profile.
+	guided := c.guidedPresent()
+	for _, x := range guided {
+		if x.o != nil {
+			c.renderGuidedRow(x.g, x.name, x.o)
 		}
-		c.w(`<span class="soon">%s</span><div class="nc2">%s</div><span></span></div>`, c.t("pc.soon", nil), nc)
 	}
 	if len(others) > 0 {
 		c.w(`<div class="prow oth"><span class="ag">%s</span><span class="now"></span><div class="olist"><div class="onames">`, c.t("pc.others", nil))
@@ -625,9 +634,23 @@ func (c htmlCtx) renderProfileViews() {
 		c.w(`</div><span class="soon">%s</span></div></div>`, c.t("pc.soon", nil))
 	}
 	c.w(`</div>`)
+	// BV-238: Grok Bot, which RosmarOps does not detect, always last and apart.
+	for _, x := range guided {
+		if x.o == nil {
+			c.w(`<div class="plist gbotlist">`)
+			c.renderGuidedRow(x.g, x.name, nil)
+			c.w(`</div>`)
+		}
+	}
 	c.renderApply("pc")
 	c.w(`</div></div></section>`)
 
+	// BV-238: the guided agents' details.
+	defer func() {
+		for _, x := range guided {
+			c.renderGuidedDetail(x.g, x.name, x.o)
+		}
+	}()
 	// §3 Claude Code in detail.
 	if cc == nil {
 		return
@@ -886,6 +909,21 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .prow .chg .c2{font-weight:650;color:var(--ink)}
 .apply .nb b,.proof b{color:var(--ink)}
 .soon{color:var(--s-ink2);font-size:13px}
+.gtag{display:inline-block;font-size:12px;font-weight:500;color:var(--s-ink2);background:var(--s-paper);border:1px solid var(--s-line);border-radius:999px;padding:0 8px;line-height:18px}
+.gbotlist{margin-top:2px}
+.pcv .prow{grid-template-columns:128px 70px 196px minmax(0,1fr) 92px;gap:12px;padding:9px 16px}
+.pcv .pc-main{gap:10px;padding:16px 32px 8px}
+.pcv .prow .chg .c1{gap:4px;white-space:nowrap}
+.pcv .prow .now,.pcv .prow .ag{white-space:nowrap;overflow-wrap:normal}
+.pcv .prow.hd{padding:6px 16px}
+.pcv .prow .chgl{white-space:nowrap}
+.pcv .prow .nc2{padding:5px 10px}
+.g2{margin:0;font-size:13px;color:var(--s-ink2)}
+.g3{margin:0;font-size:12.5px;color:var(--s-ink2)}
+.gsteps{margin:0;padding:0;list-style:none;counter-reset:gs;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.gsteps li{display:flex;gap:6px;align-items:baseline}
+.gsteps li::before{counter-increment:gs;content:counter(gs);font-weight:700;color:var(--s-brand)}
+.cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .prow.oth .olist{grid-column:3/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
 .onames{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;font-weight:650}
 .oname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
@@ -944,10 +982,12 @@ const sheetJS = `(function(){var de=document.documentElement;
 function show(id){document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id===id)});de.classList.toggle('alt',!!id);window.scrollTo(0,0)}
 document.addEventListener('click',function(e){var a=e.target.closest('[data-view]');if(!a)return;var id=a.getAttribute('data-view');if(!id){if(de.classList.contains('alt')){show('')}if(a.getAttribute('href')==='#top'){e.preventDefault()}return}e.preventDefault();show(id)});
 var bar=document.querySelector('a.spacego');if(bar){bar.addEventListener('click',function(){show('')})}
-var use='code',chosen=null;
+var use='code',chosen=null,gchosen={};
 function prof(){if(chosen)return chosen;var r=document.querySelector('input[name="use"][value="'+use+'"]');return r?r.getAttribute('data-profile'):'P1'}
-function render(){var p=prof();document.querySelectorAll('.view [data-p]').forEach(function(el){el.hidden=el.getAttribute('data-p')!==p});document.querySelectorAll('.view [data-use]').forEach(function(el){el.hidden=el.getAttribute('data-use')!==use});document.querySelectorAll('input[name="cprofile"]').forEach(function(r){r.checked=r.value===p})}
-document.querySelectorAll('input[name="use"]').forEach(function(r){r.addEventListener('change',function(){use=r.value;chosen=null;render()})});
+function grender(){document.querySelectorAll('section[data-gmap]').forEach(function(sec){var a=sec.getAttribute('data-ga');var m=JSON.parse(sec.getAttribute('data-gmap'));var s=gchosen[a]||m[use];document.querySelectorAll('[data-ga="'+a+'"][data-gs]').forEach(function(el){el.hidden=el.getAttribute('data-gs')!==s});document.querySelectorAll('input[name="gp-'+a+'"]').forEach(function(r){r.checked=r.value===s})})}
+function render(){grender();var p=prof();document.querySelectorAll('.view [data-p]').forEach(function(el){el.hidden=el.getAttribute('data-p')!==p});document.querySelectorAll('.view [data-use]').forEach(function(el){el.hidden=el.getAttribute('data-use')!==use});document.querySelectorAll('input[name="cprofile"]').forEach(function(r){r.checked=r.value===p})}
+document.querySelectorAll('input[name="use"]').forEach(function(r){r.addEventListener('change',function(){use=r.value;chosen=null;gchosen={};render()})});
+document.querySelectorAll('input[name^="gp-"]').forEach(function(r){r.addEventListener('change',function(){gchosen[r.name.slice(3)]=r.value;render()})});
 document.querySelectorAll('input[name="cprofile"]').forEach(function(r){r.addEventListener('change',function(){chosen=r.value;render()})});
 function selectText(p){var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}
 document.querySelectorAll('button[data-see]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.getAttribute('data-see'));var o=p.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');if(o){selectText(p)}})});
@@ -980,7 +1020,7 @@ func sheetKeys() []string {
 		"sheet.col.change.sub", "sheet.would", "sheet.act", "sheet.act.A1", "sheet.act.profile", "sheet.act.profile.sub", "sheet.act.findings",
 		"sheet.act.findings.sub", "sheet.foot.P1", "sheet.foot.P2", "sheet.foot.P2.final", "pc.back", "pc.kicker", "pc.q", "pc.use.code",
 		"pc.use.docs", "pc.use.mail", "pc.use.tasks", "pc.computer", "pc.B1", "pc.B1.noprofile", "pc.B2", "pc.B3", "pc.suggest", "pc.col.agent",
-		"pc.col.today", "pc.col.suggest", "pc.col.nc", "pc.change", "pc.soon", "pc.N1", "pc.N2", "pc.score", "pc.class", "cc.title", "cc.lead",
+		"pc.col.today", "pc.col.suggest", "pc.col.nc", "pc.change", "pc.soon", "pc.score", "pc.class", "cc.title", "cc.lead",
 		"cc.today", "cc.use", "cc.use.where", "cc.name.P0", "cc.name.P1", "cc.name.P3", "cc.rec", "cc.use.lc.code", "cc.use.lc.docs",
 		"cc.use.lc.mail", "cc.use.lc.tasks", "cc.row.does", "cc.row.asks", "cc.row.no", "cc.row.nc", "cc.P0.does.1", "cc.P0.no.1", "cc.P0.no.2",
 		"cc.P0.no.3", "cc.P0.nc", "cc.P1.does.1", "cc.P1.does.2", "cc.P1.asks.1", "cc.P1.asks.2", "cc.P1.no.1", "cc.P1.no.2", "cc.P1.nc",
