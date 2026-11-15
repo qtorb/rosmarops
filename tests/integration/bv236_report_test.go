@@ -302,7 +302,7 @@ const [file, c1] = process.argv.slice(1);
   if (today) {
     await today.scrollIntoViewIfNeeded();
     await today.click();
-    const ok = await p.evaluate(b => { const pre = b.previousElementSibling, l = b.nextElementSibling; return !pre.hidden && l.textContent === document.body.getAttribute('data-copyfail') }, today);
+    const ok = await p.evaluate(b => { const pre = b.previousElementSibling, l = b.nextElementSibling; return !pre.hidden && l.textContent === document.querySelector('[data-copyfail]').getAttribute('data-copyfail') }, today);
     if (!ok) fail('denied: today\'s copy does not show the text with C1');
   }
   if (errs.length) fail('page errors: ' + errs.join('; '));

@@ -193,8 +193,9 @@ func (c htmlCtx) renderBar() {
 	if c.v.SpaceConnected {
 		dot = `<i aria-hidden="true"></i>`
 	}
-	c.w(`<header class="bar">%s<span class="sp"></span>%s<a class="spacego" href="#your-space">%s%s</a></header>`,
-		sheetLogo, c.langLinks(), dot, c.t("report.space_h2", nil))
+	// data-copyfail is C1, for today's copies when the browser refuses to copy.
+	c.w(`<header class="bar" data-copyfail="%s">%s<span class="sp"></span>%s<a class="spacego" href="#your-space">%s%s</a></header>`,
+		c.t("copy.C1", nil), sheetLogo, c.langLinks(), dot, c.t("report.space_h2", nil))
 }
 
 // renderSheet is the sheet (BV-236 §1, w0).

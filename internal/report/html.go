@@ -180,7 +180,7 @@ button.i::after{content:"";position:absolute;inset:-8px}
 // from its templates, with a Blob; copy or download the export for your AI
 // (copying falls back to downloading); open and close a help «i». No
 // network, no storage, no timer but the copy notices'.
-const htmlJS = `document.querySelectorAll('button[data-copied]').forEach(function(b){b.addEventListener('click',function(){var p=b.previousElementSibling;var l=b.nextElementSibling;function sel(){p.hidden=false;var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r);l.textContent=document.body.getAttribute('data-copyfail')}try{navigator.clipboard.writeText(p.innerText).then(function(){l.textContent=b.dataset.copied;setTimeout(function(){l.textContent=''},1500)},sel)}catch(e){sel()}})});
+const htmlJS = `document.querySelectorAll('button[data-copied]').forEach(function(b){b.addEventListener('click',function(){var p=b.previousElementSibling;var l=b.nextElementSibling;function sel(){p.hidden=false;var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r);l.textContent=document.querySelector('[data-copyfail]').getAttribute('data-copyfail')}try{navigator.clipboard.writeText(p.innerText).then(function(){l.textContent=b.dataset.copied;setTimeout(function(){l.textContent=''},1500)},sel)}catch(e){sel()}})});
 var cb=document.getElementById('card-button');
 function save(c,type,name){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:type}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
 if(cb){cb.addEventListener('click',function(){save(document.getElementById('card-svg').innerHTML,'image/svg+xml',cb.dataset.svg);save(document.getElementById('card-txt').content.textContent,'text/plain',cb.dataset.txt)})}
@@ -315,8 +315,8 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	for i := range v.Index.Agents {
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
-	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><script>document.documentElement.classList.add('js')</script><style>%s</style></head><body id="top" data-copyfail="%s">`,
-		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS()+sheetCSS(), c.t("copy.C1", nil))
+	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><script>document.documentElement.classList.add('js')</script><style>%s</style></head><body>`,
+		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS()+sheetCSS())
 
 	// BV-236 §1: the top bar and the sheet replace the old header and step 1.
 	c.renderBar()
