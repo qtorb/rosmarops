@@ -27,7 +27,7 @@ import (
 // Version is the rules version recorded in the report's provenance, and
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
-	Version     = "4" // BV-107: added project_hook_runs_repo_script
+	Version     = "5" // BV-245: the terminal reads the computer; the way out from the sends row
 	RuleVersion = "3" // BV-117/BV-121: added mcp_external_action
 )
 
@@ -1021,6 +1021,9 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 		v.egress = v.codexEgress()
 	case knowledge.GrokBuildProduct:
 		v.egress = v.grokEgress()
+	case knowledge.AntigravityCLIProduct, knowledge.GitHubCopilotProduct:
+		v.egress = v.egressWays(base, launchers)
+		v.egress = append(v.egress, v.sendsRowEgress()...)
 	default:
 		v.egress = v.egressWays(base, launchers)
 	}
@@ -1240,6 +1243,47 @@ func (v *agentView) modeAssumptions() []string {
 	return a
 }
 
+// sendsRowEgress (BV-245, b-ii) is the way out that an agent's «sends out»
+// row gives by its mode, for the agents whose row says it from the mode and
+// not from the ways (Antigravity CLI and GitHub Copilot): when the row decides
+// nobody or a model with any destination, that mode is a way to send data out
+// without a person, with the row's assumptions. None when the shell ways
+// already send out.
+func (v *agentView) sendsRowEgress() []way {
+	var dec string
+	var assume []string
+	var modeCap *graph.Node
+	switch v.node.Platform {
+	case knowledge.AntigravityCLIProduct:
+		dec, assume = antigravitySendsDecider(antigravityMode(v))
+		assume = antigravityBaseAssumptions(assume...)
+	case knowledge.GitHubCopilotProduct:
+		dec, assume = copilotSendsDecider(copilotMode(v))
+		assume = copilotBaseAssumptions(assume...)
+	default:
+		return nil
+	}
+	if dec != DeciderNobody && dec != DeciderModel {
+		return nil
+	}
+	for i := range v.inForce {
+		if v.inForce[i].Type == graph.CapPermissionMode && v.inForce[i].Basis == graph.BasisConfigured {
+			modeCap = &v.inForce[i]
+			break
+		}
+	}
+	if modeCap == nil {
+		return nil
+	}
+	for _, w := range v.egressWays(v.base, &[]LauncherRule{}) {
+		if w.code == "egress_shell" {
+			return nil // the shell already sends out without a person
+		}
+	}
+	a := append([]string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}, assume...)
+	return []way{{id: modeCap.ID, code: "egress_mode_row", cap: modeCap.ID, assumptions: sortedUnique(a)}}
+}
+
 // egressWays are the agent's ways to send data out without a person (§0):
 // bypassPermissions; auto, through the classifier; an execute_shell allow in
 // force with target "*" or through a code launcher (D3), unless a deny or
@@ -1248,7 +1292,9 @@ func (v *agentView) modeAssumptions() []string {
 func (v *agentView) egressWays(base knowledge.Base, launchers *[]LauncherRule) []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented}
 	var out []way
-	if v.modeCap != nil {
+	// BV-245 (b-ii): the mode ways by name are Claude Code's modes; another
+	// agent's mode sends out as its «sends out» row says (sendsRowEgress).
+	if v.modeCap != nil && v.node.Platform == knowledge.ClaudeCodeProduct {
 		switch v.mode {
 		case modeBypass:
 			out = append(out, way{

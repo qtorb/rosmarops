@@ -140,6 +140,9 @@ func geminiConfiguredCaps(l platform.GeminiLayer) []geminiCap {
 	for _, a := range l.ToolsAllowed {
 		if a == "run_shell_command" { // no prefix: any command runs without asking
 			out = append(out, geminiCap{CapExecuteShell, ApprovalAllow, scopeAll, "tools.allowed: run_shell_command", true, ""})
+			// BV-245 (b-i): any command runs without asking, so the terminal
+			// reads the whole computer.
+			out = append(out, geminiCap{CapReadFiles, ApprovalAllow, terminalReadScope, TerminalReadRulePrefix + "tools.allowed: run_shell_command", true, ""})
 			break
 		}
 	}
@@ -228,6 +231,7 @@ type geminiInference struct {
 	untrusted map[string]bool
 	readCap   *Node
 	writeCap  *Node
+	termCap   *Node // BV-245 (b-i): the terminal reads the whole computer
 }
 
 func (p prepared) geminiInference(client Node, repoRoots []string) geminiInference {
@@ -242,7 +246,11 @@ func (p prepared) geminiInference(client Node, repoRoots []string) geminiInferen
 		}
 		switch c.Type {
 		case CapReadFiles:
-			if in.readCap == nil {
+			if IsTerminalRead(c) {
+				if in.termCap == nil {
+					in.termCap = &p.caps[client.ID][i]
+				}
+			} else if in.readCap == nil {
 				in.readCap = &p.caps[client.ID][i]
 			}
 		case CapWriteFiles:
@@ -272,18 +280,17 @@ func (in geminiInference) inWorkspace(file string, trustedOnly bool) bool {
 }
 
 func (in geminiInference) reaches(all []Node) []Edge {
-	if in.readCap == nil {
-		return nil
-	}
 	var out []Edge
 	for _, cred := range all {
 		if cred.Kind != KindCredential {
 			continue
 		}
-		if !in.credInWorkspace(cred) {
-			continue
+		if in.readCap != nil && in.credInWorkspace(cred) {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
 		}
-		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
+		if in.termCap != nil {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.termCap))
+		}
 	}
 	return out
 }
