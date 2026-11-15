@@ -64,9 +64,13 @@ func TestBuildV2_CursorEvaluated(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		of := cat.Text("html.index.of", nil)
-		if !strings.Contains(page, `aria-label="`+htmlEscape(strconv.Itoa(scores[low])+of)+`"`) {
+		// BV-236 §1: the big score is the sheet's (the machine's, the worst
+		// agent's), its label naming that agent.
+		if n, _, ok := sheetScore(page); !ok || n != scores[low] {
 			t.Errorf("%s: big score is not %s's", lang, low)
+		}
+		if !strings.Contains(sheetLabel(page), htmlEscape(low)) {
+			t.Errorf("%s: the score's label does not name %s: %q", lang, low, sheetLabel(page))
 		}
 		var band string
 		for _, a := range v.Index.Agents {

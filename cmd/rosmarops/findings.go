@@ -32,10 +32,18 @@ import (
 // reference so the next review does not ask «configuration changed». The window
 // itself is in findingswindow_windows.go; the console in findingswindow_other.go.
 
-// dismissUI shows the findings and returns the ids the person left marked and
-// whether they saved. It is a seam: production is showDismiss (the window on
-// Windows, the console on macOS/Linux); the cmd tests disable it, since a real
-// window or a console prompt would hang a headless test.
+// findingChoice is what the person left chosen when they saved (BV-236 §5):
+// the ids marked «Descartar» and the ids marked «Lo asumo». An id is in at most
+// one of them; a finding in neither is pending.
+type findingChoice struct {
+	Dismissed []string
+	Accepted  []string
+}
+
+// dismissUIHook shows the findings and returns the person's choice and whether
+// they saved. It is a seam: production is showDismiss (the window on Windows,
+// the console on macOS/Linux); the cmd tests disable it, since a real window
+// or a console prompt would hang a headless test.
 var dismissUIHook = showDismiss
 
 // offerDismissAfterReport shows the «No me afecta» UI for the last review and
@@ -84,19 +92,39 @@ func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now t
 	if onlyIfNew && !anyNewCard(cards) {
 		return // after a review, only when something is new (BV-184 point 3)
 	}
-	checked, saved := dismissUIHook(cards, cat)
+	choice, saved := dismissUIHook(cards, cat)
 	if !saved {
 		return // «Not now» or closed: nothing changes
 	}
-	list := recomputeDismissed(cfg.AllowList.Dismissed, cards, checked, now.Local().Format("2006-01-02"))
-	if err := writeDismissed(cfgPath, reportDir, stPath, list); err != nil {
+	if err := saveFindingChoice(cfgPath, reportDir, stPath, cfg.AllowList, cards, choice, now.Local().Format("2006-01-02")); err != nil {
 		slog.Warn("dismiss: the choice could not be saved", "err", err)
 	}
 }
 
+// saveFindingChoice writes both lists after the person saved (BV-236 §5):
+// allow_list.dismissed and allow_list.accepted recomputed from what they left
+// chosen among the findings shown, keeping the entries of findings that did
+// not appear in this review, through writeFindingLists. An id kept from an
+// earlier review never stays in the other list too.
+func saveFindingChoice(cfgPath, reportDir, stPath string, al config.AllowList, cards []report.FindingCard, choice findingChoice, today string) error {
+	dismissed := recomputeDismissed(al.Dismissed, cards, choice.Dismissed, today)
+	accepted := recomputeAccepted(al.Accepted, cards, choice.Accepted, today)
+	inD := map[string]bool{}
+	for _, d := range dismissed {
+		inD[d.ID] = true
+	}
+	var acc []config.AllowEntryAccepted
+	for _, a := range accepted {
+		if !inD[a.ID] {
+			acc = append(acc, a)
+		}
+	}
+	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, acc)
+}
+
 // consoleFindingLine is one numbered line of the console list (BV-184 point 5):
-// «  N. [<pill>] <title> — <sub> · <agent>», with the dismissed mark appended
-// for a finding the person has already dismissed.
+// «  N. [<pill>] <title> — <sub> · <agent>», with the accepted (K2) or the
+// dismissed (K3) mark appended for a finding already in one of the lists.
 func consoleFindingLine(n int, c report.FindingCard, cat catalog.Catalog) string {
 	pill := cat.Text("findings."+c.Severity, nil)
 	var sub string
@@ -109,44 +137,67 @@ func consoleFindingLine(n int, c report.FindingCard, cat catalog.Catalog) string
 	if c.Agent != "" {
 		line += " · " + c.Agent
 	}
-	if c.Group == report.CardGroupDismissed {
-		line += " (" + cat.Text("findings.console.dismissed", nil) + ")"
+	switch c.Group {
+	case report.CardGroupAccepted:
+		line += " (" + cat.Text("findings.console.accepted", nil) + ")" // K2
+	case report.CardGroupDismissed:
+		line += " (" + cat.Text("findings.console.dismissed", nil) + ")" // K3
 	}
 	return line
 }
 
-// applyConsoleToggles flips the state of the findings whose 1-based numbers the
-// person typed (comma-separated) and returns the ids that end up dismissed. A
-// finding starts dismissed only if it is in the dismissed group. An empty line,
-// or one with no valid number, changes nothing and is not saved.
-func applyConsoleToggles(cards []report.FindingCard, answer string) ([]string, bool) {
-	dismissed := make([]bool, len(cards))
+// applyConsoleToggles applies the numbers the person typed (comma-separated,
+// 1-based; BV-236 §5): «N» flips finding N between dismissed and pending, «Na»
+// between accepted and pending. A finding is in at most one list, so «N» on an
+// accepted finding dismisses it and «Na» on a dismissed one accepts it. A
+// finding starts in the state of its group. An empty line, or one with no
+// valid token, changes nothing and is not saved.
+func applyConsoleToggles(cards []report.FindingCard, answer string) (findingChoice, bool) {
+	const (
+		pending = iota
+		dismissed
+		accepted
+	)
+	st := make([]int, len(cards))
 	for i, c := range cards {
-		dismissed[i] = c.Group == report.CardGroupDismissed
+		switch c.Group {
+		case report.CardGroupDismissed:
+			st[i] = dismissed
+		case report.CardGroupAccepted:
+			st[i] = accepted
+		}
 	}
 	changed := false
 	for _, tok := range strings.Split(answer, ",") {
 		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
+		want := dismissed
+		if t, ok := strings.CutSuffix(strings.ToLower(tok), "a"); ok {
+			tok, want = t, accepted
 		}
-		n, err := strconv.Atoi(tok)
+		n, err := strconv.Atoi(strings.TrimSpace(tok))
 		if err != nil || n < 1 || n > len(cards) {
 			continue
 		}
-		dismissed[n-1] = !dismissed[n-1]
+		if st[n-1] == want {
+			st[n-1] = pending
+		} else {
+			st[n-1] = want
+		}
 		changed = true
 	}
 	if !changed {
-		return nil, false
+		return findingChoice{}, false
 	}
-	var ids []string
+	var out findingChoice
 	for i, c := range cards {
-		if dismissed[i] {
-			ids = append(ids, c.ID)
+		switch st[i] {
+		case dismissed:
+			out.Dismissed = append(out.Dismissed, c.ID)
+		case accepted:
+			out.Accepted = append(out.Accepted, c.ID)
 		}
 	}
-	return ids, true
+	return out, true
 }
 
 // anyNewCard reports whether any card is a new finding.
@@ -195,6 +246,23 @@ func recomputeDismissed(old []config.AllowEntryDismissed, cards []report.Finding
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// recomputeAccepted is the new allow_list.accepted after the person saved,
+// with the same rule as recomputeDismissed: the ids they left marked «Lo
+// asumo» among the findings shown, plus the accepted ids that did not appear
+// in this review. A newly accepted id takes today's date; one already accepted
+// keeps its date. Sorted by id.
+func recomputeAccepted(old []config.AllowEntryAccepted, cards []report.FindingCard, chosen []string, today string) []config.AllowEntryAccepted {
+	d := make([]config.AllowEntryDismissed, 0, len(old))
+	for _, e := range old {
+		d = append(d, config.AllowEntryDismissed(e))
+	}
+	var out []config.AllowEntryAccepted
+	for _, e := range recomputeDismissed(d, cards, chosen, today) {
+		out = append(out, config.AllowEntryAccepted(e))
+	}
 	return out
 }
 

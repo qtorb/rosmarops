@@ -108,6 +108,9 @@ type V2 struct {
 	// ("windows", "macos", "linux"): the macOS preview's texts, paths and
 	// sections (decision 2026-10-29, macOS vista previa).
 	OS string `json:"-"`
+	// engineVersion is the program's version, for the sheet's «Program»
+	// (BV-236 §1); empty when the report is read back.
+	engineVersion string
 	// NotChecked are the checks that do not apply on this system yet, by
 	// code (NotCheckedCodes), in that order: shown, not in the JSON
 	// (decision 2026-10-29, macOS vista previa, point 3).
@@ -388,6 +391,9 @@ type V2Input struct {
 	// product defaults (pipeline.Factory, BV-235 R1), built in memory and
 	// never written; nil skips the factory pass.
 	FactoryGraph *graph.Graph
+	// Profiles are the measured profiles of Claude Code (BV-236 §4), each a
+	// graph built in memory and never written; empty skips them.
+	Profiles []ProfileInput
 
 	// VSCodeFirstRun is set on the first run of the VS Code extensions
 	// collector (decision 2026-10-26, agentes y MCP nuevos, A5).
@@ -508,6 +514,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		weekly:              in.Weekly,
 		weeklyNoSystemd:     in.WeeklyNoSystemd,
 		OS:                  in.V1.Platform.OS,
+		engineVersion:       in.V1.EngineVersion,
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
 		NotificationUnavailable: in.NotificationUnavailable,
@@ -559,6 +566,8 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	// BV-235: the classes from the six axes, and the factory pass (R0′, R1).
 	if in.Graph != nil {
 		applyClasses(&v, classes(v.AgentsOverview, v.Findings, *in.Graph, v.Index), factoryPass(in, fams))
+		// BV-236 §4: the measured profiles of Claude Code, in memory.
+		applyProfiles(&v, in, fams)
 	}
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.

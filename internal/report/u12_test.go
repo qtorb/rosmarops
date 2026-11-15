@@ -59,7 +59,8 @@ func TestRenderHTML_DetectedNoneEvaluated(t *testing.T) {
 		// the usual coverage line, no new text (the reference pages pin the
 		// rest).
 		page = renderHTML(t, lang, evaluated)
-		if !strings.Contains(page, `<div class="score"`) || strings.Contains(page, `<div class="unavail">`) ||
+		_, _, scored := sheetScore(page) // BV-236 §1: the score is the sheet's
+		if !scored || strings.Contains(page, `<div class="unavail">`) ||
 			!strings.Contains(page, htmlEscape(strings.SplitN(cat.Text("html.step.1.coverage", nil), "{", 2)[0])) ||
 			strings.Contains(page, htmlEscape(cat.Text("html.index.reason.agents_not_evaluated", nil))) {
 			t.Errorf("%s: with Claude Code evaluated, the page changed", lang)

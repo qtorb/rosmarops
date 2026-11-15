@@ -1003,6 +1003,39 @@
               "type": "string",
               "minLength": 1,
               "description": "BV-235: the agent with the worst class of the computer, when it is not the agent that gives machine.value; absent otherwise."
+            },
+            "profiles": {
+              "type": "array",
+              "description": "BV-236 §4: per measured profile of Claude Code, the computer's score with it (the lowest among the evaluated agents), the class of the agent that gives it, and that agent. Optional; not sent to the space.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "profile",
+                  "value",
+                  "letter",
+                  "agent_id"
+                ],
+                "properties": {
+                  "profile": {
+                    "enum": [
+                      "P0",
+                      "P1"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "letter": {
+                    "$ref": "#/definitions/exposureClass"
+                  },
+                  "agent_id": {
+                    "$ref": "#/definitions/id"
+                  }
+                }
+              }
             }
           },
           "description": "Only when every agent present has a score: the worst of them."
@@ -1258,6 +1291,35 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 100
+              }
+            }
+          }
+        },
+        "profiles": {
+          "type": "array",
+          "description": "BV-236 §4: Claude Code only. Per measured profile of CTO-50 §1 (P0 Read only, P1 Local development), the agent's score and class with the profile's block added to its user settings, in memory. Optional; not sent to the space.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "profile",
+              "value",
+              "letter"
+            ],
+            "properties": {
+              "profile": {
+                "enum": [
+                  "P0",
+                  "P1"
+                ]
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "letter": {
+                "$ref": "#/definitions/exposureClass"
               }
             }
           }

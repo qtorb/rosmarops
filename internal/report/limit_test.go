@@ -42,9 +42,14 @@ func TestLimitLine(t *testing.T) {
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
-			want := htmlEscape(cat.Plural("html.meta.projects", 48, map[string]string{"projects": "48", "minutes": "12"}))
+			// BV-236 §1: the sheet replaces step 1; the projects line with the time limit (html.meta.projects) is no longer in the HTML.
+			// The projects checked are in the sheet's scope.
+			want := `<dd>` + htmlEscape(cat.Text("sheet.scope", map[string]string{
+				"agents":   cat.Plural("sheet.scope.agents", len(v.Index.Scope.Evaluated), map[string]string{"n": strconv.Itoa(len(v.Index.Scope.Evaluated))}),
+				"projects": cat.Plural("sheet.scope.projects", 48, map[string]string{"n": "48"}),
+			})) + `</dd>`
 			if !strings.Contains(page, want) {
-				t.Errorf("%s: no limit line %q", lang, want)
+				t.Errorf("%s: no scope %q in the sheet", lang, want)
 			}
 			// No warn line when the limit was not reached.
 			if strings.Contains(page, htmlEscape(cat.Text("html.limit.reached", map[string]string{"left": "0", "projects": "48"}))) {
@@ -57,8 +62,10 @@ func TestLimitLine(t *testing.T) {
 		v := buildV2Limit(t, []string{"/src/only"}, report.Build("t", nil, nil, 0, 0, 0, 0, nil), 5, false, 0)
 		cat, _ := catalog.Load("en")
 		page := renderHTML(t, "en", v)
-		if !strings.Contains(page, htmlEscape(cat.Text("html.meta.projects.one", map[string]string{"projects": "1", "minutes": "5"}))) {
-			t.Errorf("no singular limit line for one project")
+		// BV-236 §1: the sheet replaces step 1; the projects line with the time limit (html.meta.projects.one) is no longer in the HTML.
+		// The sheet's scope says «1 project».
+		if !strings.Contains(page, htmlEscape(cat.Text("sheet.scope.projects.one", map[string]string{"n": "1"}))+`</dd>`) {
+			t.Errorf("no singular project in the sheet's scope")
 		}
 	})
 

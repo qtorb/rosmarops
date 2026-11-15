@@ -9,7 +9,7 @@ import (
 )
 
 // flowChildren returns the tag (plus its class, as "tag.class") of each
-// direct child element of the single `<div class="flow">`, in document
+// direct child element of the single `<div class="flow" id="todo">`, in document
 // order. It fails if the page does not have exactly one `.flow`.
 //
 // A tiny depth tracker, no HTML dependency: every `<` inside text is escaped,
@@ -19,9 +19,9 @@ import (
 // `</div>` seen at depth 0 is the flow's own close.
 func flowChildren(t *testing.T, page string) []string {
 	t.Helper()
-	const open = `<div class="flow">`
+	const open = `<div class="flow" id="todo">`
 	if n := strings.Count(page, open); n != 1 {
-		t.Fatalf("want exactly one <div class=\"flow\">, got %d", n)
+		t.Fatalf("want exactly one <div class=\"flow\" id=\"todo\">, got %d", n)
 	}
 	rest := page[strings.Index(page, open)+len(open):]
 	for _, sub := range []*regexp.Regexp{
@@ -68,7 +68,8 @@ func flowChildren(t *testing.T, page string) []string {
 func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
 	g := v2Graph(t) // yields a today finding, so span.fa is emitted
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	want := []string{"section.s1", "section.now", "section"}
+	// BV-236 §1: the sheet replaces step 1; section.s1 is no longer in the HTML.
+	want := []string{"section.now", "section"}
 
 	for _, lang := range []string{"en", "es"} {
 		for _, withSpace := range []bool{false, true} {
@@ -96,7 +97,7 @@ func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
 			if !strings.Contains(page, `<section class="space"`) {
 				t.Errorf("%s (space=%v): section.space missing", lang, withSpace)
 			}
-			flowEnd := strings.Index(page, `<div class="flow">`)
+			flowEnd := strings.Index(page, `<div class="flow" id="todo">`)
 			spacePos := strings.Index(page, `<section class="space"`)
 			ovPos := strings.Index(page, `<section class="ov"`)
 			if !(spacePos > flowEnd && (ovPos < 0 || spacePos < ovPos)) {

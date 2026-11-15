@@ -25,17 +25,17 @@ func TestBV184_ApplyConsoleToggles(t *testing.T) {
 		{ID: "cred_c", Severity: "red", Group: report.CardGroupDismissed},
 	}
 	// Mark 1 (dismiss f_a) and un-mark 3 (recover cred_c).
-	ids, saved := applyConsoleToggles(cards, "1, 3\n")
+	ch, saved := applyConsoleToggles(cards, "1, 3\n")
 	if !saved {
 		t.Fatal("not saved after typing numbers")
 	}
-	got := strings.Join(ids, ",")
+	got := strings.Join(ch.Dismissed, ",")
 	if got != "f_a" {
 		t.Errorf("checked ids = %q, want f_a (f_a on, cred_c recovered)", got)
 	}
 	// Enter with nothing: no change, not saved.
-	if ids, saved := applyConsoleToggles(cards, "\n"); saved || ids != nil {
-		t.Errorf("empty answer changed state: ids=%v saved=%v", ids, saved)
+	if ch, saved := applyConsoleToggles(cards, "\n"); saved || ch.Dismissed != nil || ch.Accepted != nil {
+		t.Errorf("empty answer changed state: %+v saved=%v", ch, saved)
 	}
 	// Out-of-range and junk are ignored (not saved).
 	if _, saved := applyConsoleToggles(cards, "9, x\n"); saved {
@@ -154,12 +154,12 @@ func TestBV184_OfferDismissWritesBackAndIntegrityHolds(t *testing.T) {
 	cfgPath, stPath, reports := bv184CmdSetup(t)
 	var dismissedID string
 	prev := dismissUIHook
-	dismissUIHook = func(cards []report.FindingCard, _ catalog.Catalog) ([]string, bool) {
+	dismissUIHook = func(cards []report.FindingCard, _ catalog.Catalog) (findingChoice, bool) {
 		if len(cards) == 0 {
 			t.Fatal("no cards shown")
 		}
 		dismissedID = cards[0].ID
-		return []string{cards[0].ID}, true
+		return findingChoice{Dismissed: []string{cards[0].ID}}, true
 	}
 	defer func() { dismissUIHook = prev }()
 
@@ -209,7 +209,7 @@ func TestBV184_NotNowChangesNothing(t *testing.T) {
 	cfgPath, stPath, _ := bv184CmdSetup(t)
 	before, _ := os.ReadFile(cfgPath)
 	prev := dismissUIHook
-	dismissUIHook = func([]report.FindingCard, catalog.Catalog) ([]string, bool) { return nil, false }
+	dismissUIHook = func([]report.FindingCard, catalog.Catalog) (findingChoice, bool) { return findingChoice{}, false }
 	defer func() { dismissUIHook = prev }()
 	offerDismissAfterReport("en", cfgPath, stPath, false, time.Now())
 	after, _ := os.ReadFile(cfgPath)
@@ -231,7 +231,10 @@ func TestBV184_GateOnNew(t *testing.T) {
 	cfgPath, stPath, _ := bv184CmdSetup(t)
 	prev := dismissUIHook
 	called := false
-	dismissUIHook = func([]report.FindingCard, catalog.Catalog) ([]string, bool) { called = true; return nil, false }
+	dismissUIHook = func([]report.FindingCard, catalog.Catalog) (findingChoice, bool) {
+		called = true
+		return findingChoice{}, false
+	}
 	defer func() { dismissUIHook = prev }()
 	offerDismissAfterReport("en", cfgPath, stPath, true, time.Now())
 	if !called {

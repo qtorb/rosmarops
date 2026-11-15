@@ -49,7 +49,7 @@ func TestReportHeaderAndScopeFollowSendResult(t *testing.T) {
 			v.SpaceRejected = tc.rejected
 
 			page := renderHTML(t, "en", v)
-			header := page[strings.Index(page, `<div class="hdr">`):]
+			header := page[strings.Index(page, `<div class="sheetnotes">`):]
 			header = header[:strings.Index(header, "</div>")]
 			md := report.RenderV2Markdown(v, cat, time.UTC)
 

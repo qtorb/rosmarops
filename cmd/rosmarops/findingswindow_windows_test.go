@@ -16,8 +16,8 @@ import (
 	"github.com/qtorb/rosmarops/internal/report"
 )
 
-// sampleDismissCards are the shared test set (BV-184): at least six findings —
-// two new, three the rest, one dismissed — with reds and yellows, the longest
+// sampleDismissCards are the shared test set (BV-184, BV-236 §5): seven
+// findings — two new, three the rest, one accepted, one dismissed — with reds and yellows, the longest
 // (Spanish) texts, to stress the window's layout and scrolling. The «open
 // since» dates come from cat.LongDate, so they render in the catalog's long
 // form («25 de octubre de 2026» in Spanish) exactly as the real window does.
@@ -31,6 +31,7 @@ func sampleDismissCards(cat catalog.Catalog) []report.FindingCard {
 		{ID: "f_3", Severity: "red", Title: "Una credencial dentro de git", WhatItMeans: "Hay una credencial guardada en el historial del repositorio.", WhenApplies: "Si es una clave de prueba, ya revocada o de un proyecto que nunca se publicó, y no abre nada real.", Since: since(2026, time.October, 25), Agent: "Claude Code", Group: report.CardGroupRest},
 		{ID: "f_4", Severity: "yellow", Title: "Una clave que un agente puede leer", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.November, 1), Agent: "Aider", Group: report.CardGroupRest},
 		{ID: "f_5", Severity: "red", Title: "Un hook del proyecto ejecuta un script del repositorio", WhatItMeans: "Un script del repositorio se ejecuta cuando salta un hook.", WhenApplies: "Si el proyecto es tuyo y conoces el script que ejecuta ese hook.", Since: since(2026, time.October, 30), Agent: "Codex", Group: report.CardGroupRest},
+		{ID: "f_7", Severity: "yellow", Title: "Claude Code puede cambiar la configuración de otros agentes", WhatItMeans: "El agente puede editar los ajustes de otro agente.", WhenApplies: "Si usas a propósito este agente para configurar al otro y revisas cada cambio que hace.", Since: since(2026, time.October, 28), Agent: "Claude Code", Group: report.CardGroupAccepted},
 		{ID: "cred_6", Severity: "yellow", Title: "Una clave de prueba que descartaste", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.October, 20), Agent: "Continue", Group: report.CardGroupDismissed},
 	}
 }
@@ -39,12 +40,12 @@ func sampleDismissCards(cat catalog.Catalog) []report.FindingCard {
 // "save" then the ids, or "cancel". It uses pipes, so it needs no GUI and runs
 // on the normal verify-windows job.
 func TestDismissDriver(t *testing.T) {
-	ids, saved := driveDismissWindow(strings.NewReader("save\nf_1 cred_6\n"))
-	if !saved || strings.Join(ids, ",") != "f_1,cred_6" {
-		t.Errorf("save: ids=%v saved=%v", ids, saved)
+	ch, saved := driveDismissWindow(strings.NewReader("save\nf_1 cred_6\nf_7\n"))
+	if !saved || strings.Join(ch.Dismissed, ",") != "f_1,cred_6" || strings.Join(ch.Accepted, ",") != "f_7" {
+		t.Errorf("save: %+v saved=%v", ch, saved)
 	}
-	if ids, saved := driveDismissWindow(strings.NewReader("save\n\n")); !saved || len(ids) != 0 {
-		t.Errorf("save with nothing ticked: ids=%v saved=%v", ids, saved)
+	if ch, saved := driveDismissWindow(strings.NewReader("save\n\n\n")); !saved || len(ch.Dismissed) != 0 || len(ch.Accepted) != 0 {
+		t.Errorf("save with nothing chosen: %+v saved=%v", ch, saved)
 	}
 	if _, saved := driveDismissWindow(strings.NewReader("cancel\n")); saved {
 		t.Error("cancel counted as saved")
@@ -165,8 +166,20 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["TITLEDARK"] != "True" {
 		t.Errorf("no dark title text (#1B1A18) in the first row's text column")
 	}
-	if kv["CHECKCOBALT"] != "True" {
-		t.Errorf("no cobalt (#2346B8) in the ticked finding's checkbox")
+	// BV-236 §5: the chosen button is filled #1B1A18, a pending row's buttons
+	// are white; each button is 96x28, 6 px apart, 16 px from the row's right
+	// edge and centred on the row; the tally counts both lists.
+	if kv["CHOSENINK"] != "True" {
+		t.Errorf("CHOSENINK = %q, want True (no #1B1A18 fill on a chosen button)", kv["CHOSENINK"])
+	}
+	if kv["PENDINGWHITE"] != "True" {
+		t.Errorf("PENDINGWHITE = %q, want True (a pending row's button is not white)", kv["PENDINGWHITE"])
+	}
+	if kv["BTN"] != "96,28" || kv["BTNGAP"] != "6" || kv["BTNRIGHT"] != "16" || kv["BTNVCENTER"] != "True" {
+		t.Errorf("buttons: BTN=%s BTNGAP=%s BTNRIGHT=%s BTNVCENTER=%s, want 96,28 6 16 True", kv["BTN"], kv["BTNGAP"], kv["BTNRIGHT"], kv["BTNVCENTER"])
+	}
+	if want := strings.ReplaceAll(cfg.TallyAOne+" · "+cfg.TallyDOne, " ", "_"); kv["TALLY"] != want {
+		t.Errorf("TALLY = %q, want %q", kv["TALLY"], want)
 	}
 	// The pill is rounded: its corner (1 px inside the rectangle) still shows the
 	// row background, not the pill fill — i.e. the pill is not a plain rectangle.
@@ -211,8 +224,8 @@ func TestDismissWindowSelfTest(t *testing.T) {
 		t.Errorf("chrome: BORDER=%s MAX=%s MIN=%s TOP=%s", kv["BORDER"], kv["MAX"], kv["MIN"], kv["TOP"])
 	}
 	client := nums("CLIENT")
-	if client[0] != 640 || client[1] != 560 {
-		t.Errorf("client size = %v, want 640x560", client)
+	if client[0] != 760 || client[1] != 560 {
+		t.Errorf("client size = %v, want 760x560", client)
 	}
 }
 
@@ -294,6 +307,39 @@ func TestDismissWindowScreenshots(t *testing.T) {
 					t.Logf("wrote %s", out)
 				}
 			}
+		}
+	}
+}
+
+// TestBV236WindowConfig: the window draws W1, W2, the two buttons, the four
+// groups and the tally from the catalog, in EN and ES, and each card starts
+// with the button of its group chosen (BV-236 §5).
+func TestBV236WindowConfig(t *testing.T) {
+	want := map[string][]string{
+		"en": {"What do you want to do with these findings?", "I accept it", "Dismiss", "Accepted by you", "1 accepted", "{n} dismissed", "None changed"},
+		"es": {"¿Qué haces con estos avisos?", "Lo asumo", "Descartar", "Asumidos por ti", "1 asumido", "{n} descartados", "Ninguno cambiado"},
+	}
+	for lang, w := range want {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := dismissWindowConfigFrom(cat, sampleDismissCards(cat))
+		got := []string{cfg.Q, cfg.Accept, cfg.Dismiss, cfg.GroupAccept, cfg.TallyAOne, cfg.TallyDOther, cfg.TallyNone}
+		for i := range w {
+			if got[i] != w[i] {
+				t.Errorf("%s: %q, want %q", lang, got[i], w[i])
+			}
+		}
+		if cfg.Text != cat.Text("findings.text.accept", nil) || cfg.Tally != "{accepted} · {dismissed}" {
+			t.Errorf("%s: W2 %q tally %q", lang, cfg.Text, cfg.Tally)
+		}
+		states := map[string]string{}
+		for _, c := range cfg.Cards {
+			states[c.ID] = c.State
+		}
+		if states["f_7"] != "accepted" || states["cred_6"] != "dismissed" || states["f_1"] != "" || states["f_3"] != "" {
+			t.Errorf("%s: initial states %v", lang, states)
 		}
 	}
 }

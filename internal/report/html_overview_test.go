@@ -49,7 +49,7 @@ func TestRenderHTML_OverviewRealCase(t *testing.T) {
 		folded := ovFolded(t, page)
 		// BV-158: the overview is a cell inside «More information» (the
 		// not-connected report), after the flow and after the details opens.
-		flow, more := strings.Index(page, `<div class="flow">`), strings.Index(page, `<details class="moreinfo">`)
+		flow, more := strings.Index(page, `<div class="flow" id="todo">`), strings.Index(page, `<details class="moreinfo">`)
 		if !(flow >= 0 && more > flow && strings.Index(page, folded) > more) {
 			t.Errorf("%s: the overview is not inside «More information» after the flow", lang)
 		}

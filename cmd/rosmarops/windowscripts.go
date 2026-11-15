@@ -33,7 +33,7 @@ $shot = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT
 $shotScale = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCALE
 $shotOpenI = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I
 $shotScroll = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCROLL     # "bottom" shows "the rest" and "dismissed"
-$shotTickNew = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW  # tick the first "new" row so "1 ticked" shows on screen
+$shotTickNew = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW  # choose "Descartar" on the first "new" row so the tally shows it
 $shotHover = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_HOVER       # paint one row in the hover colour
 $selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_FINDINGS_WINDOW_SELFTEST)
 $f = 1.0
@@ -48,6 +48,7 @@ $cDetail  = [System.Drawing.ColorTranslator]::FromHtml('#3A3833')
 $cRowTop  = [System.Drawing.ColorTranslator]::FromHtml('#EFEDE7')
 $cHover   = [System.Drawing.ColorTranslator]::FromHtml('#F6F5F2')
 $cBox     = [System.Drawing.ColorTranslator]::FromHtml('#8A867E')
+$cChBdr   = [System.Drawing.ColorTranslator]::FromHtml('#8A867D')  # the two choice buttons' border (BV-236 sec. 5)
 $cCobalt  = [System.Drawing.ColorTranslator]::FromHtml('#2346B8')
 $cRedTx   = [System.Drawing.ColorTranslator]::FromHtml('#9A2B17')
 $cRedBg   = [System.Drawing.ColorTranslator]::FromHtml('#FBE9E5')
@@ -65,7 +66,7 @@ $fDetailB = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10 * $f
 $fCount   = New-Object System.Drawing.Font('Segoe UI', [single](9.75 * $f))
 $fBtnP    = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10.5 * $f))
 $fBtnS    = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
-$fCheck   = New-Object System.Drawing.Font('Segoe UI', [single](11 * $f), [System.Drawing.FontStyle]::Bold)
+$fChoice  = New-Object System.Drawing.Font('Segoe UI', [single](9.5 * $f))
 $fIcon    = New-Object System.Drawing.Font('Segoe UI', [single](9 * $f), [System.Drawing.FontStyle]::Italic)
 $noPad    = [System.Windows.Forms.TextFormatFlags]::NoPadding
 $wordBreak = [System.Windows.Forms.TextFormatFlags]::WordBreak
@@ -101,7 +102,7 @@ $form.StartPosition = 'CenterScreen'
 $form.BackColor = $cWhite
 $form.MaximizeBox = $false
 $form.MinimizeBox = $false
-$form.ClientSize = New-Object System.Drawing.Size((Px 640), (Px 560))
+$form.ClientSize = New-Object System.Drawing.Size((Px 760), (Px 560))
 $iconSet = $false
 if ($cfg.icon -and (Test-Path -LiteralPath $cfg.icon)) {
   try { $ic0 = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon); if ($ic0 -ne $null) { $form.Icon = $ic0; $iconSet = $true } } catch { }
@@ -111,12 +112,12 @@ if (-not $iconSet -and $cfg.iconfallback -and (Test-Path -LiteralPath $cfg.iconf
 }
 
 $ql = New-Object System.Windows.Forms.Label
-$ql.AutoSize = $true; $ql.MaximumSize = New-Object System.Drawing.Size((Px 584), 0)
+$ql.AutoSize = $true; $ql.MaximumSize = New-Object System.Drawing.Size((Px 704), 0)
 $ql.Font = $fTitle; $ql.ForeColor = $cInk; $ql.BackColor = $cWhite; $ql.Text = $cfg.q
 $ql.Location = New-Object System.Drawing.Point((Px 28), (Px 28)); $ql.Anchor = $aTL
 $form.Controls.Add($ql)
 $tl = New-Object System.Windows.Forms.Label
-$tl.AutoSize = $true; $tl.MaximumSize = New-Object System.Drawing.Size((Px 584), 0)
+$tl.AutoSize = $true; $tl.MaximumSize = New-Object System.Drawing.Size((Px 704), 0)
 $tl.Font = $fBody; $tl.ForeColor = $cMuted; $tl.BackColor = $cWhite; $tl.Text = $cfg.text
 $tl.Location = New-Object System.Drawing.Point((Px 28), ($ql.Bottom + (Px 12))); $tl.Anchor = $aTL
 $form.Controls.Add($tl)
@@ -139,7 +140,7 @@ $save.FlatAppearance.MouseOverBackColor = $cInk
 $save.FlatAppearance.MouseDownBackColor = $cInk
 $no = New-FlatButton $cfg.no $fBtnS $cWhite $cInk 1 $false
 $btnY = (Px 560) - (Px 28) - (Px 40)
-$save.Location = New-Object System.Drawing.Point(((Px 640) - (Px 28) - $save.Width), $btnY)
+$save.Location = New-Object System.Drawing.Point(((Px 760) - (Px 28) - $save.Width), $btnY)
 $no.Location = New-Object System.Drawing.Point(($save.Left - (Px 12) - $no.Width), $btnY)
 $save.Anchor = $aBR; $no.Anchor = $aBR
 $form.AcceptButton = $save
@@ -154,7 +155,7 @@ $listTop = $tl.Bottom + (Px 20)
 $listBottom = $btnY - (Px 20)
 $listHost = New-Object System.Windows.Forms.Panel
 $listHost.Location = New-Object System.Drawing.Point((Px 28), $listTop)
-$listHost.Size = New-Object System.Drawing.Size((Px 584), ($listBottom - $listTop))
+$listHost.Size = New-Object System.Drawing.Size((Px 704), ($listBottom - $listTop))
 $listHost.BackColor = $cWhite
 $listHost.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
 $listHost.Anchor = $aFill
@@ -168,15 +169,19 @@ $list.BackColor = $cWhite
 $list.Padding = New-Object System.Windows.Forms.Padding(0)
 $listHost.Controls.Add($list)
 
-$script:checked = @{}
+$script:choice = @{}   # card id -> '' (pending), 'accepted' or 'dismissed'
 $script:rows = @()
 $vsb = [System.Windows.Forms.SystemInformation]::VerticalScrollBarWidth
-$rowW0 = (Px 584) - 2 - $vsb
+$rowW0 = (Px 704) - 2 - $vsb
 $titleLineH = [int][math]::Ceiling($fRow.GetHeight())
 $titleMaxH = $titleLineH * 2
 $subH = [int][math]::Ceiling($fSub.GetHeight())
-$textX = (Px 16) + (Px 18) + (Px 12) + (Px 76) + (Px 12)
-$rightInset = (Px 16) + (Px 20) + (Px 12)
+# BV-236 sec. 5: no checkbox; on the right, "Lo asumo" and "Descartar" (96x28, 6 px
+# apart, 16 px from the edge), and the "i" 12 px to their left.
+$chW = Px 96; $chH = Px 28; $chGap = Px 6
+$chBlock = $chW + $chGap + $chW
+$textX = (Px 16) + (Px 76) + (Px 12)
+$rightInset = (Px 16) + $chBlock + (Px 12) + (Px 20) + (Px 12)
 $pillH = Px 22
 # Calibrate the "new" subtitle's left inset once (BV-184 point 3): the pixel gap
 # between where a default-rendered "New" (as a Label draws it, lined up with the
@@ -209,23 +214,20 @@ try {
 } catch { $subOff = 0 }
 
 function Update-Count {
-  $n = 0
-  foreach ($k in $script:checked.Keys) { if ($script:checked[$k]) { $n++ } }
-  if ($n -eq 0) { $countl.Text = $cfg.count_zero }
-  elseif ($n -eq 1) { $countl.Text = $cfg.count_one }
-  else { $countl.Text = ($cfg.count_other -replace '\{n\}', $n) }
+  # W3: "{accepted} - {dismissed}" (the catalog template), each with its form of 1; both zero: tally_none.
+  $na = 0; $nd = 0
+  foreach ($k in $script:choice.Keys) {
+    if ($script:choice[$k] -eq 'accepted') { $na++ }
+    elseif ($script:choice[$k] -eq 'dismissed') { $nd++ }
+  }
+  if ($na -eq 0 -and $nd -eq 0) { $countl.Text = $cfg.tally_none; return }
+  if ($na -eq 1) { $ta = $cfg.tally_a_one } else { $ta = ($cfg.tally_a_other -replace '\{n\}', $na) }
+  if ($nd -eq 1) { $td = $cfg.tally_d_one } else { $td = ($cfg.tally_d_other -replace '\{n\}', $nd) }
+  $countl.Text = (($cfg.tally -replace '\{accepted\}', $ta) -replace '\{dismissed\}', $td)
 }
 
-function Set-Check($state) {
-  if ([bool]$script:checked[$state.card.id]) {
-    $state.cb.BackColor = $cCobalt
-    $state.cb.BorderStyle = [System.Windows.Forms.BorderStyle]::None
-    $state.tick.Visible = $true
-  } else {
-    $state.cb.BackColor = $cWhite
-    $state.cb.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-    $state.tick.Visible = $false
-  }
+function Set-Choice($state) {
+  foreach ($b in @($state.btnA, $state.btnD)) { if ($b -ne $null) { $b.Invalidate() } }
 }
 
 function Set-RowBack($state, $col) {
@@ -233,7 +235,7 @@ function Set-RowBack($state, $col) {
   # title and subtitle labels, the pill (its corners outside the rounded fill
   # show this colour) and the open detail box (BV-184 polish, points 1-2).
   $state.row.BackColor = $col
-  foreach ($c in @($state.title, $state.subStatus, $state.subAgent, $state.pill, $state.rtb)) { if ($c -ne $null) { $c.BackColor = $col } }
+  foreach ($c in @($state.title, $state.subStatus, $state.subAgent, $state.pill, $state.rtb, $state.btnA, $state.btnD)) { if ($c -ne $null) { $c.BackColor = $col } }
 }
 
 function Add-Header($text) {
@@ -262,30 +264,18 @@ function Add-Row($card) {
   $row.Width = $rowW0
   $row.Height = $baseH
   $row.BackColor = $cWhite
-  $script:checked[$card.id] = [bool]$card.dismissed
+  $script:choice[$card.id] = [string]$card.state
 
   $bdr = New-Object System.Windows.Forms.Panel
   $bdr.Height = 1; $bdr.Dock = [System.Windows.Forms.DockStyle]::Top; $bdr.BackColor = $cRowTop
   $row.Controls.Add($bdr)
-
-  $cb = New-Object System.Windows.Forms.Panel
-  $cb.Size = New-Object System.Drawing.Size((Px 18), (Px 18))
-  $cb.Location = New-Object System.Drawing.Point((Px 16), (Px 12))
-  $cb.Anchor = $aTL
-  $row.Controls.Add($cb)
-  $tick = New-Object System.Windows.Forms.Label
-  $tick.Text = [char]0x2713; $tick.Font = $fCheck; $tick.ForeColor = $cWhite; $tick.BackColor = $cCobalt
-  $tick.Dock = [System.Windows.Forms.DockStyle]::Fill
-  $tick.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-  $tick.Visible = $false
-  $cb.Controls.Add($tick)
 
   # Severity pill: owner-drawn rounded fill + centered text (radius 9, 22 tall).
   $pillTxt = $cfg.red; $pillTx = $cRedTx; $pillBg = $cRedBg
   if ($card.sev -eq 'yellow') { $pillTxt = $cfg.yellow; $pillTx = $cYelTx; $pillBg = $cYelBg }
   $pill = New-Object System.Windows.Forms.Panel
   $pill.Size = New-Object System.Drawing.Size((Px 76), $pillH)
-  $pill.Location = New-Object System.Drawing.Point(((Px 16) + (Px 18) + (Px 12)), (Px 12))
+  $pill.Location = New-Object System.Drawing.Point((Px 16), (Px 12))
   $pill.Anchor = $aTL
   $pill.BackColor = $cWhite
   $pill.Tag = @{ txt = $pillTxt; tx = $pillTx; bg = $pillBg }
@@ -350,7 +340,7 @@ function Add-Row($card) {
   # Open: #1B1A18 fill, white "i". An elliptical Region clips it to a circle.
   $icon = New-Object System.Windows.Forms.Panel
   $icon.Size = New-Object System.Drawing.Size((Px 20), (Px 20))
-  $icon.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - (Px 20)), (Px 12))
+  $icon.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - $chBlock - (Px 12) - (Px 20)), (Px 12))
   $icon.Anchor = $aTR
   $icon.BackColor = $cWhite
   $icon.Region = Rounded-Region (Px 20) (Px 20) (Px 10)
@@ -372,6 +362,41 @@ function Add-Row($card) {
   })
   $row.Controls.Add($icon)
 
+  # The two choice buttons (BV-236 sec. 5): owner-drawn, 96x28, border 1 px #8A867D,
+  # radius 8, Segoe UI 9.5; chosen: fill #1B1A18 and white text. They exclude
+  # each other; pressing the chosen one unchooses it (pending). On the right of
+  # the row, 6 px apart, centred on the row's closed height.
+  $chY = [int](($baseH - $chH) / 2)
+  $btnD = New-Object System.Windows.Forms.Panel
+  $btnD.Size = New-Object System.Drawing.Size($chW, $chH)
+  $btnD.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - $chW), $chY)
+  $btnA = New-Object System.Windows.Forms.Panel
+  $btnA.Size = New-Object System.Drawing.Size($chW, $chH)
+  $btnA.Location = New-Object System.Drawing.Point(($btnD.Left - $chGap - $chW), $chY)
+  foreach ($pair in @(@($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))) {
+    $b = $pair[0]
+    $b.Anchor = $aTR; $b.BackColor = $cWhite; $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $b.Tag = @{ id = $card.id; kind = $pair[1]; txt = $pair[2] }
+    $b.Add_Paint({
+      param($s, $e)
+      $t = $s.Tag
+      $g = $e.Graphics; $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+      $w = $s.ClientSize.Width; $h = $s.ClientSize.Height
+      $path = Rounded-Path ($w - 1) ($h - 1) (Px 8)
+      $on = ($script:choice[$t.id] -eq $t.kind)
+      if ($on) { $fill = $cInk; $tx = $cWhite } else { $fill = $cWhite; $tx = $cInk }
+      $g.FillPath((New-Object System.Drawing.SolidBrush($fill)), $path)
+      $g.DrawPath((New-Object System.Drawing.Pen($cChBdr, 1)), $path)
+      [System.Windows.Forms.TextRenderer]::DrawText($g, $t.txt, $fChoice, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)), $tx, $center)
+    })
+    $b.Add_Click({
+      $t = $this.Tag
+      if ($script:choice[$t.id] -eq $t.kind) { $script:choice[$t.id] = '' } else { $script:choice[$t.id] = $t.kind }
+      Set-Choice $this.Parent.Tag; Update-Count
+    })
+    $row.Controls.Add($b)
+  }
+
   # Detail: a read-only, borderless, scroll-free RichTextBox; left-aligned text
   # with the two Semibold labels inline. Built lazily when first opened.
   $rtb = New-Object System.Windows.Forms.RichTextBox
@@ -391,23 +416,12 @@ function Add-Row($card) {
   $rtb.Add_Enter({ try { $list.Focus() } catch { } })
   $row.Controls.Add($rtb)
 
-  $state = @{ card = $card; open = $false; built = $false; row = $row; cb = $cb; tick = $tick; title = $title;
+  $state = @{ card = $card; open = $false; built = $false; row = $row; btnA = $btnA; btnD = $btnD; title = $title;
     subStatus = $subStatus; subAgent = $subAgent; icon = $icon; pill = $pill; rtb = $rtb; subtop = $rowSubTop; baseh = $baseH }
   $row.Tag = $state
   $icon.Tag = $state
-  Set-Check $state
+  Set-Choice $state
 
-  $toggleCheck = {
-    $p = $this.Tag; if ($p -eq $null) { $p = $this.Parent.Tag }
-    if ($p -eq $null -or $p.card -eq $null) { return }
-    $script:checked[$p.card.id] = -not $script:checked[$p.card.id]
-    Set-Check $p; Update-Count
-  }
-  $row.Add_Click($toggleCheck)
-  $cb.Add_Click($toggleCheck); $tick.Add_Click($toggleCheck)
-  $pill.Add_Click($toggleCheck); $title.Add_Click($toggleCheck)
-  $subStatus.Add_Click($toggleCheck)
-  if ($subAgent -ne $null) { $subAgent.Add_Click($toggleCheck) }
   $icon.Add_Click({ Toggle-Detail $this.Parent })
 
   $row.Add_MouseEnter({ Set-RowBack $this.Tag $cHover })
@@ -472,6 +486,7 @@ foreach ($c in $cfg.cards) {
     $label = ''
     if ($c.group -eq 'new') { $label = $cfg.group_new }
     elseif ($c.group -eq 'rest') { $label = $cfg.group_rest }
+    elseif ($c.group -eq 'accepted') { $label = $cfg.group_accepted }
     elseif ($c.group -eq 'dismissed') { $label = $cfg.group_dismissed }
     Add-Header $label
     $lastGroup = $c.group
@@ -491,10 +506,15 @@ try {
 
 $script:result = 'cancel'
 $save.Add_Click({
-  $ids = @()
-  foreach ($k in $script:checked.Keys) { if ($script:checked[$k]) { $ids += $k } }
+  # BV-236 sec. 5: both lists, "Descartar" then "Lo asumo".
+  $dis = @(); $acc = @()
+  foreach ($k in $script:choice.Keys) {
+    if ($script:choice[$k] -eq 'dismissed') { $dis += $k }
+    elseif ($script:choice[$k] -eq 'accepted') { $acc += $k }
+  }
   [Console]::Out.WriteLine('save')
-  [Console]::Out.WriteLine([string]::Join(' ', $ids))
+  [Console]::Out.WriteLine([string]::Join(' ', $dis))
+  [Console]::Out.WriteLine([string]::Join(' ', $acc))
   [Console]::Out.Flush()
   $script:result = 'save'
   $form.Close()
@@ -614,12 +634,11 @@ if ($shot) {
       Fit-Rows
       $target = $null
       if ($script:rows.Count -gt 0) { $target = $script:rows[0] } # first row = first "new"
-      # Tick exactly the first "new" row so a ticked box and "1 ticked" show
-      # on screen (BV-184 point 4b): clear the rest first.
+      # Choose "Descartar" on the first "new" row so a chosen button and the
+      # tally show on screen; the other rows keep their state.
       if ($shotTickNew -and $target -ne $null) {
-        foreach ($k in @($script:checked.Keys)) { $script:checked[$k] = $false }
-        $script:checked[$target.Tag.card.id] = $true
-        foreach ($r in $script:rows) { Set-Check $r.Tag }
+        $script:choice[$target.Tag.card.id] = 'dismissed'
+        foreach ($r in $script:rows) { Set-Choice $r.Tag }
         Update-Count
       }
       # Scroll to the bottom so "the rest" (long date) and "dismissed" show
@@ -665,13 +684,22 @@ if ($selftest) {
       # Let the window settle on screen before grabbing pixels from it.
       Start-Sleep -Milliseconds 400
       $form.Refresh(); [System.Windows.Forms.Application]::DoEvents()
-      $pillRed = $false; $pillYel = $false; $checkCobalt = $false; $titleDark = $false; $pillCorner = $false
+      $pillRed = $false; $pillYel = $false; $chosenInk = $false; $pendingWhite = $false; $titleDark = $false; $pillCorner = $false
       foreach ($r in $rowsOnly) {
         if (-not $pillRed) { $pillRed = Row-Has $r 251 233 229 6 0 0 0 }
         if (-not $pillYel) { $pillYel = Row-Has $r 253 245 223 6 0 0 0 }
         $rid = $null
         if ($r.Tag -ne $null -and $r.Tag.card -ne $null) { $rid = $r.Tag.card.id }
-        if (-not $checkCobalt -and $rid -and $script:checked[$rid]) { $checkCobalt = Row-Has $r 35 70 184 14 0 0 0 }
+        # A chosen button is filled #1B1A18; a pending row's buttons are white
+        # (sampled in the middle of the "Descartar" button, left of its text).
+        $bd = $r.Tag.btnD
+        if ($rid -and $script:choice[$rid]) {
+          $bx = $r.Tag.btnA
+          if ($script:choice[$rid] -eq 'dismissed') { $bx = $bd }
+          if (-not $chosenInk) { $chosenInk = Pixel-Near $r ($bx.Left + (Px 6)) ($bx.Top + [int]($bx.Height / 2)) 27 26 24 10 }
+        } elseif (-not $pendingWhite) {
+          $pendingWhite = Pixel-Near $r ($bd.Left + (Px 6)) ($bd.Top + [int]($bd.Height / 2)) 255 255 255 8
+        }
       }
       if ($rowsOnly.Count -gt 0) {
         $r0 = $rowsOnly[0]
@@ -682,7 +710,14 @@ if ($selftest) {
       [Console]::Out.WriteLine('PILLRED=' + $pillRed)
       [Console]::Out.WriteLine('PILLYEL=' + $pillYel)
       [Console]::Out.WriteLine('TITLEDARK=' + $titleDark)
-      [Console]::Out.WriteLine('CHECKCOBALT=' + $checkCobalt)
+      [Console]::Out.WriteLine('CHOSENINK=' + $chosenInk)
+      [Console]::Out.WriteLine('PENDINGWHITE=' + $pendingWhite)
+      if ($rowsOnly.Count -gt 0) {
+        $s0 = $rowsOnly[0].Tag
+        $vc = ([math]::Abs(($s0.btnD.Top + $s0.btnD.Height / 2) - ($s0.baseh / 2)) -le 1)
+        [Console]::Out.WriteLine('BTN=' + $s0.btnD.Width + ',' + $s0.btnD.Height + ' BTNGAP=' + ($s0.btnD.Left - $s0.btnA.Right) + ' BTNRIGHT=' + ($rowsOnly[0].Width - $s0.btnD.Right) + ' BTNVCENTER=' + $vc)
+      }
+      [Console]::Out.WriteLine('TALLY=' + ($countl.Text -replace '\s', '_'))
       [Console]::Out.WriteLine('PILLCORNER=' + $pillCorner)
       $hbefore = 0; $hafter = 0; $detailText = $false; $iconFill = $false
       $gapFlush = $false; $gap1 = -1; $gap2 = -1; $detailBgRest = $false; $detailBgHover = $false; $pillCornerHover = $false

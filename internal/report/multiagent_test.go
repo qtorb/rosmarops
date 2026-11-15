@@ -96,31 +96,23 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 			today = f
 		}
 	}
-	var firstCursor rules.Finding
-	for _, f := range v.Findings {
-		if f.Params.Agent == "Cursor" {
-			firstCursor = f
-			break
-		}
-	}
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		of := cat.Text("html.index.of", nil)
-		score := `<div class="score" role="img" aria-label="` + htmlEscape(strconv.Itoa(*cursor.Value)+of) + `"`
-		i := strings.Index(page, score)
-		if i < 0 {
+		// BV-236 §1: the sheet's score is the machine's, Cursor's, in its
+		// band's colour, and its label names Cursor (the agent · band line,
+		// .sagent, is no longer in the HTML).
+		n, band, ok := sheetScore(page)
+		if !ok || n != *cursor.Value {
 			t.Fatalf("%s: the score is not Cursor's", lang)
 		}
-		after := page[i:]
-		after = after[strings.Index(after, "</div>")+len("</div>"):]
-		if !strings.HasPrefix(after, `<p class="sagent">Cursor · `+htmlEscape(cat.Text("band."+cursor.Band, nil))+`<button type="button" class="i"`) {
-			t.Errorf("%s: the score is not followed by Cursor's line: %.120s", lang, after)
+		if want := map[string]string{index.BandExposed: "r", index.BandOpenGaps: "a", index.BandContained: "g"}[cursor.Band]; band != want {
+			t.Errorf("%s: the score's colour %q, want %q (Cursor's band %s)", lang, band, want, cursor.Band)
 		}
-		h1 := regexp.MustCompile(`<h1 class="hl">([^<]*)</h1>`).FindStringSubmatch(page)
-		if want := htmlEscape(cat.Text("html.headline."+firstCursor.Rule, map[string]string{"agent": "Cursor"})); h1 == nil || h1[1] != want {
-			t.Errorf("%s: headline %v, want %q", lang, h1, want)
+		if lab := sheetLabel(page); !strings.Contains(lab, "Cursor") {
+			t.Errorf("%s: the score's label is not Cursor's: %q", lang, lab)
 		}
+		// BV-236 §1: the sheet replaces step 1; the headline (h1.hl, Cursor's first finding) is no longer in the HTML.
 		s := claude
 		if today.Params.Agent == "Cursor" {
 			s = cursor
@@ -165,7 +157,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // BV-75 with the header's link to the other language (v3 §19, checked), at
 // BV-94 with ai.untrusted_data and the export's ```text location blocks
 // (blindaje B7, checked: nothing else changes), at BV-148 with the knowledge
-// review date line in step 1's meta (checked: the one added line);
+// review date line in step 1's meta (checked: the one added line), at
+// BV-236 with the sheet, the profile views and the bar in place of the
+// header and step 1 (signed, reviewed against prototipo-v6);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
