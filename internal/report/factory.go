@@ -45,9 +45,17 @@ func factoryPass(in V2Input, fams map[string]string) *factoryResult {
 	fin.Codex = pipeline.FactoryCodex(in.Codex)
 	fin.Grok = pipeline.FactoryGrok(in.Grok)
 	fin.Cline = pipeline.FactoryCline(in.Cline)
+	return passOf(fin, *in.FactoryGraph, fams)
+}
+
+// passOf evaluates fin over g, its graph, with no memory and no history: the
+// index and the classes of a pass that writes nothing (the factory pass and
+// the profile passes).
+func passOf(fin V2Input, g graph.Graph, fams map[string]string) *factoryResult {
 	fin.Previous, fin.History, fin.HistoryReset = nil, nil, false
 	fin.Memory, fin.MemoryReset = memory.File{}, false
-	g := *in.FactoryGraph
+	gg := g
+	fin.Graph = &gg
 	res := evaluate(fin, g, fams)
 	vf := V2{Findings: res.Findings, Today: res.Today}
 	if vf.Findings == nil {

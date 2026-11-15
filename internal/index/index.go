@@ -87,6 +87,9 @@ type MachineScore struct {
 	// when it is not the one that gives Value (BV-235 point 2); omitted
 	// otherwise.
 	WorstLetterAgentID string `json:"worst_letter_agent_id,omitempty"`
+	// Profiles are the computer's score with each measured profile of
+	// Claude Code (BV-236 §4); omitted without Claude Code.
+	Profiles []MachineProfile `json:"profiles,omitempty"`
 }
 
 // Class rules (BV-235, R0′).
@@ -189,6 +192,25 @@ type AgentIndex struct {
 	// Groups are, per group of its findings, the score without the whole
 	// group (R2).
 	Groups []Group `json:"groups"`
+	// Profiles are, for Claude Code only, its score and class with each
+	// measured profile of CTO-50 §1 (BV-236 §4). The report fills them.
+	Profiles []Profile `json:"profiles,omitempty"`
+}
+
+// Profile is a score and class with one measured profile of Claude Code
+// (BV-236 §4): its block added to Claude Code's user settings, in memory.
+type Profile struct {
+	Profile string `json:"profile"`
+	Value   int    `json:"value"`
+	Letter  Class  `json:"letter"`
+}
+
+// MachineProfile is the computer's score with one profile of Claude Code
+// (the lowest among the evaluated agents), the class of the agent that gives
+// it, and that agent.
+type MachineProfile struct {
+	Profile
+	AgentID string `json:"agent_id"`
 }
 
 // Weight is one finding's weight and the score without it.

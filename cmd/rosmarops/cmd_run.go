@@ -30,6 +30,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/problems"
+	"github.com/qtorb/rosmarops/internal/profiles"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/scan/avexclusions"
@@ -451,7 +452,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		credFiles       platform.CredentialFileScan
 		built           *graph.Graph // the graph written this run, for the v2 report
 		builtSHA        string
-		builtFactory    *graph.Graph // BV-235 R1: the factory pass's graph, never written
+		builtFactory    *graph.Graph          // BV-235 R1: the factory pass's graph, never written
+		builtProfiles   []report.ProfileInput // BV-236 §4: the profile passes' graphs, never written
 		// builtSettings is the Claude Code settings scan the graph was built
 		// from, for the model provider row (T12).
 		builtSettings *platform.ClaudeSettingsScan
@@ -655,7 +657,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					}
 					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
 					if graphErr == nil {
-						built, builtSHA, builtSettings, builtFactory = g, graphSHA, &settingsScan, factoryGraph
+						built, builtSHA, builtSettings, builtFactory, builtProfiles = g, graphSHA, &settingsScan, factoryGraph.factory, factoryGraph.profiles
 					}
 					if graphErr != nil {
 						slog.Warn("graph: v2 graph not written", "err", graphErr)
@@ -911,7 +913,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
 		AllowHits: allowHits,
 		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
-		FactoryGraph:   builtFactory,
+		FactoryGraph: builtFactory, Profiles: builtProfiles,
 		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan,
 		IntegrityNotChecked: integrityNotChecked,
 		StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
@@ -1163,12 +1165,12 @@ func writeGraph(
 	pkgObs []graph.PackageObservation,
 	n8nFolder string,
 	n8nKeyData bool,
-) (*graph.Graph, string, string, *graph.Graph, error) {
-	fail := func(err error) (*graph.Graph, string, string, *graph.Graph, error) {
+) (*graph.Graph, string, string, passGraphs, error) {
+	fail := func(err error) (*graph.Graph, string, string, passGraphs, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
 			err = errors.Join(err, rmErr)
 		}
-		return nil, "", "", nil, err
+		return nil, "", "", passGraphs{}, err
 	}
 	if listErr != nil {
 		return fail(fmt.Errorf("agent config sources could not be listed: %w", listErr))
@@ -1237,7 +1239,31 @@ func writeGraph(
 	} else {
 		factory = &fres.Graph
 	}
-	return &g, sha, path, factory, nil
+	// BV-236 §4: this computer with each measured profile of Claude Code
+	// added to its user settings, assembled in memory and never written. A
+	// failure only leaves that profile unmeasured.
+	var measured []report.ProfileInput
+	for _, id := range profiles.Measured {
+		pin2, ok := pipeline.Profile(pin, id)
+		if !ok {
+			continue
+		}
+		pres, perr := pipeline.Assemble(pin2)
+		if perr != nil {
+			slog.Warn("graph: profile pass not built", "profile", id, "err", perr)
+			continue
+		}
+		measured = append(measured, report.ProfileInput{ID: id, Graph: &pres.Graph, Settings: pin2.Settings})
+	}
+	return &g, sha, path, passGraphs{factory: factory, profiles: measured}, nil
+}
+
+// passGraphs are the graphs of the passes a review builds in memory and never
+// writes: the factory pass (BV-235 R1) and the profiles of Claude Code
+// (BV-236 §4).
+type passGraphs struct {
+	factory  *graph.Graph
+	profiles []report.ProfileInput
 }
 
 // intelVersion and intelPublishedAt are the snapshot stamp for the report, or
