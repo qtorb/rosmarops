@@ -74,6 +74,15 @@ func FromAntigravityCLI(scan platform.AntigravityScan, discoveredAt time.Time) F
 			Approval: ApprovalAllow, TargetScope: level, AppliesIn: platform.MCPScopeUser, Rule: levelRule, Source: src,
 		})
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+		// BV-245 (b-i): commands run without a person (always-proceed) or with a
+		// reviewer model (auto) on the whole computer, so the terminal reads it.
+		tid := antigravityCapID(client, "terminal_read", scan.ConfigDir, CapReadFiles, terminalReadScope)
+		b.node(Node{
+			ID: tid, Kind: KindCapability, Type: CapReadFiles, Basis: BasisConfigured, InForce: true,
+			Approval: ApprovalAllow, TargetScope: terminalReadScope, AppliesIn: platform.MCPScopeUser,
+			Rule: TerminalReadRulePrefix + levelRule, Source: src,
+		})
+		b.edge(Edge{ID: edgeID(EdgeHas, client, tid), Type: EdgeHas, From: client, To: tid, Source: src})
 		if level == agAlwaysProceed {
 			// Approve everything: shell and network run without asking.
 			for _, typ := range []string{CapExecuteShell, CapNetwork} {
@@ -127,6 +136,7 @@ type antigravityInference struct {
 	machine  bool
 	readCap  *Node
 	writeCap *Node
+	termCap  *Node // BV-245 (b-i): the terminal reads the whole computer
 }
 
 func (p prepared) antigravityInference(client Node, repoRoots []string) antigravityInference {
@@ -139,6 +149,8 @@ func (p prepared) antigravityInference(client Node, repoRoots []string) antigrav
 		switch {
 		case c.Type == CapPermissionMode && c.Basis == BasisConfigured && (c.TargetScope == agAlwaysProceed || c.TargetScope == agAuto):
 			in.level = c.TargetScope
+		case IsTerminalRead(c) && c.Approval == ApprovalAllow:
+			in.termCap = &p.caps[client.ID][i]
 		case c.Type == CapReadFiles && c.Approval == ApprovalAllow && in.readCap == nil:
 			in.readCap = &p.caps[client.ID][i]
 			in.machine = in.machine || c.TargetScope == agScopeMachine
@@ -151,18 +163,17 @@ func (p prepared) antigravityInference(client Node, repoRoots []string) antigrav
 }
 
 func (in antigravityInference) reaches(all []Node) []Edge {
-	if in.readCap == nil {
-		return nil
-	}
 	var out []Edge
 	for _, cred := range all {
 		if cred.Kind != KindCredential {
 			continue
 		}
-		if !in.machine && !credFileInWorkspace(cred, in.inWorkspace) {
-			continue
+		if in.readCap != nil && (in.machine || credFileInWorkspace(cred, in.inWorkspace)) {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
 		}
-		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
+		if in.termCap != nil {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.termCap))
+		}
 	}
 	return out
 }

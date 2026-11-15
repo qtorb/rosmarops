@@ -454,11 +454,25 @@ func codexExplicitUntrusted(scan platform.CodexScan) bool {
 // approval, widest scope first (for the cell's finding lookup).
 func (v *agentView) codexInForceCap(typ string) string {
 	for _, c := range v.inForce {
-		if c.Type == typ && c.Approval == graph.ApprovalAllow {
+		if c.Type == typ && c.Approval == graph.ApprovalAllow && !graph.IsTerminalRead(c) {
 			return c.ID
 		}
 	}
 	return ""
+}
+
+// terminalReadAlso is the reads row's second way when the agent's terminal
+// reads the whole computer (BV-245, b-i): who decides it (the runs row's
+// decider: nobody, or the reviewer model with its premise) on the whole
+// computer, as Claude Code's row shows its Bash way. ok is false without a
+// terminal-read capability.
+func terminalReadAlso(v *agentView, decider string) (also *OverviewAlso, ok bool) {
+	for _, c := range v.inForce {
+		if graph.IsTerminalRead(c) && c.Approval == graph.ApprovalAllow {
+			return &OverviewAlso{Decider: decider, Scope: ScopeMachine}, true
+		}
+	}
+	return nil, false
 }
 
 // codexCells are OpenAI Codex's six rows (BV-140, CTO-16 §4). Codex reads every
@@ -783,6 +797,16 @@ func (oi overviewInputs) copilotReadsCell(v *agentView) OverviewCell {
 	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
 	cell.Data.Assumptions = copilotBaseAssumptions()
+	// BV-245 (b-i): the terminal reads the whole computer too.
+	dec, assume := DeciderNobody, []string(nil)
+	if copilotMode(v) == copilotAssisted {
+		dec, assume = DeciderModel, []string{AssumeReviewerModelPermits}
+	}
+	if also, ok := terminalReadAlso(v, dec); ok {
+		cell.Also = also
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", "")
+		cell.Data.Assumptions = sortedUnique(copilotBaseAssumptions(assume...))
+	}
 	if len(cell.Data.FindingIDs) == 0 {
 		r := NoFindingNoTargets
 		cell.NoFindingReason = &r
@@ -841,6 +865,21 @@ func (oi overviewInputs) copilotRunsCell(v *agentView, level string) OverviewCel
 	return cell
 }
 
+// copilotSendsDecider is who decides sending out under Copilot's level
+// (BV-245, b-ii): nobody under allow all, the reviewer model under assisted,
+// you otherwise (manual URLs use a two-step approval, CTO-16 Copilot §4; the
+// agent turned off sends nothing). The «sends out» row and its way out
+// (sendsRowEgress) both come from it.
+func copilotSendsDecider(level string) (string, []string) {
+	switch level {
+	case copilotAllowAll:
+		return DeciderNobody, nil
+	case copilotAssisted:
+		return DeciderModel, []string{AssumeReviewerModelPermits}
+	}
+	return DeciderYou, nil
+}
+
 func (oi overviewInputs) copilotSendsCell(v *agentView, level string) OverviewCell {
 	cell := OverviewCell{Row: RowSendsOut, Origin: OriginConfigured}
 	assume := copilotBaseAssumptions()
@@ -856,16 +895,11 @@ func (oi overviewInputs) copilotSendsCell(v *agentView, level string) OverviewCe
 			cell.NoFindingReason = &r
 		}
 	} else {
-		switch level {
-		case copilotAllowAll:
-			cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
-		case copilotAssisted:
-			cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeAnyDestination, true
-			assume = copilotBaseAssumptions(AssumeReviewerModelPermits)
-		case copilotBlocked:
-			cell.Decider, cell.Scope = DeciderYou, ScopeNone
-		default: // manual: URLs use a two-step approval (CTO-16 Copilot §4)
-			cell.Decider, cell.Scope = DeciderYou, ScopeAnyDestination
+		d, a := copilotSendsDecider(level)
+		cell.Decider, cell.Scope, cell.Assumed = d, ScopeAnyDestination, d == DeciderModel
+		assume = copilotBaseAssumptions(a...)
+		if level == copilotBlocked {
+			cell.Scope = ScopeNone
 		}
 	}
 	cell.Data.Assumptions = sortedUnique(assume)
@@ -930,7 +964,7 @@ func antigravityMode(v *agentView) string {
 // reaches the whole machine (its product-default scope is machine, not workspace).
 func antigravityMachine(v *agentView) bool {
 	for _, c := range v.inForce {
-		if (c.Type == graph.CapReadFiles || c.Type == graph.CapWriteFiles) && c.TargetScope == agScopeMachine {
+		if (c.Type == graph.CapReadFiles || c.Type == graph.CapWriteFiles) && c.TargetScope == agScopeMachine && !graph.IsTerminalRead(c) {
 			return true
 		}
 	}
@@ -995,6 +1029,19 @@ func (oi overviewInputs) antigravityReadsCell(v *agentView, machine bool) Overvi
 	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", v.codexInForceCap(graph.CapReadFiles))
 	cell.Data.Assumptions = antigravityBaseAssumptions()
+	// BV-245 (b-i): the terminal reads the whole computer too, with the runs
+	// row's decider (the reviewer model in auto, nobody in always-proceed).
+	dec, assume := DeciderNobody, []string(nil)
+	if antigravityMode(v) == agAuto {
+		dec, assume = DeciderModel, []string{AssumeReviewerModelPermits}
+	}
+	if also, ok := terminalReadAlso(v, dec); ok {
+		if !machine {
+			cell.Also = also
+		}
+		cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", "")
+		cell.Data.Assumptions = sortedUnique(antigravityBaseAssumptions(assume...))
+	}
 	if len(cell.Data.FindingIDs) == 0 {
 		r := NoFindingNoTargets
 		cell.NoFindingReason = &r
@@ -1053,19 +1100,27 @@ func (oi overviewInputs) antigravitySendsCell(v *agentView, level string) Overvi
 			cell.NoFindingReason = &r
 		}
 	} else {
-		switch level {
-		case agAlwaysProceed:
-			cell.Decider, cell.Scope = DeciderNobody, ScopeAnyDestination
-		case agAuto:
-			cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeAnyDestination, true
-			assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
-		default:
-			cell.Decider, cell.Scope = DeciderYou, ScopeAnyDestination
-		}
+		d, a := antigravitySendsDecider(level)
+		cell.Decider, cell.Scope, cell.Assumed = d, ScopeAnyDestination, d == DeciderModel
+		assume = antigravityBaseAssumptions(a...)
 	}
 	cell.Data.Assumptions = sortedUnique(assume)
 	cell.Data.Excluded = []string{ExcludedDocumentedNetworkExceptions}
 	return cell
+}
+
+// antigravitySendsDecider is who decides sending out under the CLI's level
+// (BV-245, b-ii): nobody under always-proceed, the reviewer model under auto,
+// you otherwise. The «sends out» row and its way out (sendsRowEgress) both
+// come from it.
+func antigravitySendsDecider(level string) (string, []string) {
+	switch level {
+	case agAlwaysProceed:
+		return DeciderNobody, nil
+	case agAuto:
+		return DeciderModel, []string{AssumeReviewerModelPermits}
+	}
+	return DeciderYou, nil
 }
 
 func (oi overviewInputs) antigravityChangesCell(v *agentView, level string) OverviewCell {
@@ -1144,6 +1199,10 @@ func (oi overviewInputs) geminiReadsCell(v *agentView) OverviewCell {
 	cell.Data.CredentialsReachable, cell.Data.CredentialsReachableHigh = intp(creds), intp(high)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleCredReadAndSend, RuleCredReadable}, "", "")
 	cell.Data.Assumptions = geminiBaseAssumptions()
+	// BV-245 (b-i): a shell allow lets the terminal read the whole computer.
+	if also, ok := terminalReadAlso(v, DeciderNobody); ok {
+		cell.Also = also
+	}
 	if len(cell.Data.FindingIDs) == 0 {
 		r := NoFindingNoTargets
 		cell.NoFindingReason = &r

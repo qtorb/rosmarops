@@ -89,6 +89,11 @@ func FromCopilot(scan platform.CopilotScan, extensionPresent bool, discoveredAt 
 			Approval: ApprovalAllow, TargetScope: level, AppliesIn: platform.MCPScopeUser, Rule: levelRule, Source: src,
 		})
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+		if level == copilotAllowAll || level == copilotAssisted {
+			// BV-245 (b-i): the terminal runs without a person (allow all) or
+			// with the reviewer model (assisted) on the whole computer.
+			copilotTerminalRead(b, client, scan.ConfigDir, levelRule, src)
+		}
 	}
 	if userAllowAllOverridden {
 		id := copilotCapID(client, "mode_off", scan.ConfigDir, CapPermissionMode, copilotAllowAll)
@@ -124,6 +129,11 @@ func FromCopilot(scan platform.CopilotScan, extensionPresent bool, discoveredAt 
 			Rule: "chat.tools.terminal.autoApprove: /.*/ = true", Source: src,
 		})
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+		if l.Kind != platform.CopilotLayerProject {
+			// BV-245 (b-i): every command runs without asking on the whole
+			// computer (a project layer's catch-all stays in its project).
+			copilotTerminalRead(b, client, l.Path, "chat.tools.terminal.autoApprove: /.*/ = true", src)
+		}
 	}
 	return b.fragment()
 }
@@ -238,6 +248,17 @@ func CopilotMCPServers(scan platform.CopilotScan) []platform.MCPServer {
 	return out
 }
 
+// copilotTerminalRead adds the terminal-read capability (BV-245, b-i).
+func copilotTerminalRead(b *fragmentBuilder, client, path, rule, src string) {
+	id := copilotCapID(client, "terminal_read", path, CapReadFiles, terminalReadScope)
+	b.node(Node{
+		ID: id, Kind: KindCapability, Type: CapReadFiles, Basis: BasisConfigured, InForce: true,
+		Approval: ApprovalAllow, TargetScope: terminalReadScope, AppliesIn: platform.MCPScopeUser,
+		Rule: TerminalReadRulePrefix + rule, Source: src,
+	})
+	b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+}
+
 // copilotInference is Copilot's reaches and writes (BV-140, CTO-16 Copilot §4).
 // Built-in agent tools read and write only inside the workspace folders, so
 // reaches covers the credentials in a repo root and writes covers the agent
@@ -248,6 +269,7 @@ type copilotInference struct {
 	level    string
 	readCap  *Node
 	writeCap *Node
+	termCap  *Node // BV-245 (b-i): the terminal reads the whole computer
 }
 
 func (p prepared) copilotInference(client Node, repoRoots []string) copilotInference {
@@ -263,6 +285,10 @@ func (p prepared) copilotInference(client Node, repoRoots []string) copilotInfer
 			case copilotAllowAll, copilotAssisted, copilotBlocked:
 				in.level = c.TargetScope
 			}
+		case IsTerminalRead(c) && c.Approval == ApprovalAllow:
+			if in.termCap == nil {
+				in.termCap = &p.caps[client.ID][i]
+			}
 		case c.Type == CapReadFiles && c.Approval == ApprovalAllow && in.readCap == nil:
 			in.readCap = &p.caps[client.ID][i]
 		case c.Type == CapWriteFiles && c.Approval == ApprovalAllow && in.writeCap == nil:
@@ -276,15 +302,20 @@ func (p prepared) copilotInference(client Node, repoRoots []string) copilotInfer
 // built-in tools read only within the workspace (its own session files are
 // excused in the rules layer, not here). None when the agent is off.
 func (in copilotInference) reaches(all []Node) []Edge {
-	if in.readCap == nil || in.level == copilotBlocked {
+	if in.level == copilotBlocked {
 		return nil
 	}
 	var out []Edge
 	for _, cred := range all {
-		if cred.Kind != KindCredential || !credFileInWorkspace(cred, in.inWorkspace) {
+		if cred.Kind != KindCredential {
 			continue
 		}
-		out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
+		if in.readCap != nil && credFileInWorkspace(cred, in.inWorkspace) {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.readCap))
+		}
+		if in.termCap != nil {
+			out = append(out, in.edge(EdgeReaches, cred.ID, *in.termCap))
+		}
 	}
 	return out
 }
