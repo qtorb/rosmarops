@@ -1493,7 +1493,7 @@ func (oi overviewInputs) hermesCells(v *agentView) []OverviewCell {
 	return []OverviewCell{
 		oi.hermesReadsCell(v, isolated), oi.hermesWritesCell(v, isolated),
 		oi.hermesRunsCell(v, isolated), oi.hermesSendsCell(v),
-		oi.hermesChangesCell(v, hermesMode(v)), oi.providerCell(v),
+		oi.hermesChangesCell(v), oi.providerCell(v),
 	}
 }
 
@@ -1516,17 +1516,6 @@ func hermesUnknownBackends(nodes map[string]graph.Node, scan platform.HermesScan
 		}
 	}
 	return out
-}
-
-// hermesMode is Hermes Agent's permission mode from its permission_mode
-// capability (approvals.mode): smart, manual or off; smart when absent.
-func hermesMode(v *agentView) string {
-	for _, c := range v.inForce {
-		if c.Type == graph.CapPermissionMode {
-			return c.TargetScope
-		}
-	}
-	return "smart"
 }
 
 // hermesCap is the in-force capability of type typ with an allow approval.
@@ -1607,21 +1596,19 @@ func (oi overviewInputs) hermesSendsCell(v *agentView) OverviewCell {
 	return cell
 }
 
-// hermesChangesCell (BV-111): Hermes's writes to another agent's resources. A
-// config or executable is written without asking (nobody); another agent's
-// protected instructions are the one ask-gated write, decided by the mode
-// (smart → the auxiliary model, manual → you, off or absent → nobody).
-func (oi overviewInputs) hermesChangesCell(v *agentView, mode string) OverviewCell {
+// hermesChangesCell (BV-111, BV-241 v2): Hermes's writes to another agent's
+// resources. Hermes's approvals do not cover file writes, so every write that
+// reaches this cell is made without asking (nobody), in every approval mode.
+// With security.protected_instruction_files on, the graph creates no write to
+// the protected instruction files (internal/graph/hermes.go), so the
+// instruction writes that reach here are to files Hermes does not protect, or
+// to the protected ones with the key off.
+func (oi overviewInputs) hermesChangesCell(v *agentView) OverviewCell {
 	var cs []candidate
 	var targets []string
 	for _, e := range oi.foreign[v.node.ID] {
 		r := oi.nodes[e.To]
 		targets = append(targets, r.Configures)
-		if r.Type == graph.ResourceAgentInstructions {
-			dec, assume := hermesAskDecider(mode)
-			cs = append(cs, candidate{decider: dec, scope: ScopeInstructions, assumptions: assume, basis: []string{graph.BasisProductDefault}})
-			continue
-		}
 		scope := ScopeInstructions
 		if r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable {
 			scope = ScopeConfig
@@ -1635,20 +1622,6 @@ func (oi overviewInputs) hermesChangesCell(v *agentView, mode string) OverviewCe
 	cell.Data.TargetAgents = sortedUnique(targets)
 	cell.Data.FindingIDs = oi.findingsOf(v.node.ID, []string{RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable}, "", "")
 	return cell
-}
-
-// hermesAskDecider is who decides an ask-gated action under a Hermes mode
-// (BV-111): the auxiliary model for smart (a premise, aux_model_permits), you
-// for manual, nobody for off or any non-asking mode.
-func hermesAskDecider(mode string) (string, []string) {
-	switch mode {
-	case "smart":
-		return DeciderModel, []string{AssumeAuxModelPermits}
-	case "manual":
-		return DeciderYou, nil
-	default:
-		return DeciderNobody, nil
-	}
 }
 
 // hermesConfiguredAllow counts the agent's configured allow capabilities of
