@@ -81,7 +81,7 @@ func cursorGraph(t *testing.T, fx cursorFixture) graph.Graph {
 			t.Fatal("token in graph")
 		}
 	}
-	return g
+	return withoutStartup(g)
 }
 
 // cursorEdge is one of Cursor's inferred edges, by names.
