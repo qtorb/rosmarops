@@ -259,6 +259,13 @@ func ProductDefaults(nodes []Node, base knowledge.Base) Fragment {
 			if !e.IsCapability() {
 				continue
 			}
+			// BV-248 (CTO-56 §1.3): Cursor's run mode is not the knowledge
+			// base's: it is read (approvalMode) or declared (C1), with its
+			// least controlled case without an answer. run_mode_builtin stays
+			// the documented factory answer.
+			if base.Product == knowledge.CursorProduct && e.ID == kbCursorRunMode {
+				continue
+			}
 			source := "kb:" + base.Product + "/" + e.ID + "@" + base.Version
 			id := productDefaultID(n.ID, e)
 			b.node(Node{

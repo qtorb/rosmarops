@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -48,6 +49,13 @@ type Input struct {
 	RepoRoots  []string
 	Home       string
 	Now        time.Time
+
+	// Declared are the person's answers about the settings RosmarOps cannot
+	// read at rest (BV-248, CTO-56), product → question → option code, from
+	// state.json; nil when none (the least controlled case is assumed).
+	Declared map[string]map[string]string
+	// GrokBot is the Grok Bot scan (BV-248, CTO-57).
+	GrokBot platform.GrokBotScan
 
 	// Crosses.
 	Matcher    *intel.Matcher
@@ -112,6 +120,11 @@ func Assemble(in Input) (Result, error) {
 
 // fragment runs the agent readers and merges in the order `rosmarops run` uses.
 func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
+	// BV-248: Cursor's declared settings travel with its scan; the factory
+	// pass already set its factory answers.
+	if in.Cursor.Declared == nil {
+		in.Cursor.Declared = in.Declared[declared.Cursor]
+	}
 	frag, stats, err := graph.FromScansWithGrok(in.MCP, in.Settings, in.Cursor, in.CredFiles, in.Repos, in.Hermes, in.Codex, in.Grok, in.Salt, in.Now)
 	if err != nil {
 		return graph.Fragment{}, graph.PermissionStats{}, err
@@ -137,6 +150,10 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 	frag = graph.AddInstructions(frag, in.Instructions, in.Now)
 	frag = graph.AddSkills(frag, in.Skills, in.Now)
 	frag = graph.AddExtensions(frag, in.Extensions, filepath.Join(in.Home, ".vscode", "extensions"), in.Now)
+	// Grok Bot (BV-248, CTO-56 §2): only when the person said they use it. It
+	// loads no instruction or skills file on this computer, so it is merged
+	// after them.
+	frag = graph.Merge(frag, graph.FromGrokBot(in.GrokBot, in.Declared[declared.GrokBot], in.Now))
 	return frag, stats, nil
 }
 

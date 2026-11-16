@@ -427,6 +427,14 @@ type V2Input struct {
 	// written, for default_mode_depends_on_version. Optional.
 	Antigravity platform.AntigravityScan
 
+	// Declared are the person's answers about the settings RosmarOps cannot
+	// read at rest (BV-248, CTO-56), product → question → option, with when
+	// they were given (DeclaredAt, product → RFC 3339): the report shows them,
+	// and Grok Bot's account answers give its cloud risk kinds. Optional.
+	Declared   map[string]map[string]string
+	DeclaredAt map[string]string
+	GrokBot    platform.GrokBotScan
+
 	// IntegrityNotChecked: the state could not be read, so this run checked
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).

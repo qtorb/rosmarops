@@ -352,6 +352,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.ClineProduct {
 		return oi.clineCells(v)
 	}
+	if v.node.Platform == knowledge.GrokBotProduct {
+		return oi.grokBotCells(v)
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}
@@ -1833,6 +1836,9 @@ func pick(row string, cs []candidate) OverviewCell {
 // (§2.3): the mode RosmarOps cannot confirm at rest.
 var overviewPremise = map[string]bool{
 	graph.AssumeIDERunModeNotReadable: true,
+	// BV-248 (CTO-56 §1.3): a declared setting is a premise.
+	graph.AssumeDeclaredByYou: true,
+	graph.AssumeNotDeclared:   true,
 	graph.AssumeUIModeChoiceUnknown:   true,
 	graph.AssumeAutoModeAvailable:     true,
 }
@@ -1982,7 +1988,9 @@ func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 			launchers++
 		}
 		scope := ScopeMachine
-		if w.code == "egress_auto_review" && !insecure {
+		// Auto-review runs in its sandbox, unless insecure_none is in force or
+		// the person declared Auto-review without Sandbox (CTO-56 §1.3).
+		if w.code == "egress_auto_review" && !insecure && (v.modeCap == nil || graph.CursorModeOption(*v.modeCap) != "auto_review") {
 			scope = ScopeSandbox
 		}
 		cs = append(cs, candidate{decider: wayDecider(w.assumptions), scope: scope, code: w.code, cap: w.cap, basis: oi.basisOf(w.cap), assumptions: w.assumptions})

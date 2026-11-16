@@ -3,6 +3,8 @@ package pipeline
 import (
 	"slices"
 
+	"github.com/qtorb/rosmarops/internal/declared"
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/rules"
 )
@@ -33,6 +35,14 @@ func Factory(in Input) Input {
 	out.Antigravity = factoryAntigravity(in.Antigravity)
 	out.Gemini = factoryGemini(in.Gemini)
 	out.Cline = FactoryCline(in.Cline)
+	// BV-248: Grok Bot, when the person uses it, at its factory answers.
+	// Its settings.json values are settings: they are taken out, and its app
+	// folder is kept.
+	out.Declared = nil
+	out.GrokBot = platform.GrokBotScan{Present: in.GrokBot.Present}
+	if declared.ResolveGrokBot(graph.GrokBotFacts(in.GrokBot), in.Declared[declared.GrokBot]).Present {
+		out.Declared = map[string]map[string]string{declared.GrokBot: declared.Factory(declared.GrokBot)}
+	}
 	return out
 }
 
@@ -87,11 +97,15 @@ func factoryCursor(s platform.CursorScan) platform.CursorScan {
 		f.MCPAllowlist, f.HasMCPAllowlist = nil, false
 		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = "", "", nil
 		f.CLIAllow, f.CLIDeny = nil, nil
+		f.ApprovalMode = ""
 		out.Files[i] = f
 	}
 	if s.Files == nil {
 		out.Files = nil
 	}
+	// BV-248: the settings inside the app at their factory answers (CTO-56
+	// §1.2), never the person's.
+	out.Declared = declared.Factory(declared.Cursor)
 	return out
 }
 

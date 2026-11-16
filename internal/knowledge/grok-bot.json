@@ -1,0 +1,46 @@
+{
+  "product": "grok-bot",
+  "version": "2026-11-14",
+  "entries": [
+    {
+      "id": "local_execution_default",
+      "type": "execute_shell",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://docs.x.ai/grok-bot/settings-and-notifications",
+      "verified": "CTO-46 §1.4, doc 2026-11-14: Settings > Computer > Your computer > «Execution on this computer» is «Ask every time» by default, one per computer; the other values are «Always allow» and «Never allow». The page does not describe how the value is stored (security): it is declared by the person (BV-248, CTO-56 §2.2 B1)"
+    },
+    {
+      "id": "local_execution_vendor_advice",
+      "type": "execute_shell",
+      "approval": "deny",
+      "target_scope": "*",
+      "source_url": "https://docs.x.ai/grok-bot/security",
+      "verified": "CTO-46 §1.4, doc 2026-11-14: «Recommend Never allow unless a Bot has a specific reason to work on local files»; «Always allow» is not covered by Auto-review: «Auto Review governs only work inside the hosted computer»"
+    },
+    {
+      "id": "cloud_auto_review_default",
+      "type": "permission_mode",
+      "approval": "allow",
+      "target_scope": "cloud_auto_review",
+      "source_url": "https://docs.x.ai/grok-bot/settings-and-notifications",
+      "verified": "CTO-46 §1.4, doc 2026-11-14: Settings > General > Bot > Auto-review is on by default and governs only the cloud computer; «Bot work runs on the cloud computer» (faq). Kept in the account: declared (B2)"
+    },
+    {
+      "id": "cloud_ask_first_rules",
+      "type": "permission_mode",
+      "approval": "ask",
+      "target_scope": "cloud_ask_first",
+      "source_url": "https://docs.x.ai/grok-bot/approvals-security-and-privacy",
+      "verified": "CTO-46 §1.4, doc 2026-11-14: «Ask first» and «Allow automatically» rules are written by the person in natural language, 20 of each, «Ask first» wins, «saved to your account, so they apply from every desktop»; none by default. Declared (B3)"
+    },
+    {
+      "id": "cloud_connectors",
+      "type": "invoke_mcp_tool",
+      "approval": "allow",
+      "target_scope": "cloud_connectors",
+      "source_url": "https://docs.x.ai/grok-bot/computer-and-apps",
+      "verified": "CTO-46 §1.4, doc 2026-11-14: connectors (Gmail, Calendar, Drive, Slack…) are turned on per tool in «Connect apps», none by default; their tokens stay «on Cursor's connector backend». Declared (B4)"
+    }
+  ]
+}

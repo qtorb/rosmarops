@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -59,7 +60,7 @@ func cursorGraph(t *testing.T, fx cursorFixture) graph.Graph {
 	mcp := platform.MCPScan{Servers: fx.servers, Sources: []platform.MCPSource{
 		{Platform: "cursor", ConfigPath: cursorMCPJSON, ConfigDir: cursorDir, Status: platform.MCPSourceRead, LoadsMCP: true},
 	}}
-	cursor := platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: fx.files}
+	cursor := platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: fx.files, Declared: declared.Factory(declared.Cursor)}
 	f, _, err := graph.FromScansWithCursor(mcp, settings, cursor, creds, testSalt, scanTime)
 	if err != nil {
 		t.Fatal(err)
@@ -105,6 +106,9 @@ func cursorEdges(t *testing.T, g graph.Graph) []cursorEdge {
 		if via.Basis == graph.BasisProductDefault {
 			name = strings.SplitN(strings.TrimPrefix(via.Source, "kb:cursor/"), "@", 2)[0]
 		}
+		if _, q, _, _, ok := graph.DeclaredOf(via); ok {
+			name = q // BV-248: the declared run mode is c1_run_mode
+		}
 		to := nodes[e.To]
 		target := to.Path
 		if to.Kind == graph.KindCredential {
@@ -144,8 +148,8 @@ func TestInferCursor_EnvReachedByTerminal(t *testing.T) {
 	defer graph.SetSandboxPlatformUnknown(true)()
 	es := cursorEdges(t, cursorGraph(t, cursorFixture{}))
 	for _, file := range []string{cursorEnv, outsideEnv} {
-		got := findEdges(es, graph.EdgeReaches, file, "run_mode_builtin")
-		if len(got) != 1 || !hasAll(got[0].assumptions, graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits,
+		got := findEdges(es, graph.EdgeReaches, file, "c1_run_mode")
+		if len(got) != 1 || !hasAll(got[0].assumptions, graph.AssumeDeclaredByYou, graph.AssumeAutoClassifierPermits,
 			graph.AssumeSandboxPlatformUnknown, graph.AssumeTeamPolicyUnknown, assumeUser, assumeVersion) {
 			t.Errorf("%s: %+v", file, got)
 		}
@@ -172,8 +176,8 @@ func TestInferCursor_SandboxPlatformOnlyOnWindows(t *testing.T) {
 		}
 	}
 	for _, file := range []string{cursorEnv, outsideEnv} {
-		got := findEdges(es, graph.EdgeReaches, file, "run_mode_builtin")
-		if len(got) != 1 || !hasAll(got[0].assumptions, graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits,
+		got := findEdges(es, graph.EdgeReaches, file, "c1_run_mode")
+		if len(got) != 1 || !hasAll(got[0].assumptions, graph.AssumeDeclaredByYou, graph.AssumeAutoClassifierPermits,
 			graph.AssumeTeamPolicyUnknown, assumeUser, assumeVersion) {
 			t.Errorf("%s: %+v", file, got)
 		}
@@ -189,10 +193,10 @@ func TestInferCursor_SandboxPlatformOnlyOnWindows(t *testing.T) {
 func TestInferCursor_ReadBoundaryWorkspace(t *testing.T) {
 	user := platform.CursorFile{Path: cursorSandbox, Kind: platform.CursorSandbox, Scope: platform.CursorScopeUser, Status: platform.MCPSourceRead, ReadBoundary: "workspace"}
 	es := cursorEdges(t, cursorGraph(t, cursorFixture{files: []platform.CursorFile{user}}))
-	if got := findEdges(es, graph.EdgeReaches, outsideEnv, "run_mode_builtin"); len(got) != 0 {
+	if got := findEdges(es, graph.EdgeReaches, outsideEnv, "c1_run_mode"); len(got) != 0 {
 		t.Errorf("outside reached with readBoundary workspace: %+v", got)
 	}
-	if got := findEdges(es, graph.EdgeReaches, cursorEnv, "run_mode_builtin"); len(got) != 1 {
+	if got := findEdges(es, graph.EdgeReaches, cursorEnv, "c1_run_mode"); len(got) != 1 {
 		t.Errorf("inside not reached: %+v", got)
 	}
 	// Another repository's sandbox.json alone does not cut it.
@@ -201,7 +205,7 @@ func TestInferCursor_ReadBoundaryWorkspace(t *testing.T) {
 		Status: platform.MCPSourceRead, ReadBoundary: "workspace",
 	}
 	es = cursorEdges(t, cursorGraph(t, cursorFixture{files: []platform.CursorFile{other}}))
-	if got := findEdges(es, graph.EdgeReaches, outsideEnv, "run_mode_builtin"); len(got) != 1 {
+	if got := findEdges(es, graph.EdgeReaches, outsideEnv, "c1_run_mode"); len(got) != 1 {
 		t.Errorf("outside not reached when only another repo sets it: %+v", got)
 	}
 }
@@ -219,11 +223,11 @@ func TestInferCursor_WritesAndProtectedPaths(t *testing.T) {
 	if len(fileTools) != 1 || !contains(fileTools[0].assumptions, graph.AssumeConfigFileProtectionUnknown) {
 		t.Errorf("CLAUDE.md by the file tools: %+v", fileTools)
 	}
-	if got := findEdges(es, graph.EdgeWritesConfigOf, repoClaudeMD, "run_mode_builtin"); len(got) != 1 || contains(got[0].assumptions, assumeShellOpen) {
+	if got := findEdges(es, graph.EdgeWritesConfigOf, repoClaudeMD, "c1_run_mode"); len(got) != 1 || contains(got[0].assumptions, assumeShellOpen) {
 		t.Errorf("CLAUDE.md by the shell: %+v", got)
 	}
-	out := findEdges(es, graph.EdgeWritesConfigOf, userSettings, "run_mode_builtin")
-	if len(out) != 1 || !hasAll(out[0].assumptions, assumeShellOpen, graph.AssumeAutoClassifierPermits, graph.AssumeIDERunModeNotReadable) {
+	out := findEdges(es, graph.EdgeWritesConfigOf, userSettings, "c1_run_mode")
+	if len(out) != 1 || !hasAll(out[0].assumptions, assumeShellOpen, graph.AssumeAutoClassifierPermits, graph.AssumeDeclaredByYou) {
 		t.Errorf("~/.claude/settings.json by the retry: %+v", out)
 	}
 }
@@ -284,7 +288,7 @@ func TestInferCursor_TerminalAllowlist(t *testing.T) {
 	}
 	es := cursorEdges(t, cursorGraph(t, cursorFixture{files: []platform.CursorFile{perms}}))
 	cat := findEdges(es, graph.EdgeReaches, outsideEnv, "terminalAllowlist:cat")
-	if len(cat) != 1 || contains(cat[0].assumptions, graph.AssumeAutoClassifierPermits) || contains(cat[0].assumptions, graph.AssumeIDERunModeNotReadable) {
+	if len(cat) != 1 || contains(cat[0].assumptions, graph.AssumeAutoClassifierPermits) || contains(cat[0].assumptions, graph.AssumeDeclaredByYou) {
 		t.Errorf("cat: %+v", cat)
 	}
 	node := findEdges(es, graph.EdgeReaches, cursorEnv, "terminalAllowlist:node")

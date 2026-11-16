@@ -26,6 +26,7 @@ var clientDisplayNames = map[string]string{
 	"cline":          "Cline",
 	"cursor":         "Cursor",
 	"github-copilot": "GitHub Copilot", // BV-140: scored ai_client in VS Code
+	"grok-bot":       "Grok Bot",       // BV-248: declared by the person
 
 	// Detected and not evaluated (decision 2026-10-27, agentes nuevos, N1).
 	agentdirs.Codex:            "Codex",

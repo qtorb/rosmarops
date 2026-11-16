@@ -78,7 +78,7 @@ func mcpExternal(in Input, nodes map[string]graph.Node, view func(string) *agent
 		ea := l.server.ExternalAction
 		scope := mcpScope(l.edge.AppliesIn)
 		var findingID *string
-		if f, ok := mcpFinding(in, client, l.server, l.edge, disp, scope); ok {
+		if f, ok := mcpFinding(in, client, l.server, l.edge, disp, scope, view(client.ID)); ok {
 			findings = append(findings, f)
 			id := f.ID
 			findingID = &id
@@ -117,7 +117,7 @@ func mcpScope(appliesIn string) string {
 // mcpFinding builds the finding for one (agent, server), or reports ok=false
 // when the configuration gives none: a read-only or denied server, or an agent
 // that asks a person first for anything but money.
-func mcpFinding(in Input, client, server graph.Node, edge graph.Edge, disp, scope string) (Finding, bool) {
+func mcpFinding(in Input, client, server graph.Node, edge graph.Edge, disp, scope string, v *agentView) (Finding, bool) {
 	ea := server.ExternalAction
 	if ea.ReadOnly || disp == MCPApprovalDeny {
 		return Finding{}, false
@@ -135,7 +135,7 @@ func mcpFinding(in Input, client, server graph.Node, edge graph.Edge, disp, scop
 	assumptions := []string{}
 	if disp == MCPApprovalAnotherModel {
 		confidence = ConfidenceMedium
-		assumptions = mcpModelAssumptions(client.Platform)
+		assumptions = mcpModelAssumptions(client.Platform, v)
 	}
 	locations := mcpLocations(edge, server)
 	f := Finding{
@@ -294,12 +294,18 @@ func codexMCPDisposition(v *agentView) string {
 // on, by agent (BV-233, CTO-48 §1): Claude Code's auto-mode classifier;
 // Cursor's Auto-review, its mode not readable at rest; Hermes Agent's smart
 // mode (and the others that map to it).
-func mcpModelAssumptions(product string) []string {
+func mcpModelAssumptions(product string, v *agentView) []string {
 	switch product {
 	case knowledge.ClaudeCodeProduct:
 		return []string{graph.AssumeAutoClassifierPermits}
 	case knowledge.CursorProduct:
-		return []string{graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits}
+		// BV-248: the mode as declared (or its least controlled case).
+		if v != nil && v.modeCap != nil {
+			if d := graph.DeclaredAssumption(*v.modeCap); d != "" {
+				return []string{d, graph.AssumeAutoClassifierPermits}
+			}
+		}
+		return []string{graph.AssumeAutoClassifierPermits}
 	}
 	return []string{AssumeAuxModelPermits}
 }
@@ -361,6 +367,15 @@ func mcpRuleCoversServer(rule, server string) bool {
 // (BV-233, run-modes: «Auto-review applies to shell, MCP, and Fetch tool
 // calls»).
 func cursorMCPDisposition(v *agentView, serverName string) string {
+	// BV-248 (CTO-56 §1.3): Run Everything runs every tool without a person;
+	// Allowlist and Ask Every Time ask outside the mcpAllowlist.
+	other := MCPApprovalAnotherModel
+	switch {
+	case v.mode == graph.CursorScopeRunEverything:
+		return MCPApprovalNobody
+	case v.mode != modeAutoReview:
+		other = MCPApprovalPerson
+	}
 	for _, c := range v.inForce {
 		if c.Type != graph.CapInvokeMCPTool || c.Approval != graph.ApprovalAllow || !c.InForce {
 			continue
@@ -369,7 +384,7 @@ func cursorMCPDisposition(v *agentView, serverName string) string {
 			return MCPApprovalNobody
 		}
 	}
-	return MCPApprovalAnotherModel
+	return other
 }
 
 // cursorAllowlistCoversServer reports whether a Cursor mcpAllowlist entry

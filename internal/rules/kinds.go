@@ -55,7 +55,7 @@ const (
 var (
 	AllKindStates  = []string{StateBlocked, StateYou, StateBounded, StateModel, StateNobody, StateNoneKnown, StateUnknown}
 	AllKindScopes  = []string{KindScopeMachine, KindScopeSameProject, KindScopeSandbox, KindScopeListedCommands, KindScopeAnyDestination, KindScopeNone}
-	AllKindSources = []string{KindSourceRow, KindSourceCredentials, KindSourceCatalog}
+	AllKindSources = []string{KindSourceRow, KindSourceCredentials, KindSourceCatalog, KindSourceDeclared}
 )
 
 // RiskKindCell is one of the five risk kinds of an agent: who decides, how
@@ -185,7 +185,13 @@ func (oi overviewInputs) kinds(a OverviewAgent, v *agentView) []RiskKindCell {
 			ch = worse(ch, rowKind(KindChangesFiles, c))
 		}
 	}
-	return append(out, ch)
+	out = append(out, ch)
+	// BV-248 (CTO-56 §2.3): Grok Bot's work on its cloud computer, from the
+	// account answers, for money and sends_out.
+	if a.Product == knowledge.GrokBotProduct {
+		out = oi.grokBotCloudKinds(out)
+	}
+	return out
 }
 
 // moneyKind (§3.6): the «who decides» of the payment services of the catalog

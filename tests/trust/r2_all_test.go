@@ -3,6 +3,7 @@ package trust_test
 import (
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/pipeline"
@@ -75,7 +76,7 @@ func r2AllInput() pipeline.Input {
 	return pipeline.Input{
 		MCP:          platform.MCPScan{Servers: servers, Sources: hermes.Sources},
 		Settings:     r2Settings(platform.ClaudeSettingsFile{Scope: platform.MCPScopeUser, ConfigPath: fcClaudeDir + "/settings.json", ConfigDir: fcClaudeDir, Status: platform.MCPSourceRead}),
-		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true, Declared: declared.Factory(declared.Cursor)},
 		Hermes:       hermes,
 		Codex:        codex,
 		Grok:         grok,

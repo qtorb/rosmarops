@@ -85,6 +85,7 @@ type (
 	cursorPermissionsDoc struct {
 		TerminalAllowlist *[]string `json:"terminalAllowlist"`
 		MCPAllowlist      *[]string `json:"mcpAllowlist"`
+		ApprovalMode      string    `json:"approvalMode"`
 	}
 	// cursorSandboxDoc is sandbox.json.
 	cursorSandboxDoc struct {
@@ -146,6 +147,12 @@ func readCursorFile(path, kind, scope, root string) platform.CursorFile {
 		}
 		if perm.MCPAllowlist != nil {
 			f.MCPAllowlist, f.HasMCPAllowlist = append([]string{}, *perm.MCPAllowlist...), true
+		}
+		// CTO-56 §1.1: approvalMode, when it is one of its three values, sets
+		// the run mode; any other value is not kept.
+		switch perm.ApprovalMode {
+		case "allowlist", "unrestricted", "manual":
+			f.ApprovalMode = perm.ApprovalMode
 		}
 	case platform.CursorSandbox:
 		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = sandbox.Type, sandbox.ReadBoundary, sandbox.AdditionalReadwritePaths

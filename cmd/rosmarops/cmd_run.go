@@ -451,6 +451,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		grokScan        platform.GrokScan        // BV-140: TOML layers drive Grok's caps
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
 		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
+		grokBotScan     platform.GrokBotScan     // BV-248: Grok Bot app folder and settings.json
 		geminiScan      platform.GeminiScan      // BV-193: gemini-cli settings drive its caps
 		clineScan       platform.ClineScan       // BV-193: cline globalState drives its caps
 		credFiles       platform.CredentialFileScan
@@ -606,6 +607,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, repoList)
 			instructions, instructionsErr := plat.ListAgentInstructions(ctx, repoList)
 			cursorScan, cursorErr := plat.ListCursor(ctx, repoList)
+			// BV-248 (CTO-57): Grok Bot's app folder and settings.json.
+			grokBot, grokBotErr := plat.ListGrokBot(ctx)
+			if grokBotErr != nil {
+				slog.Warn("grok bot: not read", "err", grokBotErr)
+			}
+			grokBotScan = grokBot
 			skillScan, skillsErr := plat.ListSkills(ctx, repoList)
 			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
 			if ctx.Err() != nil {
@@ -659,7 +666,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan)
 					if graphErr == nil {
 						built, builtSHA, builtSettings, builtFactory, builtProfiles = g, graphSHA, &settingsScan, factoryGraph.factory, factoryGraph.profiles
 					}
@@ -925,6 +932,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 		BinarySkipped: binarySkipped,
+		Declared:      declaredAnswers(st), DeclaredAt: declaredAt(st), GrokBot: grokBotScan,
 	})
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
@@ -1169,6 +1177,7 @@ func writeGraph(
 	pkgObs []graph.PackageObservation,
 	n8nFolder string,
 	n8nKeyData bool,
+	grokBot platform.GrokBotScan,
 ) (*graph.Graph, string, string, passGraphs, error) {
 	fail := func(err error) (*graph.Graph, string, string, passGraphs, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -1216,6 +1225,9 @@ func writeGraph(
 		PkgObs:     pkgObs,
 		N8NFolder:  n8nFolder,
 		N8NKeyData: n8nKeyData,
+		// BV-248: the person's answers, and Grok Bot as read.
+		Declared: declaredAnswers(st),
+		GrokBot:  grokBot,
 	}
 	res, err := pipeline.Assemble(pin)
 	if err != nil {

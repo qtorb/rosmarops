@@ -1020,7 +1020,9 @@
                   "profile": {
                     "enum": [
                       "P0",
-                      "P1"
+                      "P1",
+                      "cloud",
+                      "local"
                     ]
                   },
                   "value": {
@@ -1310,7 +1312,9 @@
               "profile": {
                 "enum": [
                   "P0",
-                  "P1"
+                  "P1",
+                  "cloud",
+                  "local"
                 ]
               },
               "value": {
@@ -1681,6 +1685,36 @@
             "$ref": "#/definitions/overviewService"
           },
           "description": "The known external MCP servers the agent is configured to use (BV-121): every catalog server it loads, read-only and denied included. Only scored agents carry it; absent when none."
+        },
+        "declared": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "answers"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "answered",
+                "partial",
+                "unanswered"
+              ]
+            },
+            "answers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]{1,40}$"
+              },
+              "description": "The same question and option codes as state.json's declared."
+            },
+            "answered_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "description": "BV-248 (CTO-56 §5.2): Cursor and Grok Bot only, the person's answers about settings RosmarOps cannot read at rest. answered: every question asked has an answer; partial: some; unanswered: none (the least controlled case is assumed)."
         },
         "kinds": {
           "type": "array",
@@ -2377,8 +2411,10 @@
           "enum": [
             "overview_row",
             "credential_findings",
-            "mcp_catalog"
-          ]
+            "mcp_catalog",
+            "declared"
+          ],
+          "description": "declared: Grok Bot's work on its cloud computer, from the person's answers about the account (BV-248, CTO-56 §2.3)."
         }
       }
     }

@@ -116,6 +116,7 @@ var AllAssumptions = []string{
 	AssumeReviewerModelPermits, AssumeLaunchFlagsNotReadable, AssumeExecRulesNotEvaluated,
 	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown, AssumeAgentModelJudgesCommandSafety,
 	AssumeDefaultModeDependsOnVersion,
+	graph.AssumeDeclaredByYou, graph.AssumeNotDeclared, graph.AssumeMeasuredLocalSetting,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -127,6 +128,10 @@ var premiseAssumptions = map[string]bool{
 	graph.AssumeUIModeChoiceUnknown:   true,
 	graph.AssumeIDERunModeNotReadable: true,
 	AssumeAuxModelPermits:             true,
+	// BV-248 (CTO-56 §1.3): what the person declared, or its least controlled
+	// case, is not a reading.
+	graph.AssumeDeclaredByYou: true,
+	graph.AssumeNotDeclared:   true,
 	// A reviewer model decides the step (CTO-16): a premise, confidence medium.
 	AssumeReviewerModelPermits: true,
 }
@@ -283,6 +288,14 @@ type Input struct {
 	// whether agentMode is written, for default_mode_depends_on_version.
 	// Optional: without it (Present false) the assumption is not added.
 	Antigravity platform.AntigravityScan
+
+	// Declared are the person's answers (BV-248), product → question →
+	// option: Grok Bot's account answers (B2–B4) give its cloud risk kinds
+	// (CTO-56 §2.3). Optional.
+	Declared map[string]map[string]string
+	// GrokBot is the Grok Bot scan (BV-248, CTO-57): what settings.json gave
+	// for B1 and B2. Optional.
+	GrokBot platform.GrokBotScan
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -1003,6 +1016,19 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 	}
 	switch n.Platform {
 	case knowledge.CursorProduct:
+		// BV-248 (CTO-56 §1.3): Cursor's run mode is read (approvalMode) or
+		// declared (C1); C3 Workspace narrows like readBoundary workspace.
+		v.mode, v.modeCap = "", nil
+		boundary = map[string]bool{}
+		for i := range v.inForce {
+			c := v.inForce[i]
+			switch {
+			case graph.IsCursorMode(c):
+				v.mode, v.modeCap = c.TargetScope, &v.inForce[i]
+			case graph.IsCursorReadBoundary(c):
+				boundary[c.AppliesIn] = true
+			}
+		}
 		// readBoundary workspace narrows the radius when the user's
 		// sandbox.json sets it, or every repository's (decision 2026-10-25,
 		// Cursor, annex 2 point 8).
@@ -1057,11 +1083,15 @@ func (v *agentView) webMCPEgress() []way {
 			(c.Type == graph.CapInvokeMCPTool && v.grokDenied(graph.CapInvokeMCPTool, scopeAll))) {
 			continue
 		}
+		a := append([]string{}, baseA...)
+		if d := graph.GrokBotAssumption(c); d != "" { // BV-248: a declared or measured setting
+			a = append(a, d)
+		}
 		switch c.Type {
 		case graph.CapNetwork:
-			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: append([]string{}, baseA...)})
+			out = append(out, way{id: c.ID, code: "egress_network", cap: c.ID, assumptions: a})
 		case graph.CapInvokeMCPTool:
-			out = append(out, way{id: c.ID, code: "egress_mcp_allowlist", cap: c.ID, assumptions: append([]string{}, baseA...)})
+			out = append(out, way{id: c.ID, code: "egress_mcp_allowlist", cap: c.ID, assumptions: a})
 		}
 	}
 	return out
@@ -1199,24 +1229,35 @@ func (v *agentView) hermesEgress() []way {
 func (v *agentView) cursorEgress(base knowledge.Base) []way {
 	baseA := []string{graph.AssumeProcessRunsAsUser, graph.AssumeVersionAsDocumented, graph.AssumeTeamPolicyUnknown}
 	var out []way
+	with := func(c graph.Node, extra ...string) []string {
+		a := append([]string{}, baseA...)
+		if d := graph.DeclaredAssumption(c); d != "" {
+			a = append(a, d)
+		}
+		return append(a, extra...)
+	}
 	if v.modeCap != nil && v.mode == modeAutoReview {
 		out = append(out, way{
 			id: v.modeCap.ID, code: "egress_auto_review", cap: v.modeCap.ID,
-			assumptions: append(append([]string{}, baseA...), graph.AssumeIDERunModeNotReadable, graph.AssumeAutoClassifierPermits),
+			assumptions: with(*v.modeCap, graph.AssumeAutoClassifierPermits),
 		})
 	}
+	// Run Everything (CTO-56 §1.3): every command runs, and sends, without a
+	// person.
+	if v.modeCap != nil && v.mode == graph.CursorScopeRunEverything {
+		out = append(out, way{id: v.modeCap.ID, code: "egress_run_everything", cap: v.modeCap.ID, assumptions: with(*v.modeCap)})
+	}
 	for _, c := range v.inForce {
-		if c.Basis != graph.BasisConfigured || c.Approval != graph.ApprovalAllow {
+		// A terminalAllowlist entry, or the class of C2.
+		_, network, launcher, ok := graph.CursorListClass(c, base)
+		if !ok {
 			continue
 		}
-		if c.Type == graph.CapExecuteShell && strings.HasPrefix(c.Rule, "terminalAllowlist:") {
-			_, network, launcher := graph.CursorAllowlistClass(c.TargetScope, base)
-			switch {
-			case network:
-				out = append(out, way{id: c.ID, code: "egress_allowlist", cap: c.ID, assumptions: append([]string{}, baseA...)})
-			case launcher:
-				out = append(out, way{id: c.ID, code: "egress_allowlist", cap: c.ID, assumptions: append(append([]string{}, baseA...), AssumeCodeLauncherRule)})
-			}
+		switch {
+		case network:
+			out = append(out, way{id: c.ID, code: "egress_allowlist", cap: c.ID, assumptions: with(c)})
+		case launcher:
+			out = append(out, way{id: c.ID, code: "egress_allowlist", cap: c.ID, assumptions: with(c, AssumeCodeLauncherRule)})
 		}
 	}
 	return out
@@ -1423,6 +1464,10 @@ func (v *agentView) cursorWayCode(c graph.Node, base knowledge.Base) string {
 	switch {
 	case c.Type == graph.CapPermissionMode && c.TargetScope == modeAutoReview:
 		return "mode_auto_review"
+	case c.Type == graph.CapPermissionMode && c.TargetScope == graph.CursorScopeRunEverything:
+		return "mode_run_everything"
+	case graph.IsCursorExternalWrite(c):
+		return "file_tools_write"
 	case pd("file_tools_read"):
 		return "file_tools"
 	case pd("file_tools_write_workspace"):
@@ -1466,7 +1511,7 @@ func (v *agentView) edgeWay(e graph.Edge, nodes map[string]graph.Node, base know
 		outside := w.code == "bash_read_only" || w.code == "mode_bypass" ||
 			w.code == "mode_auto_review" || w.code == "allowlist_shell" ||
 			readScopeOutsideProject(capNode)
-		if outside && !v.blockReads {
+		if outside && !v.blockReads || w.code == "mode_run_everything" {
 			w.radius = RadiusAnyProject
 		}
 	}
