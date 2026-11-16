@@ -20,30 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Find the installer link
         shell: pwsh
-        run: |
-          $urls = @()
-          foreach ($page in @("https://x.ai/bot", "https://x.ai/grok-bot", "https://docs.x.ai/grok-bot/get-started")) {
-            try {
-              $r = Invoke-WebRequest $page -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 30
-              Write-Host "page $page -> $($r.StatusCode), $($r.Content.Length) chars"
-              $m = [regex]::Matches($r.Content, 'https://downloads\.cursor\.com/grokbot/[^"''\s<>\\]+')
-              foreach ($x in $m) { $urls += $x.Value }
-              $m2 = [regex]::Matches($r.Content, '[^"''\s<>]*(Grok_Bot|grokbot|GrokBot)[^"''\s<>]*\.(exe|msi|msix|appx)')
-              foreach ($x in $m2) { $urls += $x.Value }
-            } catch { Write-Host "page $page failed: $($_.Exception.Message)" }
-          }
-          $urls = $urls | Sort-Object -Unique
-          Write-Host "candidates:"; $urls | ForEach-Object { Write-Host "  $_" }
-          $pick = $urls | Where-Object { $_ -match 'win32-x64' -and $_ -match '\.exe$' } | Select-Object -First 1
-          if (-not $pick) { $pick = $urls | Where-Object { $_ -match 'win' -and $_ -match '\.exe$' } | Select-Object -First 1 }
-          if (-not $pick) {
-            foreach ($u in @("https://downloads.cursor.com/grokbot/stable/win32-x64/latest", "https://downloads.cursor.com/grokbot/stable/win32-x64/Grok_Bot_Setup.exe")) {
-              try { $h = Invoke-WebRequest $u -Method Head -UseBasicParsing -MaximumRedirection 0 -ErrorAction Stop; Write-Host "HEAD $u -> $($h.StatusCode) $($h.Headers.Location)" } catch { Write-Host "HEAD $u -> $($_.Exception.Response.StatusCode.value__) $($_.Exception.Response.Headers.Location)" }
-            }
-            throw "no Windows installer link found"
-          }
-          Write-Host "picked $pick"
-          "GB_URL=$pick" | Out-File -Append $env:GITHUB_ENV
+        run: python .github/cto57/find.py
       - name: Snapshot before install
         shell: pwsh
         run: |
