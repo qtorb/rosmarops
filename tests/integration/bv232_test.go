@@ -176,9 +176,16 @@ var b232Sandbox = platform.ClaudeSandbox{
 // §1, Claude Code: an effective sandbox with ~/.aws in denyRead cuts the
 // terminal's read of ~/.aws/credentials on Linux, and the score rises; on
 // native Windows the same settings change nothing.
+//
+// BV-249 §4: with «auto» available it writes a startup file and reaches
+// every credential whatever the sandbox (rule b-iii), so both machines
+// disable auto to isolate the sandbox.
 func TestBV232_ClaudeSandbox(t *testing.T) {
-	without := b232Machine{files: []platform.ClaudeSettingsFile{b232User(platform.ClaudePermissions{})}}
-	with := b232Machine{files: []platform.ClaudeSettingsFile{b232User(platform.ClaudePermissions{Sandbox: b232Sandbox})}}
+	noAuto := platform.ClaudePermissions{DisableAutoMode: "disable", DisableAutoModePointer: "/permissions/disableAutoMode"}
+	sandboxed := noAuto
+	sandboxed.Sandbox = b232Sandbox
+	without := b232Machine{files: []platform.ClaudeSettingsFile{b232User(noAuto)}}
+	with := b232Machine{files: []platform.ClaudeSettingsFile{b232User(sandboxed)}}
 
 	linuxOff, linuxOn := without.run(t, "linux"), with.run(t, "linux")
 	if v := linuxOff.reachVias("claude-code", b232AWS); len(v) == 0 {
@@ -200,7 +207,9 @@ func TestBV232_ClaudeSandbox(t *testing.T) {
 	// Without failIfUnavailable the sandbox is not taken for sure.
 	unsure := b232Sandbox
 	unsure.FailIfUnavailable, unsure.FailIfUnavailableSet = false, false
-	m := b232Machine{files: []platform.ClaudeSettingsFile{b232User(platform.ClaudePermissions{Sandbox: unsure})}}
+	unsurePerms := noAuto
+	unsurePerms.Sandbox = unsure
+	m := b232Machine{files: []platform.ClaudeSettingsFile{b232User(unsurePerms)}}
 	if a, b := linuxOff.score(t, "claude-code"), m.run(t, "linux").score(t, "claude-code"); a != b {
 		t.Errorf("sandbox without failIfUnavailable moved the score %d -> %d", a, b)
 	}
