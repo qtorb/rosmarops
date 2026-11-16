@@ -59,21 +59,8 @@ jobs:
           $out = "$env:RUNNER_TEMP\asar"
           npx --yes @electron/asar@3.2.17 extract "$env:GB_DIR\resources\app.asar" $out
           Get-ChildItem $out | ForEach-Object { Write-Host "top: $($_.Name)" }
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:CTO57_PATS = "onLocalToolPermissionNever|||[lL]ocalToolPermission\w*|||localToolAccess\w*|||mcpBoxServers|||host-secrets\.json|||host-token\.json|||local-tool-approvals\.json|||egressTunnelEnabled:|||webauthnProxyEnabled"
+          $env:CTO57_MAX = "4"
+          $env:CTO57_W = "1500"
           python .github/cto57/deep.py $out | Select-Object -First 900
-      - name: Start the app without signing in, then stop it
-        shell: pwsh
-        run: |
-          $main = Get-ChildItem $env:GB_DIR -Filter *.exe | Where-Object { $_.Name -notmatch '(?i)unins|update|crash|helper' } | Select-Object -First 1
-          Write-Host "starting $($main.FullName)"
-          $p = Start-Process $main.FullName -PassThru
-          Start-Sleep 120
-          Get-Process | Where-Object { $_.Path -and $_.Path -match '(?i)grok' } | ForEach-Object { Write-Host "running: $($_.Path)"; Stop-Process -Id $_.Id -Force }
-          Start-Sleep 5
-      - name: What the first start wrote
-        shell: pwsh
-        run: |
-          python .github/cto57/probe.py snap "$env:RUNNER_TEMP\s2.json"
-          python .github/cto57/probe.py diff "$env:RUNNER_TEMP\s1.json" "$env:RUNNER_TEMP\s2.json" "after first start" | Select-String -Pattern "grokbot|Grok Bot" | Select-Object -First 200
-          python .github/cto57/values.py
-          reg query HKCU\Software > "$env:RUNNER_TEMP\reg2.txt"
-          Compare-Object (Get-Content "$env:RUNNER_TEMP\reg1.txt") (Get-Content "$env:RUNNER_TEMP\reg2.txt") | ForEach-Object { Write-Host "reg $($_.SideIndicator) $($_.InputObject)" }
