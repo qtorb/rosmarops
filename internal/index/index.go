@@ -203,9 +203,9 @@ type Profile struct {
 	Profile string `json:"profile"`
 	// OS is the system it was measured on (BV-249 §6): windows, macos or
 	// linux, since P2 depends on it.
-	OS string `json:"os"`
-	Value   int    `json:"value"`
-	Letter  Class  `json:"letter"`
+	OS     string `json:"os"`
+	Value  int    `json:"value"`
+	Letter Class  `json:"letter"`
 }
 
 // MachineProfile is the computer's score with one profile of Claude Code
