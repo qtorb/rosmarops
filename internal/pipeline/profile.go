@@ -74,3 +74,20 @@ func DeclaredProfile(in Input, product, id string) (Input, bool) {
 	}
 	return in, false
 }
+
+// GrokProfile is in with a measured Grok Build template (BV-249 §3.2: P2)
+// pasted in its user config.toml; every other agent keeps its configuration.
+// ok is false when there is no Grok Build folder or the template is not
+// measured.
+func GrokProfile(in Input, id string) (Input, bool) {
+	if !in.Grok.Exists {
+		return in, false
+	}
+	s, ok := profiles.GrokApply(in.Grok, id)
+	if !ok {
+		return in, false
+	}
+	out := in
+	out.Grok = s
+	return out, true
+}

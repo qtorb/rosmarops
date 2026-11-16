@@ -595,6 +595,10 @@ func (oi overviewInputs) grokCells(v *agentView) []OverviewCell {
 
 func (oi overviewInputs) grokReadsCell(v *agentView) OverviewCell {
 	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: OriginProductDefault}
+	// BV-249 §3.2 (CTO-58 §1.3): the strict profile reads only the CWD.
+	if graph.GrokReadsOnlyProjects(v.inForce) {
+		cell.Scope, cell.Origin = ScopeSameProject, OriginConfigured
+	}
 	creds, high := 0, 0
 	for cred := range oi.reaches[v.node.ID] {
 		creds++

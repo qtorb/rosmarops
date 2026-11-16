@@ -1,5 +1,12 @@
 package profiles
 
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/qtorb/rosmarops/internal/platform"
+)
+
 // The guided profiles of BV-238 (CTO-50 §2 Cursor, §3 Grok Build, with the
 // adjustments of 14-11 22:11): the steps are shown and the text is copied,
 // but the engine does not measure them.
@@ -76,8 +83,62 @@ func GuidedBlock(agent, id string) string {
 		return grokP0
 	case GuidedGrok + "/" + P1:
 		return grokP1
+	case GuidedGrok + "/" + P2:
+		return grokP2
 	case GuidedGrok + "/" + P3:
 		return grokP3
 	}
 	return ""
+}
+
+// grokP2 is Grok Build's «Sandboxed development» (BV-249 §3.2, CTO-58 §1.3):
+// P1's block with [sandbox] profile = "strict" in place of "workspace".
+var grokP2 = strings.Replace(grokP1, `profile = "workspace"`, `profile = "strict"`, 1)
+
+// GrokApply is s with a Grok Build template's block pasted in the user's
+// ~/.grok/config.toml (BV-249 §3.2): its [ui] permission_mode, [sandbox]
+// profile and [compat] cells set, its [permission] rules and deny added. A
+// missing user layer is added in the configuration folder. ok is false for a
+// template that is not measured (only P2) or with no folder to apply it to.
+func GrokApply(s platform.GrokScan, id string) (platform.GrokScan, bool) {
+	if id != P2 || s.ConfigDir == "" {
+		return s, false
+	}
+	out := s
+	out.Layers = append([]platform.GrokLayer(nil), s.Layers...)
+	i := -1
+	for j, l := range out.Layers {
+		if l.Kind == platform.GrokLayerUser && l.Status == platform.MCPSourceRead {
+			i = j
+		}
+	}
+	if i < 0 {
+		out.Layers = append(out.Layers, platform.GrokLayer{
+			Kind: platform.GrokLayerUser, Path: filepath.Join(s.ConfigDir, "config.toml"), Status: platform.MCPSourceRead,
+		})
+		i = len(out.Layers) - 1
+	}
+	l := out.Layers[i]
+	l.PermissionMode, l.HasPermissionMode, l.Yolo = "ask", true, false
+	l.SandboxProfile = "strict"
+	l.Rules = append(append([]platform.GrokRule(nil), l.Rules...), grokP1Rules...)
+	l.Deny = append(append([]string(nil), l.Deny...), "WebSearch")
+	compat := map[string]bool{}
+	for k, v := range l.Compat {
+		compat[k] = v
+	}
+	compat["claude.hooks"], compat["cursor.hooks"] = false, false
+	l.Compat = compat
+	out.Layers[i] = l
+	out.Exists = true
+	return out, true
+}
+
+// grokP1Rules are the [permission] rules of grokP1 and grokP2.
+var grokP1Rules = []platform.GrokRule{
+	{Action: "allow", Tool: "bash", Pattern: "npm run lint"},
+	{Action: "allow", Tool: "bash", Pattern: "npm run test *"},
+	{Action: "allow", Tool: "bash", Pattern: "git status"},
+	{Action: "allow", Tool: "bash", Pattern: "git diff"},
+	{Action: "deny", Tool: "webfetch"},
 }

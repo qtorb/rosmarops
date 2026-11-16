@@ -41,6 +41,12 @@ func ShellNetworkSandboxed(inForce []Node, repoRoots []string) bool {
 	return true
 }
 
+// GrokReadsOnlyProjects reports a Grok Build client whose [sandbox] profile in
+// force limits reads to the working directory (strict, BV-249 §3.2).
+func GrokReadsOnlyProjects(caps []Node) bool {
+	return grokSandboxProfile(caps) == grokProfileStrict
+}
+
 // ShellSandbox reports how Claude Code's shell commands run in every session
 // (BV-249 §3.1): contained, inside an effective sandbox in each one; and
 // autoAllow, without asking there (sandbox.autoAllowBashIfSandboxed, true

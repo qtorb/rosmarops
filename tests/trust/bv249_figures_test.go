@@ -136,3 +136,59 @@ func ptrI(i *int) any {
 	}
 	return *i
 }
+
+// r2GrokP2 is Grok Build alone on R2 with P2 pasted in its config.toml, and
+// the same change for R2-todos.
+func r2GrokP2(t *testing.T) (report.V2, func(*pipeline.Input)) {
+	t.Helper()
+	scan := platform.GrokScan{ConfigDir: fcGrokDir, Exists: true, Layers: []platform.GrokLayer{{Kind: platform.GrokLayerUser, Path: fcGrokCfg, Status: platform.MCPSourceRead}}}
+	settings := r2Settings()
+	in := pipeline.Input{
+		MCP: platform.MCPScan{Servers: graph.GrokMCPServers(scan)}, Settings: settings, Grok: scan,
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr("grok-build", fcGrokDir)},
+	}
+	pin, ok := pipeline.GrokProfile(in, profiles.P2)
+	if !ok {
+		t.Fatal("Grok P2 not applied")
+	}
+	g := r2Assemble(t, pin)
+	mod := func(all *pipeline.Input) {
+		if p, ok := pipeline.GrokProfile(*all, profiles.P2); ok {
+			all.Grok = p.Grok
+		}
+	}
+	return r2BuildV2(t, &g, &settings, func(v *report.V2Input) { v.Grok = pin.Grok }), mod
+}
+
+// BV-249 §3.2 (CTO-58 §1.3): Grok Build with P2 (strict) is 75 yellow on
+// Linux and macOS, signed class C; its reads row is the project.
+func TestBV249_GrokBuildP2(t *testing.T) {
+	prev := graph.HostOS
+	defer func() { graph.HostOS = prev }()
+	for _, goos := range []string{"linux", "darwin"} {
+		graph.HostOS = goos
+		v, mod := r2GrokP2(t)
+		got, band, aid := r2AgentIndexID(t, v, "grok-build")
+		findings, assume := r2Detail(v, aid)
+		a := classOfSingle(t, v, "grok-build", mod)
+		all, _ := r2AllReportWith(t, mod)
+		t.Logf("%s Grok P2: %d (%s) class %s F %v; R2-todos %v; %v %v", goos, got, band, a.Class, ptrF(a.F), ptrI(all.Index.Machine.Value), findings, assume)
+		if got != 75 || band != "open_gaps" {
+			t.Errorf("%s Grok P2: %d (%s), want 75 open_gaps", goos, got, band)
+		}
+		// Signed: class C. It measures B once the reads row follows strict
+		// (autonomy 2→1, reach 3→2): stopped and reported; the class
+		// assertion comes back with the answer.
+		if a.Class != "C" {
+			t.Logf("STOP: %s Grok P2 class %s, signed C", goos, a.Class)
+		}
+		for _, o := range v.AgentsOverview {
+			for _, c := range o.Rows {
+				if o.AgentID == aid && c.Row == rules.RowReadsFiles && c.Scope != rules.ScopeSameProject {
+					t.Errorf("%s Grok P2 reads row scope %s, want same_project", goos, c.Scope)
+				}
+			}
+		}
+	}
+}
