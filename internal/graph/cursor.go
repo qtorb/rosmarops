@@ -124,9 +124,6 @@ func FromCursor(scan platform.CursorScan, settings platform.ClaudeSettingsScan, 
 			}
 		}
 	}
-	// The settings that live inside the app (BV-248, CTO-56): declared by
-	// the person, or their least controlled case.
-	cursorDeclared(b, client, scan)
 	// Claude Code's hooks are Cursor's executables too (K7; third-party
 	// imports, annex): user, project and local settings. CTO-31 M2 (C2):
 	// importing them, Cursor reads Claude Code's settings at rest — on by

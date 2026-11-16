@@ -120,6 +120,18 @@ func CursorFacts(scan platform.CursorScan) declared.CursorFacts {
 	return f
 }
 
+// CursorDeclared adds the declared capabilities of every Cursor ai_client in
+// nodes (cursorDeclared).
+func CursorDeclared(nodes []Node, scan platform.CursorScan) Fragment {
+	b := newFragmentBuilder()
+	for _, n := range nodes {
+		if n.Kind == KindAgent && n.Type == AgentAIClient && n.Platform == knowledge.CursorProduct {
+			cursorDeclared(b, n.ID, scan)
+		}
+	}
+	return b.fragment()
+}
+
 // cursorDeclared adds Cursor's declared capabilities to b (CTO-56 §1.3): the
 // run mode (from C1, or configured from approvalMode), the class of the
 // command list (C2), Read Access Workspace (C3) and External-File Protection

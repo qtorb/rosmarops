@@ -17,7 +17,7 @@ func evaluate(in V2Input, g graph.Graph, fams map[string]string) rules.Result {
 		Dismissed: in.Dismissed, Accepted: in.Accepted,
 		ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
 		Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Antigravity: in.Antigravity,
-		Declared: in.Declared, GrokBot: in.GrokBot,
+		Declared: in.Declared, GrokBot: in.GrokBot, Cursor: in.Cursor, DeclaredAt: in.DeclaredAt,
 	})
 }
 

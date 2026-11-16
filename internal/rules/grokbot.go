@@ -146,3 +146,42 @@ func cloudWorse(local, cloud RiskKindCell) RiskKindCell {
 	}
 	return worse(local, cloud)
 }
+
+// OverviewDeclared is an agent's declared block (report.v2
+// agents_overview[].declared): the status of the answers to the questions
+// that apply, those answers as codes, and when they were given.
+type OverviewDeclared struct {
+	Status     string            `json:"status"`
+	Answers    map[string]string `json:"answers"`
+	AnsweredAt string            `json:"answered_at,omitempty"`
+	// Applies are the questions asked (not in the report): the summary line
+	// shows their answers in order.
+	Applies map[string]bool `json:"-"`
+}
+
+// declaredOf is the declared block of a product with questions (BV-248):
+// Cursor, and Grok Bot when present. nil for any other product.
+func (oi overviewInputs) declaredOf(product string) *OverviewDeclared {
+	var applies map[string]bool
+	stored := declared.Clean(product, oi.in.Declared[product])
+	switch product {
+	case declared.Cursor:
+		applies = declared.ResolveCursor(graph.CursorFacts(oi.in.Cursor), stored).Applies
+	case declared.GrokBot:
+		st := declared.ResolveGrokBot(graph.GrokBotFacts(oi.in.GrokBot), stored)
+		if !st.Present {
+			return nil
+		}
+		applies = st.Applies
+	default:
+		return nil
+	}
+	d := &OverviewDeclared{Status: declared.StatusOf(applies, stored), Answers: map[string]string{}, Applies: applies}
+	for _, qa := range declared.Applied(product, applies, stored) {
+		d.Answers[qa[0]] = qa[1]
+	}
+	if len(d.Answers) > 0 {
+		d.AnsweredAt = oi.in.DeclaredAt[product]
+	}
+	return d
+}

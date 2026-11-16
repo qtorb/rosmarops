@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -56,7 +57,7 @@ func ovEvaluate(t *testing.T, fx ovFixture) (graph.Graph, rules.Result) {
 		trust = append(trust, platform.ProjectTrust{Path: r, Accepted: true})
 	}
 	settings := platform.ClaudeSettingsScan{Files: fx.claude, Trust: trust}
-	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: fx.cursor}, cf, salt, now)
+	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: fx.cursor, Declared: declared.Factory(declared.Cursor)}, cf, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

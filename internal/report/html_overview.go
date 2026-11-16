@@ -290,7 +290,7 @@ func knowledgeDate(cat catalog.Catalog, date string) string {
 }
 
 // overviewNotes are §11.5's lines, as (name, text, stale text) per agent.
-type overviewNote struct{ name, text, stale string }
+type overviewNote struct{ name, text, stale, answers string }
 
 func overviewNotes(cat catalog.Catalog, cols, notEval []rules.OverviewAgent) []overviewNote {
 	var out []overviewNote
@@ -302,6 +302,7 @@ func overviewNotes(cat catalog.Catalog, cols, notEval []rules.OverviewAgent) []o
 		if a.Knowledge.Stale {
 			n.stale = cat.Text("html.ov.head.knowledge.stale", nil)
 		}
+		n.answers = declaredLine(cat, a) // BV-248
 		out = append(out, n)
 	}
 	for _, a := range notEval {
@@ -417,6 +418,9 @@ func (c htmlCtx) renderOverviewDialog() {
 		}
 		if n.stale != "" {
 			c.w(` · <span class="st">%s</span>`, html.EscapeString(n.stale))
+		}
+		if n.answers != "" {
+			c.w(` · %s`, html.EscapeString(n.answers))
 		}
 		c.w(`</p>`)
 	}
@@ -536,6 +540,9 @@ func renderOverviewMarkdown(v V2, cat catalog.Catalog, w func(string, ...any)) {
 		}
 		if n.stale != "" {
 			w(" · %s", n.stale)
+		}
+		if n.answers != "" {
+			w(" · %s", n.answers)
 		}
 		w("\n\n")
 	}

@@ -148,6 +148,10 @@ type OverviewAgent struct {
 	// Only scored agents carry it; omitted when none.
 	Services []OverviewService `json:"services,omitempty"`
 
+	// Declared are the person's answers about the agent's settings that are
+	// not readable at rest (BV-248, CTO-56 §5.2): Cursor and Grok Bot only.
+	Declared *OverviewDeclared `json:"declared,omitempty"`
+
 	// Kinds are the five risk kinds of the v1 report (BV-235, R5), computed
 	// from Rows, the credential findings and the MCP catalog; empty for an
 	// agent that is not evaluated.
@@ -282,6 +286,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Rows = oi.cells(oi.view(n.ID))
 		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
 		a.Kinds = oi.kinds(a, oi.view(n.ID))
+		a.Declared = oi.declaredOf(n.Platform)
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })

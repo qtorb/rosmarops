@@ -180,6 +180,9 @@ func (c htmlCtx) guidedPresent() []struct {
 	ev := c.evaluated()
 	for _, g := range guidedAgents {
 		if g.product == "" {
+			if c.v.GrokBotNoRow { // BV-248: B0 answered or Grok Bot detected
+				continue
+			}
 			out = append(out, struct {
 				g    guidedAgent
 				name string

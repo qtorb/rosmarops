@@ -811,6 +811,7 @@ func findingParams(f rules.Finding) map[string]string {
 	}
 	p["service_name"], p["cred_label"] = serviceName(f.Params.Service), credLabel(f)
 	p["cred_id"] = f.Params.CredID
+	p["date"] = declaredDay(nil, f.Params.DeclaredOn) // BV-248
 	// BV-111: {backend} is Hermes Agent's unrecognized terminal.backend value,
 	// read from disk, sanitized and cut to 40 characters.
 	if f.Params.Backend != "" {

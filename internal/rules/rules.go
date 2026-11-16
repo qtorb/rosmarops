@@ -296,6 +296,10 @@ type Input struct {
 	// GrokBot is the Grok Bot scan (BV-248, CTO-57): what settings.json gave
 	// for B1 and B2. Optional.
 	GrokBot platform.GrokBotScan
+	// Cursor is the Cursor scan, for which of C1–C4 apply; DeclaredAt is when
+	// each product's answers were given (RFC 3339). Optional.
+	Cursor     platform.CursorScan
+	DeclaredAt map[string]string
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no
@@ -408,6 +412,10 @@ type Params struct {
 	TargetAgent  string `json:"target_agent,omitempty"`
 	ResourceType string `json:"resource_type,omitempty"`
 	Count        int    `json:"count"`
+
+	// DeclaredOn is when the answers the finding rests on were given
+	// (BV-248, RFC 3339): the {date} of declared_by_you. In memory only.
+	DeclaredOn string `json:"-"`
 
 	// Server is the MCP server entry's own name (n8n_mcp_bridge, BV-175): the
 	// {server} of its text. Config-derived, sanitized when rendered.
@@ -710,6 +718,17 @@ func Evaluate(in Input) Result {
 	}
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
+	}
+	// BV-248: the day the answers a finding rests on were given, for the
+	// {date} of declared_by_you.
+	for _, list := range [][]Finding{res.Findings, res.Dismissed} {
+		for i := range list {
+			if len(list[i].Evidence.Nodes) > 0 {
+				if at := in.DeclaredAt[nodes[list[i].Evidence.Nodes[0]].Platform]; len(at) >= 10 {
+					list[i].Params.DeclaredOn = at
+				}
+			}
+		}
 	}
 	sortFindings(res.Findings)
 	sortFindings(res.Dismissed)
