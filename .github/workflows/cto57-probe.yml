@@ -53,9 +53,13 @@ jobs:
           if (-not $dirs) { $dirs = Get-ChildItem "$env:LOCALAPPDATA", "$env:ProgramFiles" -Directory | Where-Object { $_.Name -match '(?i)grok' } }
           $dirs | ForEach-Object { Write-Host "install dir: $($_.FullName)" }
           "GB_DIR=$($dirs[0].FullName)" | Out-File -Append $env:GITHUB_ENV
-      - name: Search the app's own code for the setting
+      - name: Extract the app code and search for where the setting is stored
         shell: pwsh
-        run: python .github/cto57/probe.py bundle "$env:GB_DIR" | Select-Object -First 300
+        run: |
+          $out = "$env:RUNNER_TEMP\asar"
+          npx --yes @electron/asar@3.2.17 extract "$env:GB_DIR\resources\app.asar" $out
+          Get-ChildItem $out | ForEach-Object { Write-Host "top: $($_.Name)" }
+          python .github/cto57/deep.py $out | Select-Object -First 900
       - name: Start the app without signing in, then stop it
         shell: pwsh
         run: |
@@ -69,6 +73,7 @@ jobs:
         shell: pwsh
         run: |
           python .github/cto57/probe.py snap "$env:RUNNER_TEMP\s2.json"
-          python .github/cto57/probe.py inspect "$env:RUNNER_TEMP\s1.json" "$env:RUNNER_TEMP\s2.json" "after first start" | Select-Object -First 600
+          python .github/cto57/probe.py diff "$env:RUNNER_TEMP\s1.json" "$env:RUNNER_TEMP\s2.json" "after first start" | Select-String -Pattern "grokbot|Grok Bot" | Select-Object -First 200
+          python .github/cto57/values.py
           reg query HKCU\Software > "$env:RUNNER_TEMP\reg2.txt"
           Compare-Object (Get-Content "$env:RUNNER_TEMP\reg1.txt") (Get-Content "$env:RUNNER_TEMP\reg2.txt") | ForEach-Object { Write-Host "reg $($_.SideIndicator) $($_.InputObject)" }
