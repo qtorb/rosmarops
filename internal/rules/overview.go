@@ -69,6 +69,9 @@ const (
 	OriginMixed                    = "mixed"
 	OriginNone                     = "none"
 	OriginProductDefaultNotChecked = "product_default_not_checked_here" // reserved (§5)
+	// OriginDeclared: a setting the person declared, or its least controlled
+	// case (BV-248); it wins over the others in a mixed cell.
+	OriginDeclared = "declared"
 )
 
 // Reasons a cell has no finding behind it (§4), and why an agent is not
@@ -117,7 +120,7 @@ const (
 var (
 	AllDeciders            = []string{DeciderNobody, DeciderModel, DeciderYou, DeciderBlocked, DeciderNotEvaluated, DeciderNotApplicable}
 	AllScopes              = []string{ScopeMachine, ScopeSameProject, ScopeNone, ScopeSandbox, ScopeAnyDestination, ScopeListedDestinations, ScopeConfig, ScopeInstructions}
-	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked}
+	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked, OriginDeclared}
 	AllNoFindingReasons    = []string{NoFindingNoTargets, NoFindingNotAFinding, NoFindingFeedsOtherFindings}
 	AllNotEvaluatedReasons = []string{NotEvaluatedNoInference, NotEvaluatedAntigravityApp, NotEvaluatedCopilotJetBrains, NotEvaluatedClineCLI, NotEvaluatedClaudeDesktop, NotEvaluatedCoverage, NotEvaluatedGraphMissing}
 	AllPendingReasons      = []string{PendingModelProviderResearch}
@@ -1849,12 +1852,15 @@ var overviewPremise = map[string]bool{
 }
 
 func originOf(basis []string) string {
-	pd, cf := false, false
+	pd, cf, dc := false, false, false
 	for _, b := range basis {
 		pd = pd || b == graph.BasisProductDefault
 		cf = cf || b == graph.BasisConfigured
+		dc = dc || b == graph.BasisDeclared
 	}
 	switch {
+	case dc:
+		return OriginDeclared
 	case pd && cf:
 		return OriginMixed
 	case cf:

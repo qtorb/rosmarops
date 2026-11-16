@@ -93,7 +93,7 @@ const GrokBotVersion = "2026-11-14"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-08"
+const ReviewedOn = "2026-11-14"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by

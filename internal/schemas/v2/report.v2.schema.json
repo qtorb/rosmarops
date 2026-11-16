@@ -1837,9 +1837,10 @@
             "configured",
             "mixed",
             "none",
-            "product_default_not_checked_here"
+            "product_default_not_checked_here",
+            "declared"
           ],
-          "description": "product_default_not_checked_here is reserved (§5)."
+          "description": "product_default_not_checked_here is reserved (§5). declared: the winning way rests on a setting the person declared, or its least controlled case (BV-248)."
         },
         "assumed": {
           "type": "boolean",

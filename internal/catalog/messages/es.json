@@ -286,7 +286,7 @@
   "html.ai.title": "Pásaselo a tu IA",
   "html.assume.claude-code": "Claude Code: el modo de arranque de tus ajustes; si no fijaste ninguno, «auto», el de fábrica. El modo que elijas en la app o en el IDE no se puede leer desde el disco.",
   "html.assume.common": "Cada agente funciona como dice su documentación, con tus permisos de usuario. Lo que depende del modo «auto» o de Auto-review lo decide otro modelo de IA, no una persona.",
-  "html.assume.cursor": "Cursor: Auto-review, el modo que recomienda Cursor. Su ajuste no se guarda en el disco, así que se supone.",
+  "html.assume.cursor": "Cursor: el modo de ejecución, la lista de órdenes, «Read Access» y External-File Protection viven dentro de la aplicación y salen de tus respuestas. Sin respuesta, se supone el caso que menos controla.",
   "html.assume.antigravity-cli": "Antigravity CLI: los permisos de tus ajustes; para lo que no hayas fijado, sus valores de fábrica. Una opción que le pases al arrancarlo, una variable de entorno o una elección hecha durante la sesión no se pueden leer desde el disco. En modo auto, lo que permite lo decide otro modelo de IA.",
   "html.assume.gemini-cli": "Gemini CLI: los permisos de tus ajustes; para lo que no hayas fijado, sus valores de fábrica. Una opción que le pases al arrancarlo, una variable de entorno o una elección hecha durante la sesión no se pueden leer desde el disco.",
   "html.assume.codex": "Codex: los permisos de tus ajustes; para lo que no hayas fijado, sus valores de fábrica. Una opción que le pases al arrancarlo, una variable de entorno o una elección hecha durante la sesión no se pueden leer desde el disco.",
@@ -994,5 +994,8 @@
   "decl.again": "Tus respuestas sobre {agent}, del {date}: {summary}. ¿Siguen igual? Pulsa Enter para seguir, o escribe «c» para cambiarlas.",
   "unknown.declared_by_you": "Declarado por ti el {date}: RosmarOps no puede leer este ajuste, vive dentro de la aplicación.",
   "unknown.not_declared_least_controlled": "Sin respuesta: se supone el caso que menos controla. Contesta las preguntas en tu próxima revisión con consola.",
-  "decl.line": "Tus respuestas ({date}): {summary}."
+  "decl.line": "Tus respuestas ({date}): {summary}.",
+  "html.ov.tag.declared": "declarado por ti",
+  "unknown.measured_local_setting": "Leído de los ajustes de la app de {agent} en este ordenador.",
+  "html.assume.grok-bot": "Grok Bot: lo que puede hacer en tu ordenador y si el Auto-review está encendido se leen de los ajustes de su app cuando está instalada; si no, salen de tus respuestas. Las reglas «Ask first» y los conectores viven en tu cuenta y salen de tus respuestas. Sin respuesta, se supone el caso que menos controla."
 }

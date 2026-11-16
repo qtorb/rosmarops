@@ -133,7 +133,7 @@
   "html.ai.title": "Give it to your AI",
   "html.assume.claude-code": "Claude Code: the start mode in your settings; if you set none, auto, its factory mode. A mode you pick in the app or the IDE cannot be read from disk.",
   "html.assume.common": "Each agent works as its documentation says, with your user's permissions. What depends on auto mode or Auto-review is decided by another AI model, not a person.",
-  "html.assume.cursor": "Cursor: Auto-review, the mode Cursor recommends. Its setting is not stored on disk, so it is assumed.",
+  "html.assume.cursor": "Cursor: the run mode, the command list, «Read Access» and External-File Protection live inside the app and come from your answers. With no answer, the least controlled case is assumed.",
   "html.assume.antigravity-cli": "Antigravity CLI: the permissions in your settings; for what you have not set, its factory values. An option you pass when you start it, an environment variable or a choice made during the session cannot be read from disk. In auto mode, another AI model decides what it allows.",
   "html.assume.gemini-cli": "Gemini CLI: the permissions in your settings; for what you have not set, its factory values. An option you pass when you start it, an environment variable or a choice made during the session cannot be read from disk.",
   "html.assume.codex": "Codex: the permissions in your settings; for what you have not set, its factory values. An option you pass when you start it, an environment variable or a choice made during the session cannot be read from disk.",
@@ -819,5 +819,8 @@
   "decl.again": "Your answers about {agent}, from {date}: {summary}. Still the same? Press Enter to continue, or type «c» to change them.",
   "unknown.declared_by_you": "Declared by you on {date}: RosmarOps can't read this setting, it lives inside the app.",
   "unknown.not_declared_least_controlled": "No answer: the least controlled case is assumed. Answer the questions in your next review with a console.",
-  "decl.line": "Your answers ({date}): {summary}."
+  "decl.line": "Your answers ({date}): {summary}.",
+  "html.ov.tag.declared": "declared by you",
+  "unknown.measured_local_setting": "Read from the {agent} app's settings on this computer.",
+  "html.assume.grok-bot": "Grok Bot: what it can do on your computer and whether Auto-review is on are read from its app's settings when it's installed; otherwise they come from your answers. «Ask first» rules and connectors live in your account and come from your answers. With no answer, the least controlled case is assumed."
 }

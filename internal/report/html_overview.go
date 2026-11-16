@@ -184,6 +184,7 @@ var originTag = map[string]string{
 	rules.OriginConfigured:               "html.ov.tag.configured",
 	rules.OriginMixed:                    "html.ov.tag.mixed",
 	rules.OriginProductDefaultNotChecked: "html.ov.tag.not_checked_here",
+	rules.OriginDeclared:                 "html.ov.tag.declared", // BV-248
 }
 
 // tags are the cell's tags (§11.4): its origin and, when assumed, assumed.
