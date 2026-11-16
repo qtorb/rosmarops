@@ -12,7 +12,7 @@ import (
 // pasted block. Every other agent keeps its configuration. ok is false when
 // there is no Claude Code configuration folder to apply it to.
 func Profile(in Input, id string) (Input, bool) {
-	s, ok := profiles.Apply(in.Settings, id)
+	s, ok := profiles.Apply(in.Settings, id, in.RepoRoots...)
 	if !ok {
 		return in, false
 	}

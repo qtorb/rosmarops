@@ -1318,7 +1318,7 @@ func writeGraph(
 	// added to its user settings, assembled in memory and never written. A
 	// failure only leaves that profile unmeasured.
 	var measured []report.ProfileInput
-	for _, id := range profiles.Measured {
+	for _, id := range profiles.MeasuredOn(graph.HostOS) {
 		pin2, ok := pipeline.Profile(pin, id)
 		if !ok {
 			continue

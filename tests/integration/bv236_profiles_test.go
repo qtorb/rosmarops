@@ -31,7 +31,7 @@ func bv236V2(t *testing.T, opts ...func(*report.V2Input)) report.V2 {
 		t.Fatal(err)
 	}
 	var ps []report.ProfileInput
-	for _, id := range profiles.Measured {
+	for _, id := range profiles.MeasuredOn(graph.HostOS) {
 		pin, ok := pipeline.Profile(in, id)
 		if !ok {
 			t.Fatalf("%s: no Claude Code settings to apply it to", id)
@@ -64,7 +64,7 @@ func bv236V2(t *testing.T, opts ...func(*report.V2Input)) report.V2 {
 // TestBV236ProfilePermissions: the blocks the report copies are the ones the
 // engine measures, and the ones BV-237 measured.
 func TestBV236ProfilePermissions(t *testing.T) {
-	for i, id := range profiles.Measured {
+	for i, id := range []string{profiles.P0, profiles.P1} {
 		p, err := profiles.Permissions(id)
 		if err != nil {
 			t.Fatal(err)

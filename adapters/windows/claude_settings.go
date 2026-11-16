@@ -45,11 +45,15 @@ type settingsFile struct {
 		Enabled                  *bool `json:"enabled"`
 		FailIfUnavailable        *bool `json:"failIfUnavailable"`
 		AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
+		// AutoAllowBashIfSandboxed (BV-249 §3.1, CTO-59 §1): true when absent.
+		AutoAllowBashIfSandboxed *bool `json:"autoAllowBashIfSandboxed"`
 		Network                  struct {
 			AllowedDomains []string `json:"allowedDomains"`
 		} `json:"network"`
 		Filesystem struct {
-			DenyRead []string `json:"denyRead"`
+			DenyRead   []string `json:"denyRead"`
+			AllowRead  []string `json:"allowRead"`
+			AllowWrite []string `json:"allowWrite"`
 		} `json:"filesystem"`
 	} `json:"sandbox"`
 
@@ -276,7 +280,13 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 		BlockReadsOutsideWorkingDirectories: p.BlockReadsOutsideWorkingDirectories,
 	}
 	sb := s.Sandbox
-	f.Permissions.Sandbox = platform.ClaudeSandbox{AllowedDomains: sb.Network.AllowedDomains, DenyRead: sb.Filesystem.DenyRead}
+	f.Permissions.Sandbox = platform.ClaudeSandbox{
+		AllowedDomains: sb.Network.AllowedDomains, DenyRead: sb.Filesystem.DenyRead,
+		AllowRead: sb.Filesystem.AllowRead, AllowWrite: sb.Filesystem.AllowWrite,
+	}
+	if sb.AutoAllowBashIfSandboxed != nil {
+		f.Permissions.Sandbox.AutoAllowBash, f.Permissions.Sandbox.AutoAllowBashSet = *sb.AutoAllowBashIfSandboxed, true
+	}
 	if sb.Enabled != nil {
 		f.Permissions.Sandbox.Enabled, f.Permissions.Sandbox.EnabledSet = *sb.Enabled, true
 	}

@@ -232,6 +232,7 @@ func fromClaudeSettings(scan platform.ClaudeSettingsScan, policy managedPolicy, 
 			{ruleSandboxEnabled, "/sandbox/enabled", sb.EnabledSet, sb.Enabled},
 			{ruleSandboxFail, "/sandbox/failIfUnavailable", sb.FailIfUnavailableSet, sb.FailIfUnavailable},
 			{ruleSandboxUnsandboxed, "/sandbox/allowUnsandboxedCommands", sb.AllowUnsandboxedCommandsSet, sb.AllowUnsandboxedCommands},
+			{ruleSandboxAutoAllow, "/sandbox/autoAllowBashIfSandboxed", sb.AutoAllowBashSet, sb.AutoAllowBash},
 		} {
 			if k.set {
 				c.add(sandboxCap(CapExecuteShell, boolText(k.value)), k.rule+boolText(k.value), k.ptr, patterns)
@@ -244,6 +245,16 @@ func fromClaudeSettings(scan platform.ClaudeSettingsScan, policy managedPolicy, 
 		for i, path := range sb.DenyRead {
 			path = secrets.RedactMatches(path, patterns)
 			c.add(sandboxCap(CapReadFiles, path), ruleSandboxDenyRead+path, "/sandbox/filesystem/denyRead/"+strconv.Itoa(i), patterns)
+		}
+		// BV-249 §3.1: allowRead re-opens a denied path; allowWrite widens
+		// where a sandboxed command writes.
+		for i, path := range sb.AllowRead {
+			path = secrets.RedactMatches(path, patterns)
+			c.add(sandboxCap(CapReadFiles, path), ruleSandboxAllowRead+path, "/sandbox/filesystem/allowRead/"+strconv.Itoa(i), patterns)
+		}
+		for i, path := range sb.AllowWrite {
+			path = secrets.RedactMatches(path, patterns)
+			c.add(sandboxCap(CapWriteFiles, path), ruleSandboxAllowWrite+path, "/sandbox/filesystem/allowWrite/"+strconv.Itoa(i), patterns)
 		}
 	}
 	return b.fragment(), stats
