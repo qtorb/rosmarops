@@ -2018,6 +2018,17 @@ func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 	var cell OverviewCell
 	if len(cs) == 0 {
 		cell = oi.questionCell(v, RowRunsCommands, graph.CapExecuteShell)
+		// BV-249 §3.1 (Albert 16-11): Claude Code's commands run in its
+		// sandbox in every session: asking you, or without asking with
+		// autoAllowBashIfSandboxed.
+		if v.node.Platform == knowledge.ClaudeCodeProduct && cell.Decider != DeciderBlocked {
+			if contained, auto := graph.ShellSandbox(v.inForce, v.repoRoots); contained {
+				cell.Decider, cell.Scope, cell.Origin = DeciderYou, ScopeSandbox, OriginConfigured
+				if auto {
+					cell.Decider = DeciderNobody
+				}
+			}
+		}
 	} else {
 		cell = pick(RowRunsCommands, cs)
 		r := NoFindingFeedsOtherFindings

@@ -22,18 +22,16 @@ const (
 	P3 = "P3"
 )
 
-// Measured are the profiles the engine measures in a run, in order.
-//
-// BV-249 §3 (WIP, stopped): P2 «Sandboxed development» is built (Block,
-// ProjectBlock, Apply) but not yet measured in a run: it measures 76 yellow B
-// on R2, not the signed 99 green B, and report.v2 does not have P2 in its
-// enum yet. MeasuredOn adds it only where Claude Code has a sandbox, once
-// signed.
-var Measured = []string{P0, P1}
+// Measured are the profiles the engine measures, in order; P2 «Sandboxed
+// development» only where Claude Code has a sandbox (MeasuredOn).
+var Measured = []string{P0, P1, P2}
 
-// MeasuredOn are the measured profiles on goos (BV-249 §3: P2 only on macOS
-// and Linux; on native Windows Claude Code runs commands unsandboxed).
+// MeasuredOn are the measured profiles on goos (BV-249 §3): P2 only on macOS
+// and Linux; on native Windows Claude Code runs commands unsandboxed.
 func MeasuredOn(goos string) []string {
+	if goos == "windows" {
+		return []string{P0, P1}
+	}
 	return Measured
 }
 
@@ -101,6 +99,7 @@ const p2JSON = `{
     "enabled": true,
     "failIfUnavailable": true,
     "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
     "network": { "allowedDomains": ["registry.npmjs.org", "github.com"], "strictAllowlist": true },
     "filesystem": { "denyRead": ["~/.ssh", "~/.aws"] },
     "credentials": { "files": [ { "path": "~/.aws/credentials", "mode": "deny" }, { "path": "~/.ssh", "mode": "deny" } ] }
@@ -146,6 +145,7 @@ type sandboxBlock struct {
 	Enabled                  *bool `json:"enabled"`
 	FailIfUnavailable        *bool `json:"failIfUnavailable"`
 	AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
+	AutoAllowBashIfSandboxed *bool `json:"autoAllowBashIfSandboxed"`
 	Network                  struct {
 		AllowedDomains []string `json:"allowedDomains"`
 	} `json:"network"`
@@ -165,6 +165,9 @@ func (b sandboxBlock) sandbox() platform.ClaudeSandbox {
 	}
 	if b.AllowUnsandboxedCommands != nil {
 		s.AllowUnsandboxedCommands, s.AllowUnsandboxedCommandsSet = *b.AllowUnsandboxedCommands, true
+	}
+	if b.AutoAllowBashIfSandboxed != nil {
+		s.AutoAllowBash, s.AutoAllowBashSet = *b.AutoAllowBashIfSandboxed, true
 	}
 	s.AllowedDomains, s.DenyRead, s.AllowRead = b.Network.AllowedDomains, b.Filesystem.DenyRead, b.Filesystem.AllowRead
 	return s
@@ -223,6 +226,9 @@ func mergeSandbox(s, add platform.ClaudeSandbox) platform.ClaudeSandbox {
 	}
 	if add.AllowUnsandboxedCommandsSet {
 		s.AllowUnsandboxedCommands, s.AllowUnsandboxedCommandsSet = add.AllowUnsandboxedCommands, true
+	}
+	if add.AutoAllowBashSet {
+		s.AutoAllowBash, s.AutoAllowBashSet = add.AutoAllowBash, true
 	}
 	s.AllowedDomains = append(append([]string(nil), s.AllowedDomains...), add.AllowedDomains...)
 	s.DenyRead = append(append([]string(nil), s.DenyRead...), add.DenyRead...)

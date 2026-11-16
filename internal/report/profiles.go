@@ -73,7 +73,7 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 			for _, pa := range r.idx.Agents {
 				if pa.AgentID == a.AgentID && pa.Value != nil {
 					c, ok := r.classes[pa.AgentID]
-					a.Profiles = append(a.Profiles, index.Profile{Profile: p.ID, Value: *pa.Value, Letter: classOf(c, ok, pa.Band)})
+					a.Profiles = append(a.Profiles, index.Profile{Profile: p.ID, OS: v.OS, Value: *pa.Value, Letter: classOf(c, ok, pa.Band)})
 				}
 			}
 		}
@@ -82,7 +82,7 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 		if product != knowledge.ClaudeCodeProduct || v.Index.Machine.Value == nil || m.Value == nil {
 			continue
 		}
-		mp := index.MachineProfile{Profile: index.Profile{Profile: p.ID, Value: *m.Value, Letter: index.NoClass()}, AgentID: m.AgentID}
+		mp := index.MachineProfile{Profile: index.Profile{Profile: p.ID, OS: v.OS, Value: *m.Value, Letter: index.NoClass()}, AgentID: m.AgentID}
 		for _, pa := range r.idx.Agents {
 			if pa.AgentID == m.AgentID {
 				c, ok := r.classes[pa.AgentID]

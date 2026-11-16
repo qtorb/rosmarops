@@ -15,6 +15,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/profiles"
 	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/rules"
 )
 
 // r2ClaudeCodeAutoSandbox is Claude Code alone on R2 in «auto», its sandbox
@@ -84,11 +85,9 @@ func r2ClaudeCodeProfile(t *testing.T, id string) (report.V2, func(*pipeline.Inp
 	return r2BuildV2(t, &g, &settings, nil), mod
 }
 
-// BV-249 §3.1 (CTO-59 §1): Claude Code with P2 on Linux and macOS is signed
-// as 99 green B, and R2-todos with it stays 13. It measures 76 yellow B
-// (own_instructions_writable: a sandboxed command writes the project's
-// AGENTS.md without asking): stopped and reported, so for now the test only
-// reports its figures; the assertion comes back with the answer.
+// BV-249 §3.1 (CTO-59 §1, Albert 16-11): Claude Code with P2 (its sandbox,
+// autoAllowBashIfSandboxed false) on Linux and macOS is 99 green B with no
+// finding, and R2-todos with it stays 13.
 func TestBV249_ClaudeCodeP2(t *testing.T) {
 	prev := graph.HostOS
 	defer func() { graph.HostOS = prev }()
@@ -101,8 +100,24 @@ func TestBV249_ClaudeCodeP2(t *testing.T) {
 			a := classOfSingle(t, v, "claude-code", mod)
 			all, _ := r2AllReportWith(t, mod)
 			t.Logf("%s %s: %d (%s) class %s F %v; R2-todos %v; %v %v", goos, id, got, band, a.Class, ptrF(a.F), ptrI(all.Index.Machine.Value), findings, assume)
+			for _, o := range v.AgentsOverview {
+				for _, c := range o.Rows {
+					if o.AgentID == aid && c.Row == rules.RowRunsCommands {
+						want := [2]string{rules.DeciderYou, rules.ScopeNone}
+						if id == profiles.P2 {
+							want = [2]string{rules.DeciderYou, rules.ScopeSandbox} // «you, in the sandbox»
+						}
+						if got := [2]string{c.Decider, c.Scope}; got != want {
+							t.Errorf("%s %s runs cell %v, want %v", goos, id, got, want)
+						}
+					}
+				}
+			}
+			if id == profiles.P2 && len(findings) > 0 {
+				t.Errorf("%s P2: findings %v, want none", goos, findings)
+			}
 			if id == profiles.P2 && (got != 99 || a.Class != "B" || all.Index.Machine.Value == nil || *all.Index.Machine.Value != 13) {
-				t.Logf("STOP: %s P2: %d (%s) class %s, R2-todos %v; want 99 B and 13", goos, got, band, a.Class, ptrI(all.Index.Machine.Value))
+				t.Errorf("%s P2: %d (%s) class %s, R2-todos %v; want 99 B and 13", goos, got, band, a.Class, ptrI(all.Index.Machine.Value))
 			}
 		}
 	}

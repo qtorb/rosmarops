@@ -1083,6 +1083,7 @@
                 "additionalProperties": false,
                 "required": [
                   "profile",
+                  "os",
                   "value",
                   "letter",
                   "agent_id"
@@ -1092,8 +1093,17 @@
                     "enum": [
                       "P0",
                       "P1",
+                      "P2",
                       "cloud",
                       "local"
+                    ]
+                  },
+                  "os": {
+                    "description": "BV-249 §6 (CTO-58 §5, signed): the system the template was measured on; P2 depends on it.",
+                    "enum": [
+                      "windows",
+                      "macos",
+                      "linux"
                     ]
                   },
                   "value": {
@@ -1370,12 +1380,13 @@
         },
         "profiles": {
           "type": "array",
-          "description": "BV-236 §4: Claude Code only. Per measured profile of CTO-50 §1 (P0 Read only, P1 Local development), the agent's score and class with the profile's block added to its user settings, in memory. Optional; not sent to the space.",
+          "description": "BV-236 §4: Claude Code only. Per measured profile of CTO-50 §1 (P0 Read only, P1 Local development, P2 Sandboxed development on macOS and Linux, BV-249), the agent's score and class with the profile's block added to its user settings, in memory. Optional; not sent to the space.",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": [
               "profile",
+              "os",
               "value",
               "letter"
             ],
@@ -1384,8 +1395,17 @@
                 "enum": [
                   "P0",
                   "P1",
+                  "P2",
                   "cloud",
                   "local"
+                ]
+              },
+              "os": {
+                "description": "BV-249 §6 (CTO-58 §5, signed): the system the template was measured on; P2 depends on it.",
+                "enum": [
+                  "windows",
+                  "macos",
+                  "linux"
                 ]
               },
               "value": {
