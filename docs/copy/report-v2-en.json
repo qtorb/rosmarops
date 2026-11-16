@@ -265,6 +265,8 @@
   "unknown.launch_flags_not_readable": "Assumes {agent} starts with the settings in its files. A flag such as --yolo, an environment variable or a choice made during the session leaves no trace on disk, so RosmarOps cannot see it.",
   "unknown.exec_rules_not_evaluated": "{agent} has command rules (.rules files) that RosmarOps does not interpret. Assumes they can let commands run without asking you.",
   "unknown.windows_sandbox_unknown": "Your {agent} settings do not say which Windows sandbox to use, so {agent} picks one when it starts. Assumes the one that isolates least: it does not block reads and isolates the network less.",
+  "unknown.startup_file_runs_later": "It can write anywhere on your computer without asking you, including the files that run when you open the terminal or log in. What it leaves there will run later, outside its control, and could read your keys.",
+  "unknown.auto_without_sandbox_unknown": "If your system doesn't have Antigravity CLI's sandbox, its documentation doesn't say what «Auto» mode does.",
   "unknown.compat_cell_remote_unknown": "{agent} uses compatibility settings to decide whether it also loads Claude Code and Cursor files. Some are not set in your file, and xAI can set them remotely; assumes they are on.",
   "action.codex_workspace_sandbox.label": "Ask before edits outside the project",
   "action.codex_workspace_sandbox.how": "Set this in {file}. {agent} then edits files and runs commands inside the project it is working in, and asks you before editing outside it or using the network. It can still read any file your user can read.",

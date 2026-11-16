@@ -1085,8 +1085,11 @@ func (oi overviewInputs) antigravityRunsCell(v *agentView, level string) Overvie
 	case agAlwaysProceed:
 		cell.Decider = DeciderNobody
 	case agAuto:
-		cell.Decider, cell.Assumed = DeciderModel, true
-		assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
+		// BV-249 §4 (CTO-59 §3): in auto the terminal runs in its sandbox; the
+		// commands that ask to leave it are judged by a model (second way).
+		cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeSandbox, true
+		cell.Also = &OverviewAlso{Decider: DeciderModel, Scope: ScopeMachine}
+		assume = antigravityBaseAssumptions(AssumeReviewerModelPermits, AssumeAutoWithoutSandboxUnknown)
 	default: // request-review: every command asks
 		cell.Decider = DeciderYou
 	}
@@ -1497,7 +1500,7 @@ func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, ru
 		// Unparsed rules\*.rules could let commands run without asking (CTO-16 §4).
 		assume = append(assume, AssumeExecRulesNotEvaluated)
 	}
-	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet {
+	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet && graph.HostOS == "windows" {
 		// The command runs in a Windows sandbox whose implementation is chosen
 		// at launch; assume the least isolating one (CTO-16 §4, point 9).
 		assume = append(assume, AssumeWindowsSandboxUnknown)

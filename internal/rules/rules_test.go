@@ -416,16 +416,30 @@ func TestEvaluate_Egress(t *testing.T) {
 }
 
 // Radius (§1 b): blockReadsOutsideWorkingDirectories leaves same_project,
-// and then block_reads_outside does not apply.
+// and then block_reads_outside does not apply. BV-249 (b-iii): while «auto»
+// can be chosen, it writes a startup file anywhere and the radius is
+// any_project again; with auto disabled, same_project.
 func TestEvaluate_Radius(t *testing.T) {
-	res := evaluate(t, scenario(t, platform.ClaudePermissions{BlockReadsOutsideWorkingDirectories: true}, []entry{{dashEnv, 4, "K", serviceRole}}))
-	f := res.Findings[0]
-	if f.Radius != rules.RadiusSameProject {
-		t.Errorf("radius %s", f.Radius)
-	}
-	for _, a := range f.Actions {
-		if a.Code == rules.ActionBlockReadsOutside {
-			t.Error("block_reads_outside offered while in force")
+	for _, c := range []struct {
+		name   string
+		perms  platform.ClaudePermissions
+		radius string
+	}{
+		{"auto available", platform.ClaudePermissions{BlockReadsOutsideWorkingDirectories: true}, rules.RadiusAnyProject},
+		{"auto disabled", platform.ClaudePermissions{
+			BlockReadsOutsideWorkingDirectories: true,
+			DisableAutoMode:                     "disable", DisableAutoModePointer: "/permissions/disableAutoMode",
+		}, rules.RadiusSameProject},
+	} {
+		res := evaluate(t, scenario(t, c.perms, []entry{{dashEnv, 4, "K", serviceRole}}))
+		f := res.Findings[0]
+		if f.Radius != c.radius {
+			t.Errorf("%s: radius %s, want %s", c.name, f.Radius, c.radius)
+		}
+		for _, a := range f.Actions {
+			if a.Code == rules.ActionBlockReadsOutside {
+				t.Errorf("%s: block_reads_outside offered while in force", c.name)
+			}
 		}
 	}
 }

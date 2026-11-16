@@ -711,6 +711,8 @@
   "unknown.ui_mode_choice_unknown": "Supone que usas el modo por defecto. El modo que eliges en la app o en el IDE no se guarda donde RosmarOps pueda leerlo.",
   "unknown.version_behaves_as_documented": "Supone que la versión de {agent} que tienes instalada funciona como dice su documentación.",
   "unknown.windows_sandbox_unknown": "Tus ajustes de {agent} no dicen qué sandbox de Windows usar, así que {agent} elige uno al arrancar. Supone el que menos aísla: no impide lecturas y aísla peor la red.",
+  "unknown.startup_file_runs_later": "Puede escribir en cualquier parte de tu ordenador sin preguntarte, también en los ficheros que se ejecutan al abrir la terminal o al iniciar sesión. Lo que deje ahí correrá después, fuera de su control, y podría leer tus claves.",
+  "unknown.auto_without_sandbox_unknown": "Si tu sistema no tiene el sandbox de Antigravity CLI, su documentación no dice qué hace el modo «Auto».",
   "session.first.title": "RosmarOps · este proyecto trae:",
   "session.changes.title": "RosmarOps · nuevo desde la última vez que abriste este proyecto:",
   "session.item.allow_rule": "permiso sin preguntar: {rule}",

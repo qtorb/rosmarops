@@ -146,14 +146,18 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 				continue
 			}
 		case ActionBlockReadsOutside:
-			if !cred || f.Radius != RadiusAnyProject {
+			// BV-249 (b-iii): in force, the radius can still be any_project
+			// through a startup file; the boundary is not offered again.
+			if !cred || f.Radius != RadiusAnyProject || a.blockReads {
 				continue
 			}
 			act.Key, act.Value = m.Setting, fragment(m.Setting, json.RawMessage(m.Value))
 		case ActionSandboxReadBoundary:
 			// Cursor's readBoundary workspace in ~/.cursor/sandbox.json
 			// (decision 2026-10-25, Cursor, K2).
-			if !cred || f.Radius != RadiusAnyProject {
+			// BV-249 (b-iii): in force, the radius can still be any_project
+			// through a startup file; the boundary is not offered again.
+			if !cred || f.Radius != RadiusAnyProject || a.blockReads {
 				continue
 			}
 			act.File = inConfigDir(a.node.ConfigPath, m.File)

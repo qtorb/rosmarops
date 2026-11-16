@@ -116,9 +116,24 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case p.claude.Product:
 			in := p.claudeInference(client, repoRoots, home)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+			// BV-249 (b-iii): a startup file it writes without a person.
+			inferred = append(inferred, startupReaches(client, g.Nodes, home, func(f string) []startupWay {
+				var ws []startupWay
+				for _, w := range in.writeWays(f) {
+					ws = append(ws, startupWay{w.v.cap, w.assumptions})
+				}
+				return ws
+			})...)
 		case knowledge.CursorProduct:
 			in := p.cursorInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+			inferred = append(inferred, startupReaches(client, g.Nodes, home, func(f string) []startupWay {
+				var ws []startupWay
+				for _, w := range in.writeWays(f, "") {
+					ws = append(ws, startupWay{w.cap, w.assumptions})
+				}
+				return ws
+			})...)
 		case knowledge.HermesProduct:
 			in := p.hermesInference(client)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
