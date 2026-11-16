@@ -162,7 +162,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // header and step 1 (signed, reviewed against prototipo-v6), at BV-238
 // with the guided profiles (Grok Bot's row and view are always there), at
 // BV-239 with Grok Bot's texts and G4's dates, at BV-248 with the knowledge
-// review date 14-11 (checked: the one changed date);
+// review date 14-11 (checked: the one changed date), at BV-249 with «template»
+// for «profile» and without «protects» (checked: only the signed texts);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

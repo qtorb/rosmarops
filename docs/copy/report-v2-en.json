@@ -248,7 +248,7 @@
   "unknown.auto_mode_available": "Assumes auto mode is available to your account and model; if it is not, {agent} starts in manual mode.",
   "unknown.bash_tool_available": "Assumes {agent} has its shell tool available in your sessions.",
   "unknown.code_launcher_rule": "Relies on a pre-approved rule that runs code, such as node -e or powershell -Command, which is as broad as an unrestricted shell.",
-  "unknown.config_file_protection_scope_unknown": "Cursor protects some configuration files from edits without approval but does not list which; assumes this file is not among them.",
+  "unknown.config_file_protection_scope_unknown": "Cursor asks for approval before editing some configuration files but doesn't say which; this file is assumed not to be among them.",
   "unknown.edit_rule_partial": "A rule covers these files for the edit tools, but shell commands can still write them.",
   "unknown.ide_run_mode_not_readable": "Assumes {agent} uses Auto-review, the mode Cursor recommends. The mode you choose in its settings is not stored where RosmarOps can read it.",
   "unknown.no_pretooluse_hook_blocks": "Assumes no hook of yours blocks this action before it runs. RosmarOps does not run hooks to find out.",
