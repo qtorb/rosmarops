@@ -30,13 +30,13 @@ type cursorInference struct {
 	base      knowledge.Base
 	inForce   []Node
 	roots     []string
-	modeCap   *Node // the run mode in Auto-review (declared or read), in force
-	runAll    *Node // the run mode in Run Everything (declared or read)
+	modeCap   *Node  // the run mode in Auto-review (declared or read), in force
+	runAll    *Node  // the run mode in Run Everything (declared or read)
 	modeA     string // the mode's declared assumption ("" when read)
 	sandboxed bool   // Auto-review with Sandbox (C1), or the mode is read
 	external  *Node  // External-File Protection off (C4)
-	fileRead  *Node // file_tools_read
-	fileWrite *Node // file_tools_write_workspace
+	fileRead  *Node  // file_tools_read
+	fileWrite *Node  // file_tools_write_workspace
 
 	protected []string // sandbox_protected_paths, relative to a workspace
 	ignored   []string // default_ignore_file_tools

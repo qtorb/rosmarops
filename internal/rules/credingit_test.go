@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/config"
-	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/declared"
+	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"

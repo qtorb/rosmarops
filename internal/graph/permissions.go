@@ -2,11 +2,12 @@ package graph
 
 import (
 	"fmt"
-	"github.com/qtorb/rosmarops/internal/declared"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/qtorb/rosmarops/internal/declared"
 
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/knowledge"

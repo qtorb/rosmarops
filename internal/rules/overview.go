@@ -1842,10 +1842,10 @@ func pick(row string, cs []candidate) OverviewCell {
 var overviewPremise = map[string]bool{
 	graph.AssumeIDERunModeNotReadable: true,
 	// BV-248 (CTO-56 §1.3): a declared setting is a premise.
-	graph.AssumeDeclaredByYou: true,
-	graph.AssumeNotDeclared:   true,
-	graph.AssumeUIModeChoiceUnknown:   true,
-	graph.AssumeAutoModeAvailable:     true,
+	graph.AssumeDeclaredByYou:       true,
+	graph.AssumeNotDeclared:         true,
+	graph.AssumeUIModeChoiceUnknown: true,
+	graph.AssumeAutoModeAvailable:   true,
 }
 
 func originOf(basis []string) string {

@@ -52,8 +52,10 @@ func mcpAgentEval(t *testing.T, product string, caps ...graph.Node) rules.Findin
 // cursorMode is Cursor's run mode as declared with the factory answer
 // (BV-248): Auto-review with Sandbox.
 func cursorMode() graph.Node {
-	return graph.Node{Type: graph.CapPermissionMode, Approval: graph.ApprovalAllow, TargetScope: "auto_review", AppliesIn: "user",
-		Basis: graph.BasisDeclared, Source: "declared:cursor/c1_run_mode=auto_review_sandbox"}
+	return graph.Node{
+		Type: graph.CapPermissionMode, Approval: graph.ApprovalAllow, TargetScope: "auto_review", AppliesIn: "user",
+		Basis: graph.BasisDeclared, Source: "declared:cursor/c1_run_mode=auto_review_sandbox",
+	}
 }
 
 func modeCap(mode string, factory bool) graph.Node {
