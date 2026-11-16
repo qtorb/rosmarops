@@ -14,6 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -71,7 +72,7 @@ func noiseReport(t *testing.T, extra ...platform.CredentialEntry) report.V2 {
 		{Path: "/src/a/dashboard/.env.local", Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
 	}}
 	cf.Entries = append(cf.Entries, extra...)
-	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{}, cf, graph.Repos{Findings: v1Findings}, salt, v2Now)
+	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{Findings: v1Findings}, salt, v2Now)
 	if err != nil {
 		t.Fatal(err)
 	}

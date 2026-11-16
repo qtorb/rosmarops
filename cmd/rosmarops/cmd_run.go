@@ -1330,6 +1330,20 @@ func writeGraph(
 		}
 		measured = append(measured, report.ProfileInput{ID: id, Graph: &pres.Graph, Settings: pin2.Settings})
 	}
+	// BV-248 decision 9: Cursor's and Grok Bot's profiles, measured on the
+	// declared settings, in memory too.
+	for _, dp := range pipeline.DeclaredProfiles {
+		pin2, ok := pipeline.DeclaredProfile(pin, dp.Product, dp.ID)
+		if !ok {
+			continue
+		}
+		pres, perr := pipeline.Assemble(pin2)
+		if perr != nil {
+			slog.Warn("graph: profile pass not built", "product", dp.Product, "profile", dp.ID, "err", perr)
+			continue
+		}
+		measured = append(measured, report.ProfileInput{ID: dp.ID, Product: dp.Product, Graph: &pres.Graph, Settings: pin2.Settings, Declared: pin2.Declared, GrokBot: pin2.GrokBot})
+	}
 	return &g, sha, path, passGraphs{factory: factory, profiles: measured}, nil
 }
 

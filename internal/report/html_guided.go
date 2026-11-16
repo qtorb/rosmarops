@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"strconv"
 
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -102,7 +103,7 @@ var guidedAgents = []guidedAgent{
 		},
 	},
 	{
-		key: profiles.GuidedBot, side: "gp.bot.side", g3: "gp.bot.G3", docsRead: [3]int{2026, 11, 14},
+		key: profiles.GuidedBot, product: knowledge.GrokBotProduct, side: "gp.bot.side", g3: "gp.bot.G3", docsRead: [3]int{2026, 11, 14},
 		uses: map[string]string{"code": "cloud", "docs": "cloud", "mail": "cloud", "tasks": noProfile + "gp.bot.use.tasks"},
 		profiles: []guidedProfile{
 			{
@@ -179,7 +180,8 @@ func (c htmlCtx) guidedPresent() []struct {
 	}
 	ev := c.evaluated()
 	for _, g := range guidedAgents {
-		if g.product == "" {
+		bot := g.key == profiles.GuidedBot
+		if bot && !c.hasEvaluated(g.product) {
 			if c.v.GrokBotNoRow { // BV-248: B0 answered or Grok Bot detected
 				continue
 			}
@@ -204,6 +206,29 @@ func (c htmlCtx) guidedPresent() []struct {
 	}
 	return out
 }
+
+// hasEvaluated reports an evaluated agent of product.
+func (c htmlCtx) hasEvaluated(product string) bool {
+	for _, o := range c.evaluated() {
+		if o.Product == product {
+			return true
+		}
+	}
+	return false
+}
+
+// guidedMeasured is an agent's score and class with a profile measured on its
+// declared settings (BV-248 decision 9), when there is one.
+func (c htmlCtx) guidedMeasured(o *rules.OverviewAgent, id string) (index.Profile, bool) {
+	if o == nil {
+		return index.Profile{}, false
+	}
+	return claudeProfile(c.score[o.AgentID], id)
+}
+
+// guidedG3Rows are the rows of a measured profile the engine still does not
+// measure (BV-248 decision 9): Cursor's Ask mode (P0) and «Delete files» (P1).
+var guidedG3Rows = map[string]bool{"gp.cursor.P0.no.1": true, "gp.cursor.P1.asks.2": true}
 
 // guidedProposes reports whether a use proposes a guided profile for some
 // guided agent shown (G2 under «Your computer»).
@@ -231,6 +256,13 @@ func (c htmlCtx) renderGuidedRow(g guidedAgent, name string, o *rules.OverviewAg
 	c.w(`<div class="gsug">`)
 	for _, s := range g.states() {
 		if p, ok := g.profile(s); ok {
+			if mp, ok := c.guidedMeasured(o, p.id); ok { // BV-248: measured
+				now, val, _ := c.agentNow(o.AgentID)
+				c.w(`<div class="chg" data-ga="%s" data-gs="%s"%s><span class="c1">%s · %s<span class="arrow">→</span>%s</span><span class="c2">%s</span></div>`,
+					g.key, s, hide(s == def), c.t(p.name, nil), cls(now, ""), cls(mp.Letter, ""),
+					c.t("pc.score", map[string]string{"a": scoreText(val), "b": strconv.Itoa(mp.Value)}))
+				continue
+			}
 			c.w(`<div class="chg" data-ga="%s" data-gs="%s"%s><span class="c1">%s <span class="gtag">%s</span></span></div>`, g.key, s, hide(s == def), c.t(p.name, nil), c.t("gp.G1", nil))
 			continue
 		}
@@ -292,14 +324,22 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 		if p.id == def {
 			checked = " checked"
 		}
-		c.w(`<label class="card"><input type="radio" name="gp-%s" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s</h4></div><p class="g3">%s</p>`,
-			g.key, p.id, checked, c.t(p.name, nil), c.t(g.g3, nil))
+		c.w(`<label class="card"><input type="radio" name="gp-%s" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s</h4></div>`,
+			g.key, p.id, checked, c.t(p.name, nil))
+		mp, measured := c.guidedMeasured(o, p.id)
+		if measured { // BV-248: measured on the declared settings
+			now, val, _ := c.agentNow(o.AgentID)
+			c.w(`<div class="chg"><span class="c1">%s %s<span class="arrow">→</span>%s</span><span class="c2">%s</span></div>`, c.t("pc.class", nil), cls(now, ""), cls(mp.Letter, ""),
+				c.t("pc.score", map[string]string{"a": scoreText(val), "b": strconv.Itoa(mp.Value)}))
+		} else {
+			c.w(`<p class="g3">%s</p>`, c.t(g.g3, nil))
+		}
 		for _, u := range sheetUses {
 			if g.uses[u.id] == p.id {
 				c.w(`<span class="rectag" data-use="%s"%s>%s</span>`, u.id, hide(u.id == sheetUses[0].id), c.t("cc.rec", map[string]string{"use": c.cat.Text("cc.use.lc."+u.id, nil)}))
 			}
 		}
-		c.renderRowsOf(p.rows, p.nc)
+		c.renderRowsOf(p.rows, p.nc, measured, g.g3)
 		c.w(`</label>`)
 	}
 	c.w(`</div>`)
@@ -349,8 +389,9 @@ func (c htmlCtx) guidedText(g guidedAgent, p guidedProfile) string {
 	return c.cat.Text(p.sentence, nil) + "\n\n" + block
 }
 
-// renderRowsOf is a ProfileCard's four rows.
-func (c htmlCtx) renderRowsOf(r [3][][2]string, nc string) {
+// renderRowsOf is a ProfileCard's four rows; in a measured profile, a row the
+// engine does not measure keeps the g3 sentence.
+func (c htmlCtx) renderRowsOf(r [3][][2]string, nc string, measured bool, g3 string) {
 	c.w(`<dl class="rows">`)
 	for i, head := range []string{"cc.row.does", "cc.row.asks", "cc.row.no"} {
 		c.w(`<dt>%s</dt>`, c.t(head, nil))
@@ -358,6 +399,10 @@ func (c htmlCtx) renderRowsOf(r [3][][2]string, nc string) {
 			c.w(`<dd class="empty">—</dd>`)
 		}
 		for _, l := range r[i] {
+			if measured && guidedG3Rows[l[1]] {
+				c.w(`<dd>%s<span>%s <span class="g3">%s</span></span></dd>`, kindSVG(l[0]), c.t(l[1], nil), c.t(g3, nil))
+				continue
+			}
 			c.w(`<dd>%s<span>%s</span></dd>`, kindSVG(l[0]), c.t(l[1], nil))
 		}
 	}

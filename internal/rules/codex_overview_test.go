@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -42,7 +43,7 @@ func codexEvaluate(t *testing.T, scan platform.CodexScan, creds []entry) (graph.
 		Trust: []platform.ProjectTrust{{Path: repoWeb, Accepted: true}},
 	}
 	mcp := platform.MCPScan{Servers: graph.CodexMCPServers(scan)}
-	f, _, err := graph.FromScansWithCodex(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, platform.HermesScan{}, scan, salt, now)
+	f, _, err := graph.FromScansWithCodex(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{}, platform.HermesScan{}, scan, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

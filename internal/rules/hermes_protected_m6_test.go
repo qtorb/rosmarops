@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -32,7 +33,7 @@ func hermesInstrEval(t *testing.T, protected *bool, instr []platform.Instruction
 	source := platform.MCPSource{Platform: agentdirs.Hermes, ConfigPath: cfg.Path, ConfigDir: cfg.ConfigDir, Status: platform.MCPSourceRead, LoadsMCP: true}
 	hermes := platform.HermesScan{Configs: []platform.HermesConfig{cfg}, Sources: []platform.MCPSource{source}}
 	mcp := platform.MCPScan{Sources: hermes.Sources}
-	f, _, err := graph.FromScansWithHermes(mcp, settings, platform.CursorScan{}, platform.CredentialFileScan{}, graph.Repos{}, hermes, salt, now)
+	f, _, err := graph.FromScansWithHermes(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, platform.CredentialFileScan{}, graph.Repos{}, hermes, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

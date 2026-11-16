@@ -49,3 +49,18 @@ func declaredLine(cat catalog.Catalog, a rules.OverviewAgent) string {
 		"date": declaredDay(&cat, d.AnsweredAt), "summary": DeclaredSummary(cat, a.Product, d.Answers, nil),
 	})
 }
+
+// DeclaredKeys are the catalog codes of the questions (the console) and of
+// the answers line (the report), BV-248.
+func DeclaredKeys() []string {
+	keys := []string{"decl.entry", "decl.again", "decl.line", "decl.unknown"}
+	for _, p := range declared.Products {
+		for _, q := range declared.Questions(p) {
+			keys = append(keys, declared.QuestionKey(q.ID))
+			for _, o := range q.Options {
+				keys = append(keys, declared.LabelKey(q.ID, o))
+			}
+		}
+	}
+	return keys
+}
