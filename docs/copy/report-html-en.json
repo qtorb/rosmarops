@@ -825,7 +825,7 @@
   "html.assume.grok-bot": "Grok Bot: what it can do on your computer and whether Auto-review is on are read from its app's settings when it's installed; otherwise they come from your answers. «Ask first» rules and connectors live in your account and come from your answers. With no answer, the least controlled case is assumed.",
   "env.container": "This review ran inside a container ({engine}). What you see is what an agent could touch in there, not on your computer. From inside, there's no way to know whether the agent runs in this same container or whether the container has internet.",
   "env.engine.unidentified": "unidentified",
-  "env.container.mounts": "Folders of your computer this container can see: {list}.",
+  "env.container.mounts": "This container has folders mounted from outside: {list}. From inside, there's no way to know which folder of your computer each one is.",
   "env.container.nomounts": "No folder of your computer is mounted here.",
   "env.container.dockersock": "This container has access to the computer's Docker: an agent in here could control your computer.",
   "env.wsl": "This review ran in WSL. Your Windows drives can be seen from here: {list}. An agent working in WSL could touch your Windows folders too.",

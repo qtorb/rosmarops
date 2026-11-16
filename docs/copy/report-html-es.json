@@ -1002,7 +1002,7 @@
   "html.assume.grok-bot": "Grok Bot: lo que puede hacer en tu ordenador y si el Auto-review está encendido se leen de los ajustes de su app cuando está instalada; si no, salen de tus respuestas. Las reglas «Ask first» y los conectores viven en tu cuenta y salen de tus respuestas. Sin respuesta, se supone el caso que menos controla.",
   "env.container": "Esta revisión se ha hecho dentro de un contenedor ({engine}). Lo que ves es lo que un agente podría tocar ahí dentro, no en tu ordenador. Desde dentro no se puede saber si el agente corre en este mismo contenedor ni si el contenedor tiene internet.",
   "env.engine.unidentified": "sin identificar",
-  "env.container.mounts": "Carpetas de tu ordenador que ve este contenedor: {list}.",
+  "env.container.mounts": "Este contenedor tiene montadas carpetas de fuera: {list}. Desde dentro no se puede saber qué carpeta de tu ordenador es cada una.",
   "env.container.nomounts": "No se ve ninguna carpeta de tu ordenador montada aquí.",
   "env.container.dockersock": "Este contenedor tiene acceso a Docker del ordenador: un agente aquí dentro podría controlar tu ordenador.",
   "env.wsl": "Esta revisión se ha hecho en WSL. Desde aquí se ven tus discos de Windows: {list}. Un agente que trabaje en WSL podría tocar también tus carpetas de Windows.",

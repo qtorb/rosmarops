@@ -24,7 +24,7 @@ func TestEnvTexts(t *testing.T) {
 		{"none", nil, nil, false},
 		{"docker", &hostenv.Env{Kind: hostenv.KindContainer, Engine: hostenv.EngineDocker, HostMounts: []string{"/notes", "/workspace"}, DockerSocket: true}, []string{
 			"Esta revisión se ha hecho dentro de un contenedor (Docker). Lo que ves es lo que un agente podría tocar ahí dentro, no en tu ordenador. Desde dentro no se puede saber si el agente corre en este mismo contenedor ni si el contenedor tiene internet.",
-			"Carpetas de tu ordenador que ve este contenedor: /notes, /workspace.",
+			"Este contenedor tiene montadas carpetas de fuera: /notes, /workspace. Desde dentro no se puede saber qué carpeta de tu ordenador es cada una.",
 			"Este contenedor tiene acceso a Docker del ordenador: un agente aquí dentro podría controlar tu ordenador.",
 		}, true},
 		{"overlay", &hostenv.Env{Kind: hostenv.KindContainer, Engine: hostenv.Unidentified}, []string{
