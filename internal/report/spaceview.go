@@ -118,7 +118,10 @@ type SVAgent struct {
 	// valid, and a value with no data is absent (the space's validator takes
 	// no type unions): the class from the six axes, the factory score and
 	// class, the score without each group, and the five risk kinds.
-	Letter        *SVClass  `json:"letter,omitempty"`
+	Letter *SVClass `json:"letter,omitempty"`
+	// Declared (BV-248, CTO-56 §5.3): Cursor and Grok Bot only, whether its
+	// score rests on the person's answers. The answers never travel.
+	Declared      *bool     `json:"declared,omitempty"`
 	FactoryScore  *int      `json:"factory_score,omitempty"`
 	FactoryLetter *SVClass  `json:"factory_letter,omitempty"`
 	Groups        []SVGroup `json:"groups,omitempty"`
@@ -534,6 +537,10 @@ func svAgents(v V2, ctxs map[string]htmlCtx) []SVAgent {
 		}
 		for _, k := range oa.Kinds {
 			a.Kinds = append(a.Kinds, SVKind{Kind: k.Kind, State: k.State, Assumed: k.Assumed})
+		}
+		if oa.Declared != nil {
+			d := len(oa.Declared.Answers) > 0
+			a.Declared = &d
 		}
 		if id, ok := top[oa.AgentID]; ok {
 			a.TopFindingID = &id
