@@ -37,7 +37,7 @@ var bv238Texts = []struct{ key, es, en string }{
 	{"gp.cursor.P1.does.2", "Lanzar cuatro órdenes: npm run lint, npm test, git status y git diff", "Run four commands: npm run lint, npm test, git status and git diff"},
 	{"gp.cursor.P1.asks.1", "Cualquier otra orden", "Any other command"},
 	{"gp.cursor.P1.asks.2", "Borrar ficheros", "Delete files"},
-	{"gp.cursor.P1.nc", "La configuración y las instrucciones de otros agentes dentro de tus proyectos no se pueden dejar fuera de su alcance en Cursor. En Windows, la documentación no dice si el límite de lectura se aplica.", "Other agents' settings and instructions inside your projects can't be put out of its reach in Cursor. On Windows, the documentation doesn't say whether the read limit applies."},
+	{"gp.cursor.P1.nc", "Cursor puede llegar a la configuración y las instrucciones de otros agentes en tus proyectos. En Windows, su documentación no dice si el límite de lectura se aplica.", "Other agents' settings and instructions inside your projects can't be put out of its reach in Cursor. On Windows, the documentation doesn't say whether the read limit applies."},
 	{"gp.cursor.T2", "Crea o actualiza ~/.cursor/sandbox.json con este contenido, sin cambiar nada más. Enséñame el cambio antes de guardarlo.", "Create or update ~/.cursor/sandbox.json with this content, without changing anything else. Show me the change before saving it."},
 	{"gp.grok.use.none", "Es un agente de código: no hay plantilla para este uso.", "It's a coding agent: there's no template for this use."},
 	{"gp.grok.step.paste", "Copia el texto y pégalo en Grok Build, que te enseñará el cambio antes de guardarlo.", "Copy the text and paste it into Grok Build, which will show you the change before saving it."},

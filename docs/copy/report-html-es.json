@@ -918,7 +918,7 @@
   "gp.cursor.P1.does.2": "Lanzar cuatro órdenes: npm run lint, npm test, git status y git diff",
   "gp.cursor.P1.asks.1": "Cualquier otra orden",
   "gp.cursor.P1.asks.2": "Borrar ficheros",
-  "gp.cursor.P1.nc": "La configuración y las instrucciones de otros agentes dentro de tus proyectos no se pueden dejar fuera de su alcance en Cursor. En Windows, la documentación no dice si el límite de lectura se aplica.",
+  "gp.cursor.P1.nc": "Cursor puede llegar a la configuración y las instrucciones de otros agentes en tus proyectos. En Windows, su documentación no dice si el límite de lectura se aplica.",
   "gp.cursor.T2": "Crea o actualiza ~/.cursor/sandbox.json con este contenido, sin cambiar nada más. Enséñame el cambio antes de guardarlo.",
   "gp.grok.use.none": "Es un agente de código: no hay plantilla para este uso.",
   "gp.grok.step.paste": "Copia el texto y pégalo en Grok Build, que te enseñará el cambio antes de guardarlo.",
