@@ -1,0 +1,97 @@
+name: cto57-probe (temporary, read-only, never merge)
+
+# CTO-57: where a clean Grok Bot install on Windows keeps «Execution on this
+# computer». No sign-in, no account. Prints names, sizes, key names and short
+# code extracts only; token-like strings are redacted by probe.py.
+
+on:
+  push:
+    branches:
+      - cto/2026-11-16-cto-57-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find the installer link
+        shell: pwsh
+        run: |
+          $urls = @()
+          foreach ($page in @("https://x.ai/bot", "https://x.ai/grok-bot", "https://docs.x.ai/grok-bot/get-started")) {
+            try {
+              $r = Invoke-WebRequest $page -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 30
+              Write-Host "page $page -> $($r.StatusCode), $($r.Content.Length) chars"
+              $m = [regex]::Matches($r.Content, 'https://downloads\.cursor\.com/grokbot/[^"''\s<>\\]+')
+              foreach ($x in $m) { $urls += $x.Value }
+              $m2 = [regex]::Matches($r.Content, '[^"''\s<>]*(Grok_Bot|grokbot|GrokBot)[^"''\s<>]*\.(exe|msi|msix|appx)')
+              foreach ($x in $m2) { $urls += $x.Value }
+            } catch { Write-Host "page $page failed: $($_.Exception.Message)" }
+          }
+          $urls = $urls | Sort-Object -Unique
+          Write-Host "candidates:"; $urls | ForEach-Object { Write-Host "  $_" }
+          $pick = $urls | Where-Object { $_ -match 'win32-x64' -and $_ -match '\.exe$' } | Select-Object -First 1
+          if (-not $pick) { $pick = $urls | Where-Object { $_ -match 'win' -and $_ -match '\.exe$' } | Select-Object -First 1 }
+          if (-not $pick) {
+            foreach ($u in @("https://downloads.cursor.com/grokbot/stable/win32-x64/latest", "https://downloads.cursor.com/grokbot/stable/win32-x64/Grok_Bot_Setup.exe")) {
+              try { $h = Invoke-WebRequest $u -Method Head -UseBasicParsing -MaximumRedirection 0 -ErrorAction Stop; Write-Host "HEAD $u -> $($h.StatusCode) $($h.Headers.Location)" } catch { Write-Host "HEAD $u -> $($_.Exception.Response.StatusCode.value__) $($_.Exception.Response.Headers.Location)" }
+            }
+            throw "no Windows installer link found"
+          }
+          Write-Host "picked $pick"
+          "GB_URL=$pick" | Out-File -Append $env:GITHUB_ENV
+      - name: Snapshot before install
+        shell: pwsh
+        run: |
+          python .github/cto57/probe.py snap "$env:RUNNER_TEMP\s0.json"
+          reg query HKCU\Software > "$env:RUNNER_TEMP\reg0.txt"
+      - name: Download, verify and install silently
+        shell: pwsh
+        run: |
+          $exe = "$env:RUNNER_TEMP\grokbot-setup.exe"
+          Invoke-WebRequest $env:GB_URL -OutFile $exe -UseBasicParsing
+          $h = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          Write-Host "installer $env:GB_URL size $((Get-Item $exe).Length) sha256 $h"
+          $sig = Get-AuthenticodeSignature $exe
+          Write-Host "signature: $($sig.Status) signer: $($sig.SignerCertificate.Subject)"
+          $vi = (Get-Item $exe).VersionInfo
+          Write-Host "version info: $($vi.ProductName) $($vi.ProductVersion) $($vi.CompanyName) $($vi.FileDescription)"
+          $p = Start-Process $exe -ArgumentList '/S' -PassThru
+          if (-not $p.WaitForExit(300000)) { Write-Host "installer still running after 300 s"; Stop-Process -Id $p.Id -Force }
+          Write-Host "installer exit $($p.ExitCode)"
+          Start-Sleep 10
+          Get-Process | Where-Object { $_.Path -and $_.Path -match '(?i)grok' } | ForEach-Object { Write-Host "running after install: $($_.Path)" }
+      - name: Snapshot after install
+        shell: pwsh
+        run: |
+          python .github/cto57/probe.py snap "$env:RUNNER_TEMP\s1.json"
+          python .github/cto57/probe.py diff "$env:RUNNER_TEMP\s0.json" "$env:RUNNER_TEMP\s1.json" "after install" | Select-Object -First 400
+          reg query HKCU\Software > "$env:RUNNER_TEMP\reg1.txt"
+          Compare-Object (Get-Content "$env:RUNNER_TEMP\reg0.txt") (Get-Content "$env:RUNNER_TEMP\reg1.txt") | ForEach-Object { Write-Host "reg $($_.SideIndicator) $($_.InputObject)" }
+          $dirs = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Directory | Where-Object { $_.Name -match '(?i)grok' }
+          if (-not $dirs) { $dirs = Get-ChildItem "$env:LOCALAPPDATA", "$env:ProgramFiles" -Directory | Where-Object { $_.Name -match '(?i)grok' } }
+          $dirs | ForEach-Object { Write-Host "install dir: $($_.FullName)" }
+          "GB_DIR=$($dirs[0].FullName)" | Out-File -Append $env:GITHUB_ENV
+      - name: Search the app's own code for the setting
+        shell: pwsh
+        run: python .github/cto57/probe.py bundle "$env:GB_DIR" | Select-Object -First 300
+      - name: Start the app without signing in, then stop it
+        shell: pwsh
+        run: |
+          $main = Get-ChildItem $env:GB_DIR -Filter *.exe | Where-Object { $_.Name -notmatch '(?i)unins|update|crash|helper' } | Select-Object -First 1
+          Write-Host "starting $($main.FullName)"
+          $p = Start-Process $main.FullName -PassThru
+          Start-Sleep 120
+          Get-Process | Where-Object { $_.Path -and $_.Path -match '(?i)grok' } | ForEach-Object { Write-Host "running: $($_.Path)"; Stop-Process -Id $_.Id -Force }
+          Start-Sleep 5
+      - name: What the first start wrote
+        shell: pwsh
+        run: |
+          python .github/cto57/probe.py snap "$env:RUNNER_TEMP\s2.json"
+          python .github/cto57/probe.py inspect "$env:RUNNER_TEMP\s1.json" "$env:RUNNER_TEMP\s2.json" "after first start" | Select-Object -First 600
+          reg query HKCU\Software > "$env:RUNNER_TEMP\reg2.txt"
+          Compare-Object (Get-Content "$env:RUNNER_TEMP\reg1.txt") (Get-Content "$env:RUNNER_TEMP\reg2.txt") | ForEach-Object { Write-Host "reg $($_.SideIndicator) $($_.InputObject)" }
