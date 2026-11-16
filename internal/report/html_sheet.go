@@ -202,8 +202,8 @@ func (c htmlCtx) renderBar() {
 func (c htmlCtx) renderSheet() {
 	v := c.v
 	m := c.sheetScore()
-	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1><div class="sh-sub">%s</div></div><dl class="sh-meta">`,
-		c.t("sheet.title", nil), c.t("sheet.sub", nil))
+	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1>%s<div class="sh-sub">%s</div>%s</div><dl class="sh-meta">`,
+		c.t("sheet.title", nil), c.envTag(), c.t("sheet.sub", nil), c.envLines())
 	program := "RosmarOps"
 	if v.engineVersion != "" {
 		program += " " + v.engineVersion
@@ -808,6 +808,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 @media (max-width:860px){.sh-head{grid-template-columns:minmax(0,1fr)}}
 .sh-title{font-size:28px;margin:4px 0 2px;letter-spacing:-.01em;line-height:1.2}
 .sh-sub{color:var(--s-ink2);font-size:14px}
+.sh-env{display:inline-block;font-size:12.5px;font-weight:600;color:var(--s-ink2);background:var(--s-line);border-radius:999px;padding:2px 8px;margin:2px 0 4px}
 .sh-meta{display:grid;grid-template-columns:repeat(2,auto);gap:4px 22px;margin:0;font-size:12.5px}
 .sh-meta div{display:flex;gap:8px}
 .sh-meta dt{color:var(--s-ink3)} .sh-meta dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}

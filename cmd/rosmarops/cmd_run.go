@@ -23,6 +23,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/hostenv"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/kit"
@@ -933,6 +934,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		nt = defaultNotifier.probe(ctx)
 	}
+	// BV-249 §5: a container, WSL, a virtual machine or Windows Sandbox, read
+	// from files only; informative.
+	environment := hostenv.Detect()
 	buildV2 := func() (report.V2, rules.Result) {
 		return report.BuildV2(report.V2Input{
 			Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
@@ -950,6 +954,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 			BinarySkipped: binarySkipped,
 			Declared:      declaredAnswers(st), DeclaredAt: declaredAt(st), GrokBot: grokBotScan, Cursor: cursorRead,
+			Environment: environment,
 		})
 	}
 	v2, ruled := buildV2()

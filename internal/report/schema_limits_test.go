@@ -121,6 +121,9 @@ var limitsAllowlist = map[limit]string{
 	{"maxItems", 12}:     "agents[].groups (BV-235): one per finding group, and there are eight groups, never 12",
 	{"maxItems", 20}:     "since.score_changes / overview / signals: bounded by the nine scored agents and the signal categories, never 20",
 	{"maxItems", 50}:     "report.coverage: one line per coverage topic, never 50",
+	{"maxItems", 200}:    "environment.host_mounts (BV-249 §5): read from /proc/self/mountinfo, not from the graph",
+	{"maxItems", 26}:     "environment.drives (BV-249 §5): the drive letters WSL mounts, not from the graph",
+	{"maxLength", 4096}:  "environment.host_mounts[] (BV-249 §5): a mount point, not from the graph",
 }
 
 func TestSchemaLimitsFromPipeline(t *testing.T) {

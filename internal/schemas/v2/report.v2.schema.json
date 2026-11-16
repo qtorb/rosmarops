@@ -92,6 +92,77 @@
         "$ref": "#/definitions/signal"
       },
       "description": "Red v1 checks of the technical report (decision memoria, adjustment B). They do not count in the score."
+    },
+    "environment": {
+      "description": "BV-249 §5 (CTO-58 §3, signed): the environment this review ran in, from a file signal (or macOS sysctl, Windows registry). Informative: no weight in any score. Absent with no signal.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "signal"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "container",
+            "wsl",
+            "virtual_machine",
+            "windows_sandbox"
+          ]
+        },
+        "signal": {
+          "enum": [
+            "dockerenv",
+            "containerenv",
+            "mountinfo_overlay",
+            "proc_version",
+            "wsl_interop",
+            "dmi",
+            "hv_vmm_present",
+            "bios_registry",
+            "wdag_account"
+          ]
+        },
+        "engine": {
+          "enum": [
+            "docker",
+            "podman",
+            "unidentified"
+          ]
+        },
+        "vm_type": {
+          "enum": [
+            "qemu",
+            "vmware",
+            "virtualbox",
+            "hyper_v",
+            "amazon_ec2",
+            "google",
+            "parallels",
+            "xen",
+            "unidentified"
+          ]
+        },
+        "host_mounts": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "docker_socket": {
+          "type": "boolean"
+        },
+        "drives": {
+          "type": "array",
+          "maxItems": 26,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]:$"
+          }
+        }
+      }
     }
   },
   "definitions": {

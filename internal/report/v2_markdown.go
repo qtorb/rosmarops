@@ -255,6 +255,13 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	local := at.In(loc)
 	w("# %s\n\n", t("report.title", map[string]string{"date": local.Format("2006-01-02")}))
+	// BV-249 §5: the test-environment tag and the environment's sentences.
+	if v.Environment.TestEnvironment() {
+		w("**%s**\n\n", t("env.tag", nil))
+	}
+	if lines := EnvTexts(v.Environment, t); len(lines) > 0 {
+		w("%s\n\n", strings.Join(lines, " "))
+	}
 
 	// 1. Status and scope. The global time limit is not a coverage code
 	// (BV-155): it is left out of the gaps and the coverage list, and has its

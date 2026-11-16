@@ -1152,5 +1152,14 @@
   "decl.line": "Your answers ({date}): {summary}.",
   "html.ov.tag.declared": "declared by you",
   "unknown.measured_local_setting": "Read from the {agent} app's settings on this computer.",
-  "html.assume.grok-bot": "Grok Bot: what it can do on your computer and whether Auto-review is on are read from its app's settings when it's installed; otherwise they come from your answers. «Ask first» rules and connectors live in your account and come from your answers. With no answer, the least controlled case is assumed."
+  "html.assume.grok-bot": "Grok Bot: what it can do on your computer and whether Auto-review is on are read from its app's settings when it's installed; otherwise they come from your answers. «Ask first» rules and connectors live in your account and come from your answers. With no answer, the least controlled case is assumed.",
+  "env.container": "This review ran inside a container ({engine}). What you see is what an agent could touch in there, not on your computer. From inside, there's no way to know whether the agent runs in this same container or whether the container has internet.",
+  "env.engine.unidentified": "unidentified",
+  "env.container.mounts": "Folders of your computer this container can see: {list}.",
+  "env.container.nomounts": "No folder of your computer is mounted here.",
+  "env.container.dockersock": "This container has access to the computer's Docker: an agent in here could control your computer.",
+  "env.wsl": "This review ran in WSL. Your Windows drives can be seen from here: {list}. An agent working in WSL could touch your Windows folders too.",
+  "env.vm": "This review ran in a virtual machine ({type}). What you see is what an agent could touch in it, not on the computer hosting it.",
+  "env.wsb": "This review ran in Windows Sandbox: what you see is what an agent could touch inside, and everything is deleted when you close it.",
+  "env.tag": "Review of a test environment"
 }

@@ -999,5 +999,14 @@
   "decl.line": "Tus respuestas ({date}): {summary}.",
   "html.ov.tag.declared": "declarado por ti",
   "unknown.measured_local_setting": "Leído de los ajustes de la app de {agent} en este ordenador.",
-  "html.assume.grok-bot": "Grok Bot: lo que puede hacer en tu ordenador y si el Auto-review está encendido se leen de los ajustes de su app cuando está instalada; si no, salen de tus respuestas. Las reglas «Ask first» y los conectores viven en tu cuenta y salen de tus respuestas. Sin respuesta, se supone el caso que menos controla."
+  "html.assume.grok-bot": "Grok Bot: lo que puede hacer en tu ordenador y si el Auto-review está encendido se leen de los ajustes de su app cuando está instalada; si no, salen de tus respuestas. Las reglas «Ask first» y los conectores viven en tu cuenta y salen de tus respuestas. Sin respuesta, se supone el caso que menos controla.",
+  "env.container": "Esta revisión se ha hecho dentro de un contenedor ({engine}). Lo que ves es lo que un agente podría tocar ahí dentro, no en tu ordenador. Desde dentro no se puede saber si el agente corre en este mismo contenedor ni si el contenedor tiene internet.",
+  "env.engine.unidentified": "sin identificar",
+  "env.container.mounts": "Carpetas de tu ordenador que ve este contenedor: {list}.",
+  "env.container.nomounts": "No se ve ninguna carpeta de tu ordenador montada aquí.",
+  "env.container.dockersock": "Este contenedor tiene acceso a Docker del ordenador: un agente aquí dentro podría controlar tu ordenador.",
+  "env.wsl": "Esta revisión se ha hecho en WSL. Desde aquí se ven tus discos de Windows: {list}. Un agente que trabaje en WSL podría tocar también tus carpetas de Windows.",
+  "env.vm": "Esta revisión se ha hecho en una máquina virtual ({type}). Lo que ves es lo que un agente podría tocar en ella, no en el ordenador que la aloja.",
+  "env.wsb": "Esta revisión se ha hecho en Windows Sandbox: lo que ves es lo que un agente podría tocar dentro, y todo se borra al cerrarlo.",
+  "env.tag": "Revisión de un entorno de pruebas"
 }
