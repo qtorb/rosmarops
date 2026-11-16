@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -25,7 +26,7 @@ func cursorScenario(t *testing.T, files ...platform.CursorFile) graph.Graph {
 	settings := platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{{
 		Scope: platform.MCPScopeUser, ConfigPath: userJSON, ConfigDir: claudeDir, Status: platform.MCPSourceRead,
 	}}}
-	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: files}, cf, salt, now)
+	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cursorDir, Exists: true, Files: files, Declared: declared.Factory(declared.Cursor)}, cf, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

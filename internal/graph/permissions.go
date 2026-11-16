@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/declared"
+
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -259,6 +261,13 @@ func ProductDefaults(nodes []Node, base knowledge.Base) Fragment {
 			if !e.IsCapability() {
 				continue
 			}
+			// BV-248 (CTO-56 §1.3): Cursor's run mode is not the knowledge
+			// base's: it is read (approvalMode) or declared (C1), with its
+			// least controlled case without an answer. run_mode_builtin stays
+			// the documented factory answer.
+			if base.Product == knowledge.CursorProduct && e.ID == kbCursorRunMode {
+				continue
+			}
 			source := "kb:" + base.Product + "/" + e.ID + "@" + base.Version
 			id := productDefaultID(n.ID, e)
 			b.node(Node{
@@ -507,7 +516,9 @@ func FromScan(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, salt [
 // settings ones), the files read go to sources_read and the files not read
 // to sources_failed.
 func FromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, credFiles platform.CredentialFileScan, salt []byte, discoveredAt time.Time) (Fragment, PermissionStats, error) {
-	return FromScansWithCursor(mcp, settings, platform.CursorScan{}, credFiles, salt, discoveredAt)
+	// BV-248: with no Cursor scan, a Cursor client (from its mcp.json) has its
+	// factory answers.
+	return FromScansWithCursor(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, credFiles, salt, discoveredAt)
 }
 
 // FromScansWithCursor is FromScans with Cursor's files (decision 2026-10-25,
@@ -579,6 +590,10 @@ func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, curso
 		files.failed = append(files.failed, SourceFailed{Path: f.Path, Reason: f.Reason})
 	}
 	merged := Merge(mcpFrag, setFrag, files.fragment(), FromCursor(cursor, settings, discoveredAt), FromCodex(codex, discoveredAt), FromGrok(grok, settings, cursor, discoveredAt))
+	// BV-248 (CTO-56): every Cursor client's settings that live inside the
+	// app — declared by the person, or their least controlled case — whether
+	// it came in through ~/.cursor or through its mcp.json alone.
+	merged = Merge(merged, CursorDeclared(merged.Nodes, cursor))
 	applyApprovals(&merged, mcp, settings, policy)
 	defaults := []Fragment{merged}
 	// Codex's and Grok Build's product defaults are the generic ones (CTO-16 §4,

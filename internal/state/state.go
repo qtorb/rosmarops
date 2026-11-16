@@ -48,8 +48,21 @@ type State struct {
 	// it. Empty when never declined; cleared is fine. Optional in state.v2.
 	ConnectOfferDeclinedAt string `json:"connect_offer_declined_at,omitempty"`
 
+	// Declared are the person's answers about the settings RosmarOps cannot
+	// read at rest (BV-248, CTO-56 §5.1), per product (cursor, grok-bot):
+	// stable codes only. Optional in state.v2.
+	Declared map[string]Declared `json:"declared,omitempty"`
+
 	Integrity Integrity `json:"integrity"`
 	Baselines Baselines `json:"baselines"`
+}
+
+// Declared is one product's answers (BV-248): question code → option code,
+// when they were given and the knowledge base version they answer.
+type Declared struct {
+	Answers          map[string]string `json:"answers"`
+	AnsweredAt       string            `json:"answered_at"`
+	KnowledgeVersion string            `json:"knowledge_version"`
 }
 
 // Integrity holds hashes used for the self-integrity check on startup.

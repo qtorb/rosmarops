@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -53,7 +54,7 @@ func TestRenderHTML_CodexAndGrokEvaluated(t *testing.T) {
 		}},
 	}}}
 	mcp := platform.MCPScan{Servers: append(graph.CodexMCPServers(scan), graph.GrokMCPServers(grok)...)}
-	f, _, err := graph.FromScansWithGrok(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, platform.HermesScan{}, scan, grok, salt, v2Now)
+	f, _, err := graph.FromScansWithGrok(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{}, platform.HermesScan{}, scan, grok, salt, v2Now)
 	if err != nil {
 		t.Fatal(err)
 	}

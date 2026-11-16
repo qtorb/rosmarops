@@ -33,6 +33,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/profiles"
 	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/scan"
 	"github.com/qtorb/rosmarops/internal/scan/avexclusions"
 	"github.com/qtorb/rosmarops/internal/scan/configkeys"
@@ -451,6 +452,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		grokScan        platform.GrokScan        // BV-140: TOML layers drive Grok's caps
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
 		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
+		grokBotScan     platform.GrokBotScan     // BV-248: Grok Bot app folder and settings.json
+		cursorRead      platform.CursorScan      // BV-248: which of Cursor's questions apply
 		geminiScan      platform.GeminiScan      // BV-193: gemini-cli settings drive its caps
 		clineScan       platform.ClineScan       // BV-193: cline globalState drives its caps
 		credFiles       platform.CredentialFileScan
@@ -465,6 +468,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		// buildGraph is set by the graph step once the agents' sources are
 		// listed.
 		buildGraph   func(graph.Repos)
+		regraph      func(state.State) bool // BV-248
 		repoFindings []finding.Finding
 		// vscodeExts are the extensions listed, for the graph's extension
 		// agents (A3); vscodeFirstRun is set on a first run (A5).
@@ -606,6 +610,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			settingsScan, settingsErr := plat.ListClaudeSettings(ctx, repoList)
 			instructions, instructionsErr := plat.ListAgentInstructions(ctx, repoList)
 			cursorScan, cursorErr := plat.ListCursor(ctx, repoList)
+			// BV-248 (CTO-57): Grok Bot's app folder and settings.json.
+			grokBot, grokBotErr := plat.ListGrokBot(ctx)
+			if grokBotErr != nil {
+				slog.Warn("grok bot: not read", "err", grokBotErr)
+			}
+			grokBotScan = grokBot
+			cursorRead = cursorScan
 			skillScan, skillsErr := plat.ListSkills(ctx, repoList)
 			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
 			if ctx.Err() != nil {
@@ -659,7 +670,19 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 							Ecosystem: intel.EcosystemNPM, Name: p.Name, Version: p.Version, Path: p.Path,
 						})
 					}
-					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData())
+					// BV-248: the same build again with the answers the person
+					// gives at the end of the review (a pass in memory; the
+					// graph file is rewritten in the reports directory).
+					regraph = func(s state.State) bool {
+						g, graphSHA, _, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, s, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan)
+						if graphErr != nil {
+							slog.Warn("graph: rebuild with the answers failed", "err", graphErr)
+							return false
+						}
+						built, builtSHA, builtFactory, builtProfiles = g, graphSHA, factoryGraph.factory, factoryGraph.profiles
+						return true
+					}
+					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan)
 					if graphErr == nil {
 						built, builtSHA, builtSettings, builtFactory, builtProfiles = g, graphSHA, &settingsScan, factoryGraph.factory, factoryGraph.profiles
 					}
@@ -910,22 +933,26 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		nt = defaultNotifier.probe(ctx)
 	}
-	v2, ruled := report.BuildV2(report.V2Input{
-		Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
-		Families: families, V1: r, GeneratedAt: time.Now(),
-		Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
-		Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
-		AllowHits: allowHits,
-		Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
-		FactoryGraph: builtFactory, Profiles: builtProfiles,
-		VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
-		IntegrityNotChecked: integrityNotChecked,
-		StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
-		ExePath: exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
-		IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
-		LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
-		BinarySkipped: binarySkipped,
-	})
+	buildV2 := func() (report.V2, rules.Result) {
+		return report.BuildV2(report.V2Input{
+			Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
+			Families: families, V1: r, GeneratedAt: time.Now(),
+			Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
+			Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
+			AllowHits: allowHits,
+			Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
+			FactoryGraph: builtFactory, Profiles: builtProfiles,
+			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
+			IntegrityNotChecked: integrityNotChecked,
+			StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
+			ExePath: exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
+			IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
+			LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
+			BinarySkipped: binarySkipped,
+			Declared:      declaredAnswers(st), DeclaredAt: declaredAt(st), GrokBot: grokBotScan, Cursor: cursorRead,
+		})
+	}
+	v2, ruled := buildV2()
 	launcherRules := make([]string, 0, len(ruled.Launchers))
 	for _, l := range ruled.Launchers {
 		launcherRules = append(launcherRules, l.Rule)
@@ -1032,30 +1059,41 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Write report files.
 	progress.line("console.progress.report", nil)
 	// BV-226 §4, §5: RosmarOps inside Claude Code, for «More information».
+	// writeReport writes this review's report files, all in the reports
+	// directory; BV-248 calls it again when the answers rebuild the report.
+	writeReport := func(v2 report.V2) (string, error) {
+		mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
+		if err != nil {
+			return "", fmt.Errorf("write report: %w", err)
+		}
+		htmlPath, err := report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir)
+		if err != nil {
+			return "", fmt.Errorf("write report: %w", err)
+		}
+		slog.Info("html report written", "html", htmlPath)
+		aiPath, err := report.WriteAIExport(v2, cat, homeDir, dataDir)
+		if err != nil {
+			return "", fmt.Errorf("write report: %w", err)
+		}
+		slog.Info("ai export written", "ai", aiPath)
+		// The history read at the start is the base: a rewrite replaces this
+		// review's entry, never adds a second one.
+		if err := index.WriteHistory(dataDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
+			return "", fmt.Errorf("index history: %w", err)
+		}
+		if err := memory.Write(dataDir, v2.NextMemory()); err != nil {
+			return "", fmt.Errorf("findings memory: %w", err)
+		}
+		slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
+		// BV-226 §2: the line `rosmarops statusline` shows in Claude Code.
+		writeRunStatusline(dataDir, v2, time.Now())
+		return htmlPath, nil
+	}
 	v2.AgentHooks = agentHooksFor(builtSettings, v2, exePath)
-	mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
+	htmlPath, err = writeReport(v2)
 	if err != nil {
-		return "", fmt.Errorf("write report: %w", err)
+		return "", err
 	}
-	htmlPath, err = report.WriteHTMLPages(v2, lang, homeDir, time.Local, reportDir)
-	if err != nil {
-		return "", fmt.Errorf("write report: %w", err)
-	}
-	slog.Info("html report written", "html", htmlPath)
-	aiPath, err := report.WriteAIExport(v2, cat, homeDir, dataDir)
-	if err != nil {
-		return "", fmt.Errorf("write report: %w", err)
-	}
-	slog.Info("ai export written", "ai", aiPath)
-	if err := index.WriteHistory(dataDir, history, index.EntryOf(v2.Index, time.Now().Format("2006-01-02"))); err != nil {
-		return "", fmt.Errorf("index history: %w", err)
-	}
-	if err := memory.Write(dataDir, v2.NextMemory()); err != nil {
-		return "", fmt.Errorf("findings memory: %w", err)
-	}
-	slog.Info("report written", "md", mdPath, "json", jsonPath, "v2", v2Path)
-	// BV-226 §2: the line `rosmarops statusline` shows in Claude Code.
-	writeRunStatusline(dataDir, v2, time.Now())
 
 	// BV-183: prune old sealed packages — those whose name is more than 30 days
 	// old and whose last send result is terminal. Nothing else is removed.
@@ -1085,6 +1123,35 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	}
 	if err := state.SaveState(stPath, st); err != nil {
 		return "", fmt.Errorf("save state: %w", err)
+	}
+
+	// BV-248 (CTO-56 §4, decision 5): with a console, the questions about the
+	// settings RosmarOps cannot read; never in a scheduled review or a double
+	// click. The answers go to state.json only, and this review's report is
+	// rebuilt at once, in memory, and rewritten in the reports directory.
+	if !unattended && !m.window && ask.terminal && regraph != nil {
+		dc := declaredContext{
+			cursor: cursorEvaluated(v2), cursorFacts: graph.CursorFacts(cursorRead), grokBot: graph.GrokBotFacts(grokBotScan),
+		}
+		if askDeclared(runInput, os.Stdout, cat, &st, dc, time.Now()) {
+			if err := state.SaveState(stPath, st); err != nil {
+				return "", fmt.Errorf("save state: %w", err)
+			}
+			if regraph(st) {
+				prev := v2
+				v2, _ = buildV2()
+				v2.SpaceConnected, v2.SpaceSentDate, v2.SpaceRejected = prev.SpaceConnected, prev.SpaceSentDate, prev.SpaceRejected
+				v2.ProblemsSentThisRun, v2.ProblemsUnsent, v2.ProblemsWillAsk = prev.ProblemsSentThisRun, prev.ProblemsUnsent, prev.ProblemsWillAsk
+				v2.AgentHooks = agentHooksFor(builtSettings, v2, exePath)
+				if htmlPath, err = writeReport(v2); err != nil {
+					return "", err
+				}
+				st.LastRunStatus = v2.Status
+				if err := state.SaveState(stPath, st); err != nil {
+					return "", fmt.Errorf("save state: %w", err)
+				}
+			}
+		}
 	}
 
 	// BV-151: the report is written — the window says so and the taskbar clears,
@@ -1169,6 +1236,7 @@ func writeGraph(
 	pkgObs []graph.PackageObservation,
 	n8nFolder string,
 	n8nKeyData bool,
+	grokBot platform.GrokBotScan,
 ) (*graph.Graph, string, string, passGraphs, error) {
 	fail := func(err error) (*graph.Graph, string, string, passGraphs, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -1216,6 +1284,9 @@ func writeGraph(
 		PkgObs:     pkgObs,
 		N8NFolder:  n8nFolder,
 		N8NKeyData: n8nKeyData,
+		// BV-248: the person's answers, and Grok Bot as read.
+		Declared: declaredAnswers(st),
+		GrokBot:  grokBot,
 	}
 	res, err := pipeline.Assemble(pin)
 	if err != nil {
@@ -1258,6 +1329,20 @@ func writeGraph(
 			continue
 		}
 		measured = append(measured, report.ProfileInput{ID: id, Graph: &pres.Graph, Settings: pin2.Settings})
+	}
+	// BV-248 decision 9: Cursor's and Grok Bot's profiles, measured on the
+	// declared settings, in memory too.
+	for _, dp := range pipeline.DeclaredProfiles {
+		pin2, ok := pipeline.DeclaredProfile(pin, dp.Product, dp.ID)
+		if !ok {
+			continue
+		}
+		pres, perr := pipeline.Assemble(pin2)
+		if perr != nil {
+			slog.Warn("graph: profile pass not built", "product", dp.Product, "profile", dp.ID, "err", perr)
+			continue
+		}
+		measured = append(measured, report.ProfileInput{ID: dp.ID, Product: dp.Product, Graph: &pres.Graph, Settings: pin2.Settings, Declared: pin2.Declared, GrokBot: pin2.GrokBot})
 	}
 	return &g, sha, path, passGraphs{factory: factory, profiles: measured}, nil
 }

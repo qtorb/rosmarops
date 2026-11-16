@@ -69,6 +69,9 @@ const (
 	OriginMixed                    = "mixed"
 	OriginNone                     = "none"
 	OriginProductDefaultNotChecked = "product_default_not_checked_here" // reserved (§5)
+	// OriginDeclared: a setting the person declared, or its least controlled
+	// case (BV-248); it wins over the others in a mixed cell.
+	OriginDeclared = "declared"
 )
 
 // Reasons a cell has no finding behind it (§4), and why an agent is not
@@ -117,7 +120,7 @@ const (
 var (
 	AllDeciders            = []string{DeciderNobody, DeciderModel, DeciderYou, DeciderBlocked, DeciderNotEvaluated, DeciderNotApplicable}
 	AllScopes              = []string{ScopeMachine, ScopeSameProject, ScopeNone, ScopeSandbox, ScopeAnyDestination, ScopeListedDestinations, ScopeConfig, ScopeInstructions}
-	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked}
+	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked, OriginDeclared}
 	AllNoFindingReasons    = []string{NoFindingNoTargets, NoFindingNotAFinding, NoFindingFeedsOtherFindings}
 	AllNotEvaluatedReasons = []string{NotEvaluatedNoInference, NotEvaluatedAntigravityApp, NotEvaluatedCopilotJetBrains, NotEvaluatedClineCLI, NotEvaluatedClaudeDesktop, NotEvaluatedCoverage, NotEvaluatedGraphMissing}
 	AllPendingReasons      = []string{PendingModelProviderResearch}
@@ -147,6 +150,10 @@ type OverviewAgent struct {
 	// included, with who approves its use and the finding it gave, if any.
 	// Only scored agents carry it; omitted when none.
 	Services []OverviewService `json:"services,omitempty"`
+
+	// Declared are the person's answers about the agent's settings that are
+	// not readable at rest (BV-248, CTO-56 §5.2): Cursor and Grok Bot only.
+	Declared *OverviewDeclared `json:"declared,omitempty"`
 
 	// Kinds are the five risk kinds of the v1 report (BV-235, R5), computed
 	// from Rows, the credential findings and the MCP catalog; empty for an
@@ -282,6 +289,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Rows = oi.cells(oi.view(n.ID))
 		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
 		a.Kinds = oi.kinds(a, oi.view(n.ID))
+		a.Declared = oi.declaredOf(n.Platform)
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
@@ -351,6 +359,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	}
 	if v.node.Platform == knowledge.ClineProduct {
 		return oi.clineCells(v)
+	}
+	if v.node.Platform == knowledge.GrokBotProduct {
+		return oi.grokBotCells(v)
 	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
@@ -1833,17 +1844,23 @@ func pick(row string, cs []candidate) OverviewCell {
 // (§2.3): the mode RosmarOps cannot confirm at rest.
 var overviewPremise = map[string]bool{
 	graph.AssumeIDERunModeNotReadable: true,
-	graph.AssumeUIModeChoiceUnknown:   true,
-	graph.AssumeAutoModeAvailable:     true,
+	// BV-248 (CTO-56 §1.3): a declared setting is a premise.
+	graph.AssumeDeclaredByYou:       true,
+	graph.AssumeNotDeclared:         true,
+	graph.AssumeUIModeChoiceUnknown: true,
+	graph.AssumeAutoModeAvailable:   true,
 }
 
 func originOf(basis []string) string {
-	pd, cf := false, false
+	pd, cf, dc := false, false, false
 	for _, b := range basis {
 		pd = pd || b == graph.BasisProductDefault
 		cf = cf || b == graph.BasisConfigured
+		dc = dc || b == graph.BasisDeclared
 	}
 	switch {
+	case dc:
+		return OriginDeclared
 	case pd && cf:
 		return OriginMixed
 	case cf:
@@ -1982,7 +1999,9 @@ func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 			launchers++
 		}
 		scope := ScopeMachine
-		if w.code == "egress_auto_review" && !insecure {
+		// Auto-review runs in its sandbox, unless insecure_none is in force or
+		// the person declared Auto-review without Sandbox (CTO-56 §1.3).
+		if w.code == "egress_auto_review" && !insecure && (v.modeCap == nil || graph.CursorModeOption(*v.modeCap) != "auto_review") {
 			scope = ScopeSandbox
 		}
 		cs = append(cs, candidate{decider: wayDecider(w.assumptions), scope: scope, code: w.code, cap: w.cap, basis: oi.basisOf(w.cap), assumptions: w.assumptions})

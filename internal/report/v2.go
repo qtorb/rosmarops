@@ -14,6 +14,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
@@ -143,6 +144,11 @@ type V2 struct {
 	// then suppressed so it does not say «we'll ask you next time» while the
 	// program is about to ask now (BV-211d). Set by the command; not in the JSON.
 	ProblemsWillAsk bool `json:"-"`
+
+	// GrokBotNoRow: Grok Bot is detected or B0 has an answer, so the guided
+	// «Do you use Grok Bot?» row is not shown (BV-248 decision 4, Albert 16-11
+	// point 3): it shows only while B0 has no answer. In memory only.
+	GrokBotNoRow bool `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;
@@ -427,6 +433,15 @@ type V2Input struct {
 	// written, for default_mode_depends_on_version. Optional.
 	Antigravity platform.AntigravityScan
 
+	// Declared are the person's answers about the settings RosmarOps cannot
+	// read at rest (BV-248, CTO-56), product → question → option, with when
+	// they were given (DeclaredAt, product → RFC 3339): the report shows them,
+	// and Grok Bot's account answers give its cloud risk kinds. Optional.
+	Declared   map[string]map[string]string
+	DeclaredAt map[string]string
+	GrokBot    platform.GrokBotScan
+	Cursor     platform.CursorScan
+
 	// IntegrityNotChecked: the state could not be read, so this run checked
 	// no integrity (decision 2026-10-26, integridad y revisión semanal, J1;
 	// informe HTML v3 §17.5).
@@ -619,6 +634,10 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	for _, a := range v.Index.Agents {
 		v.seriesBy[a.Agent] = index.Series(in.History, index.EntryOf(v.Index, ""), a.Agent)
 	}
+	// BV-248: the guided Grok Bot row only while B0 has no answer and the app
+	// is not detected.
+	gb := in.Declared[declared.GrokBot][declared.B0Uses]
+	v.GrokBotNoRow = in.GrokBot.Present || gb == declared.Yes || gb == declared.No
 	return v, res
 }
 

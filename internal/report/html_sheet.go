@@ -576,7 +576,7 @@ func (c htmlCtx) renderProfileViews() {
 		switch o.Product {
 		case knowledge.ClaudeCodeProduct:
 			own = append(own, o)
-		case knowledge.CursorProduct, knowledge.GrokBuildProduct: // BV-238: guided rows
+		case knowledge.CursorProduct, knowledge.GrokBuildProduct, knowledge.GrokBotProduct: // BV-238, BV-248: guided rows
 		default:
 			others = append(others, o)
 		}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
@@ -38,7 +39,7 @@ func gitScenario(t *testing.T, cs []finding.CommittedSecret, entries []entry, ro
 		Scope: platform.MCPScopeUser, ConfigPath: userJSON, ConfigDir: claudeDir, Status: platform.MCPSourceRead,
 	}}}
 	fs := []finding.Finding{{ID: "secret:1", Category: "secret_tracked", Committed: cs}}
-	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{}, cf, graph.Repos{Findings: fs}, salt, now)
+	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{Findings: fs}, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

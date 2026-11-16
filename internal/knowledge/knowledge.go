@@ -41,6 +41,10 @@ const (
 	// decision 2); the Cline CLI stays detected. Its ai_client is identified by
 	// ~/.cline/data (decision 9).
 	ClineProduct = "cline"
+
+	// GrokBotProduct is xAI's Grok Bot (BV-248, CTO-56 §2): its local
+	// execution and its account settings are declared by the person.
+	GrokBotProduct = "grok-bot"
 )
 
 // Version is the version of the embedded Claude Code base. It must equal the
@@ -78,6 +82,10 @@ const GeminiCLIVersion = "2026-11-08"
 // Not after ReviewedOn.
 const ClineVersion = "2026-11-03"
 
+// GrokBotVersion is the version of the embedded Grok Bot base (grok-bot.json,
+// BV-248): the day its documentation was read (CTO-46 §1.4).
+const GrokBotVersion = "2026-11-14"
+
 // ReviewedOn (YYYY-MM-DD) is the date of the last weekly review of the
 // knowledge base against the Observatory (BV-148): every Tuesday the new
 // Observatory findings move into these bases and a version goes out. The
@@ -85,7 +93,7 @@ const ClineVersion = "2026-11-03"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-08"
+const ReviewedOn = "2026-11-14"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
@@ -95,7 +103,7 @@ const ReviewedOn = "2026-11-08"
 // CompositeOf sorts them.
 // The parts are sorted by product (claude-code < codex < cursor <
 // github-copilot < grok-build < hermes), as CompositeOf sorts them.
-const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
+const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBotProduct + "@" + GrokBotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -133,6 +141,9 @@ var geminiCLIJSON []byte
 
 //go:embed cline.json
 var clineJSON []byte
+
+//go:embed grok-bot.json
+var grokBotJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -402,6 +413,18 @@ func GeminiCLI() (Base, error) {
 
 // Cline returns the embedded Cline base (BV-193), with Claude Code's code
 // launcher table (shared as the others do).
+// GrokBot is the embedded Grok Bot base (BV-248).
+func GrokBot() (Base, error) {
+	b, err := decode(grokBotJSON)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != GrokBotVersion {
+		return Base{}, fmt.Errorf("knowledge base grok-bot: version %q, want %q", b.Version, GrokBotVersion)
+	}
+	return b, nil
+}
+
 func Cline() (Base, error) {
 	b, err := decode(clineJSON)
 	if err != nil {
@@ -424,7 +447,7 @@ func Cline() (Base, error) {
 // CLI and Cline join the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline, GrokBot} {
 		b, err := load()
 		if err != nil {
 			return nil, err

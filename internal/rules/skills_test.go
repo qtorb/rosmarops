@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -144,7 +145,7 @@ func skillScenario(t *testing.T, setup func(t *testing.T, repo string)) skillOut
 		}},
 		Trust: []platform.ProjectTrust{{Path: repo, Accepted: true}},
 	}
-	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cuDir, Exists: true}, platform.CredentialFileScan{}, salt, now)
+	f, _, err := graph.FromScansWithCursor(mcp, settings, platform.CursorScan{ConfigDir: cuDir, Exists: true, Declared: declared.Factory(declared.Cursor)}, platform.CredentialFileScan{}, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

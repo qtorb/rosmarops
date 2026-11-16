@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/pipeline"
@@ -135,7 +136,7 @@ func r2Cursor(t *testing.T) report.V2 {
 	settings := r2Settings()
 	g := r2Assemble(t, pipeline.Input{
 		Settings:     settings,
-		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true, Declared: declared.Factory(declared.Cursor)},
 		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
 		Instructions: platform.InstructionScan{Files: r2Instr("cursor", fcHome+"/.cursor")},
 	})
@@ -540,7 +541,7 @@ func r2CursorStripe(t *testing.T) report.V2 {
 	g := r2Assemble(t, pipeline.Input{
 		MCP:          platform.MCPScan{Servers: []platform.MCPServer{r2Stripe("cursor", fcHome+"/.cursor/mcp.json", fcHome+"/.cursor")}},
 		Settings:     settings,
-		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true, Declared: declared.Factory(declared.Cursor)},
 		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
 		Instructions: platform.InstructionScan{Files: r2Instr("cursor", fcHome+"/.cursor")},
 	})

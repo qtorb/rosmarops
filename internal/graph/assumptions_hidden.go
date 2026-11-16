@@ -25,6 +25,11 @@ var hiddenAtRest = map[string]bool{
 	AssumeConfigFileProtectionUnknown: true, // config_file_protection_scope_unknown
 	AssumeSandboxPlatformUnknown:      true, // sandbox_platform_unknown
 	AssumeAutoModeAvailable:           true, // auto_mode_available
+	// BV-248 (CTO-56): a setting declared by the person, or its least
+	// controlled case, is not read at rest; it takes the place of
+	// ide_run_mode_not_readable on Cursor's ways.
+	AssumeDeclaredByYou: true, // declared_by_you
+	AssumeNotDeclared:   true, // not_declared_least_controlled
 	// Defined in internal/rules (which imports this package, so referenced here
 	// by their stable enum string to avoid an import cycle):
 	"aux_model_permits":                 true,

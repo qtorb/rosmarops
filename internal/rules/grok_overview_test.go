@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -42,7 +43,7 @@ func grokEvaluate(t *testing.T, scan platform.GrokScan, claude []platform.Claude
 	}
 	settings := platform.ClaudeSettingsScan{Files: claude, Trust: []platform.ProjectTrust{{Path: repoWeb, Accepted: true}}}
 	mcp := platform.MCPScan{Servers: graph.GrokMCPServers(scan)}
-	f, _, err := graph.FromScansWithGrok(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, platform.HermesScan{}, platform.CodexScan{}, scan, salt, now)
+	f, _, err := graph.FromScansWithGrok(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{}, platform.HermesScan{}, platform.CodexScan{}, scan, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

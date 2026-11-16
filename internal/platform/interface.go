@@ -643,6 +643,11 @@ type Platform interface {
 	// with its read outcome.
 	ListCursor(ctx context.Context, repoRoots []string) (CursorScan, error)
 
+	// ListGrokBot reads Grok Bot at rest (BV-248, CTO-57): the existence of
+	// its app folder, and only ~/.grokbot/settings.json's local tool
+	// permission keys and each account's Auto-review on/off.
+	ListGrokBot(ctx context.Context) (GrokBotScan, error)
+
 	// ListHermes reads Hermes Agent's config.yaml and every profile's
 	// (decision 2026-10-27, agentes nuevos, N2a): its approval mode, its
 	// protected instruction files and its MCP servers.
@@ -726,6 +731,12 @@ type CursorScan struct {
 	// WorkspaceTrusted are the repo roots with .cursor/.workspace-trusted:
 	// only recorded, with no effect on the inference (K10).
 	WorkspaceTrusted []string
+
+	// Declared are the person's answers about Cursor's settings that are not
+	// readable at rest (BV-248, CTO-56 §1.2), question → option code, from
+	// state.json; nil when none. Not read from disk by the reader: the run
+	// sets them.
+	Declared map[string]string
 }
 
 // Cursor file kinds.
@@ -761,6 +772,9 @@ type CursorFile struct {
 	HasTerminalAllowlist bool
 	MCPAllowlist         []string
 	HasMCPAllowlist      bool
+	// ApprovalMode is permissions.json's approvalMode when it is allowlist,
+	// unrestricted or manual (CTO-56 §1.1); "" otherwise.
+	ApprovalMode string
 
 	// sandbox.json (https://cursor.com/docs/reference/sandbox.md).
 	SandboxType              string
@@ -1317,4 +1331,28 @@ type GeminiMCPServer struct {
 	Env        []EnvVar
 	HeaderKeys []string
 	Headers    []EnvVar
+}
+
+// GrokBotScan is what ListGrokBot read (BV-248, CTO-57). Only codes leave the
+// reader: never an account name, a machine id or any text of the file.
+type GrokBotScan struct {
+	// Present: %LOCALAPPDATA%\Programs\Grok Bot exists (nothing in it is
+	// opened).
+	Present bool
+
+	// Settings is ~/.grokbot/settings.json and its read outcome.
+	SettingsPath string
+	Status       MCPSourceStatus
+	Reason       string
+
+	// LocalPermissions are the values of every localToolPermissionByMachineId
+	// entry, localToolPermission and localToolPermissionCeiling found, at the
+	// root and in each accountScopes.<account>: "always", "ask" or "never".
+	LocalPermissions []string
+
+	// AutoReview: Accounts counts the accounts read; AutoReviewOff reports one
+	// whose accountScopes.<account>.autoReviewInstructions.isEnabled is false
+	// (absent counts as true, the app's default).
+	Accounts      int
+	AutoReviewOff bool
 }

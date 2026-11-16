@@ -41,6 +41,7 @@
             }
           },
           "letter": { "$ref": "#/$defs/exposureClass" },
+          "declared": { "type": "boolean", "description": "BV-248 (CTO-56 §5.3): Cursor and Grok Bot only; true when the agent's score rests on the person's answers. The answers never travel." },
           "factory_score": { "type": "integer", "minimum": 0, "maximum": 100 },
           "factory_letter": { "$ref": "#/$defs/exposureClass" },
           "groups": {

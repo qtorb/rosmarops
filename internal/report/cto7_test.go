@@ -8,6 +8,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
@@ -46,7 +47,7 @@ func cto7Report(t *testing.T) report.V2 {
 	v1 := report.Build("t", v1Findings, nil, 0, 0, 0, 0, nil)
 	mcp := platform.MCPScan{Sources: []platform.MCPSource{{Platform: "claude-code", ConfigPath: "/h/.claude.json", ConfigDir: "/h/.claude", Status: platform.MCPSourceRead, LoadsMCP: true}}}
 	settings := platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{{Scope: platform.MCPScopeUser, ConfigPath: "/h/.claude/settings.json", ConfigDir: "/h/.claude", Status: platform.MCPSourceRead}}}
-	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{}, platform.CredentialFileScan{}, graph.Repos{Findings: v1Findings}, salt, v2Now)
+	f, _, err := graph.FromScansWithRepos(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, platform.CredentialFileScan{}, graph.Repos{Findings: v1Findings}, salt, v2Now)
 	if err != nil {
 		t.Fatal(err)
 	}

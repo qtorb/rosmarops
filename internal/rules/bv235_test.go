@@ -17,6 +17,9 @@ func kindsEval(t *testing.T, product string, stripe bool, accepted []config.Allo
 	t.Helper()
 	seen := now.UTC().Format("2006-01-02T15:04:05Z07:00")
 	client := "agent_client_" + product
+	if product == knowledge.CursorProduct {
+		caps = append([]graph.Node{cursorMode()}, caps...)
+	}
 	nodes := []graph.Node{{ID: client, Kind: graph.KindAgent, Type: graph.AgentAIClient, Name: product, Platform: product, ConfigPath: home + "/." + product, DiscoveredAt: seen}}
 	var edges []graph.Edge
 	if stripe {
@@ -85,7 +88,7 @@ func TestBV235_MoneyKind(t *testing.T) {
 			t.Errorf("%s: money %+v, want %s from %s", c.name, k, c.state, c.source)
 		}
 	}
-	// Cursor's mode is not readable: its money state rests on an assumption.
+	// Cursor's mode is declared: its money state rests on an assumption.
 	if k := kindOf(t, kindsEval(t, knowledge.CursorProduct, true, nil), knowledge.CursorProduct, rules.KindMoney); !k.Assumed {
 		t.Errorf("cursor money: %+v, want assumed", k)
 	}

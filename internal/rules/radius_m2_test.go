@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -60,7 +61,7 @@ func hermesEvaluate(t *testing.T, cfg platform.HermesConfig, creds []entry) (gra
 	}
 	hermes := platform.HermesScan{Configs: []platform.HermesConfig{cfg}, Sources: []platform.MCPSource{source}}
 	mcp := platform.MCPScan{Sources: hermes.Sources, Servers: hermes.Servers}
-	f, _, err := graph.FromScansWithHermes(mcp, settings, platform.CursorScan{}, cf, graph.Repos{}, hermes, salt, now)
+	f, _, err := graph.FromScansWithHermes(mcp, settings, platform.CursorScan{Declared: declared.Factory(declared.Cursor)}, cf, graph.Repos{}, hermes, salt, now)
 	if err != nil {
 		t.Fatal(err)
 	}

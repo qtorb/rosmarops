@@ -42,6 +42,54 @@
       "format": "date-time",
       "description": "When the person last declined («Not now») the connect offer at the end of a double-click review (BV-158, decision A). The offer is not shown again until 7 days after it. Optional."
     },
+    "declared": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answers", "answered_at", "knowledge_version"],
+          "properties": {
+            "answers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "c1_run_mode": { "enum": ["ask_every_time", "allowlist", "auto_review", "auto_review_sandbox", "allowlist_sandbox", "run_everything", "unknown"] },
+                "c2_allowlist": { "enum": ["empty", "no_reads", "reads_files", "network", "runs_code", "unknown"] },
+                "c3_read_access": { "enum": ["workspace", "system", "unknown"] },
+                "c4_external_file_protection": { "enum": ["on", "off", "unknown"] }
+              }
+            },
+            "answered_at": { "type": "string", "format": "date-time" },
+            "knowledge_version": { "type": "string", "minLength": 1, "description": "The product's knowledge base version when answered; another version asks again." }
+          },
+          "description": "Cursor IDE: C1–C4 of CTO-56 §1.2. A question not asked is not stored; «I don't know» is unknown."
+        },
+        "grok-bot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answers", "answered_at", "knowledge_version"],
+          "properties": {
+            "answers": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "b0_uses": { "enum": ["yes", "no", "unknown"] },
+                "b1_local_execution": { "enum": ["ask_every_time", "always_allow", "never_allow", "unknown"] },
+                "b2_auto_review": { "enum": ["on", "off", "unknown"] },
+                "b3_ask_first": { "enum": ["all_four", "some", "none", "unknown"] },
+                "b4_send_tools": { "enum": ["yes", "no", "unknown"] }
+              }
+            },
+            "answered_at": { "type": "string", "format": "date-time" },
+            "knowledge_version": { "type": "string", "minLength": 1, "description": "The product's knowledge base version when answered; another version asks again." }
+          },
+          "description": "Grok Bot: B0–B4 of CTO-56 §2.2, asked once per computer (BV-248 decision 8). A question not asked is not stored; «I don't know» is unknown."
+        }
+      },
+      "description": "BV-248 (CTO-56 §5.1): the person's answers about settings RosmarOps cannot read at rest, per product, as stable codes. No free text, no machine name, nothing of the account. Optional."
+    },
     "integrity": {
       "type": "object",
       "required": ["vigil_binary_sha256", "config_sha256"],

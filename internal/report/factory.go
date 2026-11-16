@@ -17,6 +17,7 @@ func evaluate(in V2Input, g graph.Graph, fams map[string]string) rules.Result {
 		Dismissed: in.Dismissed, Accepted: in.Accepted,
 		ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
 		Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Antigravity: in.Antigravity,
+		Declared: in.Declared, GrokBot: in.GrokBot, Cursor: in.Cursor, DeclaredAt: in.DeclaredAt,
 	})
 }
 
@@ -46,6 +47,8 @@ func factoryPass(in V2Input, fams map[string]string) *factoryResult {
 	fin.Grok = pipeline.FactoryGrok(in.Grok)
 	fin.Cline = pipeline.FactoryCline(in.Cline)
 	fin.Antigravity = pipeline.FactoryAntigravity(in.Antigravity)
+	f := pipeline.Factory(pipeline.Input{Declared: in.Declared, GrokBot: in.GrokBot})
+	fin.Declared, fin.GrokBot = f.Declared, f.GrokBot
 	return passOf(fin, *in.FactoryGraph, fams)
 }
 

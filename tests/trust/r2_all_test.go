@@ -3,6 +3,7 @@ package trust_test
 import (
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/pipeline"
@@ -75,7 +76,7 @@ func r2AllInput() pipeline.Input {
 	return pipeline.Input{
 		MCP:          platform.MCPScan{Servers: servers, Sources: hermes.Sources},
 		Settings:     r2Settings(platform.ClaudeSettingsFile{Scope: platform.MCPScopeUser, ConfigPath: fcClaudeDir + "/settings.json", ConfigDir: fcClaudeDir, Status: platform.MCPSourceRead}),
-		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true},
+		Cursor:       platform.CursorScan{ConfigDir: fcHome + "/.cursor", Exists: true, Declared: declared.Factory(declared.Cursor)},
 		Hermes:       hermes,
 		Codex:        codex,
 		Grok:         grok,
@@ -93,7 +94,17 @@ func r2AllInput() pipeline.Input {
 // v2 report, with every per-agent scan set so agents_overview is complete.
 func r2AllReport(t *testing.T) (report.V2, graph.Graph) {
 	t.Helper()
+	return r2AllReportWith(t, nil)
+}
+
+// r2AllReportWith is r2AllReport with the input changed by mod (BV-248: other
+// declared answers).
+func r2AllReportWith(t *testing.T, mod func(*pipeline.Input)) (report.V2, graph.Graph) {
+	t.Helper()
 	in := r2AllInput()
+	if mod != nil {
+		mod(&in)
+	}
 	g := r2Assemble(t, in)
 	if _, err := graph.Encode(g); err != nil {
 		t.Fatalf("R2-all graph fails graph.v2 schema validation: %v", err)

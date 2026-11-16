@@ -167,6 +167,7 @@ func HTMLFindingKeys() []string {
 func CatalogKeys() []string {
 	keys := append([]string{}, staticKeys...)
 	keys = append(keys, "report.intel_stamp") // BV-100 foot stamp
+	keys = append(keys, DeclaredKeys()...)    // BV-248: the console's questions and the answers line
 	for _, r := range rules.AllRules {
 		if r == rules.RulePackageKnownMalicious {
 			// BV-100: this finding has no "what"; its texts are title/why/action.
@@ -811,6 +812,7 @@ func findingParams(f rules.Finding) map[string]string {
 	}
 	p["service_name"], p["cred_label"] = serviceName(f.Params.Service), credLabel(f)
 	p["cred_id"] = f.Params.CredID
+	p["date"] = declaredDay(nil, f.Params.DeclaredOn) // BV-248
 	// BV-111: {backend} is Hermes Agent's unrecognized terminal.backend value,
 	// read from disk, sanitized and cut to 40 characters.
 	if f.Params.Backend != "" {

@@ -18,6 +18,9 @@ func mcpAgentEval(t *testing.T, product string, caps ...graph.Node) rules.Findin
 	t.Helper()
 	seen := now.UTC().Format("2006-01-02T15:04:05Z07:00")
 	client := "agent_client_" + product
+	if product == knowledge.CursorProduct {
+		caps = append([]graph.Node{cursorMode()}, caps...)
+	}
 	nodes := []graph.Node{
 		{ID: client, Kind: graph.KindAgent, Type: graph.AgentAIClient, Name: product, Platform: product, ConfigPath: home + "/." + product, DiscoveredAt: seen},
 		{
@@ -44,6 +47,15 @@ func mcpAgentEval(t *testing.T, product string, caps ...graph.Node) rules.Findin
 		t.Fatalf("%s: no Stripe finding", product)
 	}
 	return f
+}
+
+// cursorMode is Cursor's run mode as declared with the factory answer
+// (BV-248): Auto-review with Sandbox.
+func cursorMode() graph.Node {
+	return graph.Node{
+		Type: graph.CapPermissionMode, Approval: graph.ApprovalAllow, TargetScope: "auto_review", AppliesIn: "user",
+		Basis: graph.BasisDeclared, Source: "declared:cursor/c1_run_mode=auto_review_sandbox",
+	}
 }
 
 func modeCap(mode string, factory bool) graph.Node {
@@ -80,7 +92,7 @@ func TestBV233_ClaudeCodeAutoMCP(t *testing.T) {
 func TestBV233_CursorAutoReviewMCP(t *testing.T) {
 	f := mcpAgentEval(t, knowledge.CursorProduct)
 	if f.Params.Disposition != rules.MCPApprovalAnotherModel || f.Severity != rules.SeverityRed ||
-		!slices.Contains(f.Evidence.Assumptions, graph.AssumeIDERunModeNotReadable) ||
+		!slices.Contains(f.Evidence.Assumptions, graph.AssumeDeclaredByYou) ||
 		!slices.Contains(f.Evidence.Assumptions, graph.AssumeAutoClassifierPermits) {
 		t.Errorf("no allowlist: %s %s %v", f.Params.Disposition, f.Severity, f.Evidence.Assumptions)
 	}

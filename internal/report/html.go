@@ -1237,6 +1237,7 @@ func (c htmlCtx) params(f rules.Finding) map[string]string {
 	p["cred_name"] = c.cat.Text("html.cred."+c.credKey(f)+".name", nil)
 	p["family"] = familyName(f)
 	p["projects"] = listNames(c.cat, c.projects(f))
+	p["date"] = declaredDay(&c.cat, f.Params.DeclaredOn) // BV-248
 	return p
 }
 

@@ -30,9 +30,13 @@ type cursorInference struct {
 	base      knowledge.Base
 	inForce   []Node
 	roots     []string
-	modeCap   *Node // run_mode_builtin (Auto-review), in force
-	fileRead  *Node // file_tools_read
-	fileWrite *Node // file_tools_write_workspace
+	modeCap   *Node  // the run mode in Auto-review (declared or read), in force
+	runAll    *Node  // the run mode in Run Everything (declared or read)
+	modeA     string // the mode's declared assumption ("" when read)
+	sandboxed bool   // Auto-review with Sandbox (C1), or the mode is read
+	external  *Node  // External-File Protection off (C4)
+	fileRead  *Node  // file_tools_read
+	fileWrite *Node  // file_tools_write_workspace
 
 	protected []string // sandbox_protected_paths, relative to a workspace
 	ignored   []string // default_ignore_file_tools
@@ -62,7 +66,22 @@ func newCursorInference(client Node, caps []Node, nodes map[string]Node, base kn
 		}
 		return &n
 	}
-	in.modeCap, in.fileRead, in.fileWrite = pd(kbCursorRunMode), pd(kbCursorFileRead), pd(kbCursorFileWrite)
+	in.fileRead, in.fileWrite = pd(kbCursorFileRead), pd(kbCursorFileWrite)
+	for i := range in.inForce {
+		c := in.inForce[i]
+		switch {
+		case IsCursorMode(c):
+			switch opt := CursorModeOption(c); {
+			case opt == "auto_review" || opt == "auto_review_sandbox":
+				in.modeCap, in.sandboxed = &in.inForce[i], opt == "auto_review_sandbox"
+			case opt == CursorScopeRunEverything:
+				in.runAll = &in.inForce[i]
+			}
+			in.modeA = DeclaredAssumption(c)
+		case IsCursorExternalWrite(c):
+			in.external = &in.inForce[i]
+		}
+	}
 	if e, ok := base.Entry(kbCursorProtected); ok {
 		in.protected = e.Paths
 	}
@@ -71,12 +90,18 @@ func newCursorInference(client Node, caps []Node, nodes map[string]Node, base kn
 	}
 	boundary := map[string]bool{}
 	for _, c := range in.inForce {
+		if IsCursorReadBoundary(c) {
+			boundary[c.AppliesIn] = true
+			continue
+		}
+		if _, _, _, ok := CursorListClass(c, base); ok && c.Basis == BasisDeclared {
+			in.allowlist = append(in.allowlist, c)
+			continue
+		}
 		if c.Basis != BasisConfigured {
 			continue
 		}
 		switch {
-		case c.Rule == cursorReadBoundaryRule:
-			boundary[c.AppliesIn] = true
 		case c.Rule == CursorInsecureNoneRule:
 			in.insecure[c.AppliesIn] = true
 		case strings.HasPrefix(c.Rule, cursorReadwriteRule):
@@ -118,8 +143,24 @@ func sandboxPlatformAssumptions() []string {
 	return nil
 }
 
-func cursorModeAssumptions(extra ...string) []string {
-	return cursorBase(append([]string{AssumeIDERunModeNotReadable, AssumeAutoClassifierPermits}, extra...)...)
+// modeAssumptions are the assumptions of a way through Auto-review (§2,
+// CTO-56 §1.3): the mode as declared (or its least controlled case; nothing
+// when approvalMode is read) and the classifier.
+func (in cursorInference) modeAssumptions(extra ...string) []string {
+	var a []string
+	if in.modeA != "" {
+		a = append(a, in.modeA)
+	}
+	return cursorBase(append(append(a, AssumeAutoClassifierPermits), extra...)...)
+}
+
+// declaredBase are the base assumptions of a way through a declared
+// capability c, with its declared assumption.
+func declaredBase(c Node, extra ...string) []string {
+	if a := DeclaredAssumption(c); a != "" {
+		extra = append([]string{a}, extra...)
+	}
+	return cursorBase(extra...)
 }
 
 func (in cursorInference) rootOf(file string) (string, bool) {
@@ -295,18 +336,22 @@ func (in cursorInference) readWays(files []string) []cursorWay {
 		out = append(out, cursorWay{*in.fileRead, cursorBase()})
 	}
 	if in.modeCap != nil && usedBy(func(_ string, inside bool) bool { return inside || !in.readBoundary }) {
-		out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(sandboxPlatformAssumptions()...)})
+		out = append(out, cursorWay{*in.modeCap, in.modeAssumptions(sandboxPlatformAssumptions()...)})
 	}
 	if len(files) == 0 {
 		return out
 	}
+	// Run Everything (CTO-56 §1.3): any file, no person and no sandbox.
+	if in.runAll != nil {
+		out = append(out, cursorWay{*in.runAll, declaredBase(*in.runAll)})
+	}
 	for _, c := range in.allowlist {
-		reads, _, launcher := CursorAllowlistClass(c.TargetScope, in.base)
+		reads, _, launcher, _ := CursorListClass(c, in.base)
 		switch {
 		case reads:
-			out = append(out, cursorWay{c, cursorBase()})
+			out = append(out, cursorWay{c, declaredBase(c)})
 		case launcher:
-			out = append(out, cursorWay{c, cursorBase(AssumeCodeLauncherRule)})
+			out = append(out, cursorWay{c, declaredBase(c, AssumeCodeLauncherRule)})
 		}
 	}
 	return out
@@ -352,6 +397,12 @@ func (in cursorInference) writeWays(file, resType string) []cursorWay {
 	switch {
 	case in.fileWrite != nil && resType == ResourceAgentInstructions && inside && !protected:
 		out = append(out, cursorWay{*in.fileWrite, cursorBase(AssumeConfigFileProtectionUnknown)})
+	case in.external != nil && resType == ResourceAgentInstructions && !inside:
+		// External-File Protection off (C4, CTO-56 §1.3): the file tools
+		// write outside the projects without a person.
+		out = append(out, cursorWay{*in.external, declaredBase(*in.external, AssumeConfigFileProtectionUnknown)})
+	case in.external != nil && resType == "" && !inside:
+		out = append(out, cursorWay{*in.external, declaredBase(*in.external)})
 	case in.fileWrite != nil && resType == "" && inside && !protected:
 		// A file that is no agent resource (decision 2026-10-25, cómo
 		// trabajan tus agentes, cálculo, annex 2, point 3): the file tools
@@ -366,14 +417,18 @@ func (in cursorInference) writeWays(file, resType string) []cursorWay {
 		}
 		switch {
 		case inside && (!protected || in.insecureFor(file)), !inside && readwrite:
-			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(sandboxPlatformAssumptions()...)})
+			out = append(out, cursorWay{*in.modeCap, in.modeAssumptions(sandboxPlatformAssumptions()...)})
 		case !inside:
-			out = append(out, cursorWay{*in.modeCap, cursorModeAssumptions(AssumeShellWriteUnchecked)})
+			out = append(out, cursorWay{*in.modeCap, in.modeAssumptions(AssumeShellWriteUnchecked)})
 		}
 	}
+	// Run Everything (CTO-56 §1.3): any file, no person.
+	if in.runAll != nil {
+		out = append(out, cursorWay{*in.runAll, declaredBase(*in.runAll)})
+	}
 	for _, c := range in.allowlist {
-		if _, _, launcher := CursorAllowlistClass(c.TargetScope, in.base); launcher {
-			out = append(out, cursorWay{c, cursorBase(AssumeCodeLauncherRule, AssumeShellWriteUnchecked)})
+		if _, _, launcher, _ := CursorListClass(c, in.base); launcher {
+			out = append(out, cursorWay{c, declaredBase(c, AssumeCodeLauncherRule, AssumeShellWriteUnchecked)})
 		}
 	}
 	return out
