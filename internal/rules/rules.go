@@ -51,7 +51,7 @@ var AllRules = []string{
 	RuleForeignAgentConfigWritable, RuleForeignAgentInstructionsWritable,
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
 	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
-	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed,
+	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed, RuleActsWithoutYou,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -124,12 +124,14 @@ var AllAssumptions = []string{
 	AssumeDefaultModeDependsOnVersion,
 	graph.AssumeDeclaredByYou, graph.AssumeNotDeclared, graph.AssumeMeasuredLocalSetting,
 	graph.AssumeStartupFileRunsLater, AssumeAutoWithoutSandboxUnknown,
+	AssumeLaunchStateUnknown,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
 // cannot confirm at rest: one is enough for confidence medium (§1, E4). The
 // others (base and partial-way) leave confidence high.
 var premiseAssumptions = map[string]bool{
+	AssumeLaunchStateUnknown: true, // BV-251: whether the wake source runs is not seen
 	graph.AssumeAutoClassifierPermits: true,
 	graph.AssumeAutoModeAvailable:     true,
 	graph.AssumeUIModeChoiceUnknown:   true,
@@ -512,7 +514,26 @@ type agentView struct {
 }
 
 // Evaluate applies the rules to the graph.
+//
+// BV-251 (CTO-62 §3): an agent that acts without you holds what its own
+// environment loads at start — the credentials under its configuration folder
+// and those its MCP servers receive — as if it had read them, even when its
+// reads ask. Who acts without you comes from the overview, so when such a
+// credential is not already reached the rules run a second time with it.
 func Evaluate(in Input) Result {
+	res := evaluate(in, nil)
+	if env := envCredentials(in, res); len(env) > 0 {
+		res = evaluate(in, env)
+	}
+	finishAlwaysOn(in, &res)
+	return res
+}
+
+// envReachSource marks the in-memory reaches of a credential an agent's own
+// environment loads (BV-251, CTO-62 §3); never in the graph.
+const envReachSource = "agent_environment"
+
+func evaluate(in Input, env map[[2]string]bool) Result {
 	g := in.Graph
 	nodes := make(map[string]graph.Node, len(g.Nodes))
 	for _, n := range g.Nodes {
@@ -572,6 +593,17 @@ func Evaluate(in Input) Result {
 			}
 			writes[key] = append(writes[key], e)
 			writeRule[key] = rule
+		}
+	}
+	// BV-251 (CTO-62 §3): what the environment of an agent that acts without
+	// you loads counts as reached by it.
+	for k := range env {
+		p := pair{k[0], k[1]}
+		if _, ok := reaches[p]; !ok {
+			reaches[p] = []graph.Edge{{
+				ID: "edge_reaches_env_" + graph.KeyHash(p.agent, p.cred), Type: graph.EdgeReaches,
+				From: p.agent, To: p.cred, Source: envReachSource, Certainty: graph.CertaintyInferred,
+			}}
 		}
 	}
 
@@ -1531,6 +1563,9 @@ func readScopeOutsideProject(c graph.Node) bool {
 // scope is outside the project (M2), without
 // blockReadsOutsideWorkingDirectories in force (§1 b).
 func (v *agentView) edgeWay(e graph.Edge, nodes map[string]graph.Node, base knowledge.Base) way {
+	if e.Source == envReachSource { // BV-251: loaded by its own environment
+		return way{id: e.ID, cap: v.node.ID, target: e.To, code: envReachSource, radius: RadiusSameProject}
+	}
 	capID := e.Via
 	if capID == "" && len(e.DerivedFrom) > 1 {
 		capID = e.DerivedFrom[1] // writes_config_of: client, capability, resource

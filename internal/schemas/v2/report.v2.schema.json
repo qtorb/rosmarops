@@ -350,7 +350,8 @@
             "mcp_external_action",
             "n8n_mcp_bridge",
             "n8n_key_with_data",
-            "computer_use_app_allowed"
+            "computer_use_app_allowed",
+            "acts_without_you"
           ]
         },
         "rule_version": {
@@ -1813,6 +1814,56 @@
           "items": {
             "$ref": "#/definitions/riskKindCell"
           }
+        },
+        "orders": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "enum": [
+                "only_you",
+                "listed",
+                "anyone_admitted",
+                "unknown",
+                "not_read"
+              ]
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "BV-251 (CTO-53 review point 2, signed 15-11): «Who can give it orders», the agent's own line. only_you: no inbound channel; listed: a list of count people; anyone_admitted: anyone admitted to the chat; unknown: «—» (a launch flag, the cloud, or who is admitted is not seen); not_read: «—», no documented place to read it. Evaluated agents only; optional."
+        },
+        "memory": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "files",
+              "bytes"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "files": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          "description": "BV-251 (CTO-62 §4, decision 2): the agent's memory folders, from their metadata only (RosmarOps never opens them). Optional."
         }
       },
       "description": "One detected agent (§6): an ai_client and an extension of one product are one agent."

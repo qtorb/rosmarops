@@ -157,7 +157,7 @@ func (e Edge) MarshalJSON() ([]byte, error) {
 			AppliesIn     string `json:"applies_in,omitempty"`
 			ApprovalState string `json:"approval_state,omitempty"`
 		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, e.AppliesIn, e.ApprovalState})
-	case EdgeReceives, EdgeReadsEnv, EdgeSendsTo:
+	case EdgeReceives, EdgeReadsEnv, EdgeSendsTo, EdgeWakes:
 		return json.Marshal(struct {
 			ID        string `json:"id"`
 			Type      string `json:"type"`

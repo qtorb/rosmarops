@@ -303,6 +303,12 @@ func weightIn(version int, f rules.Finding) float64 {
 		}
 		return 6
 	}
+	// BV-251 (CTO-62 §2.1, option A): acts_without_you weighs by who can wake
+	// the agent. Its findings exist from this release on, so no earlier
+	// report has one to re-weigh: the index version does not change.
+	if f.Rule == rules.RuleActsWithoutYou {
+		return rules.WakeWeight(f)
+	}
 	if f.Rule == rules.RuleMCPExternalAction {
 		if version < 4 {
 			return 0
