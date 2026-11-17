@@ -2435,9 +2435,10 @@
         "repository",
         "computer_use",
         "n8n",
-        "package"
+        "package",
+        "always_on"
       ],
-      "description": "R2 groups: keys = cred_read_and_send + cred_readable; agent_config = foreign_agent_config_writable + own_config_writable; agent_instructions = foreign_agent_instructions_writable + own_instructions_writable; external_service = mcp_external_action; repository = cred_in_git + project_hook_runs_repo_script; computer_use = computer_use_app_allowed; n8n = n8n_mcp_bridge + n8n_key_with_data; package = package_known_malicious."
+      "description": "R2 groups: keys = cred_read_and_send + cred_readable; agent_config = foreign_agent_config_writable + own_config_writable; agent_instructions = foreign_agent_instructions_writable + own_instructions_writable; external_service = mcp_external_action; repository = cred_in_git + project_hook_runs_repo_script; computer_use = computer_use_app_allowed; n8n = n8n_mcp_bridge + n8n_key_with_data; package = package_known_malicious; always_on = acts_without_you (BV-251, optional)."
     },
     "exposureClass": {
       "type": "object",

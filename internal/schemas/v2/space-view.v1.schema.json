@@ -52,7 +52,7 @@
               "additionalProperties": false,
               "required": ["group", "without"],
               "properties": {
-                "group": { "enum": ["keys", "agent_config", "agent_instructions", "external_service", "repository", "computer_use", "n8n", "package"] },
+                "group": { "enum": ["keys", "agent_config", "agent_instructions", "external_service", "repository", "computer_use", "n8n", "package", "always_on"] },
                 "without": { "type": "integer", "minimum": 0, "maximum": 100 }
               }
             }

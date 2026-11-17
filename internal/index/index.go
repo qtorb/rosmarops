@@ -138,10 +138,11 @@ const (
 	GroupComputerUse       = "computer_use"
 	GroupN8N               = "n8n"
 	GroupPackage           = "package"
+	GroupAlwaysOn          = "always_on" // BV-251 (Albert 17-11): acts_without_you
 )
 
 // GroupOrder is the order of the groups in agent_index.groups.
-var GroupOrder = []string{GroupKeys, GroupAgentConfig, GroupAgentInstructions, GroupExternalService, GroupRepository, GroupComputerUse, GroupN8N, GroupPackage}
+var GroupOrder = []string{GroupKeys, GroupAgentConfig, GroupAgentInstructions, GroupExternalService, GroupRepository, GroupComputerUse, GroupN8N, GroupPackage, GroupAlwaysOn}
 
 // GroupOf is the group of a rule; "" for a rule in none.
 func GroupOf(rule string) string {
@@ -162,6 +163,8 @@ func GroupOf(rule string) string {
 		return GroupN8N
 	case rules.RulePackageKnownMalicious:
 		return GroupPackage
+	case rules.RuleActsWithoutYou:
+		return GroupAlwaysOn
 	}
 	return ""
 }

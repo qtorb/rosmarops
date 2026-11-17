@@ -714,6 +714,7 @@
   "unknown.windows_sandbox_unknown": "Tus ajustes de {agent} no dicen qué sandbox de Windows usar, así que {agent} elige uno al arrancar. Supone el que menos aísla: no impide lecturas y aísla peor la red.",
   "unknown.startup_file_runs_later": "Puede escribir en cualquier parte de tu ordenador sin preguntarte, también en los ficheros que se ejecutan al abrir la terminal o al iniciar sesión. Lo que deje ahí correrá después, fuera de su control, y podría leer tus claves.",
   "unknown.auto_without_sandbox_unknown": "Si tu sistema no tiene el sandbox de Antigravity CLI, su documentación no dice qué hace el modo «Auto».",
+  "unknown.launch_state_unknown": "Esta fuente solo funciona mientras está en marcha, o si el agente se arranca con una opción; RosmarOps ve el ajuste, no si está encendida ahora.",
   "unknown.sandbox_autoallow_default_by_version": "Claude Code 2.1.325 y posteriores preguntan antes de las órdenes del sandbox cuando este ajuste no está escrito; RosmarOps no puede leer tu versión y supone que no preguntan.",
   "unknown.wsl_windows_drive_readable": "En WSL, tu disco de Windows está en /mnt: este agente lo puede leer, y RosmarOps para Linux no revisa lo que hay ahí.",
   "session.first.title": "RosmarOps · este proyecto trae:",
