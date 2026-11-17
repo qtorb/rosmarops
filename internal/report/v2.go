@@ -341,6 +341,10 @@ type LegacyGroup struct {
 type V2Input struct {
 	// Environment is hostenv.Detect's result (BV-249 §5); nil with no signal.
 	Environment *hostenv.Env
+	// HostOS is the system this review runs on (runtime.GOOS); on "windows"
+	// the coverage notes carry coverage.windows.wsl_containers_not_read
+	// (BV-252). Empty: no system-dependent note.
+	HostOS string
 
 	// Graph is the graph written this run, nil when none could be built;
 	// GraphSHA256 the SHA-256 of its file.
@@ -572,7 +576,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 			SourcesRead:       len(g.Coverage.SourcesRead),
 			SourcesFailed:     g.Coverage.SourcesFailed,
 			AgentsUnsupported: g.Coverage.AgentsUnsupported,
-			Notes:             coverageNotes(g),
+			Notes:             coverageNotes(g, in.HostOS),
 		}
 		v2Status = reduceV2(v.Findings, g.Coverage.SourcesFailed)
 	} else {
@@ -747,12 +751,21 @@ func applyMemory(v *V2, in V2Input) {
 // servers, and RosmarOps lists both without guessing which the app uses.
 const CoverageNoteClaudeDesktopTwoConfigs = "coverage.claude_desktop_two_configs"
 
+// CoverageNoteWSLContainersNotRead is the fixed coverage line of the Windows
+// review (BV-252, CTO-63 §4.3): RosmarOps for Windows does not look inside WSL
+// or containers. It reads nothing new.
+const CoverageNoteWSLContainersNotRead = "coverage.windows.wsl_containers_not_read"
+
 // coverageNotes derives the informational coverage notes from the graph
-// (BV-193 D3). Today that is the one Claude Desktop two-configurations note.
-func coverageNotes(g graph.Graph) []string {
+// (BV-193 D3) and the system: the Claude Desktop two-configurations note, and
+// on Windows always the WSL and containers line (BV-252).
+func coverageNotes(g graph.Graph, hostOS string) []string {
 	var notes []string
 	if claudeDesktopTwoConfigs(g) {
 		notes = append(notes, CoverageNoteClaudeDesktopTwoConfigs)
+	}
+	if hostOS == "windows" {
+		notes = append(notes, CoverageNoteWSLContainersNotRead)
 	}
 	return notes
 }
@@ -1208,6 +1221,13 @@ func ConsoleSummary(v V2, cat catalog.Catalog, path string) string {
 		"red":    strconv.Itoa(red), "yellow": strconv.Itoa(yellow),
 		"legacy_red": strconv.Itoa(v.Legacy.Counts.Red), "legacy_yellow": strconv.Itoa(v.Legacy.Counts.Yellow),
 	})
+	// BV-252: the Windows review's fixed WSL and containers line, in the
+	// console too.
+	for _, n := range v.Coverage.Notes {
+		if n == CoverageNoteWSLContainersNotRead {
+			summary += "\n" + cat.Text(n, nil)
+		}
+	}
 	return summary + "\n" + cat.Text("console.report", map[string]string{"path": path}) + "\n"
 }
 
