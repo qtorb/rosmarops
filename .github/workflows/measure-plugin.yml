@@ -41,6 +41,8 @@ jobs:
         shell: bash
     env:
       CLAUDE_VERSION: "2.1.326"
+      # macOS has no timeout(1): perl's alarm does the same.
+      TMO: 'tmo() { if command -v timeout >/dev/null; then timeout "$@"; else perl -e "alarm shift; exec @ARGV" "$@"; fi; }'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,6 +79,7 @@ jobs:
       - name: C.2 plugin hook without rosmarops on the PATH
         run: |
           set +e
+          eval "$TMO"
           unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
           H="$RUNNER_TEMP/c2home"; P="$H/project"; mkdir -p "$P"
           export HOME="$H" USERPROFILE="$H"
@@ -86,7 +89,7 @@ jobs:
             command -v rosmarops; echo "exit=$?"
             echo "## claude -p (stream-json, hook events)"
             cd "$P"
-            timeout 90 claude --plugin-dir "$plugin" -p "hola" --output-format stream-json \
+            tmo 90 claude --plugin-dir "$plugin" -p "hola" --output-format stream-json \
               --verbose --include-hook-events --debug-file "$H/debug.log" < /dev/null > out.json 2> err.txt
             echo "exit=$?"
             echo "### stdout"; cat out.json
@@ -98,9 +101,9 @@ jobs:
             printf '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$P" > "$H/.claude.json"
             cd "$P"
             if [ "$RUNNER_OS" = Linux ]; then
-              timeout 40 script -qfec "claude --plugin-dir $plugin" "$H/tui.txt" < /dev/null
+              tmo 40 script -qfec "claude --plugin-dir $plugin" "$H/tui.txt" < /dev/null
             else
-              ( timeout 40 script -q "$H/tui.txt" claude --plugin-dir "$plugin" < /dev/null ) || true
+              ( tmo 40 script -q "$H/tui.txt" claude --plugin-dir "$plugin" < /dev/null ) || true
             fi
             {
               echo "## interactive screen (ANSI removed)"
@@ -113,11 +116,17 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           set +e
+          eval "$TMO"
           unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
           if [ "$RUNNER_OS" = Linux ]; then
             sudo apt-get install -y bubblewrap socat > /dev/null
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           fi
+          # The probe skill runs a script that lives in the project, pre-approved
+          # with allowed-tools, so Claude Code's permission check sees only
+          # «sh ./c3-probe.sh». The script tries what the sandbox of P2 blocks:
+          # a write in the home folder, a read of ~/.ssh, and a read of the
+          # reports folder (~/.rosmarops/reports), which /rosmarops needs.
           probe="$RUNNER_TEMP/probe"
           mkdir -p "$probe/.claude-plugin" "$probe/skills/probe"
           echo '{"name":"probe","version":"0.0.1"}' > "$probe/.claude-plugin/plugin.json"
@@ -125,13 +134,24 @@ jobs:
           ---
           name: probe
           description: Sandbox probe for BV-253 C.3.
+          allowed-tools: Bash(sh ./c3-probe.sh)
           ---
-          Result: !`touch "$HOME/c3-outside-write" && echo WROTE-HOME; cat "$HOME/.ssh/c3-secret" && echo READ-SSH; echo RAN`
+          Result: !`sh ./c3-probe.sh`
           MD
           for mode in p2 control; do
             H="$RUNNER_TEMP/c3-$mode"; P="$H/project"
-            mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh"
+            mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh" "$H/.rosmarops/reports"
             echo secret-c3 > "$H/.ssh/c3-secret"
+            echo report-c3 > "$H/.rosmarops/reports/c3-report.txt"
+            cat > "$P/c3-probe.sh" <<'SH'
+          {
+            echo RAN
+            touch "$HOME/c3-outside-write" && echo WROTE-HOME
+            cat "$HOME/.ssh/c3-secret" > /dev/null && echo READ-SSH
+            cat "$HOME/.rosmarops/reports/c3-report.txt" > /dev/null && echo READ-REPORTS
+          } > ./c3-result.txt 2>&1
+          cat ./c3-result.txt
+          SH
             if [ $mode = p2 ]; then
               go run ./tests/manual/p2-template > "$H/.claude/settings.json"
               go run ./tests/manual/p2-template -project > "$P/.claude/settings.json"
@@ -139,10 +159,11 @@ jobs:
             (
               export HOME="$H"; cd "$P"
               echo "## $mode"
-              timeout 90 claude --plugin-dir "$probe" -p "/probe:probe" --output-format stream-json \
+              tmo 90 claude --plugin-dir "$probe" -p "/probe:probe" --output-format stream-json \
                 --verbose --debug-file "$H/debug.log" < /dev/null > out.json 2> err.txt
               echo "exit=$?"
               echo "### file written in home: $( [ -e "$H/c3-outside-write" ] && echo YES || echo NO )"
+              echo "### c3-result.txt (written by the script in the project)"; cat c3-result.txt 2>&1
               echo "### stdout"; cat out.json
               echo "### stderr"; cat err.txt
               echo "### debug log, shell/sandbox/skill lines"; grep -i -E "sandbox|skill|probe|shell|bwrap|seatbelt" "$H/debug.log" | head -60
