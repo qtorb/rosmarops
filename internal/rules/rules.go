@@ -131,7 +131,7 @@ var AllAssumptions = []string{
 // cannot confirm at rest: one is enough for confidence medium (§1, E4). The
 // others (base and partial-way) leave confidence high.
 var premiseAssumptions = map[string]bool{
-	AssumeLaunchStateUnknown: true, // BV-251: whether the wake source runs is not seen
+	AssumeLaunchStateUnknown:          true, // BV-251: whether the wake source runs is not seen
 	graph.AssumeAutoClassifierPermits: true,
 	graph.AssumeAutoModeAvailable:     true,
 	graph.AssumeUIModeChoiceUnknown:   true,

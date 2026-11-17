@@ -90,8 +90,10 @@ func strongestWake(g graph.Graph, agent string) (wake, bool) {
 		switch r.Type {
 		case graph.ResourceInboundChannel:
 			chat = append(chat, r)
-			w := wake{platform: r.Platform, source: r, launchFlag: r.Status == platform.ChannelLaunchFlagRequired,
-				potential: r.Status != platform.ChannelEnabledInConfig}
+			w := wake{
+				platform: r.Platform, source: r, launchFlag: r.Status == platform.ChannelLaunchFlagRequired,
+				potential: r.Status != platform.ChannelEnabledInConfig,
+			}
 			switch {
 			case r.Approvers == platform.ApproversAnyoneAdmitted || (r.AllowAll != nil && *r.AllowAll):
 				w.kind, w.level, w.weight = WakeAnyone, 3, 12
