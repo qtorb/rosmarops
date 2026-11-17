@@ -124,6 +124,8 @@ var builtinPrefilters = map[string]prefilter{
 	"stripe_restricted_key":          {"rk_live_", false},
 	"slack_bot_token":                {"xoxb-", false},
 	"slack_webhook_url":              {"hooks.slack.com/services/", false},
+	"telegram_bot_token":             {":AA", false},
+	"discord_bot_token":              {".", false}, // its only literal: the part separator
 	"jwt_token":                      {"eyJ", false},
 	"supabase_secret_key":            {"sb_secret_", false},
 	"supabase_publishable_key":       {"sb_publishable_", false},
@@ -275,6 +277,22 @@ var builtinSpecs = []struct {
 		"slack_webhook_url",
 		"Slack incoming webhook URL",
 		`hooks\.slack\.com/services/[A-Za-z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]+`,
+	},
+	{
+		// BV-251 (CTO-53 §1.1 option C, signed 15-11): a Telegram bot token,
+		// <bot id>:<35 characters starting with AA> (core.telegram.org/bots/api,
+		// «Authorizing your bot»). Hermes Agent turns its Telegram platform on
+		// from TELEGRAM_BOT_TOKEN in ~/.hermes/.env.
+		"telegram_bot_token",
+		"Telegram bot token",
+		`\b[0-9]{8,10}:AA[A-Za-z0-9_-]{33}\b`,
+	},
+	{
+		// BV-251 (CTO-53 §1.1 option C): a Discord bot token, three base64url
+		// parts: the bot id, a timestamp and the HMAC.
+		"discord_bot_token",
+		"Discord bot token",
+		`\b[MNO][A-Za-z0-9_-]{23,25}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,38}\b`,
 	},
 
 	// ---- JWT / Supabase ------------------------------------------------------

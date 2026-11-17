@@ -730,7 +730,8 @@ func (in inference) edge(typ, to string, v via, assumptions, extra []string) Edg
 }
 
 func isAgentResource(t string) bool {
-	return t == ResourceAgentConfig || t == ResourceAgentInstructions || t == ResourceAgentExecutable
+	return t == ResourceAgentConfig || t == ResourceAgentInstructions || t == ResourceAgentExecutable ||
+		t == ResourceAgentMemory // BV-251: who can write an agent's memory counts as for its instructions
 }
 
 // resourceFile is the file of a resource path: the part before "#". A

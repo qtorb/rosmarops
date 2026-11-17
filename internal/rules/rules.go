@@ -985,6 +985,11 @@ func computerUseFinding(in Input, agent graph.Node, sev string, apps, caps []str
 // agent to resource r (§1 c, d): another agent's config or executable, its
 // instructions, or the agent's own.
 func writeRuleOf(agent string, r graph.Node) (rule, key string) {
+	// BV-251 (decision 2): an agent's memory counts as its instructions, in
+	// the same finding (same key), so it adds a location, not a finding.
+	if r.Type == graph.ResourceAgentMemory {
+		r.Type = graph.ResourceAgentInstructions
+	}
 	config := r.Type == graph.ResourceAgentConfig || r.Type == graph.ResourceAgentExecutable
 	switch {
 	case r.Configures != agent && config:

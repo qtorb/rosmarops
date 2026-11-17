@@ -56,6 +56,8 @@ var credentialKinds = map[string]credentialKind{
 	"stripe_restricted_key":          {CredentialAPIKey, "stripe"},
 	"slack_bot_token":                {CredentialOAuthToken, "slack"},
 	"slack_webhook_url":              {CredentialWebhookSecret, "slack"},
+	"telegram_bot_token":             {CredentialAPIKey, "telegram"},
+	"discord_bot_token":              {CredentialAPIKey, "discord"},
 	"jwt_token":                      {CredentialGenericSecret, ServiceUnknown},
 	"supabase_secret_key":            {CredentialAPIKey, "supabase"},
 	"supabase_publishable_key":       {CredentialAPIKey, "supabase"},
