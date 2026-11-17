@@ -138,10 +138,11 @@ const (
 	GroupComputerUse       = "computer_use"
 	GroupN8N               = "n8n"
 	GroupPackage           = "package"
+	GroupAlwaysOn          = "always_on" // BV-251 (Albert 17-11): acts_without_you
 )
 
 // GroupOrder is the order of the groups in agent_index.groups.
-var GroupOrder = []string{GroupKeys, GroupAgentConfig, GroupAgentInstructions, GroupExternalService, GroupRepository, GroupComputerUse, GroupN8N, GroupPackage}
+var GroupOrder = []string{GroupKeys, GroupAgentConfig, GroupAgentInstructions, GroupExternalService, GroupRepository, GroupComputerUse, GroupN8N, GroupPackage, GroupAlwaysOn}
 
 // GroupOf is the group of a rule; "" for a rule in none.
 func GroupOf(rule string) string {
@@ -162,6 +163,8 @@ func GroupOf(rule string) string {
 		return GroupN8N
 	case rules.RulePackageKnownMalicious:
 		return GroupPackage
+	case rules.RuleActsWithoutYou:
+		return GroupAlwaysOn
 	}
 	return ""
 }
@@ -302,6 +305,12 @@ func weightIn(version int, f rules.Finding) float64 {
 			return 15
 		}
 		return 6
+	}
+	// BV-251 (CTO-62 §2.1, option A): acts_without_you weighs by who can wake
+	// the agent. Its findings exist from this release on, so no earlier
+	// report has one to re-weigh: the index version does not change.
+	if f.Rule == rules.RuleActsWithoutYou {
+		return rules.WakeWeight(f)
 	}
 	if f.Rule == rules.RuleMCPExternalAction {
 		if version < 4 {

@@ -52,10 +52,20 @@
               "additionalProperties": false,
               "required": ["group", "without"],
               "properties": {
-                "group": { "enum": ["keys", "agent_config", "agent_instructions", "external_service", "repository", "computer_use", "n8n", "package"] },
+                "group": { "enum": ["keys", "agent_config", "agent_instructions", "external_service", "repository", "computer_use", "n8n", "package", "always_on"] },
                 "without": { "type": "integer", "minimum": 0, "maximum": 100 }
               }
             }
+          },
+          "orders": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value"],
+            "properties": {
+              "value": { "enum": ["only_you", "listed", "anyone_admitted", "unknown", "not_read"] },
+              "count": { "type": "integer", "minimum": 0 }
+            },
+            "description": "BV-251 (CTO-53 review point 2, signed 15-11): «Who can give it orders». Optional."
           },
           "kinds": {
             "type": "array",

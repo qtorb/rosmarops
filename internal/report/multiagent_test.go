@@ -166,7 +166,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // for «profile» and without «protects» (checked: only the signed texts), the
 // four-card grid's CSS (checked: the two CSS lines), «Try it just this
 // once»'s CSS and list script (checked: one CSS line, one script line) and
-// the test-environment tag's style rule (checked: the one added CSS line);
+// the test-environment tag's style rule (checked: the one added CSS line),
+// at BV-251 with the agent's «Who can give it orders» line in the agents
+// window (checked: the one added block);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

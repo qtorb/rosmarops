@@ -334,7 +334,8 @@ func svNone(c htmlCtx) string {
 func isBespokeFixRule(rule string) bool {
 	switch rule {
 	case rules.RulePackageKnownMalicious, rules.RuleProjectHookRunsRepoScript,
-		rules.RuleMCPExternalAction, rules.RuleN8NMCPBridge, rules.RuleN8NKeyWithData:
+		rules.RuleMCPExternalAction, rules.RuleN8NMCPBridge, rules.RuleN8NKeyWithData,
+		rules.RuleActsWithoutYou:
 		return true
 	}
 	return false

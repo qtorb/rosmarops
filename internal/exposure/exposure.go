@@ -114,7 +114,7 @@ func Compute(in Inputs) Agent {
 	a.Axes[AxisAutonomy] = autonomy(in.Single)
 	a.Axes[AxisReach] = reach(in.Single)
 	a.Axes[AxisContagion] = contagion(in.All, in.AllGraph, in.ClientID)
-	a.Axes[AxisDelegation] = delegation(in.All)
+	a.Axes[AxisDelegation] = delegation(in.All, in.AllGraph, in.ClientID)
 	a.Axes[AxisOpacity] = opacity(append(append([]string{}, in.SingleAssumptions...), cellAssumptions(in.Single)...))
 	a.Axes[AxisComplexity] = complexity(in.Product)
 	a.Class, a.ClassStatus, a.MissingAxes, a.F = classify(a.Axes)
@@ -227,7 +227,7 @@ func reach(a rules.OverviewAgent) Axis {
 
 // --- axis 4: delegation, from R2-todos ---
 
-func delegation(a rules.OverviewAgent) Axis {
+func delegation(a rules.OverviewAgent, g graph.Graph, clientID string) Axis {
 	modelIn := func(row string) bool {
 		c, ok := cell(a, row)
 		if !ok {
@@ -255,6 +255,13 @@ func delegation(a rules.OverviewAgent) Axis {
 	add(rules.RowChangesOtherAgents, 2)
 	add(rules.RowRunsCommands, 3)
 	add(rules.RowSendsOut, 3)
+	// BV-251 (CTO-62 §2.2): what can wake the agent without the person.
+	if n, input := rules.WakeDelegation(g, clientID); n > 0 {
+		if n > level {
+			level = n
+		}
+		inputs = append(inputs, input)
+	}
 	sort.Strings(inputs)
 	return lvl(level, inputs...)
 }

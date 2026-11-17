@@ -316,6 +316,12 @@ type ClaudeSettingsFile struct {
 	AllowManagedPermissionRulesOnly bool
 	ManagedSourcesBehavior          string
 
+	// ChannelsEnabled and AllowedChannelPlugins are the managed settings'
+	// channel policy (BV-251, CTO-53 §1.2): managed files only; nil when
+	// absent.
+	ChannelsEnabled       *bool
+	AllowedChannelPlugins []string
+
 	// HasPolicyKey reports that the document sets a policy key: any key other
 	// than managedSourcesBehavior and wslInheritsWindowsSettings, to a value
 	// other than null (managed-settings, "When an admin document counts as
@@ -656,6 +662,14 @@ type Platform interface {
 	// permission keys and each account's Auto-review on/off.
 	ListGrokBot(ctx context.Context) (GrokBotScan, error)
 
+	// ListAlwaysOn reads, at rest, what can wake an agent without the person
+	// and the memory it writes (BV-251, CTO-62 §1, §4): Claude Code's channel
+	// folders and their access.json counts, its scheduled tasks; Cline's
+	// connector state files and its schedules folder; Hermes Agent's cron
+	// jobs.json fields; and the memory folders' metadata, never their content.
+	// Hermes Agent's gateway and approvers come with ListHermes.
+	ListAlwaysOn(ctx context.Context, repoRoots []string) (AlwaysOnScan, error)
+
 	// ListHermes reads Hermes Agent's config.yaml and every profile's
 	// (decision 2026-10-27, agentes nuevos, N2a): its approval mode, its
 	// protected instruction files and its MCP servers.
@@ -841,6 +855,25 @@ type HermesConfig struct {
 	// isolated backend; any other value is an unrecognized plugin, treated as
 	// local with a note. Empty when the file was not read.
 	TerminalBackend string
+
+	// BV-251 (CTO-53 §1.1, §3): gateway.platforms.<name>.enabled, by
+	// platform name, sorted; only the name and enabled are read, never a
+	// token, a key or a channel. GatewayUnread: the gateway section is
+	// outside the YAML subset, so what it turns on is not known.
+	GatewayPlatforms []HermesPlatform
+	GatewayUnread    bool
+	// Approvers is approvals.approvers: Set when present (absent is
+	// Hermes's default ["*"], any admitted member); Anyone when it holds
+	// "*"; Count the entries (never who).
+	ApproversSet, ApproversAnyone bool
+	ApproversCount                int
+}
+
+// HermesPlatform is one gateway.platforms entry: its name and whether
+// config.yaml enables it (EnabledSet: the key is present).
+type HermesPlatform struct {
+	Name                string
+	Enabled, EnabledSet bool
 }
 
 // CodexScan is what ListCodex read of OpenAI Codex's TOML config layers
@@ -1363,4 +1396,80 @@ type GrokBotScan struct {
 	// (absent counts as true, the app's default).
 	Accounts      int
 	AutoReviewOff bool
+}
+
+// AlwaysOnScan is what ListAlwaysOn read (BV-251, CTO-62 §1, §4). Only names,
+// counts, sizes and codes leave the reader: never a message, a prompt, a
+// script, a user identifier, a token or any content of a memory file.
+type AlwaysOnScan struct {
+	Channels  []InboundChannel
+	Schedules []AgentSchedule
+	Memory    []AgentMemory
+	// Failed are the files considered that exist and could not be read.
+	Failed []SourceFailure
+}
+
+// Inbound channel statuses and origins (graph.v2 inbound_channel).
+const (
+	ChannelConfigured         = "configured"
+	ChannelEnabledInConfig    = "enabled_in_config"
+	ChannelLaunchFlagRequired = "launch_flag_required"
+	ChannelUnknown            = "unknown"
+
+	ChannelOriginConfig  = "config"
+	ChannelOriginEnvName = "env_name"
+
+	ApproversAnyoneAdmitted = "anyone_admitted"
+	ApproversListed         = "listed"
+	ApproversHostOnly       = "host_only"
+	ApproversUnknown        = "unknown"
+)
+
+// InboundChannel is one source that can give an agent orders from outside
+// (CTO-53 §1, §3): a chat platform, an API server or webhooks.
+type InboundChannel struct {
+	Product   string // agentdirs product code of the agent it wakes
+	ConfigDir string // that agent's configuration folder
+	Path      string // the folder or file where it was seen
+	Platform  string // telegram, discord, slack, api_server, webhook…
+	Status    string
+	Origin    string
+	// LaunchFlag is the flag that turns it on, when Status is
+	// launch_flag_required (Claude Code: --channels).
+	LaunchFlag string
+	// Approvers is who can give orders through it; AllowAll and
+	// AllowlistCount when known (a count, never who).
+	Approvers      string
+	AllowAll       *bool
+	AllowlistCount *int
+}
+
+// AgentSchedule is an agent's own scheduled tasks (CTO-53 §2). Tasks and
+// Active are nil when the tasks exist but are not read (Cline's
+// schedules.db, signed: not read).
+type AgentSchedule struct {
+	Product      string
+	ConfigDir    string
+	Path         string
+	Tasks        *int
+	Active       *int
+	Destinations []string
+}
+
+// AgentMemory is a memory folder or file an agent writes and loads (CTO-62
+// §4, BV-251 decision 2): its path, how many files and their total size, from
+// their metadata only. RosmarOps never opens them.
+type AgentMemory struct {
+	Product      string
+	ConfigDir    string
+	Path         string
+	Files        int
+	Bytes        int64
+	InRepository bool
+}
+
+// SourceFailure is a file that exists and could not be read.
+type SourceFailure struct {
+	Path   string
+	Reason string
 }

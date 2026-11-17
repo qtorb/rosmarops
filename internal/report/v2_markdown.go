@@ -159,6 +159,7 @@ func HTMLFindingKeys() []string {
 		nk + ".title", nk + ".what", nk + ".step1",
 		cu + ".red", cu + ".yellow",
 	}
+	keys = append(keys, ActsKeys()...)
 	return append(keys, mcpExternalKeys()...)
 }
 
@@ -201,6 +202,11 @@ func CatalogKeys() []string {
 		if r == rules.RuleComputerUseAppAllowed {
 			// BV-193: one signed sentence per colour, no generic what/why.
 			keys = append(keys, "finding."+r+".red", "finding."+r+".yellow")
+			continue
+		}
+		if r == rules.RuleActsWithoutYou {
+			// BV-251: the title and its detail lines.
+			keys = append(keys, ActsKeys()...)
 			continue
 		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
@@ -449,6 +455,20 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("%s\n\n", strings.Join(meta, " · "))
 			w("#### %s\n\n%s\n\n", t("finding.part.why", p), t("finding."+f.Rule+".what", p))
 			w("#### %s\n\n%s", t("finding.part.todo", p), n8nMarkdownSteps(t, f, p))
+			continue
+		}
+		if f.Rule == rules.RuleActsWithoutYou { // BV-251: the title and its detail lines
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), cat.Text("finding.acts_without_you.title", nil))
+			w("%s\n\n", strings.Join([]string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}, " · "))
+			for _, l := range ActsDetail(cat, f) {
+				w("%s\n\n", l)
+			}
+			for _, a := range f.Evidence.Assumptions {
+				if !sharedAssumption[a] {
+					w("- %s\n", t("unknown."+a, p))
+				}
+			}
+			w("\n")
 			continue
 		}
 		if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: one signed sentence (the title), no generic what/why

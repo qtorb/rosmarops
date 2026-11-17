@@ -240,11 +240,14 @@ func everyNodeTypeNodes(seen string) []graph.Node {
 			Service: "fixture", Fingerprint: "fp" + itoaPad(id), Locations: []string{"/secrets:1"}, DiscoveredAt: seen,
 		})
 	}
-	resTypes := []string{"file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository"}
+	resTypes := []string{
+		"file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository",
+		"inbound_channel", "agent_schedule", "agent_memory",
+	} // BV-251
 	for _, ty := range resTypes {
 		n := graph.Node{ID: nid("res"), Kind: graph.KindResource, Type: ty, Path: "/res", DiscoveredAt: seen}
 		switch ty {
-		case "agent_config", "agent_instructions", "agent_executable":
+		case "agent_config", "agent_instructions", "agent_executable", "agent_memory":
 			n.Configures = aiClientID // these resources configure an agent
 		}
 		out = append(out, n)

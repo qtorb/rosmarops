@@ -844,6 +844,9 @@ var MemoryUntracked = map[string]bool{
 	// computer-use config; it is not in the memory schema's rule enum, so
 	// adding it there would be a memory-schema change (owner sign-off).
 	rules.RuleComputerUseAppAllowed: true,
+	// BV-251: acts_without_you is re-derived each run from the wake sources
+	// and the overview; it is not in the memory schema's rule enum.
+	rules.RuleActsWithoutYou: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

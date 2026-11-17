@@ -125,7 +125,72 @@ func readHermesConfig(path, dir string) (platform.HermesConfig, []platform.MCPSe
 			cfg.TerminalBackend = v
 		}
 	}
+	hermesApprovers(&cfg, mapOf(root, "approvals")["approvers"])
+	hermesGateway(&cfg, raw, path)
 	return cfg, hermesServers(mapOf(root, "mcp_servers"), path, dir)
+}
+
+// hermesApprovers reads approvals.approvers (BV-251, CTO-53 §3;
+// hermes_cli/config_defaults.py: ["*"] by default, «lets any admitted member
+// answer»): whether it is set, holds "*", and how many entries — never who.
+func hermesApprovers(cfg *platform.HermesConfig, v any) {
+	if v == nil {
+		return
+	}
+	cfg.ApproversSet = true
+	var items []string
+	switch t := v.(type) {
+	case yamlsubset.Seq:
+		for _, it := range t {
+			if s, ok := it.(yamlsubset.Scalar); ok && !s.IsNull() {
+				items = append(items, strings.TrimSpace(s.Text))
+			}
+		}
+	case yamlsubset.Scalar:
+		if !t.IsNull() {
+			items = append(items, strings.TrimSpace(t.Text))
+		}
+	default:
+		cfg.ApproversAnyone = true // not a list Hermes reads: assume the default, fail-secure
+		return
+	}
+	cfg.ApproversCount = len(items)
+	for _, it := range items {
+		if it == "*" {
+			cfg.ApproversAnyone = true
+		}
+	}
+}
+
+// hermesGateway reads gateway.platforms.<name>.enabled (BV-251, CTO-53 §1.1;
+// gateway/config.py:468). It parses the gateway section on its own, so a
+// construct outside the YAML subset there leaves the rest of config.yaml read
+// and marks the gateway as unread (its platforms are then unknown). Only the
+// platform names and enabled leave this function: the same blocks can hold
+// tokens and keys, which are never kept.
+func hermesGateway(cfg *platform.HermesConfig, raw []byte, path string) {
+	doc, err := yamlsubset.ParseKeys(raw, "gateway")
+	if err != nil {
+		slog.Warn("hermes: gateway section not read: outside the YAML subset", "path", path, "err", err)
+		cfg.GatewayUnread = true
+		return
+	}
+	root, _ := doc.(yamlsubset.Map)
+	platforms := mapOf(mapOf(root, "gateway"), "platforms")
+	names := make([]string, 0, len(platforms))
+	for n := range platforms {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		p := platform.HermesPlatform{Name: strings.ToLower(n)}
+		if s, ok := mapOf(platforms, n)["enabled"].(yamlsubset.Scalar); ok {
+			if b, isBool := s.Bool(); isBool {
+				p.Enabled, p.EnabledSet = b, true
+			}
+		}
+		cfg.GatewayPlatforms = append(cfg.GatewayPlatforms, p)
+	}
 }
 
 // hermesServers are the mcp_servers entries as MCPServer

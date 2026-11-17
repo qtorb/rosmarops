@@ -77,7 +77,25 @@ func (n Node) MarshalJSON() ([]byte, error) {
 			DiscoveredAt string `json:"discovered_at"`
 			Configures   string `json:"configures,omitempty"`
 			Family       string `json:"family,omitempty"`
-		}{n.ID, n.Kind, n.Type, n.Path, n.DiscoveredAt, n.Configures, n.Family})
+			// BV-251: inbound_channel, agent_schedule and agent_memory only.
+			Platform       string   `json:"platform,omitempty"`
+			Status         string   `json:"status,omitempty"`
+			Origin         string   `json:"origin,omitempty"`
+			LaunchFlag     string   `json:"launch_flag,omitempty"`
+			Approvers      string   `json:"approvers,omitempty"`
+			AllowAll       *bool    `json:"allow_all,omitempty"`
+			AllowlistCount *int     `json:"allowlist_count,omitempty"`
+			TaskCount      *int     `json:"task_count,omitempty"`
+			ActiveCount    *int     `json:"active_count,omitempty"`
+			Destinations   []string `json:"destinations,omitempty"`
+			FileCount      *int     `json:"file_count,omitempty"`
+			TotalBytes     *int64   `json:"total_bytes,omitempty"`
+			InRepository   bool     `json:"in_repository,omitempty"`
+		}{
+			n.ID, n.Kind, n.Type, n.Path, n.DiscoveredAt, n.Configures, n.Family,
+			n.Platform, n.Status, n.Origin, n.LaunchFlag, n.Approvers, n.AllowAll, n.AllowlistCount,
+			n.TaskCount, n.ActiveCount, n.Destinations, n.FileCount, n.TotalBytes, n.InRepository,
+		})
 	default:
 		return nil, fmt.Errorf("node %q: cannot encode unknown kind %q", n.ID, n.Kind)
 	}
@@ -139,7 +157,7 @@ func (e Edge) MarshalJSON() ([]byte, error) {
 			AppliesIn     string `json:"applies_in,omitempty"`
 			ApprovalState string `json:"approval_state,omitempty"`
 		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, e.AppliesIn, e.ApprovalState})
-	case EdgeReceives, EdgeReadsEnv, EdgeSendsTo:
+	case EdgeReceives, EdgeReadsEnv, EdgeSendsTo, EdgeWakes:
 		return json.Marshal(struct {
 			ID        string `json:"id"`
 			Type      string `json:"type"`

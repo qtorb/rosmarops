@@ -254,6 +254,28 @@
       "type": "git_repository",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_a26",
+      "kind": "resource",
+      "type": "inbound_channel",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_b27",
+      "kind": "resource",
+      "type": "agent_schedule",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "res_c28",
+      "kind": "resource",
+      "type": "agent_memory",
+      "path": "/res",
+      "discovered_at": "2026-11-09T12:00:00Z",
+      "configures": "agent_b1"
     }
   ],
   "edges": []

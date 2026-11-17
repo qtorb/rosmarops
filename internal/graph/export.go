@@ -63,6 +63,20 @@ func ShellSandbox(inForce []Node, repoRoots []string) (contained, autoAllow bool
 	return contained, autoAllow
 }
 
+// SandboxAutoAllowUnwritten reports a Claude Code session whose sandbox is
+// effective and whose layers do not write sandbox.autoAllowBashIfSandboxed
+// (CTO-64 §2): the engine assumes true, the default before 2.1.325.
+func SandboxAutoAllowUnwritten(inForce []Node, repoRoots []string) bool {
+	sorted := append([]Node{}, inForce...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	for _, s := range claudeSessions(sorted, repoRoots, "") {
+		if s.sandboxEffective() && !s.sb.autoAllowSet {
+			return true
+		}
+	}
+	return false
+}
+
 // ClosesWindowsDrive reports that every Claude Code session keeps its reads
 // out of /mnt, where WSL mounts the Windows drives (BV-252, CTO-63 §4.3): an
 // effective sandbox with blockReadsOutsideWorkingDirectories in force, or an

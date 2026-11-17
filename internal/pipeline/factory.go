@@ -21,7 +21,7 @@ import (
 // Kept: the credentials found (env blocks, MCP server env and headers, API
 // keys), the repositories and roots, the MCP servers and their .mcp.json
 // approvals, the extensions, hooks and other programs the settings run, the
-// instruction files, and the project trust.
+// instruction and memory files, and the project trust.
 //
 // Factory never changes in: every slice it edits is a copy.
 func Factory(in Input) Input {
@@ -35,6 +35,11 @@ func Factory(in Input) Input {
 	out.Antigravity = factoryAntigravity(in.Antigravity)
 	out.Gemini = factoryGemini(in.Gemini)
 	out.Cline = FactoryCline(in.Cline)
+	// BV-251: inbound channels and scheduled tasks are set up by the person,
+	// not defaults: taken out. The memory files stay, like the instruction
+	// files. (A Telegram or Discord token in Hermes's .env is a credential,
+	// kept: with it, Hermes turns the platform on by default.)
+	out.AlwaysOn = platform.AlwaysOnScan{Memory: in.AlwaysOn.Memory, Failed: in.AlwaysOn.Failed}
 	// BV-248: Grok Bot, when the person uses it, at its factory answers.
 	// Its settings.json values are settings: they are taken out, and its app
 	// folder is kept.
@@ -116,6 +121,9 @@ func FactoryHermes(s platform.HermesScan) platform.HermesScan {
 	out.Configs = make([]platform.HermesConfig, len(s.Configs))
 	for i, c := range s.Configs {
 		c.ApprovalMode, c.ProtectedInstructionFiles, c.TerminalBackend = "", nil, ""
+		// BV-251: the gateway platforms and approvers are settings.
+		c.GatewayPlatforms, c.GatewayUnread = nil, false
+		c.ApproversSet, c.ApproversAnyone, c.ApproversCount = false, false, 0
 		out.Configs[i] = c
 	}
 	if s.Configs == nil {

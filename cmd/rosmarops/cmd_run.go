@@ -454,6 +454,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
 		antigravityScan platform.AntigravityScan // BV-140: antigravity-cli settings drive its caps
 		grokBotScan     platform.GrokBotScan     // BV-248: Grok Bot app folder and settings.json
+		alwaysOnScan    platform.AlwaysOnScan    // BV-251: channels, own scheduled tasks, memory
 		cursorRead      platform.CursorScan      // BV-248: which of Cursor's questions apply
 		geminiScan      platform.GeminiScan      // BV-193: gemini-cli settings drive its caps
 		clineScan       platform.ClineScan       // BV-193: cline globalState drives its caps
@@ -617,6 +618,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				slog.Warn("grok bot: not read", "err", grokBotErr)
 			}
 			grokBotScan = grokBot
+			// BV-251 (CTO-62 §1, §4): what can wake an agent without the
+			// person, and its memory's metadata.
+			alwaysOn, alwaysOnErr := plat.ListAlwaysOn(ctx, repoList)
+			if alwaysOnErr != nil {
+				slog.Warn("always-on: not read", "err", alwaysOnErr)
+			}
+			alwaysOnScan = alwaysOn
 			cursorRead = cursorScan
 			skillScan, skillsErr := plat.ListSkills(ctx, repoList)
 			instructionsErr = errors.Join(instructionsErr, cursorErr, skillsErr)
@@ -675,7 +683,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					// gives at the end of the review (a pass in memory; the
 					// graph file is rewritten in the reports directory).
 					regraph = func(s state.State) bool {
-						g, graphSHA, _, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, s, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan)
+						g, graphSHA, _, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, s, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan)
 						if graphErr != nil {
 							slog.Warn("graph: rebuild with the answers failed", "err", graphErr)
 							return false
@@ -683,7 +691,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 						built, builtSHA, builtFactory, builtProfiles = g, graphSHA, factoryGraph.factory, factoryGraph.profiles
 						return true
 					}
-					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan)
+					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan)
 					if graphErr == nil {
 						built, builtSHA, builtSettings, builtFactory, builtProfiles = g, graphSHA, &settingsScan, factoryGraph.factory, factoryGraph.profiles
 					}
@@ -1242,6 +1250,7 @@ func writeGraph(
 	n8nFolder string,
 	n8nKeyData bool,
 	grokBot platform.GrokBotScan,
+	alwaysOn platform.AlwaysOnScan,
 ) (*graph.Graph, string, string, passGraphs, error) {
 	fail := func(err error) (*graph.Graph, string, string, passGraphs, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -1292,6 +1301,7 @@ func writeGraph(
 		// BV-248: the person's answers, and Grok Bot as read.
 		Declared: declaredAnswers(st),
 		GrokBot:  grokBot,
+		AlwaysOn: alwaysOn,
 	}
 	res, err := pipeline.Assemble(pin)
 	if err != nil {

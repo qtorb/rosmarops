@@ -126,6 +126,9 @@ type SVAgent struct {
 	FactoryLetter *SVClass  `json:"factory_letter,omitempty"`
 	Groups        []SVGroup `json:"groups,omitempty"`
 	Kinds         []SVKind  `json:"kinds,omitempty"`
+	// Orders (BV-251, CTO-53 review point 2): «Who can give it orders»,
+	// its value code and, for a list, how many; optional.
+	Orders *rules.OverviewOrders `json:"orders,omitempty"`
 }
 
 // SVClass is an agent's class in the space view: class (null for a detected
@@ -542,6 +545,7 @@ func svAgents(v V2, ctxs map[string]htmlCtx) []SVAgent {
 			d := len(oa.Declared.Answers) > 0
 			a.Declared = &d
 		}
+		a.Orders = oa.Orders
 		if id, ok := top[oa.AgentID]; ok {
 			a.TopFindingID = &id
 		}

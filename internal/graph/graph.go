@@ -38,6 +38,7 @@ const (
 	EdgeReadsConfigOf   = "reads_config_of" // BV-208 C2: a client reads another product's config at rest
 	EdgeCommittedIn     = "committed_in"
 	EdgeSendsTo         = "sends_to" // mcp_server → external_service (BV-91, E1)
+	EdgeWakes           = "wakes"    // inbound_channel / agent_schedule → agent (CTO-53 §5.2, BV-251)
 )
 
 // Resource types referenced by the integrity rules.
@@ -48,6 +49,12 @@ const (
 	ResourceAgentInstructions = "agent_instructions"
 	ResourceAgentExecutable   = "agent_executable"
 	ResourceGitRepository     = "git_repository"
+
+	// BV-251 (CTO-53 §5.1, CTO-62 §1, §4): what can wake an agent without the
+	// person, and the memory it writes.
+	ResourceInboundChannel = "inbound_channel"
+	ResourceAgentSchedule  = "agent_schedule"
+	ResourceAgentMemory    = "agent_memory"
 )
 
 // Graph mirrors schemas/v2/graph.v2.schema.json.
@@ -129,6 +136,24 @@ type Node struct {
 	Path       string `json:"path"`
 	Configures string `json:"configures"`
 	Family     string `json:"family"` // git_repository
+
+	// inbound_channel (BV-251, CTO-53 §5.1, §5.3): Platform holds the
+	// platform; its status, where it was seen, the launch flag that turns it
+	// on, and who can give the agent orders through it.
+	Status         string `json:"status"`
+	Origin         string `json:"origin"`
+	LaunchFlag     string `json:"launch_flag"`
+	Approvers      string `json:"approvers"`
+	AllowAll       *bool  `json:"allow_all"`
+	AllowlistCount *int   `json:"allowlist_count"`
+	// agent_schedule: how many tasks, how many enabled, where they deliver.
+	TaskCount    *int     `json:"task_count"`
+	ActiveCount  *int     `json:"active_count"`
+	Destinations []string `json:"destinations"`
+	// agent_memory: from the files' metadata, never their content.
+	FileCount    *int   `json:"file_count"`
+	TotalBytes   *int64 `json:"total_bytes"`
+	InRepository bool   `json:"in_repository"`
 
 	// agent, credential, resource
 	DiscoveredAt string `json:"discovered_at"`
@@ -277,7 +302,7 @@ var edgeEndpoints = map[string]struct{ from, to []endpoint }{
 	EdgeWritesConfigOf: {
 		from: []endpoint{{kind: KindAgent}},
 		to: []endpoint{{kind: KindResource, types: []string{
-			ResourceAgentConfig, ResourceAgentInstructions, ResourceAgentExecutable,
+			ResourceAgentConfig, ResourceAgentInstructions, ResourceAgentExecutable, ResourceAgentMemory,
 		}}},
 	},
 	EdgeReadsConfigOf: {
@@ -287,6 +312,10 @@ var edgeEndpoints = map[string]struct{ from, to []endpoint }{
 	EdgeSendsTo: {
 		from: []endpoint{{kind: KindAgent, types: []string{AgentMCPServer}}},
 		to:   []endpoint{{kind: KindResource, types: []string{ResourceExternalService}}},
+	},
+	EdgeWakes: {
+		from: []endpoint{{kind: KindResource, types: []string{ResourceInboundChannel, ResourceAgentSchedule}}},
+		to:   []endpoint{{kind: KindAgent}},
 	},
 }
 

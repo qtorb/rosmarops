@@ -429,6 +429,7 @@ func (c htmlCtx) renderOverviewDialog() {
 	// BV-121: «What it's connected to», one block per evaluated agent.
 	for _, a := range cols {
 		c.renderServices(a)
+		c.renderAlwaysOn(a) // BV-251
 	}
 	c.w(`<p class="ovf">%s</p></dialog>`, c.t("html.ov.foot", nil))
 }

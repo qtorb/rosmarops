@@ -159,6 +159,20 @@ type OverviewAgent struct {
 	// from Rows, the credential findings and the MCP catalog; empty for an
 	// agent that is not evaluated.
 	Kinds []RiskKindCell `json:"kinds"`
+
+	// Orders is «Who can give it orders» (BV-251, CTO-53 review point 2):
+	// evaluated agents only.
+	Orders *OverviewOrders `json:"orders,omitempty"`
+	// Memory are the memory folders the agent writes (BV-251, CTO-62 §4):
+	// path, files and size from their metadata.
+	Memory []OverviewMemory `json:"memory,omitempty"`
+}
+
+// OverviewMemory is one agent_memory resource as the report shows it.
+type OverviewMemory struct {
+	Path  string `json:"path"`
+	Files int    `json:"files"`
+	Bytes int64  `json:"bytes"`
 }
 
 // OverviewService is one catalog MCP server an agent is configured to use
@@ -290,6 +304,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
 		a.Kinds = oi.kinds(a, oi.view(n.ID))
 		a.Declared = oi.declaredOf(n.Platform)
+		autoAllowByVersion(a.Rows, oi.view(n.ID)) // CTO-64 §2: after the kinds, no score or class change
 		oi.wslDrive(a.Rows, oi.view(n.ID))
 		out = append(out, a)
 	}

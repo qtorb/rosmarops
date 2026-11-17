@@ -56,6 +56,9 @@ type Input struct {
 	Declared map[string]map[string]string
 	// GrokBot is the Grok Bot scan (BV-248, CTO-57).
 	GrokBot platform.GrokBotScan
+	// AlwaysOn is what can wake an agent without the person and the memory
+	// it writes (BV-251, CTO-62 §1, §4).
+	AlwaysOn platform.AlwaysOnScan
 
 	// Crosses.
 	Matcher    *intel.Matcher
@@ -154,6 +157,10 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 	// loads no instruction or skills file on this computer, so it is merged
 	// after them.
 	frag = graph.Merge(frag, graph.FromGrokBot(in.GrokBot, in.Declared[declared.GrokBot], in.Now))
+	// BV-251: inbound channels, own scheduled tasks and memory, on the
+	// ai_clients now present (after the credentials: a Hermes bot token in
+	// its .env is a channel, CTO-53 §1.1 option C).
+	frag = graph.AddAlwaysOn(frag, in.Hermes, ClaudeChannelPolicy(in.AlwaysOn, in.Settings), in.Now)
 	return frag, stats, nil
 }
 
@@ -243,4 +250,42 @@ func ClineExtensionPresent(exts []platform.VSCodeExtension) bool {
 		}
 	}
 	return false
+}
+
+// ClaudeChannelPolicy is ao without the Claude Code channels the managed
+// settings turn off (BV-251, CTO-53 §1.2): channelsEnabled false turns them
+// all off; allowedChannelPlugins, when set, keeps only the channels it names
+// («<name>@<marketplace>», with or without «plugin:»).
+func ClaudeChannelPolicy(ao platform.AlwaysOnScan, s platform.ClaudeSettingsScan) platform.AlwaysOnScan {
+	off := false
+	var allowed map[string]bool
+	for _, f := range s.Files {
+		if f.Scope != platform.MCPScopeManaged || f.Status != platform.MCPSourceRead {
+			continue
+		}
+		if f.ChannelsEnabled != nil && !*f.ChannelsEnabled {
+			off = true
+		}
+		if f.AllowedChannelPlugins != nil {
+			if allowed == nil {
+				allowed = map[string]bool{}
+			}
+			for _, p := range f.AllowedChannelPlugins {
+				name, _, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(p), "plugin:"), "@")
+				allowed[strings.ToLower(name)] = true
+			}
+		}
+	}
+	if !off && allowed == nil {
+		return ao
+	}
+	out := ao
+	out.Channels = nil
+	for _, ch := range ao.Channels {
+		if ch.Product == knowledge.ClaudeCodeProduct && (off || !allowed[ch.Platform]) {
+			continue
+		}
+		out.Channels = append(out.Channels, ch)
+	}
+	return out
 }

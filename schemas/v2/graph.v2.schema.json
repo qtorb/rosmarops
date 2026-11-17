@@ -223,7 +223,7 @@
       "properties": {
         "id": { "$ref": "#/definitions/id" },
         "kind": { "const": "resource" },
-        "type": { "enum": ["file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository"] },
+        "type": { "enum": ["file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository", "inbound_channel", "agent_schedule", "agent_memory"] },
         "path": { "type": "string" },
         "discovered_at": { "$ref": "#/definitions/dateTime" },
         "family": {
@@ -232,11 +232,24 @@
         },
         "configures": {
           "$ref": "#/definitions/id",
-          "description": "Id of the agent this resource belongs to. Required when type is agent_config (changes the agent's permissions/settings), agent_instructions (instructions the agent obeys, e.g. CLAUDE.md, AGENTS.md, .cursor/rules) or agent_executable (hook or binary the agent executes); forbidden otherwise."
-        }
+          "description": "Id of the agent this resource belongs to. Required when type is agent_config (changes the agent's permissions/settings), agent_instructions (instructions the agent obeys, e.g. CLAUDE.md, AGENTS.md, .cursor/rules) agent_executable (hook or binary the agent executes) or agent_memory (memory the agent writes and loads, BV-251); forbidden otherwise."
+        },
+        "platform": { "type": "string", "maxLength": 64, "description": "inbound_channel only (CTO-53 §5.1, BV-251): the platform the channel listens on (telegram, discord, slack, api_server, webhook…)." },
+        "status": { "enum": ["configured", "enabled_in_config", "launch_flag_required", "unknown"], "description": "inbound_channel only: configured (its token or state is present), enabled_in_config (enabled in the agent's config), launch_flag_required (on only when the agent starts with a flag), unknown." },
+        "origin": { "enum": ["config", "env_name"], "description": "inbound_channel only: where it was seen — the agent's config, or a credential its environment file holds, by its pattern (never its value)." },
+        "launch_flag": { "type": "string", "maxLength": 64, "description": "inbound_channel with status launch_flag_required: the flag that turns it on (e.g. --channels)." },
+        "approvers": { "enum": ["anyone_admitted", "listed", "host_only", "unknown"], "description": "inbound_channel only (CTO-53 §5.3): who can give the agent orders through it." },
+        "allow_all": { "type": "boolean", "description": "inbound_channel only: every user of the platform is admitted." },
+        "allowlist_count": { "type": "integer", "minimum": 0, "maximum": 100000, "description": "inbound_channel with approvers listed: how many are on the list (never who)." },
+        "task_count": { "type": "integer", "minimum": 0, "maximum": 100000, "description": "agent_schedule only: how many tasks." },
+        "active_count": { "type": "integer", "minimum": 0, "maximum": 100000, "description": "agent_schedule only: how many tasks are enabled." },
+        "destinations": { "type": "array", "maxItems": 64, "items": { "type": "string", "maxLength": 64 }, "description": "agent_schedule only: where the tasks deliver their output (platform names, never addresses)." },
+        "file_count": { "type": "integer", "minimum": 0, "maximum": 1000000, "description": "agent_memory only: how many files, from their metadata (never opened, BV-251)." },
+        "total_bytes": { "type": "integer", "minimum": 0, "description": "agent_memory only: their total size in bytes, from their metadata." },
+        "in_repository": { "type": "boolean", "description": "agent_memory only: the memory is inside a repository, so it can be committed." }
       },
       "if": {
-        "properties": { "type": { "enum": ["agent_config", "agent_instructions", "agent_executable"] } },
+        "properties": { "type": { "enum": ["agent_config", "agent_instructions", "agent_executable", "agent_memory"] } },
         "required": ["type"]
       },
       "then": { "required": ["configures"] },
@@ -254,7 +267,8 @@
         { "$ref": "#/definitions/edgeAuthenticatesTo" },
         { "$ref": "#/definitions/edgeReadsEnv" },
         { "$ref": "#/definitions/edgeCommittedIn" },
-        { "$ref": "#/definitions/edgeSendsTo" }
+        { "$ref": "#/definitions/edgeSendsTo" },
+        { "$ref": "#/definitions/edgeWakes" }
       ]
     },
 
@@ -418,6 +432,21 @@
         "certainty": { "$ref": "#/definitions/certainty" },
         "presence": { "enum": ["tracked", "history_only"] },
         "has_remote": { "type": "boolean", "description": "True when .git/config declares at least one remote." }
+      }
+    },
+
+    "edgeWakes": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "inbound_channel or agent_schedule resource to the agent it can wake without the person (CTO-53 §5.2, BV-251).",
+      "required": ["id", "type", "from", "to", "source", "certainty"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "wakes" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "observed" }
       }
     },
 

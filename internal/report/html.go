@@ -1373,6 +1373,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193
 		return c.cat.Text(computerUseKey(f), computerUseParams(f))
 	}
+	if f.Rule == rules.RuleActsWithoutYou { // BV-251
+		return c.cat.Text("finding.acts_without_you.title", nil)
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
 		return c.cat.Text("html.f.cred.title", p)
@@ -1468,6 +1471,9 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	}
 	if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: the one signed sentence is the title; no separate impact
 		return ""
+	}
+	if f.Rule == rules.RuleActsWithoutYou { // BV-251: the detail line(s)
+		return strings.Join(ActsDetail(c.cat, f), " ")
 	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredInGit {
@@ -1620,7 +1626,8 @@ func HTMLKeys() []string {
 	}
 	for _, r := range rules.AllRules {
 		if r == rules.RulePackageKnownMalicious || r == rules.RuleProjectHookRunsRepoScript || r == rules.RuleMCPExternalAction ||
-			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData || r == rules.RuleComputerUseAppAllowed {
+			r == rules.RuleN8NMCPBridge || r == rules.RuleN8NKeyWithData || r == rules.RuleComputerUseAppAllowed ||
+			r == rules.RuleActsWithoutYou {
 			continue // renders with finding.* title, no html.headline key (BV-100, BV-107, BV-117, BV-175, BV-193)
 		}
 		keys = append(keys, "html.headline."+r)
