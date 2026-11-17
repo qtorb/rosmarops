@@ -224,6 +224,11 @@ type ClaudeSettingsScan struct {
 	// VSCode is claudeCode.initialPermissionMode from VS Code's user
 	// settings; nil when the file does not exist.
 	VSCode *VSCodeModeSetting
+
+	// OwnPlugin reports RosmarOps's own Claude Code plugin, recognised by all
+	// six conditions of BV-253 §B.2 (CTO-66 §4.2): its SessionStart hook is
+	// RosmarOps's session check. Only that recognition leaves the reader.
+	OwnPlugin bool
 }
 
 // Managed settings source kinds, highest priority first.
@@ -300,6 +305,10 @@ type ClaudeSettingsFile struct {
 	// OwnHookStatusline, each only when all five conditions of CTO-44 §4d
 	// hold. Their pointers are not in Executables.
 	OwnHooks []string
+
+	// OwnPluginEnabled, for a user or managed settings file only (BV-253
+	// §B.2, condition 1): its enabledPlugins has "rosmarops@rosmarops": true.
+	OwnPluginEnabled bool
 
 	// HasStatusLine reports that the file sets a statusLine command, ours or
 	// not (BV-226 §5: the report offers RosmarOps's only when there is none).

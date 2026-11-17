@@ -93,6 +93,10 @@ func agentHooksFor(scan *platform.ClaudeSettingsScan, v report.V2, exe string) r
 		taken = taken || (f.HasStatusLine && !mine)
 	}
 	a.StatusLineTaken = taken
+	// BV-253 §B.2: RosmarOps's own Claude Code plugin runs the session check.
+	if scan.OwnPlugin {
+		own[platform.OwnHookSessionCheck] = true
+	}
 	for _, h := range []string{platform.OwnHookSessionCheck, platform.OwnHookStatusline} {
 		if own[h] {
 			a.Installed = append(a.Installed, h)

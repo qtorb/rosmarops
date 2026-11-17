@@ -28,7 +28,10 @@ import (
 // discarded; keys are matched exactly (jsonkeys.Decode, B5). Command texts are read only to see that a
 // command exists; they are never kept.
 type settingsFile struct {
-	Permissions struct {
+	// EnabledPlugins is read for one key only (BV-253 §B.2): whether
+	// RosmarOps's own plugin is enabled.
+	EnabledPlugins map[string]json.RawMessage `json:"enabledPlugins"`
+	Permissions    struct {
 		Allow                               []string `json:"allow"`
 		Ask                                 []string `json:"ask"`
 		Deny                                []string `json:"deny"`
@@ -145,6 +148,7 @@ func (w *WindowsPlatform) ListClaudeSettings(ctx context.Context, repoRoots []st
 	if w.managed != nil {
 		w.managed.read(ctx, dir, &scan)
 	}
+	scan.OwnPlugin = ownPluginEnabled(scan) && ReadOwnPlugin(pluginsDir(dir))
 	return scan, nil
 }
 
@@ -273,6 +277,9 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	}
 	f.KeyConflicts = conflicts
 	f.HasPolicyKey = hasPolicyKey(raw)
+	if f.Scope == platform.MCPScopeUser || f.Scope == platform.MCPScopeManaged {
+		f.OwnPluginEnabled = strings.TrimSpace(string(s.EnabledPlugins[ownPluginID])) == "true"
+	}
 
 	p := s.Permissions
 	f.Permissions = platform.ClaudePermissions{
