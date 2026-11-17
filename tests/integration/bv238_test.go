@@ -128,6 +128,7 @@ func TestBV238Browser(t *testing.T) {
 		if err != nil {
 			t.Errorf("%s: %v\n%s", lang, err, out)
 		}
+		t.Logf("%s: %s", lang, out)
 	}
 }
 
@@ -155,6 +156,8 @@ const [file, c1] = process.argv.slice(1);
     await p.click('#v-pc a[data-view="v-' + a + '"]:not([hidden])');
     if (!(await p.isVisible('#v-' + a))) fail(a + ': the view does not open');
     const h = await height();
+    const n = await p.evaluate(s => document.querySelectorAll(s + ' label.card').length, '#v-' + a);
+    console.log(a + ' view: ' + n + ' cards, ' + h + 'px');
     if (h > 800) fail(a + ': the view is ' + h + 'px tall');
     if (a === 'grok-build') {
       await p.click('#v-grok-build .apply:not([hidden]) button[data-copy]');

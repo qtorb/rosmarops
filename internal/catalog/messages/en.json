@@ -1161,5 +1161,16 @@
   "env.wsl": "This review ran in WSL. Your Windows drives can be seen from here: {list}. An agent working in WSL could touch your Windows folders too.",
   "env.vm": "This review ran in a virtual machine ({type}). What you see is what an agent could touch in it, not on the computer hosting it.",
   "env.wsb": "This review ran in Windows Sandbox: what you see is what an agent could touch inside, and everything is deleted when you close it.",
-  "env.tag": "Review of a test environment"
+  "env.tag": "Review of a test environment",
+  "cc.name.P2": "Sandboxed development",
+  "cc.P2.step.1": "Copy the first text and paste it into Claude Code, which will show you the change before saving it.",
+  "cc.P2.step.2": "In each project you'll work in, paste the second text too: that way the terminal can't see the rest of your home folder.",
+  "cc.P2.T2": "Add this setting to this project's settings (.claude/settings.json), without changing anything else. Show me the change before saving it.",
+  "cc.P2.does.2": "Run commands inside the sandbox: they only see your project and only go out to github.com and registry.npmjs.org",
+  "cc.P2.no.1": "Read outside your projects, from the terminal too",
+  "cc.P2.no.2": "Run commands outside the sandbox",
+  "cc.P2.nc": "What the terminal reads from your project can go out to github.com or registry.npmjs.org. Hooks and local MCP servers run outside the sandbox.",
+  "gp.grok.P2.does.1": "Run four commands inside the sandbox: npm run lint, npm run test, git status and git diff",
+  "gp.grok.P2.no.1": "Read outside the project, from the terminal too",
+  "gp.grok.P2.nc": "Its documentation says the rule blocks web search; we haven't checked. On macOS, the sandbox doesn't cut the network for commands."
 }

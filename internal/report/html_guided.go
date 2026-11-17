@@ -26,6 +26,7 @@ type guidedProfile struct {
 	nc       string         // «Doesn't cover»
 	sentence string         // the sentence before the block (T2, T3); empty for a command
 	cmd      bool           // copies a launch command (P3)
+	unix     bool           // only on macOS and Linux (BV-249 §3: P2)
 }
 
 // guidedAgent is an agent with guided profiles, and what each use proposes
@@ -91,6 +92,17 @@ var guidedAgents = []guidedAgent{
 				},
 				nc: "gp.grok.P1.nc", sentence: "gp.grok.T3",
 			},
+			// BV-249 §3.2: P1's block with [sandbox] profile = "strict",
+			// measured (75 yellow B on R2).
+			{
+				id: profiles.P2, name: "cc.name.P2", steps: []string{"gp.grok.step.paste"},
+				rows: [3][][2]string{
+					{{rules.KindRunsCommands, "gp.grok.P2.does.1"}},
+					{{rules.KindChangesFiles, "gp.grok.P1.asks.1"}, {rules.KindRunsCommands, "gp.grok.P1.asks.2"}},
+					{{rules.KindKeys, "gp.grok.P2.no.1"}, {rules.KindSendsOut, "gp.grok.no.web"}},
+				},
+				nc: "gp.grok.P2.nc", sentence: "gp.grok.T3", unix: true,
+			},
 			{
 				id: profiles.P3, name: "cc.name.P3", steps: []string{"gp.grok.P3.step.1", "gp.grok.P3.step.2"},
 				rows: [3][][2]string{
@@ -126,6 +138,35 @@ var guidedAgents = []guidedAgent{
 			},
 		},
 	},
+}
+
+// guided are the guided agents for this review (BV-249 §3): the macOS and
+// Linux templates only there, and there «I write code» proposes P2 where the
+// agent has one.
+func (c htmlCtx) guided() []guidedAgent {
+	out := make([]guidedAgent, 0, len(guidedAgents))
+	for _, g := range guidedAgents {
+		var ps []guidedProfile
+		hasP2 := false
+		for _, p := range g.profiles {
+			if p.unix && !c.sandboxOS() {
+				continue
+			}
+			hasP2 = hasP2 || p.id == profiles.P2
+			ps = append(ps, p)
+		}
+		g.profiles = ps
+		if hasP2 {
+			uses := map[string]string{}
+			for k, v := range g.uses {
+				uses[k] = v
+			}
+			uses["code"] = profiles.P2
+			g.uses = uses
+		}
+		out = append(out, g)
+	}
+	return out
 }
 
 // grokBotName is Grok Bot's name: RosmarOps does not detect it, so it is not
@@ -179,7 +220,7 @@ func (c htmlCtx) guidedPresent() []struct {
 		o    *rules.OverviewAgent
 	}
 	ev := c.evaluated()
-	for _, g := range guidedAgents {
+	for _, g := range c.guided() {
 		bot := g.key == profiles.GuidedBot
 		if bot && !c.hasEvaluated(g.product) {
 			if c.v.GrokBotNoRow { // BV-248: B0 answered or Grok Bot detected
@@ -315,8 +356,11 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 		c.w(`<span class="owner" data-use="%s"%s>%s</span>`, u.id, hide(u.id == sheetUses[0].id), c.t("cc.use.where", map[string]string{"use": c.cat.Text("pc.use."+u.id, nil)}))
 	}
 	two := ""
-	if len(g.profiles) == 2 {
+	switch len(g.profiles) {
+	case 2:
 		two = " two"
+	case 4:
+		two = " four" // BV-249 §3.3
 	}
 	c.w(`</div><div class="cards%s" role="radiogroup" aria-labelledby="gt-%s">`, two, g.key)
 	for _, p := range g.profiles {

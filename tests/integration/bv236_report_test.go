@@ -284,6 +284,7 @@ func TestBV236Browser(t *testing.T) {
 		if err != nil {
 			t.Errorf("%s: %v\n%s", lang, err, out)
 		}
+		t.Logf("%s: %s", lang, out)
 	}
 }
 
@@ -312,6 +313,15 @@ const [file, c1] = process.argv.slice(1);
   const sel = await p.evaluate(() => window.getSelection().toString().length);
   if (sel === 0) fail('denied: the text is not selected');
   await p.click('#v-pc a[data-view="v-cc"]');
+  // BV-249 §3.3: the templates' cards in one row at 1280×800 (four on macOS
+  // and Linux), without scrolling.
+  const cards = await p.evaluate(() => [...document.querySelectorAll('#v-cc label.card')].map(e => Math.round(e.getBoundingClientRect().top)));
+  if (new Set(cards).size !== 1) fail('Claude Code: the ' + cards.length + ' cards are not in one row (' + cards.join(',') + ')');
+  const hcc = await p.evaluate(() => document.documentElement.scrollHeight);
+  console.log('cc view: ' + cards.length + ' cards, ' + hcc + 'px');
+  // Its height over 800 px is reported, stopped (BV-249 §3.3): it is already
+  // 814 px in Spanish on master with three cards; the limit comes back with
+  // the answer.
   await p.click('#v-cc label.card:has(input[value="P3"])');
   if (!(await p.isVisible('#v-cc .apply[data-p="P3"]')) || await p.isVisible('#v-cc .apply[data-p="P1"]')) fail('choosing P3 does not change the bar');
   await p.click('#v-cc a[data-view="v-pc"]');

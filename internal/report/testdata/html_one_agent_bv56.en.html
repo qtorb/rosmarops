@@ -290,6 +290,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .gsteps li{display:flex;gap:6px;align-items:baseline}
 .gsteps li::before{counter-increment:gs;content:counter(gs);font-weight:700;color:var(--s-brand)}
 .cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cards.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 .prow.oth .olist{grid-column:3/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
 .onames{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;font-weight:650}
 .oname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
@@ -322,7 +323,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .uses .k{margin-right:4px}
 .owner{font-size:13px;color:var(--s-ink2);white-space:nowrap}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-@media (max-width:900px){.cards{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.cards,.cards.four{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--s-paper);border:1px solid var(--s-line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;min-width:0;position:relative}
 .card:has(input:checked){border:2px solid var(--s-brand);padding:11px 13px}
 .card:has(input:checked) .radio::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--s-brand)}

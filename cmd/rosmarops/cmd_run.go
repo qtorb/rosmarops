@@ -1335,6 +1335,17 @@ func writeGraph(
 		}
 		measured = append(measured, report.ProfileInput{ID: id, Graph: &pres.Graph, Settings: pin2.Settings})
 	}
+	// BV-249 §3.2: Grok Build's P2 (strict), where its sandbox exists.
+	if graph.HostOS != "windows" {
+		if pin2, ok := pipeline.GrokProfile(pin, profiles.P2); ok {
+			if pres, perr := pipeline.Assemble(pin2); perr != nil {
+				slog.Warn("graph: profile pass not built", "product", knowledge.GrokBuildProduct, "profile", profiles.P2, "err", perr)
+			} else {
+				g := pin2.Grok
+				measured = append(measured, report.ProfileInput{ID: profiles.P2, Product: knowledge.GrokBuildProduct, Graph: &pres.Graph, Settings: pin2.Settings, Grok: &g})
+			}
+		}
+	}
 	// BV-248 decision 9: Cursor's and Grok Bot's profiles, measured on the
 	// declared settings, in memory too.
 	for _, dp := range pipeline.DeclaredProfiles {

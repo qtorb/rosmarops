@@ -21,6 +21,8 @@ type ProfileInput struct {
 	Product  string
 	Declared map[string]map[string]string
 	GrokBot  platform.GrokBotScan
+	// Grok is the pass's Grok Build scan, for its P2 (BV-249 §3.2).
+	Grok *platform.GrokScan
 }
 
 // profilePass evaluates one profile's graph with its settings; every other
@@ -33,8 +35,11 @@ func profilePass(in V2Input, fams map[string]string, p ProfileInput) *factoryRes
 	fin := in
 	s := p.Settings
 	fin.ClaudeSettings = &s
-	if p.Product != "" {
+	if p.Product != "" && p.Grok == nil { // Cursor's and Grok Bot's declared passes
 		fin.Declared, fin.GrokBot = p.Declared, p.GrokBot
+	}
+	if p.Grok != nil {
+		fin.Grok = *p.Grok
 	}
 	return passOf(fin, *p.Graph, fams)
 }
