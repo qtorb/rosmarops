@@ -158,7 +158,8 @@ const [file, c1] = process.argv.slice(1);
     const h = await height();
     const n = await p.evaluate(s => document.querySelectorAll(s + ' label.card').length, '#v-' + a);
     console.log(a + ' view: ' + n + ' cards, ' + h + 'px');
-    if (h > 800) fail(a + ': the view is ' + h + 'px tall');
+    // BV-249 §3.3 (Albert 17-11): an agent's templates view may scroll; its
+    // height is logged. Only «Computer templates» keeps the 800 px limit.
     if (a === 'grok-build') {
       await p.click('#v-grok-build .apply:not([hidden]) button[data-copy]');
       const live = await p.textContent('#v-grok-build .apply:not([hidden]) .live');

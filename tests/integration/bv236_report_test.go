@@ -319,9 +319,8 @@ const [file, c1] = process.argv.slice(1);
   if (new Set(cards).size !== 1) fail('Claude Code: the ' + cards.length + ' cards are not in one row (' + cards.join(',') + ')');
   const hcc = await p.evaluate(() => document.documentElement.scrollHeight);
   console.log('cc view: ' + cards.length + ' cards, ' + hcc + 'px');
-  // Its height over 800 px is reported, stopped (BV-249 §3.3): it is already
-  // 814 px in Spanish on master with three cards; the limit comes back with
-  // the answer.
+  // BV-249 §3.3 (Albert 17-11): an agent's templates view may scroll; its
+  // height is logged. Only «Computer templates» keeps the 800 px limit.
   await p.click('#v-cc label.card:has(input[value="P3"])');
   if (!(await p.isVisible('#v-cc .apply[data-p="P3"]')) || await p.isVisible('#v-cc .apply[data-p="P1"]')) fail('choosing P3 does not change the bar');
   await p.click('#v-cc a[data-view="v-pc"]');

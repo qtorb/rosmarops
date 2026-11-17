@@ -741,7 +741,7 @@ var profileRows = map[string][4][][2]string{
 	// BV-249 §3.1: «Sandboxed development».
 	profiles.P2: {
 		{{rules.KindChangesFiles, "cc.P1.does.1"}, {rules.KindRunsCommands, "cc.P2.does.2"}},
-		{{rules.KindChangesFiles, "cc.P1.asks.2"}},
+		{{rules.KindRunsCommands, "cc.P2.asks.1"}, {rules.KindChangesFiles, "cc.P1.asks.2"}},
 		{{rules.KindKeys, "cc.P2.no.1"}, {rules.KindRunsCommands, "cc.P2.no.2"}, {rules.KindSendsOut, "cc.P1.no.2"}},
 	},
 	profiles.P3: {
@@ -788,8 +788,8 @@ func (c htmlCtx) renderApply(where string) {
 		case profiles.P3:
 			steps, nb, see, cp = []string{"cc.S5", "cc.S6"}, "cc.S7", "cc.see.cmd", "cc.copy.cmd"
 		case profiles.P2:
-			// BV-249 §3.1: its two steps; it has no closing note of its own.
-			steps, nb = []string{"cc.P2.step.1", "cc.P2.step.2"}, ""
+			// BV-249 §3.1: its two steps and its closing note (Albert 17-11).
+			steps, nb = []string{"cc.P2.step.1", "cc.P2.step.2"}, "cc.S4.P2"
 		}
 		for i, s := range steps {
 			c.w(`<span><i>%d</i>%s</span>`, i+1, c.t(s, nil))
@@ -1083,6 +1083,7 @@ func sheetKeys() []string {
 		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "sheet.findings.count.one", "pc.others",
 		// BV-249 §3.1: «Sandboxed development»
 		"cc.name.P2", "cc.P2.step.1", "cc.P2.step.2", "cc.P2.T2", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
+		"cc.P2.asks.1", "cc.S4.P2",
 	}
 }
 

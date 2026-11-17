@@ -1166,11 +1166,13 @@
   "cc.P2.step.1": "Copy the first text and paste it into Claude Code, which will show you the change before saving it.",
   "cc.P2.step.2": "In each project you'll work in, paste the second text too: that way the terminal can't see the rest of your home folder.",
   "cc.P2.T2": "Add this setting to this project's settings (.claude/settings.json), without changing anything else. Show me the change before saving it.",
-  "cc.P2.does.2": "Run commands inside the sandbox: they only see your project and only go out to github.com and registry.npmjs.org",
+  "cc.P2.does.2": "Run four commands inside the sandbox: npm run lint, npm run test, git status and git diff",
   "cc.P2.no.1": "Read outside your projects, from the terminal too",
   "cc.P2.no.2": "Run commands outside the sandbox",
   "cc.P2.nc": "What the terminal reads from your project can go out to github.com or registry.npmjs.org. Hooks and local MCP servers run outside the sandbox.",
   "gp.grok.P2.does.1": "Run four commands inside the sandbox: npm run lint, npm run test, git status and git diff",
   "gp.grok.P2.no.1": "Read outside the project, from the terminal too",
-  "gp.grok.P2.nc": "Its documentation says the rule blocks web search; we haven't checked. On macOS, the sandbox doesn't cut the network for commands."
+  "gp.grok.P2.nc": "Its documentation says the rule blocks web search; we haven't checked. On macOS, the sandbox doesn't cut the network for commands.",
+  "cc.P2.asks.1": "Other commands, which run inside the sandbox: they only see your project and only go out to github.com and registry.npmjs.org",
+  "cc.S4.P2": "RosmarOps changes nothing. The template has two parts: one for your user settings, which applies to all your projects, and one for each project's folder."
 }

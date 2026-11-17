@@ -1013,11 +1013,13 @@
   "cc.P2.step.1": "Copia el primer texto y pégalo en Claude Code, que te enseñará el cambio antes de guardarlo.",
   "cc.P2.step.2": "En cada proyecto donde vayas a trabajar, pega también el segundo texto: así la terminal no ve el resto de tu carpeta personal.",
   "cc.P2.T2": "Añade este ajuste a la configuración de este proyecto (.claude/settings.json), sin cambiar nada más. Enséñame el cambio antes de guardarlo.",
-  "cc.P2.does.2": "Ejecutar órdenes dentro del sandbox: solo ven tu proyecto y solo salen a github.com y registry.npmjs.org",
+  "cc.P2.does.2": "Lanzar cuatro órdenes dentro del sandbox: npm run lint, npm run test, git status y git diff",
   "cc.P2.no.1": "Leer fuera de tus proyectos, también desde la terminal",
   "cc.P2.no.2": "Ejecutar órdenes fuera del sandbox",
   "cc.P2.nc": "Lo que la terminal lea de tu proyecto puede salir hacia github.com o registry.npmjs.org. Los hooks y los servidores MCP locales funcionan fuera del sandbox.",
   "gp.grok.P2.does.1": "Lanzar cuatro órdenes dentro del sandbox: npm run lint, npm run test, git status y git diff",
   "gp.grok.P2.no.1": "Leer fuera del proyecto, también desde la terminal",
-  "gp.grok.P2.nc": "Su documentación dice que la regla corta la búsqueda en internet; no lo hemos comprobado. En macOS, el sandbox no corta la red de las órdenes."
+  "gp.grok.P2.nc": "Su documentación dice que la regla corta la búsqueda en internet; no lo hemos comprobado. En macOS, el sandbox no corta la red de las órdenes.",
+  "cc.P2.asks.1": "Las demás órdenes, que se ejecutan dentro del sandbox: solo ven tu proyecto y solo salen a github.com y registry.npmjs.org",
+  "cc.S4.P2": "RosmarOps no cambia nada. La plantilla tiene dos partes: una para tu configuración de usuario, que vale para todos tus proyectos, y otra para la carpeta de cada proyecto."
 }
