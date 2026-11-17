@@ -107,6 +107,11 @@ const (
 	// the rows whose decider depends on that default carry it (BV-244, CTO-54).
 	// Not a premise and not hidden-at-rest: it changes no score and no class.
 	AssumeDefaultModeDependsOnVersion = "default_mode_depends_on_version"
+	// AssumeWSLWindowsDriveReadable (BV-252, CTO-63 §4.3): the review runs in
+	// WSL (hostenv) and the agent does not keep its reads out of /mnt, where
+	// the Windows drive is; RosmarOps for Linux does not review what is there.
+	// On the reads row only; it changes no score and no class.
+	AssumeWSLWindowsDriveReadable = "wsl_windows_drive_readable"
 )
 
 // AllAssumptions lists every assumption a finding can carry: the graph's and
@@ -125,6 +130,7 @@ var AllAssumptions = []string{
 	graph.AssumeDeclaredByYou, graph.AssumeNotDeclared, graph.AssumeMeasuredLocalSetting,
 	graph.AssumeStartupFileRunsLater, AssumeAutoWithoutSandboxUnknown,
 	AssumeLaunchStateUnknown, AssumeSandboxAutoAllowByVersion,
+	AssumeWSLWindowsDriveReadable,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -309,6 +315,11 @@ type Input struct {
 	// each product's answers were given (RFC 3339). Optional.
 	Cursor     platform.CursorScan
 	DeclaredAt map[string]string
+
+	// WSL: this review runs inside WSL (hostenv, BV-252). The reads row of an
+	// agent that does not keep its reads out of /mnt carries
+	// wsl_windows_drive_readable. Optional.
+	WSL bool
 }
 
 // baseFor is the knowledge base of a product; empty for a product with no

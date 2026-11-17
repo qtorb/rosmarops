@@ -438,7 +438,7 @@ func (c htmlCtx) renderAssumeDialog() {
 // rowAssumptionsInDialog are the row assumptions whose text the window of the
 // analysis assumptions lists under their agent, when one of its rows carries
 // it (BV-244).
-var rowAssumptionsInDialog = []string{rules.AssumeDefaultModeDependsOnVersion, rules.AssumeSandboxAutoAllowByVersion}
+var rowAssumptionsInDialog = []string{rules.AssumeDefaultModeDependsOnVersion, rules.AssumeWSLWindowsDriveReadable, rules.AssumeSandboxAutoAllowByVersion}
 
 // agentRowsCarry reports whether a row of a carries the assumption code.
 func agentRowsCarry(a rules.OverviewAgent, code string) bool {

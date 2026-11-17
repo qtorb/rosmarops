@@ -77,6 +77,23 @@ func SandboxAutoAllowUnwritten(inForce []Node, repoRoots []string) bool {
 	return false
 }
 
+// ClosesWindowsDrive reports that every Claude Code session keeps its reads
+// out of /mnt, where WSL mounts the Windows drives (BV-252, CTO-63 §4.3): an
+// effective sandbox with blockReadsOutsideWorkingDirectories in force, or an
+// effective sandbox whose denyRead covers /mnt ("/mnt/"). Any other agent's
+// capabilities carry neither, so it does not close it.
+func ClosesWindowsDrive(inForce []Node, repoRoots []string, home string) bool {
+	sorted := append([]Node{}, inForce...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	sessions := claudeSessions(sorted, repoRoots, home)
+	for _, s := range sessions {
+		if !s.sandboxEffective() || !(s.blocksReadsOutside(sorted) || s.sandboxDenies("/mnt", home)) {
+			return false
+		}
+	}
+	return len(sessions) > 0
+}
+
 // CredentialFiles returns the distinct files of a credential's locations.
 func CredentialFiles(cred Node) []string { return credentialFiles(cred) }
 

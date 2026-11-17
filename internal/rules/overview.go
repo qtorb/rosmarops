@@ -305,6 +305,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Kinds = oi.kinds(a, oi.view(n.ID))
 		a.Declared = oi.declaredOf(n.Platform)
 		autoAllowByVersion(a.Rows, oi.view(n.ID)) // CTO-64 §2: after the kinds, no score or class change
+		oi.wslDrive(a.Rows, oi.view(n.ID))
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })
@@ -2216,4 +2217,19 @@ func ProviderEnvKeys() []string {
 		out[i] = pv.key
 	}
 	return out
+}
+
+// wslDrive adds wsl_windows_drive_readable to the reads row (BV-252, CTO-63
+// §4.3) when the review runs in WSL and the agent does not keep its reads out
+// of /mnt (graph.ClosesWindowsDrive). After the risk kinds: it changes no
+// score, no class and no kind.
+func (oi overviewInputs) wslDrive(rows []OverviewCell, v *agentView) {
+	if !oi.in.WSL || v == nil || graph.ClosesWindowsDrive(v.inForce, v.repoRoots, oi.in.Home) {
+		return
+	}
+	for i := range rows {
+		if rows[i].Row == RowReadsFiles {
+			rows[i].Data.Assumptions = sortedUnique(append(rows[i].Data.Assumptions, AssumeWSLWindowsDriveReadable))
+		}
+	}
 }
