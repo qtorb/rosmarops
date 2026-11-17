@@ -42,6 +42,21 @@ var schemaSet = map[string][]byte{
 	"problems.v1":        schemas.ProblemsSchema,
 	"kit.v1":             schemas.KitSchema,
 	"intel.v1":           schemas.IntelSchema,
+	// BV-249 §6: the release files' schemas, read from schemas/release/ (they
+	// are not embedded: only tests build those files).
+	"factory-scores.v1":  releaseSchema("factory-scores.v1.schema.json"),
+	"profile-scores.v1":  releaseSchema("profile-scores.v1.schema.json"),
+	"sandbox-example.v1": releaseSchema("sandbox-example.v1.schema.json"),
+}
+
+// releaseSchema reads a schema of schemas/release/ (the test runs in
+// internal/schemaval).
+func releaseSchema(name string) []byte {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "schemas", "release", name))
+	if err != nil {
+		panic(err)
+	}
+	return raw
 }
 
 // pair is one schema compiled by both validators.

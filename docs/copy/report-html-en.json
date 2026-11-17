@@ -844,5 +844,9 @@
   "gp.grok.P2.no.1": "Read outside the project, from the terminal too",
   "gp.grok.P2.nc": "Its documentation says the rule blocks web search; we haven't checked. On macOS, the sandbox doesn't cut the network for commands.",
   "cc.P2.asks.1": "Other commands, which run inside the sandbox: they only see your project and only go out to github.com and registry.npmjs.org",
-  "cc.S4.P2": "RosmarOps changes nothing. The template has two parts: one for your user settings, which applies to all your projects, and one for each project's folder."
+  "cc.S4.P2": "RosmarOps changes nothing. The template has two parts: one for your user settings, which applies to all your projects, and one for each project's folder.",
+  "try.button": "Try it just this once",
+  "try.intro": "Opens {agent} with the sandbox on for this session only: it doesn't change your settings, and when you close it everything goes back to how it was. RosmarOps can't measure a session, so the score doesn't change.",
+  "try.linux": "On Linux it needs bubblewrap and socat installed; if they're missing, the session won't start.",
+  "try.grok.macos": "On macOS, the sandbox doesn't cut the network for commands."
 }

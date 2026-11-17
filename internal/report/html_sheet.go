@@ -801,6 +801,14 @@ func (c htmlCtx) renderApply(where string) {
 		c.w(`</div><div class="bt"><button type="button" class="btn s" data-see="%s" aria-controls="%s" aria-expanded="false">%s</button><button type="button" class="btn p" data-copy="%s" data-done="%s" data-fail="%s">%s</button></div>`,
 			pid, pid, c.t(see, nil), pid, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
 		c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span>`, pid, html.EscapeString(c.copyText(id)))
+		if id == profiles.P2 && c.sandboxOS() {
+			// BV-249 §8: «Try it just this once».
+			note := ""
+			if c.v.linux() {
+				note = "try.linux"
+			}
+			c.renderTry(tryID(where, "cc", 0), "Claude Code", c.claudeTryCmds(profiles.ClaudeSessionCommand), note)
+		}
 		if id == profiles.P2 {
 			// BV-249 §3.1: the second text, for each project.
 			pid2 := pid + "-project"
@@ -996,6 +1004,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .apply button.btn.p{background:var(--ink);color:var(--s-paper)}
 .ptext{grid-column:1/-1;margin:0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;background:var(--s-paper);border-radius:8px;padding:10px 12px;max-height:240px;overflow:auto;user-select:text}
 .js .ptext:not(.open){display:none}
+.ptry p{margin:0 0 6px}.ptry select{margin:0 0 6px;font:inherit}.tcmd{margin:0 0 6px;white-space:pre-wrap;word-break:break-all;font-size:12.5px}
 .apply .live{grid-column:1/-1;margin:0;font-size:13px}
 .apply .live:empty{display:none}
 .proof{font-size:12.5px;color:var(--s-ink2);margin:0}
@@ -1045,6 +1054,7 @@ document.querySelectorAll('input[name^="gp-"]').forEach(function(r){r.addEventLi
 document.querySelectorAll('input[name="cprofile"]').forEach(function(r){r.addEventListener('change',function(){chosen=r.value;render()})});
 function selectText(p){var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}
 document.querySelectorAll('button[data-see]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.getAttribute('data-see'));var o=p.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');if(o){selectText(p)}})});
+document.querySelectorAll('select[data-try]').forEach(function(s){s.addEventListener('change',function(){var w=document.getElementById(s.getAttribute('data-try'));w.querySelectorAll('[data-tryi]').forEach(function(d){d.hidden=d.getAttribute('data-tryi')!==s.value});w.querySelector('button[data-copy]').setAttribute('data-copy',s.getAttribute('data-try')+'-'+s.value)})});
 document.querySelectorAll('button[data-copy]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.getAttribute('data-copy'));var l=p.nextElementSibling;function fail(){p.classList.add('open');selectText(p);l.textContent=b.getAttribute('data-fail')}try{navigator.clipboard.writeText(p.textContent).then(function(){l.textContent=b.getAttribute('data-done');setTimeout(function(){l.textContent=''},1500)},fail)}catch(err){fail()}})});
 render()})();`
 
@@ -1084,6 +1094,8 @@ func sheetKeys() []string {
 		// BV-249 §3.1: «Sandboxed development»
 		"cc.name.P2", "cc.P2.step.1", "cc.P2.step.2", "cc.P2.T2", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
 		"cc.P2.asks.1", "cc.S4.P2",
+		// BV-249 §8: «Try it just this once»
+		"try.button", "try.intro", "try.linux", "try.grok.macos",
 	}
 }
 

@@ -1,0 +1,426 @@
+{
+  "format": "rosmarops.sandbox-example/1",
+  "rosmarops_version": "dev",
+  "commit": "",
+  "generated_at": "2026-11-17T08:00:00Z",
+  "host_os": "linux",
+  "index_version": 4,
+  "rules_version": "6",
+  "knowledge_version": "kb",
+  "reference_computer": "R2",
+  "agent": "demo-agent",
+  "combinations": [
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": false,
+        "asks_first": false,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": false,
+        "asks_first": false,
+        "network_cut": true
+      },
+      "valid": false,
+      "reason": "network_cut_needs_sandbox",
+      "score": null,
+      "band": null,
+      "class": null,
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": []
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": false,
+        "asks_first": true,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": false,
+        "asks_first": true,
+        "network_cut": true
+      },
+      "valid": false,
+      "reason": "network_cut_needs_sandbox",
+      "score": null,
+      "band": null,
+      "class": null,
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": []
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": true,
+        "asks_first": false,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": true,
+        "asks_first": false,
+        "network_cut": true
+      },
+      "valid": false,
+      "reason": "network_cut_needs_sandbox",
+      "score": null,
+      "band": null,
+      "class": null,
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": []
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": true,
+        "asks_first": true,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": false,
+        "read_only": true,
+        "asks_first": true,
+        "network_cut": true
+      },
+      "valid": false,
+      "reason": "network_cut_needs_sandbox",
+      "score": null,
+      "band": null,
+      "class": null,
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": []
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": false,
+        "asks_first": false,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": false,
+        "asks_first": false,
+        "network_cut": true
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": false,
+        "asks_first": true,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": false,
+        "asks_first": true,
+        "network_cut": true
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": true,
+        "asks_first": false,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": true,
+        "asks_first": false,
+        "network_cut": true
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": true,
+        "asks_first": true,
+        "network_cut": false
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    },
+    {
+      "switches": {
+        "sandbox": true,
+        "read_only": true,
+        "asks_first": true,
+        "network_cut": true
+      },
+      "valid": true,
+      "reason": null,
+      "score": 75,
+      "band": "open_gaps",
+      "class": "B",
+      "class_status": "provisional",
+      "kinds": {
+        "money": "none_known",
+        "sends_out": "bounded",
+        "keys": "bounded",
+        "runs_commands": "bounded",
+        "changes_files": "bounded"
+      },
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ]
+    }
+  ]
+}

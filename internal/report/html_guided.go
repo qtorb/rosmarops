@@ -403,6 +403,14 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 				pid, pid, c.t(see, nil), pid, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
 			c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span>`, pid, html.EscapeString(text))
 		}
+		// BV-249 §8: «Try it just this once» on Grok Build's P2.
+		if g.key == profiles.GuidedGrok && p.id == profiles.P2 && c.sandboxOS() {
+			note := ""
+			if c.v.macOS() {
+				note = "try.grok.macos"
+			}
+			c.renderTry(tryID("gv", g.key, 0), name, []tryCmd{{cmd: profiles.GrokSessionCommand}}, note)
+		}
 		c.w(`</div>`)
 		c.w(`<p class="proof" data-ga="%s" data-gs="%s"%s>%s %s</p>`, g.key, p.id, hide(p.id == def),
 			boldLead(c.t("cc.lab", map[string]string{"profile": c.cat.Text(p.name, nil)}), ": "), c.t("gp.G4", g4))
