@@ -199,3 +199,28 @@ func TestBV251_AutoAllowByVersion(t *testing.T) {
 		t.Errorf("factory Claude Code %d %s, want 31 exposed", s1, b1)
 	}
 }
+
+// CTO-53 §1.2: channelsEnabled false in the managed settings turns Claude
+// Code's channels off; allowedChannelPlugins keeps only those it names.
+func TestBV251_ClaudeChannelPolicy(t *testing.T) {
+	chs := platform.AlwaysOnScan{Channels: []platform.InboundChannel{
+		{Product: knowledge.ClaudeCodeProduct, Platform: "telegram"},
+		{Product: knowledge.ClaudeCodeProduct, Platform: "discord"},
+		{Product: knowledge.ClineProduct, Platform: "telegram"},
+	}}
+	f := false
+	managed := func(enabled *bool, allowed []string) platform.ClaudeSettingsScan {
+		return platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{{
+			Scope: platform.MCPScopeManaged, Status: platform.MCPSourceRead, ChannelsEnabled: enabled, AllowedChannelPlugins: allowed,
+		}}}
+	}
+	if got := pipeline.ClaudeChannelPolicy(chs, managed(&f, nil)).Channels; len(got) != 1 || got[0].Product != knowledge.ClineProduct {
+		t.Errorf("channelsEnabled false: %+v", got)
+	}
+	if got := pipeline.ClaudeChannelPolicy(chs, managed(nil, []string{"plugin:telegram@claude-plugins-official"})).Channels; len(got) != 2 || got[0].Platform != "telegram" {
+		t.Errorf("allowedChannelPlugins telegram: %+v", got)
+	}
+	if got := pipeline.ClaudeChannelPolicy(chs, platform.ClaudeSettingsScan{}).Channels; len(got) != 3 {
+		t.Errorf("no policy: %+v", got)
+	}
+}

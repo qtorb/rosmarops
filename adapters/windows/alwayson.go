@@ -33,7 +33,7 @@ func ReadAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string
 
 func readAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string, env agentdirs.Env) platform.AlwaysOnScan {
 	var scan platform.AlwaysOnScan
-	claudeAlwaysOn(&scan, claudeDir, repoRoots)
+	claudeAlwaysOn(&scan, home, claudeDir, repoRoots)
 	clineAlwaysOn(&scan, home, agentdirs.ClineDataDir(home, env), repoRoots)
 	hermes := l.HermesHome(home, env)
 	dirs := []string{hermes}
@@ -63,7 +63,7 @@ func readAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string
 // A channel runs only when Claude Code starts with --channels: at rest it is
 // launch_flag_required. Its .env is never opened; of access.json only
 // dmPolicy and how many entries allowFrom has are kept.
-func claudeAlwaysOn(scan *platform.AlwaysOnScan, dir string, repoRoots []string) {
+func claudeAlwaysOn(scan *platform.AlwaysOnScan, home, dir string, repoRoots []string) {
 	product := knowledge.ClaudeCodeProduct
 	for _, name := range subdirs(filepath.Join(dir, "channels")) {
 		chDir := filepath.Join(dir, "channels", name)
@@ -90,6 +90,23 @@ func claudeAlwaysOn(scan *platform.AlwaysOnScan, dir string, repoRoots []string)
 	}
 	for _, p := range subdirs(filepath.Join(dir, "projects")) {
 		addMemory(scan, product, dir, filepath.Join(dir, "projects", p, "memory"), false)
+	}
+	// autoMemoryDirectory in the user settings moves the memory
+	// (code.claude.com/docs/en/memory). Only that key is kept.
+	if raw, status, _ := readBounded(filepath.Join(dir, "settings.json")); status == platform.MCPSourceRead {
+		var s struct {
+			AutoMemoryDirectory string `json:"autoMemoryDirectory"`
+		}
+		if json.Unmarshal(raw, &s) == nil {
+			if p := strings.TrimSpace(s.AutoMemoryDirectory); p != "" {
+				if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+					p = filepath.Join(home, p[2:])
+				}
+				if filepath.IsAbs(p) {
+					addMemory(scan, product, dir, p, false)
+				}
+			}
+		}
 	}
 }
 

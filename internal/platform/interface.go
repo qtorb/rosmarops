@@ -316,6 +316,12 @@ type ClaudeSettingsFile struct {
 	AllowManagedPermissionRulesOnly bool
 	ManagedSourcesBehavior          string
 
+	// ChannelsEnabled and AllowedChannelPlugins are the managed settings'
+	// channel policy (BV-251, CTO-53 §1.2): managed files only; nil when
+	// absent.
+	ChannelsEnabled       *bool
+	AllowedChannelPlugins []string
+
 	// HasPolicyKey reports that the document sets a policy key: any key other
 	// than managedSourcesBehavior and wslInheritsWindowsSettings, to a value
 	// other than null (managed-settings, "When an admin document counts as

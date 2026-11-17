@@ -76,6 +76,8 @@ func TestReadAlwaysOn(t *testing.T) {
 	writeFile(t, filepath.Join(claude, "channels", "discord", ".env"), "")
 	writeFile(t, filepath.Join(repo, ".claude", "scheduled_tasks.json"), `[{"prompt":"secret"},{"prompt":"two"}]`)
 	writeFile(t, filepath.Join(claude, "projects", "p1", "memory", "MEMORY.md"), "12345")
+	writeFile(t, filepath.Join(claude, "settings.json"), `{"autoMemoryDirectory":"~/mem","permissions":{}}`)
+	writeFile(t, filepath.Join(home, "mem", "x.md"), "123")
 	data := filepath.Join(home, ".cline", "data")
 	writeFile(t, filepath.Join(data, "connectors", "telegram", "mybot.json"), `{"botUsername":"x"}`)
 	writeFile(t, filepath.Join(home, ".cline", "schedules", "x"), "")
@@ -113,11 +115,18 @@ func TestReadAlwaysOn(t *testing.T) {
 		t.Errorf("hermes cron: %+v", s)
 	}
 	mem := map[string]platform.AgentMemory{}
+	claudeMem := 0
 	for _, m := range scan.Memory {
 		mem[m.Product] = m
+		if m.Product == knowledge.ClaudeCodeProduct {
+			claudeMem++
+			if m.Path == filepath.Join(home, "mem") && (m.Files != 1 || m.Bytes != 3) {
+				t.Errorf("autoMemoryDirectory: %+v", m)
+			}
+		}
 	}
-	if m := mem[knowledge.ClaudeCodeProduct]; m.Files != 1 || m.Bytes != 5 {
-		t.Errorf("claude memory: %+v", m)
+	if claudeMem != 2 {
+		t.Errorf("claude memory folders: %d, want 2 (projects/p1/memory and autoMemoryDirectory)", claudeMem)
 	}
 	if m := mem[knowledge.ClineProduct]; m.Files != 1 || m.Bytes != 2 || !m.InRepository {
 		t.Errorf("cline memory bank: %+v", m)

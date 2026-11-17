@@ -81,6 +81,11 @@ type settingsFile struct {
 
 	AllowManagedPermissionRulesOnly bool   `json:"allowManagedPermissionRulesOnly"`
 	ManagedSourcesBehavior          string `json:"managedSourcesBehavior"`
+
+	// BV-251 (CTO-53 §1.2): the organization's channel policy, read in the
+	// managed settings.
+	ChannelsEnabled       *bool    `json:"channelsEnabled"`
+	AllowedChannelPlugins []string `json:"allowedChannelPlugins"`
 }
 
 // controlKeys are the managed settings keys that are not policy keys
@@ -322,6 +327,9 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	}
 	f.AllowManagedPermissionRulesOnly = s.AllowManagedPermissionRulesOnly
 	f.ManagedSourcesBehavior = s.ManagedSourcesBehavior
+	if f.Scope == platform.MCPScopeManaged {
+		f.ChannelsEnabled, f.AllowedChannelPlugins = s.ChannelsEnabled, s.AllowedChannelPlugins
+	}
 	return f
 }
 
