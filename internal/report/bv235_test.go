@@ -19,7 +19,8 @@ func TestBV235SpaceViewOldSchemaCompatible(t *testing.T) {
 	if err := json.Unmarshal(sv, &doc); err != nil {
 		t.Fatal(err)
 	}
-	newAgent := []string{"letter", "factory_score", "factory_letter", "groups", "kinds"}
+	// BV-251 adds orders, optional like the others.
+	newAgent := []string{"letter", "factory_score", "factory_letter", "groups", "kinds", "orders"}
 	seen := map[string]bool{}
 	for _, a := range doc["agents"].([]any) {
 		m := a.(map[string]any)

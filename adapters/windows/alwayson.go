@@ -286,14 +286,14 @@ func MemoryStat(path string) (files int, size int64, ok bool) {
 	if !info.IsDir() {
 		return 0, 0, false
 	}
-	files, size = memoryWalk(os.DirFS(path))
+	files, size = MemoryWalk(os.DirFS(path))
 	return files, size, true
 }
 
-// memoryWalk counts the regular files of fsys and their sizes with
+// MemoryWalk counts the regular files of fsys and their sizes with
 // fs.ReadDir and DirEntry.Info only: no file is opened (tested with a file
 // system that fails on any file open).
-func memoryWalk(fsys fs.FS) (files int, size int64) {
+func MemoryWalk(fsys fs.FS) (files int, size int64) {
 	entries := 0
 	var walk func(dir string, depth int)
 	walk = func(dir string, depth int) {
