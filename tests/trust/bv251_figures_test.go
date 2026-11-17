@@ -17,6 +17,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/pipeline"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/profiles"
 	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/rules"
 )
@@ -160,4 +161,41 @@ func TestBV251_NoSourceNoFinding(t *testing.T) {
 		t.Errorf("Hermes orders %+v, want only_you", o)
 	}
 	_ = graph.EdgeWakes
+}
+
+// CTO-64 §2 (advisor 17-11): with Claude Code's sandbox effective and
+// autoAllowBashIfSandboxed not written, the runs row carries
+// sandbox_autoallow_default_by_version; written (P2 writes false), it does
+// not. Score and class do not change.
+func TestBV251_AutoAllowByVersion(t *testing.T) {
+	prev := graph.HostOS
+	defer func() { graph.HostOS = prev }()
+	graph.HostOS = "linux"
+	carries := func(v report.V2) bool {
+		for _, c := range overviewByProduct(v, knowledge.ClaudeCodeProduct).Rows {
+			if c.Row == rules.RowRunsCommands {
+				for _, a := range c.Data.Assumptions {
+					if a == rules.AssumeSandboxAutoAllowByVersion {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+	written := bv252Claude(t, nil, profiles.P2, nil)
+	unwritten := bv252Claude(t, nil, profiles.P2, func(s *platform.ClaudeSandbox, _ *platform.ClaudePermissions) {
+		s.AutoAllowBash, s.AutoAllowBashSet = false, false
+	})
+	factory := bv252Claude(t, nil, "", nil)
+	if carries(written) || carries(factory) {
+		t.Errorf("assumption with the key written (P2) or without a sandbox (factory)")
+	}
+	if !carries(unwritten) {
+		t.Errorf("no assumption with an effective sandbox and the key not written")
+	}
+	s1, b1, _ := r2AgentIndexID(t, factory, knowledge.ClaudeCodeProduct)
+	if s1 != 31 || b1 != "exposed" {
+		t.Errorf("factory Claude Code %d %s, want 31 exposed", s1, b1)
+	}
 }

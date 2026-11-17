@@ -79,6 +79,8 @@ type sandboxState struct {
 	// autoAllow: sandbox.autoAllowBashIfSandboxed, true when absent (BV-249
 	// §3.1): in an effective sandbox every command runs without asking.
 	autoAllow bool
+	// autoAllowSet: a layer writes autoAllowBashIfSandboxed (CTO-64 §2).
+	autoAllowSet bool
 	// allowRead re-opens paths under denyRead; allowWrite adds where a
 	// sandboxed command writes besides the project. Relative paths of a
 	// project's settings are resolved against that project; those of the
@@ -334,6 +336,7 @@ func sessionSandbox(inForce []Node, root string) sandboxState {
 	st.sure = val(ruleSandboxEnabled, false) && val(ruleSandboxFail, false)
 	st.noEscape = !val(ruleSandboxUnsandboxed, true)
 	st.autoAllow = val(ruleSandboxAutoAllow, true)
+	st.autoAllowSet = keys[strings.TrimSuffix(ruleSandboxAutoAllow, "=")] != nil
 	if p := keys[strings.TrimSuffix(ruleSandboxEnabled, "=")]; p != nil && p.value {
 		st.enabledCap = p.node
 	}

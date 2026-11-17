@@ -866,6 +866,7 @@
   "unknown.windows_sandbox_unknown": "Your {agent} settings do not say which Windows sandbox to use, so {agent} picks one when it starts. Assumes the one that isolates least: it does not block reads and isolates the network less.",
   "unknown.startup_file_runs_later": "It can write anywhere on your computer without asking you, including the files that run when you open the terminal or log in. What it leaves there will run later, outside its control, and could read your keys.",
   "unknown.auto_without_sandbox_unknown": "If your system doesn't have Antigravity CLI's sandbox, its documentation doesn't say what «Auto» mode does.",
+  "unknown.sandbox_autoallow_default_by_version": "Claude Code 2.1.325 and later ask before sandboxed commands when this setting isn't written; RosmarOps can't read your version and assumes they don't ask.",
   "session.first.title": "RosmarOps · this project brings:",
   "session.changes.title": "RosmarOps · new since you last opened this project:",
   "session.item.allow_rule": "permission without asking: {rule}",

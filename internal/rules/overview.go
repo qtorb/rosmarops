@@ -304,6 +304,7 @@ func overview(oi overviewInputs) []OverviewAgent {
 		a.Services = oi.services[n.ID] // BV-121: catalog MCP servers it uses
 		a.Kinds = oi.kinds(a, oi.view(n.ID))
 		a.Declared = oi.declaredOf(n.Platform)
+		autoAllowByVersion(a.Rows, oi.view(n.ID)) // CTO-64 §2: after the kinds, no score or class change
 		out = append(out, a)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Agent < out[j].Agent })

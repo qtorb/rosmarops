@@ -124,7 +124,7 @@ var AllAssumptions = []string{
 	AssumeDefaultModeDependsOnVersion,
 	graph.AssumeDeclaredByYou, graph.AssumeNotDeclared, graph.AssumeMeasuredLocalSetting,
 	graph.AssumeStartupFileRunsLater, AssumeAutoWithoutSandboxUnknown,
-	AssumeLaunchStateUnknown,
+	AssumeLaunchStateUnknown, AssumeSandboxAutoAllowByVersion,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps

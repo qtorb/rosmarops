@@ -365,3 +365,22 @@ func finishAlwaysOn(in Input, res *Result) {
 	sortFindings(res.Dismissed)
 	res.Today = pickToday(res.Findings)
 }
+
+// AssumeSandboxAutoAllowByVersion (CTO-64 §2, advisor 17-11): Claude Code's
+// runs row when its sandbox is effective and autoAllowBashIfSandboxed is not
+// written. RosmarOps cannot read the installed version and assumes true (the
+// default before 2.1.325). It changes no score and no class.
+const AssumeSandboxAutoAllowByVersion = "sandbox_autoallow_default_by_version"
+
+// autoAllowByVersion adds AssumeSandboxAutoAllowByVersion to Claude Code's
+// runs row when its sandbox is effective and the key is not written.
+func autoAllowByVersion(rows []OverviewCell, v *agentView) {
+	if v == nil || v.node.Platform != knowledge.ClaudeCodeProduct || !graph.SandboxAutoAllowUnwritten(v.inForce, v.repoRoots) {
+		return
+	}
+	for i := range rows {
+		if rows[i].Row == RowRunsCommands {
+			rows[i].Data.Assumptions = sortedUnique(append(rows[i].Data.Assumptions, AssumeSandboxAutoAllowByVersion))
+		}
+	}
+}
