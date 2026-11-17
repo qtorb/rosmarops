@@ -3,6 +3,7 @@ package report
 import (
 	"github.com/qtorb/rosmarops/internal/exposure"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/hostenv"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/pipeline"
@@ -18,6 +19,7 @@ func evaluate(in V2Input, g graph.Graph, fams map[string]string) rules.Result {
 		ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
 		Hermes: in.Hermes, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Antigravity: in.Antigravity,
 		Declared: in.Declared, GrokBot: in.GrokBot, Cursor: in.Cursor, DeclaredAt: in.DeclaredAt,
+		WSL: in.Environment != nil && in.Environment.Kind == hostenv.KindWSL,
 	})
 }
 

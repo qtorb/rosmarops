@@ -954,7 +954,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 			BinarySkipped: binarySkipped,
 			Declared:      declaredAnswers(st), DeclaredAt: declaredAt(st), GrokBot: grokBotScan, Cursor: cursorRead,
-			Environment: environment,
+			Environment: environment, HostOS: runtime.GOOS,
 		})
 	}
 	v2, ruled := buildV2()

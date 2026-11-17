@@ -37,7 +37,7 @@ var staticKeys = []string{
 	"evidence.edges",
 	"group.family.one", "group.family.other", "group.outside_repos",
 	"action.file_missing",
-	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "coverage.claude_desktop_two_configs", "legacy.none",
+	"findings.none", "posture.none", "coverage.none", "coverage.binary_skipped.one", "coverage.binary_skipped.other", "coverage.claude_desktop_two_configs", "coverage.windows.wsl_containers_not_read", "legacy.none",
 	"legacy.vscode.first_run", "legacy.vscode.first_run.one", "legacy.vscode.first_run.recent", "finding.cred_in_git.what.one",
 	// BV-39
 	"section.assumptions", "console.summary", "console.report",

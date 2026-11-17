@@ -46,7 +46,7 @@ func TestClaudeDesktopTwoConfigs(t *testing.T) {
 			if got := claudeDesktopTwoConfigs(g); got != tc.want {
 				t.Errorf("claudeDesktopTwoConfigs = %v, want %v", got, tc.want)
 			}
-			notes := coverageNotes(g)
+			notes := coverageNotes(g, "")
 			has := len(notes) == 1 && notes[0] == CoverageNoteClaudeDesktopTwoConfigs
 			if has != tc.want {
 				t.Errorf("coverageNotes = %v, want note present = %v", notes, tc.want)
