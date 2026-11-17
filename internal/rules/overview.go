@@ -654,8 +654,13 @@ func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
 		decider, assume = DeciderBlocked, nil // BV-237: deny of bash
 	}
 	scope := ScopeMachine
-	if decider == DeciderBlocked {
+	switch {
+	case decider == DeciderBlocked:
 		scope = ScopeNone
+	case graph.GrokReadsOnlyProjects(v.inForce):
+		// BV-249 §3.2 (Albert 17-11): with profile = "strict" in force its
+		// commands run in the sandbox, as Claude Code's with an effective one.
+		scope = ScopeSandbox
 	}
 	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: OriginConfigured}
 	pre := 0
