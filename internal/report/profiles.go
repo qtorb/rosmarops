@@ -21,6 +21,8 @@ type ProfileInput struct {
 	Product  string
 	Declared map[string]map[string]string
 	GrokBot  platform.GrokBotScan
+	// Grok is the pass's Grok Build scan, for its P2 (BV-249 §3.2).
+	Grok *platform.GrokScan
 }
 
 // profilePass evaluates one profile's graph with its settings; every other
@@ -33,8 +35,11 @@ func profilePass(in V2Input, fams map[string]string, p ProfileInput) *factoryRes
 	fin := in
 	s := p.Settings
 	fin.ClaudeSettings = &s
-	if p.Product != "" {
+	if p.Product != "" && p.Grok == nil { // Cursor's and Grok Bot's declared passes
 		fin.Declared, fin.GrokBot = p.Declared, p.GrokBot
+	}
+	if p.Grok != nil {
+		fin.Grok = *p.Grok
 	}
 	return passOf(fin, *p.Graph, fams)
 }
@@ -73,7 +78,7 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 			for _, pa := range r.idx.Agents {
 				if pa.AgentID == a.AgentID && pa.Value != nil {
 					c, ok := r.classes[pa.AgentID]
-					a.Profiles = append(a.Profiles, index.Profile{Profile: p.ID, Value: *pa.Value, Letter: classOf(c, ok, pa.Band)})
+					a.Profiles = append(a.Profiles, index.Profile{Profile: p.ID, OS: v.OS, Value: *pa.Value, Letter: classOf(c, ok, pa.Band)})
 				}
 			}
 		}
@@ -82,7 +87,7 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 		if product != knowledge.ClaudeCodeProduct || v.Index.Machine.Value == nil || m.Value == nil {
 			continue
 		}
-		mp := index.MachineProfile{Profile: index.Profile{Profile: p.ID, Value: *m.Value, Letter: index.NoClass()}, AgentID: m.AgentID}
+		mp := index.MachineProfile{Profile: index.Profile{Profile: p.ID, OS: v.OS, Value: *m.Value, Letter: index.NoClass()}, AgentID: m.AgentID}
 		for _, pa := range r.idx.Agents {
 			if pa.AgentID == m.AgentID {
 				c, ok := r.classes[pa.AgentID]

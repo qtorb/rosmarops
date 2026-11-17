@@ -25,6 +25,9 @@ const (
 	ruleSandboxUnsandboxed = "sandbox.allowUnsandboxedCommands="
 	ruleSandboxDomain      = "sandbox.network.allowedDomains="
 	ruleSandboxDenyRead    = "sandbox.filesystem.denyRead="
+	ruleSandboxAutoAllow   = "sandbox.autoAllowBashIfSandboxed="
+	ruleSandboxAllowRead   = "sandbox.filesystem.allowRead="
+	ruleSandboxAllowWrite  = "sandbox.filesystem.allowWrite="
 	ruleGrokSandboxProfile = "sandbox.profile = "
 
 	approvalSetting = "unknown"
@@ -73,6 +76,17 @@ type sandboxState struct {
 	noEscape bool
 	denyRead []string
 	domains  []string
+	// autoAllow: sandbox.autoAllowBashIfSandboxed, true when absent (BV-249
+	// §3.1): in an effective sandbox every command runs without asking.
+	autoAllow bool
+	// allowRead re-opens paths under denyRead; allowWrite adds where a
+	// sandboxed command writes besides the project. Relative paths of a
+	// project's settings are resolved against that project; those of the
+	// other layers (relative to ~/.claude) are left out.
+	allowRead, allowWrite []string
+	// enabledCap is the sandbox.enabled capability in force: the way of the
+	// commands the sandbox runs without asking.
+	enabledCap *Node
 }
 
 // effective reports the sandbox contains the session's shell commands: it is
@@ -100,7 +114,32 @@ func (s claudeSession) blocksReadsOutside(inForce []Node) bool {
 // sandboxDenies reports f is under one of the session's sandbox denyRead
 // paths (~/ resolved against home).
 func (s claudeSession) sandboxDenies(f, home string) bool {
+	for _, p := range s.sb.allowRead {
+		if within(expandHome(p, home), f) {
+			return false
+		}
+	}
 	for _, p := range s.sb.denyRead {
+		if within(expandHome(p, home), f) {
+			return true
+		}
+	}
+	return false
+}
+
+// sandboxRunsAll reports the session's commands run without asking inside an
+// effective sandbox (BV-249 §3.1, CTO-59 §1).
+func (s claudeSession) sandboxRunsAll() bool {
+	return s.sandboxEffective() && s.sb.autoAllow && s.sb.enabledCap != nil
+}
+
+// sandboxWrites reports a sandboxed command of the session writes f: inside
+// the project or an allowWrite path (BV-249 §3.1).
+func (s claudeSession) sandboxWrites(f, home string) bool {
+	if s.root != "" && within(s.root, f) {
+		return true
+	}
+	for _, p := range s.sb.allowWrite {
 		if within(expandHome(p, home), f) {
 			return true
 		}
@@ -248,18 +287,37 @@ func sessionSandbox(inForce []Node, root string) sandboxState {
 	type pick struct {
 		rank  int
 		value bool
+		node  *Node
 	}
 	keys := map[string]*pick{}
 	var st sandboxState
-	for _, c := range inForce {
+	relative := func(c Node, p string) (string, bool) {
+		if strings.HasPrefix(p, "~") || strings.HasPrefix(p, "/") || len(p) > 1 && p[1] == ':' {
+			return p, true
+		}
+		if root == "" || !strings.HasPrefix(c.AppliesIn, "project") {
+			return "", false
+		}
+		return joinLike(root, p), true
+	}
+	for i := range inForce {
+		c := inForce[i]
 		if !isSandboxSetting(c) || !appliesTo(c, root) {
 			continue
 		}
 		key, value, _ := strings.Cut(c.Rule, "=")
 		switch key + "=" {
-		case ruleSandboxEnabled, ruleSandboxFail, ruleSandboxUnsandboxed:
+		case ruleSandboxEnabled, ruleSandboxFail, ruleSandboxUnsandboxed, ruleSandboxAutoAllow:
 			if p := keys[key]; p == nil || layerRank(c) < p.rank {
-				keys[key] = &pick{layerRank(c), value == "true"}
+				keys[key] = &pick{layerRank(c), value == "true", &inForce[i]}
+			}
+		case ruleSandboxAllowRead:
+			if p, ok := relative(c, c.TargetScope); ok {
+				st.allowRead = append(st.allowRead, p)
+			}
+		case ruleSandboxAllowWrite:
+			if p, ok := relative(c, c.TargetScope); ok {
+				st.allowWrite = append(st.allowWrite, p)
 			}
 		case ruleSandboxDomain:
 			st.domains = append(st.domains, c.TargetScope)
@@ -275,6 +333,12 @@ func sessionSandbox(inForce []Node, root string) sandboxState {
 	}
 	st.sure = val(ruleSandboxEnabled, false) && val(ruleSandboxFail, false)
 	st.noEscape = !val(ruleSandboxUnsandboxed, true)
+	st.autoAllow = val(ruleSandboxAutoAllow, true)
+	if p := keys[strings.TrimSuffix(ruleSandboxEnabled, "=")]; p != nil && p.value {
+		st.enabledCap = p.node
+	}
+	sort.Strings(st.allowRead)
+	sort.Strings(st.allowWrite)
 	sort.Strings(st.denyRead)
 	sort.Strings(st.domains)
 	return st

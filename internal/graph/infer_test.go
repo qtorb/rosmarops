@@ -86,6 +86,20 @@ func inferGraph(t *testing.T, settings platform.ClaudeSettingsScan) graph.Graph 
 			t.Fatal("token in graph")
 		}
 	}
+	return withoutStartup(g)
+}
+
+// withoutStartup drops the reaches edges of rule (b-iii) (BV-249 §4): these
+// tests pin the direct ways; the startup-file way has its own test
+// (startup_test.go).
+func withoutStartup(g graph.Graph) graph.Graph {
+	edges := g.Edges[:0:0]
+	for _, e := range g.Edges {
+		if !contains(e.Assumptions, graph.AssumeStartupFileRunsLater) {
+			edges = append(edges, e)
+		}
+	}
+	g.Edges = edges
 	return g
 }
 

@@ -41,6 +41,28 @@ func ShellNetworkSandboxed(inForce []Node, repoRoots []string) bool {
 	return true
 }
 
+// GrokReadsOnlyProjects reports a Grok Build client whose [sandbox] profile in
+// force limits reads to the working directory (strict, BV-249 §3.2).
+func GrokReadsOnlyProjects(caps []Node) bool {
+	return grokSandboxProfile(caps) == grokProfileStrict
+}
+
+// ShellSandbox reports how Claude Code's shell commands run in every session
+// (BV-249 §3.1): contained, inside an effective sandbox in each one; and
+// autoAllow, without asking there (sandbox.autoAllowBashIfSandboxed, true
+// when absent) in each one.
+func ShellSandbox(inForce []Node, repoRoots []string) (contained, autoAllow bool) {
+	sorted := append([]Node{}, inForce...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	sessions := claudeSessions(sorted, repoRoots, "")
+	contained, autoAllow = len(sessions) > 0, len(sessions) > 0
+	for _, s := range sessions {
+		contained = contained && s.sandboxEffective()
+		autoAllow = autoAllow && s.sandboxRunsAll()
+	}
+	return contained, autoAllow
+}
+
 // CredentialFiles returns the distinct files of a credential's locations.
 func CredentialFiles(cred Node) []string { return credentialFiles(cred) }
 

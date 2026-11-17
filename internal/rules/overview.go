@@ -595,6 +595,10 @@ func (oi overviewInputs) grokCells(v *agentView) []OverviewCell {
 
 func (oi overviewInputs) grokReadsCell(v *agentView) OverviewCell {
 	cell := OverviewCell{Row: RowReadsFiles, Decider: DeciderNobody, Scope: ScopeMachine, Origin: OriginProductDefault}
+	// BV-249 §3.2 (CTO-58 §1.3): the strict profile reads only the CWD.
+	if graph.GrokReadsOnlyProjects(v.inForce) {
+		cell.Scope, cell.Origin = ScopeSameProject, OriginConfigured
+	}
 	creds, high := 0, 0
 	for cred := range oi.reaches[v.node.ID] {
 		creds++
@@ -650,8 +654,13 @@ func (oi overviewInputs) grokRunsCell(v *agentView, mode string) OverviewCell {
 		decider, assume = DeciderBlocked, nil // BV-237: deny of bash
 	}
 	scope := ScopeMachine
-	if decider == DeciderBlocked {
+	switch {
+	case decider == DeciderBlocked:
 		scope = ScopeNone
+	case graph.GrokReadsOnlyProjects(v.inForce):
+		// BV-249 §3.2 (Albert 17-11): with profile = "strict" in force its
+		// commands run in the sandbox, as Claude Code's with an effective one.
+		scope = ScopeSandbox
 	}
 	cell := OverviewCell{Row: RowRunsCommands, Decider: decider, Scope: scope, Origin: OriginConfigured}
 	pre := 0
@@ -1085,8 +1094,11 @@ func (oi overviewInputs) antigravityRunsCell(v *agentView, level string) Overvie
 	case agAlwaysProceed:
 		cell.Decider = DeciderNobody
 	case agAuto:
-		cell.Decider, cell.Assumed = DeciderModel, true
-		assume = antigravityBaseAssumptions(AssumeReviewerModelPermits)
+		// BV-249 §4 (CTO-59 §3): in auto the terminal runs in its sandbox; the
+		// commands that ask to leave it are judged by a model (second way).
+		cell.Decider, cell.Scope, cell.Assumed = DeciderModel, ScopeSandbox, true
+		cell.Also = &OverviewAlso{Decider: DeciderModel, Scope: ScopeMachine}
+		assume = antigravityBaseAssumptions(AssumeReviewerModelPermits, AssumeAutoWithoutSandboxUnknown)
 	default: // request-review: every command asks
 		cell.Decider = DeciderYou
 	}
@@ -1497,7 +1509,7 @@ func (oi overviewInputs) codexRunsCell(v *agentView, mode string, configured, ru
 		// Unparsed rules\*.rules could let commands run without asking (CTO-16 §4).
 		assume = append(assume, AssumeExecRulesNotEvaluated)
 	}
-	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet {
+	if !untrustedAsks && mode != codexDanger && !windowsSandboxSet && graph.HostOS == "windows" {
 		// The command runs in a Windows sandbox whose implementation is chosen
 		// at launch; assume the least isolating one (CTO-16 §4, point 9).
 		assume = append(assume, AssumeWindowsSandboxUnknown)
@@ -2015,6 +2027,17 @@ func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 	var cell OverviewCell
 	if len(cs) == 0 {
 		cell = oi.questionCell(v, RowRunsCommands, graph.CapExecuteShell)
+		// BV-249 §3.1 (Albert 16-11): Claude Code's commands run in its
+		// sandbox in every session: asking you, or without asking with
+		// autoAllowBashIfSandboxed.
+		if v.node.Platform == knowledge.ClaudeCodeProduct && cell.Decider != DeciderBlocked {
+			if contained, auto := graph.ShellSandbox(v.inForce, v.repoRoots); contained {
+				cell.Decider, cell.Scope, cell.Origin = DeciderYou, ScopeSandbox, OriginConfigured
+				if auto {
+					cell.Decider = DeciderNobody
+				}
+			}
+		}
 	} else {
 		cell = pick(RowRunsCommands, cs)
 		r := NoFindingFeedsOtherFindings

@@ -116,9 +116,24 @@ func Infer(g Graph, repoRoots []string, home string) (Graph, error) {
 		case p.claude.Product:
 			in := p.claudeInference(client, repoRoots, home)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+			// BV-249 (b-iii): a startup file it writes without a person.
+			inferred = append(inferred, startupReaches(client, g.Nodes, home, func(f string) []startupWay {
+				var ws []startupWay
+				for _, w := range in.writeWays(f) {
+					ws = append(ws, startupWay{w.v.cap, w.assumptions})
+				}
+				return ws
+			})...)
 		case knowledge.CursorProduct:
 			in := p.cursorInference(client, repoRoots)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
+			inferred = append(inferred, startupReaches(client, g.Nodes, home, func(f string) []startupWay {
+				var ws []startupWay
+				for _, w := range in.writeWays(f, "") {
+					ws = append(ws, startupWay(w))
+				}
+				return ws
+			})...)
 		case knowledge.HermesProduct:
 			in := p.hermesInference(client)
 			inferred = append(in.reaches(g.Nodes), in.writes(g.Nodes)...)
@@ -543,6 +558,12 @@ func (in inference) readWays(files []string) []inferredWay {
 				}
 				use(via{*in.bashVia, baseAssumptions(AssumeBashToolAvailable, AssumeNoPreToolUseHookBlocks)}, false, nil, extra...)
 			}
+			// BV-249 §3.1 (CTO-59 §1): with autoAllowBashIfSandboxed, every
+			// command runs without asking inside the effective sandbox; it
+			// reads what the sandbox lets it (the Read deny rules merged in).
+			if s.sandboxRunsAll() && cov == nil && (inside || !blockReads) && !s.sandboxDenies(f, in.home) {
+				use(via{*s.sb.enabledCap, baseAssumptions(AssumeNoPreToolUseHookBlocks)}, false, nil)
+			}
 			// The modes: the file tools and any command, on a covered file
 			// only through a program, which an effective sandbox stops.
 			if s.modeCap != nil && !(cov != nil && eff) {
@@ -657,11 +678,25 @@ func (in inference) writeWays(file string) []inferredWay {
 			partial(via{*sess.modeCap, hook(append([]string{AssumeAutoClassifierPermits}, modeAssumptions(sess)...)...)})
 		}
 	}
+	// BV-249 §3.1: inside an effective sandbox a command writes only in the
+	// project and allowWrite; with autoAllowBashIfSandboxed any command does
+	// it without asking. contained: every session's sandbox keeps file out.
+	contained := len(in.sessions) > 0
+	for _, sess := range in.sessions {
+		writes := sess.sandboxWrites(file, in.home)
+		contained = contained && sess.sandboxEffective() && !writes
+		if sess.sandboxRunsAll() && writes && !protected && !seen[sess.sb.enabledCap.ID] {
+			seen[sess.sb.enabledCap.ID] = true
+			partial(via{*sess.sb.enabledCap, hook(AssumeShellWriteUnchecked)})
+		}
+	}
 	for _, c := range in.inForce {
 		switch {
 		case c.Type == CapWriteFiles && c.Approval == ApprovalAllow && !protected &&
 			matchRulePath(c.TargetScope, c.Approval, in.scopeOf(c), file):
 			blocked(via{c, hook()})
+		case contained && c.Type == CapExecuteShell:
+			// A command of a shell allow or a launcher stays in the sandbox.
 		case c.Type == CapExecuteShell && c.Approval == ApprovalAllow && c.TargetScope == scopeAll &&
 			!in.shellRules(shellTool(c.Rule)):
 			partial(via{c, hook(AssumeShellWriteUnchecked)})

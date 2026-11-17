@@ -12,6 +12,7 @@ package rules
 import (
 	"log/slog"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ import (
 // Version is the rules version recorded in the report's provenance, and
 // RuleVersion the version of each rule. Neither enters a finding id.
 const (
-	Version     = "5" // BV-245: the terminal reads the computer; the way out from the sends row
+	Version     = "6" // BV-249: startup files (b-iii), Antigravity auto in its sandbox
 	RuleVersion = "3" // BV-117/BV-121: added mcp_external_action
 )
 
@@ -87,6 +88,11 @@ const (
 	// an implementation at launch. Assume the least-isolating one (CTO-16
 	// point 9).
 	AssumeWindowsSandboxUnknown = "windows_sandbox_unknown"
+
+	// AssumeAutoWithoutSandboxUnknown (BV-249 §4, CTO-59 §3): Antigravity CLI in
+	// «auto» runs its terminal in its sandbox; without that sandbox on the
+	// system, its documentation does not say what «auto» does.
+	AssumeAutoWithoutSandboxUnknown = "auto_without_sandbox_unknown"
 	// AssumeCompatCellRemoteUnknown: a Grok Build compatibility cell has no
 	// value in the file and xAI may set it remotely; assume it is on (CTO-16
 	// point 10).
@@ -117,6 +123,7 @@ var AllAssumptions = []string{
 	AssumeWindowsSandboxUnknown, AssumeCompatCellRemoteUnknown, AssumeAgentModelJudgesCommandSafety,
 	AssumeDefaultModeDependsOnVersion,
 	graph.AssumeDeclaredByYou, graph.AssumeNotDeclared, graph.AssumeMeasuredLocalSetting,
+	graph.AssumeStartupFileRunsLater, AssumeAutoWithoutSandboxUnknown,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -1530,7 +1537,9 @@ func (v *agentView) edgeWay(e graph.Edge, nodes map[string]graph.Node, base know
 		outside := w.code == "bash_read_only" || w.code == "mode_bypass" ||
 			w.code == "mode_auto_review" || w.code == "allowlist_shell" ||
 			readScopeOutsideProject(capNode)
-		if outside && !v.blockReads || w.code == "mode_run_everything" {
+		// BV-249 (b-iii): a startup file written outside the project reaches
+		// every credential of the computer.
+		if outside && !v.blockReads || w.code == "mode_run_everything" || slices.Contains(e.Assumptions, graph.AssumeStartupFileRunsLater) {
 			w.radius = RadiusAnyProject
 		}
 	}

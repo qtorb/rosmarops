@@ -23,6 +23,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/hostenv"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/intel"
 	"github.com/qtorb/rosmarops/internal/kit"
@@ -933,6 +934,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if unattended {
 		nt = defaultNotifier.probe(ctx)
 	}
+	// BV-249 §5: a container, WSL, a virtual machine or Windows Sandbox, read
+	// from files only; informative.
+	environment := hostenv.Detect()
 	buildV2 := func() (report.V2, rules.Result) {
 		return report.BuildV2(report.V2Input{
 			Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
@@ -950,6 +954,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
 			BinarySkipped: binarySkipped,
 			Declared:      declaredAnswers(st), DeclaredAt: declaredAt(st), GrokBot: grokBotScan, Cursor: cursorRead,
+			Environment: environment,
 		})
 	}
 	v2, ruled := buildV2()
@@ -1318,7 +1323,7 @@ func writeGraph(
 	// added to its user settings, assembled in memory and never written. A
 	// failure only leaves that profile unmeasured.
 	var measured []report.ProfileInput
-	for _, id := range profiles.Measured {
+	for _, id := range profiles.MeasuredOn(graph.HostOS) {
 		pin2, ok := pipeline.Profile(pin, id)
 		if !ok {
 			continue
@@ -1329,6 +1334,17 @@ func writeGraph(
 			continue
 		}
 		measured = append(measured, report.ProfileInput{ID: id, Graph: &pres.Graph, Settings: pin2.Settings})
+	}
+	// BV-249 §3.2: Grok Build's P2 (strict), where its sandbox exists.
+	if graph.HostOS != "windows" {
+		if pin2, ok := pipeline.GrokProfile(pin, profiles.P2); ok {
+			if pres, perr := pipeline.Assemble(pin2); perr != nil {
+				slog.Warn("graph: profile pass not built", "product", knowledge.GrokBuildProduct, "profile", profiles.P2, "err", perr)
+			} else {
+				g := pin2.Grok
+				measured = append(measured, report.ProfileInput{ID: profiles.P2, Product: knowledge.GrokBuildProduct, Graph: &pres.Graph, Settings: pin2.Settings, Grok: &g})
+			}
+		}
 	}
 	// BV-248 decision 9: Cursor's and Grok Bot's profiles, measured on the
 	// declared settings, in memory too.

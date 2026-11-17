@@ -201,8 +201,11 @@ type AgentIndex struct {
 // (BV-236 §4): its block added to Claude Code's user settings, in memory.
 type Profile struct {
 	Profile string `json:"profile"`
-	Value   int    `json:"value"`
-	Letter  Class  `json:"letter"`
+	// OS is the system it was measured on (BV-249 §6): windows, macos or
+	// linux, since P2 depends on it.
+	OS     string `json:"os"`
+	Value  int    `json:"value"`
+	Letter Class  `json:"letter"`
 }
 
 // MachineProfile is the computer's score with one profile of Claude Code

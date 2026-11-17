@@ -112,7 +112,9 @@ func TestEvaluateCursor_ReadAndSendWithItsActions(t *testing.T) {
 }
 
 // Annex 2 point 8: with readBoundary workspace in the user's sandbox.json
-// the radius is same_project, and the action is no longer offered.
+// the action is no longer offered. BV-249 (b-iii, CTO-59 §4.3): in
+// Auto-review (the factory answer) the reviewer may let a command write a
+// startup file anywhere, so the radius stays any_project.
 func TestEvaluateCursor_ReadBoundaryInForce(t *testing.T) {
 	sandbox := platform.CursorFile{
 		Path: cursorDir + "/sandbox.json", Kind: platform.CursorSandbox, Scope: platform.CursorScopeUser,
@@ -123,7 +125,7 @@ func TestEvaluateCursor_ReadBoundaryInForce(t *testing.T) {
 		if f.Rule != rules.RuleCredReadAndSend && f.Rule != rules.RuleCredReadable {
 			continue
 		}
-		if f.Radius != rules.RadiusSameProject {
+		if f.Radius != rules.RadiusAnyProject {
 			t.Errorf("%s: radius %s", f.Params.Service, f.Radius)
 		}
 		for _, a := range f.Actions {

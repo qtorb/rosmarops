@@ -1,0 +1,205 @@
+{
+  "format": "rosmarops.factory-scores/1",
+  "rosmarops_version": "dev",
+  "commit": "",
+  "generated_at": "2026-11-17T07:50:57Z",
+  "reference_computer": "R2",
+  "index_version": 5,
+  "rules_version": "0",
+  "knowledge_version": "antigravity-cli@2026-11-01;claude-code@2026-10-24;cline@2026-11-03;codex@2026-11-01;cursor@2026-10-25;gemini-cli@2026-11-08;github-copilot@2026-11-01;grok-bot@2026-11-14;grok-build@2026-11-08;hermes@2026-10-29",
+  "agents": [
+    {
+      "product": "claude-code",
+      "score": 31,
+      "band": "exposed",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 30
+        },
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        },
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "auto_classifier_permits",
+        "auto_mode_available",
+        "bash_tool_available",
+        "no_pretooluse_hook_blocks",
+        "process_runs_as_user",
+        "startup_file_runs_later",
+        "ui_mode_choice_unknown",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "cursor",
+      "score": 31,
+      "band": "exposed",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 30
+        },
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        },
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "auto_classifier_permits",
+        "config_file_protection_scope_unknown",
+        "declared_by_you",
+        "process_runs_as_user",
+        "shell_write_unchecked",
+        "startup_file_runs_later",
+        "team_policy_unknown",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "codex",
+      "score": 73,
+      "band": "open_gaps",
+      "findings": [
+        {
+          "code": "cred_readable",
+          "weight": 12
+        },
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "launch_flags_not_readable",
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "github-copilot",
+      "score": 76,
+      "band": "open_gaps",
+      "findings": [
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "ui_mode_choice_unknown",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "gemini-cli",
+      "score": 76,
+      "band": "open_gaps",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 8
+        }
+      ],
+      "assumptions": [
+        "launch_flags_not_readable",
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "cline",
+      "score": 27,
+      "band": "exposed",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 30
+        },
+        {
+          "code": "own_config_writable",
+          "weight": 15
+        },
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        },
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "grok-build",
+      "score": 32,
+      "band": "exposed",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 30
+        },
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ],
+      "assumptions": [
+        "launch_flags_not_readable",
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "hermes",
+      "score": 32,
+      "band": "exposed",
+      "findings": [
+        {
+          "code": "cred_read_and_send",
+          "weight": 30
+        },
+        {
+          "code": "cred_read_and_send",
+          "weight": 12
+        }
+      ],
+      "assumptions": [
+        "no_pretooluse_hook_blocks",
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    },
+    {
+      "product": "antigravity-cli",
+      "score": 76,
+      "band": "open_gaps",
+      "findings": [
+        {
+          "code": "own_instructions_writable",
+          "weight": 4
+        }
+      ],
+      "assumptions": [
+        "launch_flags_not_readable",
+        "process_runs_as_user",
+        "version_behaves_as_documented"
+      ]
+    }
+  ]
+}

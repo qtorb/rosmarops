@@ -375,10 +375,18 @@ type ClaudeSandbox struct {
 	// AllowUnsandboxedCommands is sandbox.allowUnsandboxedCommands (true by
 	// default): false closes the unsandboxed retry.
 	AllowUnsandboxedCommands, AllowUnsandboxedCommandsSet bool
+	// AutoAllowBash is sandbox.autoAllowBashIfSandboxed (true by default):
+	// sandboxed commands run without asking (BV-249 §3.1, CTO-59 §1).
+	AutoAllowBash, AutoAllowBashSet bool
 	// AllowedDomains is sandbox.network.allowedDomains; DenyRead is
 	// sandbox.filesystem.denyRead. Both merge across the settings files.
 	AllowedDomains []string
 	DenyRead       []string
+	// AllowRead and AllowWrite are sandbox.filesystem.allowRead and
+	// allowWrite (BV-249 §3.1): allowRead re-opens a path under denyRead
+	// ("." is the project in a project's settings), allowWrite adds where a
+	// sandboxed command writes besides the project.
+	AllowRead, AllowWrite []string
 }
 
 // InstructionScan lists the instruction files agents load (decision

@@ -1,0 +1,16 @@
+{
+  "version": "2026-11-16",
+  "files": [
+    {"os": "linux", "path": "~/.bashrc", "source_url": "https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: Bash reads ~/.bashrc for an interactive non-login shell"},
+    {"os": "linux", "path": "~/.profile", "source_url": "https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: a login shell reads ~/.bash_profile, ~/.bash_login or ~/.profile"},
+    {"os": "linux", "path": "~/.zshrc", "source_url": "https://zsh.sourceforge.io/Intro/intro_3.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: zsh sources .zshrc for interactive shells"},
+    {"os": "linux", "path": "~/.config/autostart/", "source_url": "https://specifications.freedesktop.org/autostart-spec/latest/", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: desktop entries in $XDG_CONFIG_HOME/autostart start at login"},
+    {"os": "darwin", "path": "~/.zshrc", "source_url": "https://zsh.sourceforge.io/Intro/intro_3.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: zsh, the default shell on macOS, sources .zshrc for interactive shells"},
+    {"os": "darwin", "path": "~/.zprofile", "source_url": "https://zsh.sourceforge.io/Intro/intro_3.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: zsh sources .zprofile for login shells (Terminal opens login shells)"},
+    {"os": "darwin", "path": "~/.bash_profile", "source_url": "https://www.gnu.org/software/bash/manual/html_node/Bash-Startup-Files.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: a login bash reads ~/.bash_profile"},
+    {"os": "darwin", "path": "~/Library/LaunchAgents/", "source_url": "https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: per-user agents in ~/Library/LaunchAgents load at login"},
+    {"os": "windows", "path": "~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1", "source_url": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: the current user, current host profile runs when PowerShell starts"},
+    {"os": "windows", "path": "~/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1", "source_url": "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: Windows PowerShell 5.1's current user, current host profile"},
+    {"os": "windows", "path": "~/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/", "source_url": "https://learn.microsoft.com/en-us/windows/win32/shell/knownfolderid", "verified": "BV-249 (CTO-59 §4.3), read 2026-11-16: FOLDERID_Startup, programs started at sign-in"}
+  ]
+}

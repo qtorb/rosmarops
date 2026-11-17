@@ -628,3 +628,39 @@ type AgentExtension struct {
 	Name    string
 	Product string
 }
+
+//go:embed startup-files.json
+var startupFilesJSON []byte
+
+// StartupFile is a file (or, ending in "/", a folder) that the system runs
+// later — when a terminal opens or the person signs in — outside any agent's
+// control (BV-249, CTO-59 §4.3), with its source.
+type StartupFile struct {
+	OS        string `json:"os"` // linux, darwin, windows (runtime.GOOS)
+	Path      string `json:"path"`
+	SourceURL string `json:"source_url"`
+	Verified  string `json:"verified"`
+}
+
+// StartupFiles are the startup files of goos, decoded strictly.
+func StartupFiles(goos string) ([]StartupFile, error) {
+	var doc struct {
+		Version string        `json:"version"`
+		Files   []StartupFile `json:"files"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(startupFilesJSON))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("decode startup files: %w", err)
+	}
+	var out []StartupFile
+	for _, f := range doc.Files {
+		if f.Path == "" || f.SourceURL == "" || f.Verified == "" {
+			return nil, fmt.Errorf("startup files: entry with an empty field")
+		}
+		if f.OS == goos {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}

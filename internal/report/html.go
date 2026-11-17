@@ -1512,6 +1512,9 @@ func HTMLKeys() []string {
 		"html.today.reach",
 		"html.group.red", "html.group.yellow", "html.chip.any_project", "html.gain",
 		"html.where",
+		// BV-249 §5: the environment's tag and sentences (sheet and Markdown)
+		"env.tag", "env.container", "env.engine.unidentified", "env.container.mounts", "env.container.nomounts",
+		"env.container.dockersock", "env.wsl", "env.vm", "env.wsb",
 		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
 		"html.projects.title", "html.projects.summary", "html.projects.item",

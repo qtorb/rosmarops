@@ -287,8 +287,17 @@ jobs:
         run: |
           go test ./tests/trust -run '^TestExposurePotential$' -count=1
           test -f dist/exposure-potential.json
-      - name: Add factory-scores.json and exposure-potential.json to the release
-        run: gh release upload "$TAG" dist/factory-scores.json dist/exposure-potential.json --repo "$GITHUB_REPOSITORY" --clobber
+      - name: Generate profile-scores.json
+        # BV-249 §6 (CTO-58 §5): each measured template per system on R2,
+        # validated against schemas/release/profile-scores.v1.schema.json.
+        env:
+          ROSMAROPS_PROFILE_SCORES_OUT: ${{ github.workspace }}/dist/profile-scores.json
+          ROSMAROPS_VERSION: ${{ env.TAG }}
+        run: |
+          go test ./tests/trust -run '^TestProfileScores$' -count=1
+          test -f dist/profile-scores.json
+      - name: Add factory-scores.json, exposure-potential.json and profile-scores.json to the release
+        run: gh release upload "$TAG" dist/factory-scores.json dist/exposure-potential.json dist/profile-scores.json --repo "$GITHUB_REPOSITORY" --clobber
 
   e2e-realistic:
     needs: release

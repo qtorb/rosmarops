@@ -202,8 +202,8 @@ func (c htmlCtx) renderBar() {
 func (c htmlCtx) renderSheet() {
 	v := c.v
 	m := c.sheetScore()
-	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1><div class="sh-sub">%s</div></div><dl class="sh-meta">`,
-		c.t("sheet.title", nil), c.t("sheet.sub", nil))
+	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1>%s<div class="sh-sub">%s</div>%s</div><dl class="sh-meta">`,
+		c.t("sheet.title", nil), c.envTag(), c.t("sheet.sub", nil), c.envLines())
 	program := "RosmarOps"
 	if v.engineVersion != "" {
 		program += " " + v.engineVersion
@@ -463,6 +463,28 @@ var sheetUses = []struct{ id, profile string }{
 	{"code", profiles.P1}, {"docs", profiles.P0}, {"mail", profiles.P0}, {"tasks", profiles.P3},
 }
 
+// sandboxOS reports a review on macOS or Linux, where the P2 templates exist
+// (BV-249 §3: on Windows they do not show).
+func (c htmlCtx) sandboxOS() bool { return c.v.OS != "" && c.v.OS != "windows" }
+
+// uses are sheetUses for this review: on macOS and Linux «I write code»
+// proposes P2 (BV-249 §3); on Windows, P1.
+func (c htmlCtx) uses() []struct{ id, profile string } {
+	out := append([]struct{ id, profile string }(nil), sheetUses...)
+	if c.sandboxOS() {
+		out[0].profile = profiles.P2
+	}
+	return out
+}
+
+// ccIDs are Claude Code's templates shown: P2 only on macOS and Linux.
+func (c htmlCtx) ccIDs() []string {
+	if c.sandboxOS() {
+		return []string{profiles.P0, profiles.P1, profiles.P2, profiles.P3}
+	}
+	return []string{profiles.P0, profiles.P1, profiles.P3}
+}
+
 // claudeProfile is Claude Code's score and class with a measured profile.
 func claudeProfile(a *index.AgentIndex, id string) (index.Profile, bool) {
 	if a == nil {
@@ -489,6 +511,9 @@ func (c htmlCtx) claudeAgent() *index.AgentIndex {
 // ncKey is a profile's «Doesn't cover»: P1's names Windows' missing sandbox
 // only on Windows (P1b elsewhere, BV-236 §6).
 func (c htmlCtx) ncKey(id string) string {
+	if id == profiles.P2 {
+		return "cc.P2.nc"
+	}
 	if id == profiles.P1 && c.v.OS != "" && c.v.OS != "windows" {
 		return "cc.P1b.nc"
 	}
@@ -520,13 +545,13 @@ func (c htmlCtx) renderProfileViews() {
 			gitKey = true
 		}
 	}
-	def := sheetUses[0]
+	def := c.uses()[0]
 
 	// §2 Computer profile.
 	c.w(`<section class="view pcv" id="v-pc" aria-labelledby="pc-q"><div class="pc"><div class="pc-side">`)
 	c.w(`<div><a class="back" href="#top" data-view="">%s</a></div><div><div class="k">%s</div><h2 id="pc-q">%s</h2></div><div class="q" role="radiogroup" aria-labelledby="pc-q">`,
 		c.t("pc.back", nil), c.t("pc.kicker", nil), c.t("pc.q", nil))
-	for _, u := range sheetUses {
+	for _, u := range c.uses() {
 		checked := ""
 		if u.id == def.id {
 			checked = " checked"
@@ -534,7 +559,7 @@ func (c htmlCtx) renderProfileViews() {
 		c.w(`<label><input type="radio" name="use" value="%s" data-profile="%s"%s><span class="radio" aria-hidden="true"></span>%s</label>`, u.id, u.profile, checked, c.t("pc.use."+u.id, nil))
 	}
 	c.w(`</div><div class="ba"><div class="k">%s</div>`, c.t("pc.computer", nil))
-	for _, id := range []string{profiles.P0, profiles.P1, profiles.P3} {
+	for _, id := range c.ccIDs() {
 		after, afterVal, agent := before, m.Value, m.AgentID
 		measured := false
 		for _, mp := range m.Profiles {
@@ -561,7 +586,7 @@ func (c htmlCtx) renderProfileViews() {
 		c.w(`</p></div>`)
 	}
 	// BV-238: guided profiles don't count in before → after (G2).
-	for _, u := range sheetUses {
+	for _, u := range c.uses() {
 		if c.guidedProposes(u.id) {
 			c.w(`<p class="g2" data-use="%s"%s>%s</p>`, u.id, hide(u.id == def.id), c.t("gp.G2", nil))
 		}
@@ -596,7 +621,7 @@ func (c htmlCtx) renderProfileViews() {
 		}
 		c.w(`<div class="prow"><span class="ag">%s</span><span class="now">%s%s</span>`, html.EscapeString(o.Agent), cls(now, ""), ntOf(val, band))
 		if o.Product == knowledge.ClaudeCodeProduct && a != nil {
-			for _, id := range []string{profiles.P0, profiles.P1, profiles.P3} {
+			for _, id := range c.ccIDs() {
 				c.w(`<div class="chg" data-p="%s"%s><span class="c1">%s`, id, hide(id == def.profile), c.t("cc.name."+id, nil))
 				if p, ok := claudeProfile(a, id); ok {
 					c.w(` · %s<span class="arrow">→</span>%s</span><span class="c2">%s</span></div>`, cls(now, ""), cls(p.Letter, ""),
@@ -605,7 +630,7 @@ func (c htmlCtx) renderProfileViews() {
 					c.w(`</span><span class="c2">%s</span></div>`, c.t("cc.nomeasure", nil))
 				}
 			}
-			for _, id := range []string{profiles.P0, profiles.P1, profiles.P3} {
+			for _, id := range c.ccIDs() {
 				c.w(`<div class="nc2" data-p="%s"%s>%s</div>`, id, hide(id == def.profile), c.t(c.ncKey(id), nil))
 			}
 			c.w(`<a class="chgl" href="#v-cc" data-view="v-cc">%s</a></div>`, c.t("pc.change", nil))
@@ -659,11 +684,15 @@ func (c htmlCtx) renderProfileViews() {
 	c.w(`<div><a class="back" href="#v-pc" data-view="v-pc">%s</a></div><div><div class="k">%s</div><h2 id="cc-title">%s</h2></div><p>%s</p><div class="nb">%s %s %s</div></div>`,
 		c.t("cc.back", nil), html.EscapeString(cc.Agent), c.t("cc.title", nil), c.t("cc.lead", nil), c.t("cc.today", nil), cls(cc.Letter, ""), ntOf(cc.Value, cc.Band))
 	c.w(`<div class="pf-main"><div class="uses"><span class="k">%s</span>`, c.t("cc.use", nil))
-	for _, u := range sheetUses {
+	for _, u := range c.uses() {
 		c.w(`<span class="owner" data-use="%s"%s>%s</span>`, u.id, hide(u.id == def.id), c.t("cc.use.where", map[string]string{"use": c.cat.Text("pc.use."+u.id, nil)}))
 	}
-	c.w(`</div><div class="cards" role="radiogroup" aria-labelledby="cc-title">`)
-	for _, id := range []string{profiles.P0, profiles.P1, profiles.P3} {
+	four := ""
+	if len(c.ccIDs()) == 4 {
+		four = " four" // BV-249 §3.3: four cards in one row
+	}
+	c.w(`</div><div class="cards%s" role="radiogroup" aria-labelledby="cc-title">`, four)
+	for _, id := range c.ccIDs() {
 		checked := ""
 		if id == def.profile {
 			checked = " checked"
@@ -676,7 +705,7 @@ func (c htmlCtx) renderProfileViews() {
 			c.w(`<span class="c2">%s</span>`, c.t("cc.nomeasure", nil))
 		}
 		c.w(`</div>`)
-		for _, u := range sheetUses {
+		for _, u := range c.uses() {
 			if u.profile == id {
 				c.w(`<span class="rectag" data-use="%s"%s>%s</span>`, u.id, hide(u.id == def.id), c.t("cc.rec", map[string]string{"use": c.cat.Text("cc.use.lc."+u.id, nil)}))
 			}
@@ -708,6 +737,12 @@ var profileRows = map[string][4][][2]string{
 		{{rules.KindChangesFiles, "cc.P1.does.1"}, {rules.KindRunsCommands, "cc.P1.does.2"}},
 		{{rules.KindRunsCommands, "cc.P1.asks.1"}, {rules.KindChangesFiles, "cc.P1.asks.2"}},
 		{{rules.KindKeys, "cc.P1.no.1"}, {rules.KindSendsOut, "cc.P1.no.2"}},
+	},
+	// BV-249 §3.1: «Sandboxed development».
+	profiles.P2: {
+		{{rules.KindChangesFiles, "cc.P1.does.1"}, {rules.KindRunsCommands, "cc.P2.does.2"}},
+		{{rules.KindRunsCommands, "cc.P2.asks.1"}, {rules.KindChangesFiles, "cc.P1.asks.2"}},
+		{{rules.KindKeys, "cc.P2.no.1"}, {rules.KindRunsCommands, "cc.P2.no.2"}, {rules.KindSendsOut, "cc.P1.no.2"}},
 	},
 	profiles.P3: {
 		{{rules.KindRunsCommands, "cc.P3.does.1"}},
@@ -745,20 +780,45 @@ func (c htmlCtx) copyText(id string) string {
 // renderApply is the apply bar and the lab test line of each profile
 // (BV-236 §3), the default one visible; where is the view's prefix for ids.
 func (c htmlCtx) renderApply(where string) {
-	for _, id := range []string{profiles.P0, profiles.P1, profiles.P3} {
+	for _, id := range c.ccIDs() {
 		pid := where + "-" + id
-		c.w(`<div class="apply" data-p="%s"%s><div><div class="steps">`, id, hide(id == sheetUses[0].profile))
+		c.w(`<div class="apply" data-p="%s"%s><div><div class="steps">`, id, hide(id == c.uses()[0].profile))
 		steps, nb, see, cp := []string{"cc.S1", "cc.S2", "cc.S3"}, "cc.S4", "cc.see.text", "cc.copy.text"
-		if id == profiles.P3 {
+		switch id {
+		case profiles.P3:
 			steps, nb, see, cp = []string{"cc.S5", "cc.S6"}, "cc.S7", "cc.see.cmd", "cc.copy.cmd"
+		case profiles.P2:
+			// BV-249 §3.1: its two steps and its closing note (Albert 17-11).
+			steps, nb = []string{"cc.P2.step.1", "cc.P2.step.2"}, "cc.S4.P2"
 		}
 		for i, s := range steps {
 			c.w(`<span><i>%d</i>%s</span>`, i+1, c.t(s, nil))
 		}
-		c.w(`</div><div class="nb">%s</div></div><div class="bt"><button type="button" class="btn s" data-see="%s" aria-controls="%s" aria-expanded="false">%s</button><button type="button" class="btn p" data-copy="%s" data-done="%s" data-fail="%s">%s</button></div>`,
-			boldLead(c.t(nb, nil), ". "), pid, pid, c.t(see, nil), pid, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
-		c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span></div>`, pid, html.EscapeString(c.copyText(id)))
-		c.w(`<p class="proof" data-p="%s"%s>%s %s</p>`, id, hide(id == sheetUses[0].profile),
+		c.w(`</div>`)
+		if nb != "" {
+			c.w(`<div class="nb">%s</div>`, boldLead(c.t(nb, nil), ". "))
+		}
+		c.w(`</div><div class="bt"><button type="button" class="btn s" data-see="%s" aria-controls="%s" aria-expanded="false">%s</button><button type="button" class="btn p" data-copy="%s" data-done="%s" data-fail="%s">%s</button></div>`,
+			pid, pid, c.t(see, nil), pid, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
+		c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span>`, pid, html.EscapeString(c.copyText(id)))
+		if id == profiles.P2 && c.sandboxOS() {
+			// BV-249 §8: «Try it just this once».
+			note := ""
+			if c.v.linux() {
+				note = "try.linux"
+			}
+			c.renderTry(tryID(where, "cc", 0), "Claude Code", c.claudeTryCmds(profiles.ClaudeSessionCommand), note)
+		}
+		if id == profiles.P2 {
+			// BV-249 §3.1: the second text, for each project.
+			pid2 := pid + "-project"
+			c.w(`<div class="bt"><button type="button" class="btn s" data-see="%s" aria-controls="%s" aria-expanded="false">%s</button><button type="button" class="btn p" data-copy="%s" data-done="%s" data-fail="%s">%s</button></div>`,
+				pid2, pid2, c.t(see, nil), pid2, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
+			c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span>`, pid2,
+				html.EscapeString(c.cat.Text("cc.P2.T2", nil)+"\n\n"+profiles.ProjectBlock(id)))
+		}
+		c.w(`</div>`)
+		c.w(`<p class="proof" data-p="%s"%s>%s %s</p>`, id, hide(id == c.uses()[0].profile),
 			boldLead(c.t("cc.lab", map[string]string{"profile": c.cat.Text("cc.name."+id, nil)}), ": "), c.t("cc.R1", nil))
 	}
 }
@@ -808,6 +868,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 @media (max-width:860px){.sh-head{grid-template-columns:minmax(0,1fr)}}
 .sh-title{font-size:28px;margin:4px 0 2px;letter-spacing:-.01em;line-height:1.2}
 .sh-sub{color:var(--s-ink2);font-size:14px}
+.sh-env{display:inline-block;font-size:12.5px;font-weight:600;color:var(--s-ink2);background:var(--s-line);border-radius:999px;padding:2px 8px;margin:2px 0 4px}
 .sh-meta{display:grid;grid-template-columns:repeat(2,auto);gap:4px 22px;margin:0;font-size:12.5px}
 .sh-meta div{display:flex;gap:8px}
 .sh-meta dt{color:var(--s-ink3)} .sh-meta dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
@@ -924,6 +985,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .gsteps li{display:flex;gap:6px;align-items:baseline}
 .gsteps li::before{counter-increment:gs;content:counter(gs);font-weight:700;color:var(--s-brand)}
 .cards.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cards.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 .prow.oth .olist{grid-column:3/-1;display:flex;flex-direction:column;gap:4px;min-width:0}
 .onames{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0;font-size:13.5px;font-weight:650}
 .oname{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
@@ -942,6 +1004,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .apply button.btn.p{background:var(--ink);color:var(--s-paper)}
 .ptext{grid-column:1/-1;margin:0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;background:var(--s-paper);border-radius:8px;padding:10px 12px;max-height:240px;overflow:auto;user-select:text}
 .js .ptext:not(.open){display:none}
+.ptry p{margin:0 0 6px}.ptry select{margin:0 0 6px;font:inherit}.tcmd{margin:0 0 6px;white-space:pre-wrap;word-break:break-all;font-size:12.5px}
 .apply .live{grid-column:1/-1;margin:0;font-size:13px}
 .apply .live:empty{display:none}
 .proof{font-size:12.5px;color:var(--s-ink2);margin:0}
@@ -956,7 +1019,7 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .uses .k{margin-right:4px}
 .owner{font-size:13px;color:var(--s-ink2);white-space:nowrap}
 .cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-@media (max-width:900px){.cards{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.cards,.cards.four{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--s-paper);border:1px solid var(--s-line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;min-width:0;position:relative}
 .card:has(input:checked){border:2px solid var(--s-brand);padding:11px 13px}
 .card:has(input:checked) .radio::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--s-brand)}
@@ -991,6 +1054,7 @@ document.querySelectorAll('input[name^="gp-"]').forEach(function(r){r.addEventLi
 document.querySelectorAll('input[name="cprofile"]').forEach(function(r){r.addEventListener('change',function(){chosen=r.value;render()})});
 function selectText(p){var r=document.createRange();r.selectNodeContents(p);var s=window.getSelection();s.removeAllRanges();s.addRange(r)}
 document.querySelectorAll('button[data-see]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.getAttribute('data-see'));var o=p.classList.toggle('open');b.setAttribute('aria-expanded',o?'true':'false');if(o){selectText(p)}})});
+document.querySelectorAll('select[data-try]').forEach(function(s){s.addEventListener('change',function(){var w=document.getElementById(s.getAttribute('data-try'));w.querySelectorAll('[data-tryi]').forEach(function(d){d.hidden=d.getAttribute('data-tryi')!==s.value});w.querySelector('button[data-copy]').setAttribute('data-copy',s.getAttribute('data-try')+'-'+s.value)})});
 document.querySelectorAll('button[data-copy]').forEach(function(b){b.addEventListener('click',function(){var p=document.getElementById(b.getAttribute('data-copy'));var l=p.nextElementSibling;function fail(){p.classList.add('open');selectText(p);l.textContent=b.getAttribute('data-fail')}try{navigator.clipboard.writeText(p.textContent).then(function(){l.textContent=b.getAttribute('data-done');setTimeout(function(){l.textContent=''},1500)},fail)}catch(err){fail()}})});
 render()})();`
 
@@ -1027,6 +1091,11 @@ func sheetKeys() []string {
 		"cc.P1b.nc", "cc.P3.does.1", "cc.P3.no.1", "cc.P3.no.2", "cc.P3.no.3", "cc.P3.nc", "cc.nomeasure", "cc.S1", "cc.S2", "cc.S3", "cc.S4",
 		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
 		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "sheet.findings.count.one", "pc.others",
+		// BV-249 §3.1: «Sandboxed development»
+		"cc.name.P2", "cc.P2.step.1", "cc.P2.step.2", "cc.P2.T2", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
+		"cc.P2.asks.1", "cc.S4.P2",
+		// BV-249 §8: «Try it just this once»
+		"try.button", "try.intro", "try.linux", "try.grok.macos",
 	}
 }
 

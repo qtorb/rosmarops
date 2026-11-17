@@ -17,6 +17,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/hostenv"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
@@ -62,6 +63,10 @@ type V2 struct {
 	// shown; Signals the red technical-report categories (adjustment B).
 	Silenced rules.Silenced `json:"silenced"`
 	Signals  []Signal       `json:"signals"`
+	// Environment is where this review ran (BV-249 §5): a container, WSL, a
+	// virtual machine or Windows Sandbox, with the signal; absent otherwise.
+	// Informative: no weight in any score.
+	Environment *hostenv.Env `json:"environment,omitempty"`
 	// TestData are the keys treated as test data by default (decision
 	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
 	TestData rules.TestData `json:"-"`
@@ -334,6 +339,9 @@ type LegacyGroup struct {
 
 // V2Input is what the v2 report is built from.
 type V2Input struct {
+	// Environment is hostenv.Detect's result (BV-249 §5); nil with no signal.
+	Environment *hostenv.Env
+
 	// Graph is the graph written this run, nil when none could be built;
 	// GraphSHA256 the SHA-256 of its file.
 	Graph       *graph.Graph
@@ -537,6 +545,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
 
 		NotificationUnavailable: in.NotificationUnavailable,
+		Environment:             in.Environment,
 	}
 	v2Status := finding.StatusYellow // no graph: fail-secure
 	var res rules.Result

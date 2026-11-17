@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/profiles"
 )
 
@@ -127,6 +128,7 @@ func TestBV238Browser(t *testing.T) {
 		if err != nil {
 			t.Errorf("%s: %v\n%s", lang, err, out)
 		}
+		t.Logf("%s: %s", lang, out)
 	}
 }
 
@@ -154,7 +156,10 @@ const [file, c1] = process.argv.slice(1);
     await p.click('#v-pc a[data-view="v-' + a + '"]:not([hidden])');
     if (!(await p.isVisible('#v-' + a))) fail(a + ': the view does not open');
     const h = await height();
-    if (h > 800) fail(a + ': the view is ' + h + 'px tall');
+    const n = await p.evaluate(s => document.querySelectorAll(s + ' label.card').length, '#v-' + a);
+    console.log(a + ' view: ' + n + ' cards, ' + h + 'px');
+    // BV-249 §3.3 (Albert 17-11): an agent's templates view may scroll; its
+    // height is logged. Only «Computer templates» keeps the 800 px limit.
     if (a === 'grok-build') {
       await p.click('#v-grok-build .apply:not([hidden]) button[data-copy]');
       const live = await p.textContent('#v-grok-build .apply:not([hidden]) .live');
@@ -172,6 +177,25 @@ const [file, c1] = process.argv.slice(1);
 // segura, seguros, seguras, safe, safely or safety, as a whole word, in any
 // case.
 var safeWord = regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}])(seguro|segura|seguros|seguras|safe|safely|safety)([^\p{L}\p{N}]|$)`)
+
+// protectWord is a word that starts with proteg or protect (BV-249 §2): the
+// report never says something protects.
+var protectWord = regexp.MustCompile(`(?i)(^|[^\p{L}\p{N}])(proteg|protect)\p{L}*`)
+
+// protectWordExceptions are the catalog keys allowed a proteg*/protect* word
+// (BV-249 §2): html.cred.supabase.service_role.impact describes the database
+// (its row-level protection), and gp.cursor.P1.step.3 names Cursor's own
+// screen («External-File Protection», «File-Deletion Protection»).
+//
+// decl.c4_external_file_protection.q and html.assume.cursor (BV-248, signed
+// 16-11) name the same Cursor setting, «External-File Protection», for the
+// same reason as gp.cursor.P1.step.3.
+var protectWordExceptions = map[string]bool{
+	"html.cred.supabase.service_role.impact": true,
+	"gp.cursor.P1.step.3":                    true,
+	"decl.c4_external_file_protection.q":     true,
+	"html.assume.cursor":                     true,
+}
 
 // safeWordExceptions are the catalog keys allowed to use one of those words
 // (BV-240): they are not promises of the product. kit.recovery_code tells
@@ -205,10 +229,28 @@ func TestBV239NoSafeWord(t *testing.T) {
 		}
 		pages["one agent, "+lang] = string(raw)
 	}
+	// The exceptions' own texts, which a page may show (BV-249 §2).
+	var excepted []string
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k := range protectWordExceptions {
+			excepted = append(excepted, cat.Text(k, nil))
+		}
+	}
 	for name, page := range pages {
 		text := visibleText(page)
 		for _, m := range safeWord.FindAllStringSubmatchIndex(text, -1) {
 			t.Errorf("%s: %q", name, text[max(0, m[0]-60):min(len(text), m[1]+30)])
+		}
+		rest := text
+		for _, e := range excepted {
+			rest = strings.ReplaceAll(rest, e, " ")
+		}
+		for _, m := range protectWord.FindAllStringIndex(rest, -1) {
+			t.Errorf("%s: %q", name, rest[max(0, m[0]-60):min(len(rest), m[1]+30)])
 		}
 	}
 	files, err := filepath.Glob(filepath.Join("..", "..", "internal", "catalog", "messages", "*.json"))
@@ -227,6 +269,9 @@ func TestBV239NoSafeWord(t *testing.T) {
 		for k, v := range msgs {
 			if !safeWordExceptions[k] && safeWord.MatchString(v) {
 				t.Errorf("%s: %s: %q", filepath.Base(f), k, v)
+			}
+			if !protectWordExceptions[k] && protectWord.MatchString(v) {
+				t.Errorf("%s: %s: %q (proteg*/protect*)", filepath.Base(f), k, v)
 			}
 		}
 	}
