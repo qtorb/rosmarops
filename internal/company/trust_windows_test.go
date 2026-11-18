@@ -5,6 +5,7 @@ package company
 import (
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -50,17 +51,37 @@ func companyFolder(t *testing.T) string {
 	for _, name := range []string{ConfigName, ListName} {
 		icacls(t, filepath.Join(dir, name), "/reset")
 	}
+	// The test's own account may still hold an entry of its own on the folder
+	// or the files (the temporary folder it runs in gives it one); the install
+	// script runs in ProgramData, where it gets none. Remove it so only the
+	// three identities above remain.
+	if u, err := user.Current(); err == nil && u.Uid != "" {
+		for _, p := range []string{filepath.Join(dir, ConfigName), filepath.Join(dir, ListName), dir} {
+			icacls(t, p, "/remove:g", "*"+u.Uid)
+		}
+	}
 	icacls(t, dir, "/setowner", "*S-1-5-32-544", "/T")
 	return dir
+}
+
+// aclDump is what icacls prints for the folder and its two files, to show in
+// a failure which entry is left.
+func aclDump(dir string) string {
+	var b strings.Builder
+	for _, p := range []string{dir, filepath.Join(dir, ConfigName), filepath.Join(dir, ListName)} {
+		out, _ := exec.Command("icacls", p).CombinedOutput()
+		b.Write(out)
+	}
+	return b.String()
 }
 
 func TestCompanyTrustWindows(t *testing.T) {
 	dir := companyFolder(t)
 	if l := LoadConfig(dir); l.State != Trusted || !l.SummaryEnabled() {
-		t.Fatalf("admin-only folder: %+v (%v)", l, checkTrusted(filepath.Join(dir, ConfigName)))
+		t.Fatalf("admin-only folder: %+v (%v)\n%s", l, checkTrusted(filepath.Join(dir, ConfigName)), aclDump(dir))
 	}
 	if _, ok := LoadList(dir); !ok {
-		t.Fatalf("admin-only list not read: %v", checkTrusted(filepath.Join(dir, ListName)))
+		t.Fatalf("admin-only list not read: %v\n%s", checkTrusted(filepath.Join(dir, ListName)), aclDump(dir))
 	}
 
 	cases := map[string]func(dir string){
