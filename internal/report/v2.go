@@ -121,7 +121,7 @@ type V2 struct {
 	// project's path (graph.v2 authenticates_to). The report groups the
 	// findings of one service with them; in memory only.
 	credServices map[string]credService
-	repoRoots  []string
+	repoRoots    []string
 	// committed are the graph's committed_in edges by edge id, for the
 	// «where» line of cred_in_git (BV-219): the commit and the path inside
 	// the repository. Not in the JSON; empty when the report is read back.
