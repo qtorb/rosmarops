@@ -143,48 +143,6 @@ func (c htmlCtx) evaluated() []rules.OverviewAgent {
 	return out
 }
 
-// pendingRows are the rows of the findings still pending (not dismissed, not
-// accepted), in today's order: today's first, then «What remains» by
-// severity, the score's agent's first, one row per credential.
-func (c htmlCtx) pendingRows() []rules.Finding {
-	todayID := c.v.Today.FindingID
-	var list []rules.Finding
-	for _, f := range c.v.Findings {
-		if f.Accepted == nil {
-			list = append(list, f)
-		}
-	}
-	if a, ok := c.scored(); ok {
-		sort.SliceStable(list, func(i, j int) bool { return c.ofScoredAgent(list[i], a) && !c.ofScoredAgent(list[j], a) })
-	}
-	var rows []rules.Finding
-	done := map[*credRow]bool{}
-	for _, f := range list {
-		if r := c.rows[f.ID]; r != nil && containsID(r.ids, todayID) && !done[r] {
-			done[r] = true
-			rows = append(rows, r.rep)
-		}
-	}
-	for _, sev := range []string{rules.SeverityRed, rules.SeverityYellow} {
-		for _, f := range list {
-			if r := c.rows[f.ID]; r != nil && f.Severity == sev && !done[r] {
-				done[r] = true
-				rows = append(rows, r.rep)
-			}
-		}
-	}
-	return rows
-}
-
-func containsID(ids []string, id string) bool {
-	for _, x := range ids {
-		if x == id {
-			return true
-		}
-	}
-	return false
-}
-
 // renderBar is the top bar (BV-236 §1): the logo, the other languages, and
 // «Your space», filled in brand, with the green dot when connected; it leads
 // to today's «Your space» section.
@@ -196,135 +154,6 @@ func (c htmlCtx) renderBar() {
 	// data-copyfail is C1, for today's copies when the browser refuses to copy.
 	c.w(`<header class="bar" data-copyfail="%s">%s<span class="sp"></span>%s<a class="spacego" href="#your-space">%s%s</a></header>`,
 		c.t("copy.C1", nil), sheetLogo, c.langLinks(), dot, c.t("report.space_h2", nil))
-}
-
-// renderSheet is the sheet (BV-236 §1, w0).
-func (c htmlCtx) renderSheet() {
-	v := c.v
-	m := c.sheetScore()
-	c.w(`<div class="sheetwrap"><article class="sheet" aria-labelledby="sheet-title"><header class="sh-head"><div><h1 class="sh-title" id="sheet-title">%s</h1>%s<div class="sh-sub">%s</div>%s</div><dl class="sh-meta">`,
-		c.t("sheet.title", nil), c.envTag(), c.t("sheet.sub", nil), c.envLines())
-	program := "RosmarOps"
-	if v.engineVersion != "" {
-		program += " " + v.engineVersion
-	}
-	agents := len(v.Index.Scope.Evaluated)
-	scope := c.cat.Text("sheet.scope", map[string]string{
-		"agents":   c.cat.Plural("sheet.scope.agents", agents, map[string]string{"n": strconv.Itoa(agents)}),
-		"projects": c.cat.Plural("sheet.scope.projects", v.repos, map[string]string{"n": strconv.Itoa(v.repos)}),
-	})
-	for _, kv := range [][2]string{
-		{"sheet.meta.date", c.local.Format("2006-01-02 15:04")},
-		{"sheet.meta.computer", osName(v.OS)},
-		{"sheet.meta.scope", scope},
-		{"sheet.meta.program", program},
-	} {
-		c.w(`<div><dt>%s</dt><dd>%s</dd></div>`, c.t(kv[0], nil), html.EscapeString(kv[1]))
-	}
-	c.w(`</dl></header>`)
-
-	// 1 Result.
-	c.w(`<section class="sh-sec" aria-labelledby="sh-result"><h2 class="sh-h" id="sh-result"><span aria-hidden="true">1</span>%s</h2><div class="res">`, c.t("sheet.result", nil))
-	if m.Value != nil {
-		letter := index.NoClass()
-		if m.Letter != nil {
-			letter = *m.Letter
-		}
-		prov, phrase := "", ""
-		if provisional(letter) {
-			prov = ` <span class="prov">` + c.t("sheet.provisional", nil) + `</span>`
-		}
-		if letter.Class != nil {
-			phrase = c.t("sheet.class."+*letter.Class, nil)
-		}
-		label := c.t("sheet.result.label", map[string]string{"agent": c.agentName(m.AgentID)})
-		if len(v.Dismissed) > 0 { // BV-184: the score leaves out what the person dismissed
-			label += " · " + c.t("report.dismissed.note", nil)
-		}
-		c.w(`<div class="res-main"><div class="res-num"><b class="nt %s big">%d</b><small>/100</small></div><div><div class="res-lab">%s</div><div class="clsline">%s%s%s</div></div></div>`,
-			bandLetter(m.Band), *m.Value, label, cls(letter, ""), phrase, prov)
-		// Both at 0, the score is at its floor: the reference cannot show what
-		// the settings change, so neither it nor the comparison is shown.
-		if !scoreSaturated(m) {
-			c.w(`<div class="res-ref"><div class="res-k">%s</div><div>`, c.t("sheet.reference", nil))
-			if m.FactoryValue != nil {
-				c.w(`%s`, strings.Replace(c.t("sheet.reference.value", map[string]string{"n": "\x00"}), "\x00", "<b>"+strconv.Itoa(*m.FactoryValue)+"</b>", 1))
-			} else {
-				c.w(`—`)
-			}
-			c.w(`</div></div>`)
-		}
-		c.w(`<div class="res-int"><div class="res-k">%s</div><div>%s</div></div>`, c.t("sheet.reading", nil), c.reading(m, letter))
-	} else {
-		reason := index.ReasonNotApplicable
-		switch {
-		case !v.Coverage.GraphBuilt:
-			reason = index.ReasonCoverage
-		case m.Unavailable != "":
-			reason = m.Unavailable
-		}
-		c.w(`<div class="res-main"><div class="unavail">%s</div></div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
-	}
-	c.renderStrip()
-	c.w(`</div></section>`)
-
-	// 2 Findings.
-	rows := c.pendingRows()
-	count := ""
-	switch {
-	case len(rows) > 3:
-		count = c.t("sheet.findings.count.first", map[string]string{"n": strconv.Itoa(len(rows))})
-	case len(rows) == 1:
-		count = c.t("sheet.findings.count.one", nil)
-	default:
-		count = c.t("sheet.findings.count", map[string]string{"n": strconv.Itoa(len(rows))})
-	}
-	// A project that ran out of time kept only what it had found: the total
-	// is a lower bound, and says how many projects did not finish.
-	if k := timedOutProjects(v); k > 0 {
-		key := "findings.count.at_least"
-		if k == 1 {
-			key = "findings.count.at_least.one_project"
-		}
-		count = c.t(key, map[string]string{"n": strconv.Itoa(len(rows)), "k": strconv.Itoa(k)})
-	}
-	if count != "" {
-		count = ` <em>` + count + `</em>`
-	}
-	c.w(`<section class="sh-sec" aria-labelledby="sh-findings"><h2 class="sh-h" id="sh-findings"><span aria-hidden="true">2</span>%s%s</h2>`, c.t("sheet.findings", nil), count)
-	if len(rows) > 0 {
-		c.w(`<table class="tbl short"><thead><tr><th scope="col">%s</th><th scope="col">%s</th><th scope="col">%s</th><th scope="col">%s</th><th scope="col" class="n">%s <span class="th-sub">%s</span></th></tr></thead><tbody>`,
-			c.t("sheet.col.no", nil), c.t("sheet.col.finding", nil), c.t("sheet.col.affects", nil), c.t("sheet.col.level", nil), c.t("sheet.col.change", nil), c.t("sheet.col.change.sub", nil))
-		for i, f := range rows {
-			if i == 3 {
-				break
-			}
-			pill := "a"
-			if f.Severity == rules.SeverityRed {
-				pill = "r"
-			}
-			c.w(`<tr><td>%d</td><td class="t">%s</td><td class="af">%s</td><td><span class="pill %s">%s</span></td><td class="n">%s</td></tr>`,
-				i+1, c.rowTitle(f), html.EscapeString(c.affects(f)), pill, c.t("html.group."+f.Severity, nil), c.ifChange(f))
-		}
-		c.w(`</tbody></table>`)
-	}
-	c.w(`</section>`)
-
-	// 3 How to act.
-	c.w(`<section class="sh-sec sh-reco" aria-labelledby="sh-act"><h2 class="sh-h" id="sh-act"><span aria-hidden="true">3</span>%s</h2><div class="rrow"><p>%s</p><div class="ways">`,
-		c.t("sheet.act", nil), c.t("sheet.act.A1", nil))
-	c.w(`<div class="way"><a class="btn p" href="#v-pc" data-view="v-pc">%s</a><small>%s</small></div>`, c.t("sheet.act.profile", nil), c.t("sheet.act.profile.sub", nil))
-	c.w(`<div class="way"><a class="btn" href="#todo" data-view="">%s</a><small>%s</small></div>`, c.t("sheet.act.findings", nil), c.t("sheet.act.findings.sub", nil))
-	c.w(`</div></div></section>`)
-
-	// Footer.
-	p2 := "sheet.foot.P2.final"
-	for _, a := range v.Index.Agents {
-		if provisional(a.Letter) {
-			p2 = "sheet.foot.P2"
-		}
-	}
-	c.w(`<footer class="sh-foot"><span>%s</span><span>%s</span></footer></article></div>`, c.t("sheet.foot.P1", nil), c.t(p2, nil))
 }
 
 // osName is the computer's system as the sheet names it: the name of the
@@ -357,45 +186,6 @@ func timedOutProjects(v V2) int {
 // them says nothing about the person's settings.
 func scoreSaturated(m index.MachineScore) bool {
 	return m.Value != nil && m.FactoryValue != nil && *m.Value == 0 && *m.FactoryValue == 0
-}
-
-// reading is «Reading» (L1 to L7, BV-236 §7): who sets the score, what the
-// person's settings do against the factory score, why class and score
-// differ when they do, and the agent with a worse class.
-func (c htmlCtx) reading(m index.MachineScore, letter index.Class) string {
-	var out []string
-	name := c.agentName(m.AgentID)
-	out = append(out, c.t("sheet.reading.L1", map[string]string{"agent": name}))
-	if m.FactoryValue != nil && !scoreSaturated(m) {
-		d := *m.Value - *m.FactoryValue
-		switch {
-		case d < 0:
-			out = append(out, c.t(c.cat.One("sheet.reading.L2.other", -d), nil))
-		case d > 0:
-			out = append(out, c.t(c.cat.One("sheet.reading.L3.other", d), nil))
-		default:
-			out = append(out, c.t("sheet.reading.L4", nil))
-		}
-		if d < 0 {
-			out[len(out)-1] = html.EscapeString(c.cat.Plural("sheet.reading.L2", -d, map[string]string{"n": strconv.Itoa(-d)}))
-		} else if d > 0 {
-			out[len(out)-1] = html.EscapeString(c.cat.Plural("sheet.reading.L3", d, map[string]string{"n": strconv.Itoa(d)}))
-		}
-	}
-	if letter.Class != nil && letter.Coherent != nil && !*letter.Coherent {
-		switch l := *letter.Class; {
-		case (l == "A" || l == "B") && m.Band == index.BandExposed:
-			out = append(out, c.t("sheet.reading.L5", nil))
-		case (l == "C" || l == "D") && m.Band == index.BandContained:
-			out = append(out, c.t("sheet.reading.L6", nil))
-		}
-	}
-	if m.WorstLetterAgentID != "" {
-		if a := c.score[m.WorstLetterAgentID]; a != nil && a.Letter.Class != nil {
-			out = append(out, c.t("sheet.reading.L7", map[string]string{"agent": a.Agent, "letter": *a.Letter.Class}))
-		}
-	}
-	return strings.Join(out, " ")
 }
 
 // renderStrip is the RiskStrip (BV-236 §1): for each of the five kinds, the
@@ -446,47 +236,6 @@ func (c htmlCtx) renderStrip() {
 	if star {
 		c.w(`<p class="starnote">%s</p>`, c.t("sheet.assumed.note", nil))
 	}
-}
-
-// affects is «Affects» of a findings row: its projects for a key in git
-// (one name, or «N projects»), else its agents (one name, or «N agents»).
-func (c htmlCtx) affects(f rules.Finding) string {
-	if rules.IsMachineFinding(f) {
-		ps := c.projects(f)
-		if len(ps) == 1 {
-			return ps[0]
-		}
-		if len(ps) > 1 {
-			return c.cat.Plural("sheet.scope.projects", len(ps), map[string]string{"n": strconv.Itoa(len(ps))})
-		}
-		return ""
-	}
-	if r := c.rows[f.ID]; r != nil && len(r.agents) > 1 {
-		return c.cat.Text("sheet.who.agents", map[string]string{"n": strconv.Itoa(len(r.agents))})
-	}
-	if a, ok := agentOfFinding(c.v, f); ok {
-		return a.Agent
-	}
-	return f.Params.Agent
-}
-
-// ifChange is «If you change it (agent's score)»: «{agent} would go up to
-// {n}» from the agent's group without that finding (index groups), or «—».
-func (c htmlCtx) ifChange(f rules.Finding) string {
-	a, ok := agentOfFinding(c.v, f)
-	if !ok || a.Value == nil {
-		return `<span class="zero">—</span>`
-	}
-	best := -1
-	for _, g := range a.Groups {
-		if containsID(g.FindingIDs, f.ID) && g.Without > best {
-			best = g.Without
-		}
-	}
-	if best <= *a.Value {
-		return `<span class="zero">—</span>`
-	}
-	return c.t("sheet.would", map[string]string{"agent": a.Agent, "n": strconv.Itoa(best)})
 }
 
 // The uses of «Computer profile» (BV-236 §2) and the profile each proposes
@@ -1097,16 +846,11 @@ func boldLead(s, sep string) string {
 // (BV-236 §7).
 func sheetKeys() []string {
 	return []string{
-		"sheet.title", "sheet.sub", "sheet.meta.date", "sheet.meta.computer", "sheet.meta.scope", "sheet.meta.program", "sheet.scope",
-		"sheet.scope.agents.one", "sheet.scope.agents.other", "sheet.scope.projects.one", "sheet.scope.projects.other", "sheet.result",
-		"sheet.result.label", "sheet.provisional", "sheet.class.A", "sheet.class.B", "sheet.class.C", "sheet.class.D", "sheet.reference",
-		"sheet.reference.value", "sheet.reading", "sheet.reading.L1", "sheet.reading.L2.one", "sheet.reading.L2.other", "sheet.reading.L3.one",
-		"sheet.reading.L3.other", "sheet.reading.L4", "sheet.reading.L5", "sheet.reading.L6", "sheet.reading.L7", "sheet.kind.money",
+		"sheet.class.A", "sheet.class.B", "sheet.class.C", "sheet.class.D",
+		"sheet.kind.money",
 		"sheet.kind.sends_out", "sheet.kind.keys", "sheet.kind.runs_commands", "sheet.kind.changes_files", "sheet.state.bounded",
-		"sheet.state.none_known", "sheet.who.agents", "sheet.assumed.note", "sheet.findings", "sheet.findings.count.first",
-		"sheet.findings.count", "sheet.col.no", "sheet.col.finding", "sheet.col.affects", "sheet.col.level", "sheet.col.change",
-		"sheet.col.change.sub", "sheet.would", "sheet.act", "sheet.act.A1", "sheet.act.profile", "sheet.act.profile.sub", "sheet.act.findings",
-		"sheet.act.findings.sub", "sheet.foot.P1", "sheet.foot.P2", "sheet.foot.P2.final", "pc.back", "pc.kicker", "pc.q", "pc.use.code",
+		"sheet.state.none_known", "sheet.who.agents", "sheet.assumed.note",
+		"pc.back", "pc.kicker", "pc.q", "pc.use.code",
 		"pc.use.docs", "pc.use.mail", "pc.use.tasks", "pc.computer", "pc.B1", "pc.B1.noprofile", "pc.B2", "pc.B3", "pc.suggest", "pc.col.agent",
 		"pc.col.today", "pc.col.suggest", "pc.col.nc", "pc.change", "pc.soon", "pc.score", "pc.class", "cc.title", "cc.lead",
 		"cc.today", "cc.use", "cc.use.where", "cc.name.P0", "cc.name.P1", "cc.name.P3", "cc.rec", "cc.use.lc.code", "cc.use.lc.docs",
@@ -1114,7 +858,7 @@ func sheetKeys() []string {
 		"cc.P0.no.3", "cc.P0.nc", "cc.P1.does.1", "cc.P1.does.2", "cc.P1.asks.1", "cc.P1.asks.2", "cc.P1.no.1", "cc.P1.no.2", "cc.P1.nc",
 		"cc.P1b.nc", "cc.P3.does.1", "cc.P3.no.1", "cc.P3.no.2", "cc.P3.no.3", "cc.P3.nc", "cc.nomeasure", "cc.S1", "cc.S2", "cc.S3", "cc.S4",
 		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
-		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "sheet.findings.count.one", "pc.others",
+		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "pc.others",
 		// BV-249 §3.1: «Sandboxed development»
 		"cc.name.P2", "cc.P2.step.1", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
 		"cc.P2.asks.1", "cc.S4.P2",

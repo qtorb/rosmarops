@@ -1,7 +1,6 @@
 package report
 
 import (
-	"html"
 	"strings"
 
 	"github.com/qtorb/rosmarops/internal/hostenv"
@@ -15,16 +14,6 @@ func (c htmlCtx) envTag() string {
 		return ""
 	}
 	return `<div><span class="sh-env">` + c.t("env.tag", nil) + `</span></div>`
-}
-
-// envLines are the header's environment line and its follow-ups (BV-249 §5);
-// empty with no signal.
-func (c htmlCtx) envLines() string {
-	var out []string
-	for _, line := range EnvTexts(c.v.Environment, c.cat.Text) {
-		out = append(out, `<div class="sh-sub">`+html.EscapeString(line)+`</div>`)
-	}
-	return strings.Join(out, "")
 }
 
 // EnvTexts are the environment's sentences in a catalog (BV-249 §5): the

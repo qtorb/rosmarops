@@ -95,26 +95,26 @@ func htmlEscape(s string) string {
 	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;").Replace(s)
 }
 
-// sheetScoreRE is the sheet's score (BV-236 §1): the machine score in its
-// band's colour, in `.res-num`.
-var sheetScoreRE = regexp.MustCompile(`<div class="res-num"><b class="nt ([rag]) big">(\d+)</b>`)
+// sheetScoreRE is the first screen's score (block 1, «Result»): the
+// machine score in its band's colour.
+var sheetScoreRE = regexp.MustCompile(`<p class="r3-score (red|amber|green)"><b>(\d+)</b>`)
 
-// sheetScore is the sheet's score and its band letter (r, a, g); ok is false
-// when the sheet shows no score.
+// sheetScore is the first screen's score and its band letter (r, a, g); ok
+// is false when it shows no score.
 func sheetScore(page string) (value int, band string, ok bool) {
 	m := sheetScoreRE.FindStringSubmatch(page)
 	if m == nil {
 		return 0, "", false
 	}
 	n, _ := strconv.Atoi(m[2])
-	return n, m[1], true
+	return n, map[string]string{"red": "r", "amber": "a", "green": "g"}[m[1]], true
 }
 
-// sheetLabel is the sheet score's label (`.res-lab`): the agent that sets
-// it and, with dismissed findings, the dismissed note.
+// sheetLabel is the score's sentence (the agent that sets it, in bold) and,
+// with dismissed findings, the dismissed note under it.
 func sheetLabel(page string) string {
-	_, lab, _ := strings.Cut(page, `<div class="res-lab">`)
-	lab, _, _ = strings.Cut(lab, `</div>`)
+	_, lab, _ := strings.Cut(page, `<p class="r3-text">`)
+	lab, _, _ = strings.Cut(lab, `</section>`)
 	return lab
 }
 
