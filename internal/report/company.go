@@ -58,23 +58,23 @@ const SummaryRunFailed = "run_failed"
 // about one review. Counts and codes only: no path, preview, file content,
 // name chosen by the person, or identifier derived from a path.
 type CompanySummary struct {
-	SchemaVersion int            `json:"schema_version"`
-	GeneratedAt   string         `json:"generated_at"`
-	GeneratedUnix int64          `json:"generated_unix"`
-	Version       string         `json:"version"`
-	RulesVersion  *string        `json:"rules_version"`
-	Run           string         `json:"run"`
-	AbortCode     *string        `json:"abort_code"`
-	Status        string         `json:"status"`
-	RedTotal      int            `json:"red_total"`
-	YellowTotal   int            `json:"yellow_total"`
-	MachineBand   *string        `json:"machine_band"`
-	MachineIndex  *int           `json:"machine_index"`
+	SchemaVersion int                   `json:"schema_version"`
+	GeneratedAt   string                `json:"generated_at"`
+	GeneratedUnix int64                 `json:"generated_unix"`
+	Version       string                `json:"version"`
+	RulesVersion  *string               `json:"rules_version"`
+	Run           string                `json:"run"`
+	AbortCode     *string               `json:"abort_code"`
+	Status        string                `json:"status"`
+	RedTotal      int                   `json:"red_total"`
+	YellowTotal   int                   `json:"yellow_total"`
+	MachineBand   *string               `json:"machine_band"`
+	MachineIndex  *int                  `json:"machine_index"`
 	ByRule        []CompanySummaryRule  `json:"by_rule"`
 	Agents        []CompanySummaryAgent `json:"agents"`
-	NotChecked    []string       `json:"not_checked"`
-	ConfigSource  string         `json:"config_source"`
-	Binary        string         `json:"binary"`
+	NotChecked    []string              `json:"not_checked"`
+	ConfigSource  string                `json:"config_source"`
+	Binary        string                `json:"binary"`
 }
 
 // CompanySummaryRule is one rule's findings of one severity.
