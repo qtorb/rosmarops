@@ -44,6 +44,12 @@ func companyFolder(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	// Each file keeps only what it inherits from the folder, as after the
+	// install script: a file created by the test's own account may also get an
+	// entry of its own for that account.
+	for _, name := range []string{ConfigName, ListName} {
+		icacls(t, filepath.Join(dir, name), "/reset")
+	}
 	icacls(t, dir, "/setowner", "*S-1-5-32-544", "/T")
 	return dir
 }
