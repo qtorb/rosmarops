@@ -142,6 +142,12 @@ tests/
 
 ---
 
+## Human documentation
+
+Every pull request that adds or changes behaviour updates, in the same pull request and in English, the human documentation it affects: ARCHITECTURE.md, the how-to in docs/how-to/, the glossary, and an ADR in docs/decisions/ for any decision that changes what the product does, reads, writes or sends. Code comments explain the why in the code's own words; they do not rely on internal ticket codes. (Albert, 18-11-2026.)
+
+---
+
 ## When to STOP and ask the human owner
 
 - adding any third-party Go dependency;
