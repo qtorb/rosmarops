@@ -41,6 +41,7 @@ These cannot be violated by any code you write. They are the product.
    - `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted.
    - the configured reports directory (default `~/.rosmarops/reports/`).
    No other `os.Create`, `os.WriteFile`, `os.OpenFile`, or `os.MkdirAll` calls outside these paths.
+   RosmarOps never writes, creates or changes the permissions of the company configuration, the administrator fingerprint list, or their folders.
 
 3. **No secrets in logs or reports.** Secret matchers return `{type, file, line, redacted_preview}`. The preview must be: first 4 chars + ` ... ` + last 4 chars of the matched value. Never the full value. Never the middle. Tested.
 
@@ -64,9 +65,12 @@ These cannot be violated by any code you write. They are the product.
 
 8. **Self-integrity check.** On startup, the binary computes its own SHA-256 and compares it against `state.integrity.vigil_binary_sha256`, and the SHA-256 of the configuration in use against `state.integrity.config_sha256`. A mismatch, a lost state, or a reference at zero after a run aborts with a minimal red report and one finding (`binary_hash_changed` or `config_hash_changed`), unless one of these accepts it:
    - **The person**, who confirms it in the console.
+   - **The administrator fingerprint list**: `binaries.sha256` in the RosmarOps folder of ProgramData (Windows, resolved with `SHGetKnownFolderPath`, never from the environment) or in `/etc/rosmarops/` (Linux). The running binary's SHA-256 appears in it with the same version as the running binary. Before reading the list, RosmarOps checks that the list and its folder are owned by, and writable only by, administrators: on Windows, Administrators, SYSTEM or TrustedInstaller, with no write, delete or permission-change entry for any other identity, CREATOR OWNER included; on Linux, root, with neither the file nor any parent folder writable by group or others; and neither a link. A list that fails the check, or has a malformed line, does not exist for RosmarOps.
    - **A Microsoft Store update** (Windows): the process runs with RosmarOps's own package identity, the package family name `AlbertGarciaPujadas.RosmarOps_<publisher id>` fixed in the code; its executable is inside the package's own installed folder as Windows reports it (`GetCurrentPackagePath`), never the `%LOCALAPPDATA%` alias; and its package version equals the running binary's version. The package signature is the one Windows verified when it installed the package from the Store; RosmarOps does not accept a package with any other identity.
 
-   The Store never accepts a version older than `state.engine_version`, or the same version with a different SHA-256. An accepted change records the new references and how it was accepted (`binary_accepted_via`), and the report says so. Signed releases (Authenticode, Apple) will add a signature check; until then this is the only automatic path.
+   Neither the list nor the Store ever accepts a version older than `state.engine_version`, or the same version with a different SHA-256. With the company configuration in use and no user configuration, a lost or missing state is accepted as a first run only if the binary passes the list or the Store check. An accepted change records the new references and how it was accepted (`binary_accepted_via`), and the report says so.
+
+   The company configuration (`company.json`, same folders) is read only if it passes the same ownership check; otherwise it is ignored and the report says so. When it is the configuration in use, a change to it is recorded and reported, not aborted. Signed releases (Authenticode, Apple) will add a signature check; until then these are the only automatic paths.
 
    `session-check` and `statusline` check integrity like every command, but on a mismatch they never ask and never write: they print one line saying RosmarOps changed and that running it confirms the change, and exit 0. The next `rosmarops run` handles it as today.
 
@@ -139,6 +143,12 @@ tests/
 - `go vet ./...` clean.
 - `staticcheck ./...` clean.
 - Formatting: `gofumpt -l -d .` returns nothing.
+
+---
+
+## Human documentation
+
+Every pull request that adds or changes behaviour updates, in the same pull request and in English, the human documentation it affects: ARCHITECTURE.md, the how-to in docs/how-to/, the glossary, and an ADR in docs/decisions/ for any decision that changes what the product does, reads, writes or sends. Code comments explain the why in the code's own words; they do not rely on internal ticket codes. (Albert, 18-11-2026.)
 
 ---
 

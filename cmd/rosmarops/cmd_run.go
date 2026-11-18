@@ -126,7 +126,7 @@ func runRun(inv cli.Invocation) error {
 		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
 		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
 	}
-	// BV-256: usage statistics, last: asked only with a console and never in a
+	// Usage statistics, last: asked only with a console and never in a
 	// scheduled review; sent after every review while they are on.
 	if err == nil {
 		afterReportUsage(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], !unattended && runCanAsk())
@@ -180,7 +180,22 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve config path: %w", err)
 	}
-	cfg, err := config.LoadConfig(cfgPath)
+	// A managed computer's company configuration (company.json), read only
+	// after its ownership check. The person's config.json, when it exists,
+	// stays the configuration in use; without it, a trusted company
+	// configuration is, in memory only.
+	defaultDirEarly, err := report.DefaultReportDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve report dir: %w", err)
+	}
+	homeEarly, _ := os.UserHomeDir()
+	comp := loadCompany(defaultDirEarly)
+	defer func() {
+		if err != nil {
+			comp.writeAbortSummary(report.SummaryFailed, report.SummaryRunFailed)
+		}
+	}()
+	cfg, cfgPath, err := resolveRunConfig(cfgPath, homeEarly, comp)
 	if err != nil {
 		return "", fmt.Errorf("load config: %w", err)
 	}
@@ -263,6 +278,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		ask: ask, st: &st, stErr: stErr, stPath: stPath, cfgPath: cfgPath, reportDir: defaultDir,
 		unattended: unattended, window: m.window, lang: lang, selfHash: hash.Self,
 		store: realStoreCheck, accepted: &storeUpd,
+		adminList: adminListed, company: comp,
 	}.check()
 	if err != nil {
 		return "", err
@@ -270,10 +286,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 
 	// The configuration is verified now: its report directory can be used for
 	// the report files that follow.
-	reportDir := cfg.ReportDirectory
-	if reportDir == "" {
-		reportDir = defaultDir
-	}
+	reportDir := comp.reportDirFor(cfg.ReportDirectory, defaultDir)
 	// BV-183: now that the configuration is verified, tidy the configured
 	// reports directory too (a no-op when it is the default, already migrated
 	// above). Everything but the three HTML pages lives in dataDir.
@@ -865,6 +878,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// Run surfaces both a global-timeout error and any step that panicked
 	// (BV-202 S1); all become visible errors[] so the run is fail-secure.
 	scanErrors = append(scanErrors, scan.Run(ctx, steps)...)
+	// An ignored company configuration keeps the review at least yellow.
+	scanErrors = append(scanErrors, comp.scanErrors()...)
 	if buildGraph != nil {
 		// The graph build runs outside scan.Run, so a panic here would otherwise
 		// bring the program down with no report (BV-202 C1, CTO-28). Contain it
@@ -963,6 +978,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
 			IntegrityNotChecked: integrityNotChecked,
 			StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
+			AdminListOld: comp.adminOld, AdminListNew: comp.adminNew,
 			ExePath: exePath, Weekly: weekly, WeeklyNoSystemd: weeklyNoSystemd, NotificationUnavailable: nt.code, NotChecked: notChecked,
 			IntelVersion: intelVersion(intelMatcher), IntelPublishedAt: intelPublishedAt(intelMatcher),
 			LimitMinutes: limitMinutes, LimitReached: limitReached, ProjectsNotReviewed: projectsNotReviewed,
@@ -1074,7 +1090,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// the program truly cannot ask: no one present, or the ask was already made
 	// and declined this run.
 	v2.ProblemsWillAsk = presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking && !problemsAskedThisRun
-	// BV-256: the report's usage statistics line, from the state's answer.
+	// The report's usage statistics line, from the state's answer.
 	v2.UsageState = usageStateKey(st.Usage)
 
 	// Write report files.
@@ -1083,6 +1099,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// writeReport writes this review's report files, all in the reports
 	// directory; BV-248 calls it again when the answers rebuild the report.
 	writeReport := func(v2 report.V2) (string, error) {
+		// «Your company» and the summary the company reads, when there is a
+		// company configuration.
+		comp.applyToReport(&v2, built, notChecked)
 		mdPath, jsonPath, v2Path, err := report.WriteV2(r, v2, time.Local, dataDir)
 		if err != nil {
 			return "", fmt.Errorf("write report: %w", err)
@@ -1175,7 +1194,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		}
 	}
 
-	// BV-256: this review, for the usage package sent after the report.
+	// This review, for the usage package sent after the report.
 	ui2 := usageInputOf(v2, st.SpacePermission, builtSettings, exePath)
 	lastUsageInput = &ui2
 

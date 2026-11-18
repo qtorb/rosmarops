@@ -14,7 +14,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/usage"
 )
 
-// BV-256 §E.2: the usage package never carries a path, a project, file,
+// The usage package never carries a path, a project, file,
 // computer or user name, or a key, even when the review reads all of them.
 // A home with Claude Code, a project with a recognisable name and a .env
 // holding a recognisable fake key is reviewed with usage statistics on (the

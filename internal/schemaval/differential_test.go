@@ -42,6 +42,8 @@ var schemaSet = map[string][]byte{
 	"problems.v1":        schemas.ProblemsSchema,
 	"usage.v1":           schemas.UsageSchema,
 	"kit.v1":             schemas.KitSchema,
+	"summary.v1":         schemas.SummaryV1Schema,
+	"company.v1":         schemas.CompanyV1Schema,
 	"intel.v1":           schemas.IntelSchema,
 	// BV-249 §6: the release files' schemas, read from schemas/release/ (they
 	// are not embedded: only tests build those files).
@@ -491,7 +493,7 @@ func FuzzDifferential(f *testing.F) {
 }
 
 // Compile refuses every keyword outside §1.2 (propertyNames and maxProperties
-// joined it with usage.v1, BV-256), a format other than
+// joined it with usage.v1), a format other than
 // date-time, items as an array and a reference that is not local.
 func TestCompile_RefusesUnsupported(t *testing.T) {
 	for _, s := range []string{

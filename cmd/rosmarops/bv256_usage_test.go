@@ -59,7 +59,7 @@ func loadUsage(t *testing.T, stPath string) *state.Usage {
 	return st.Usage
 }
 
-// §E.5: the answers. Enter, s, S, y, Y are yes; n, N are no; anything else
+// The answers. Enter, s, S, y, Y are yes; n, N are no; anything else
 // asks once more and then counts as no; a closed input is no.
 func TestAskUsageAnswers(t *testing.T) {
 	cat, err := catalog.Load("en")
@@ -80,7 +80,7 @@ func TestAskUsageAnswers(t *testing.T) {
 	}
 }
 
-// §E.5: without a console (or with --unattended, which the caller turns into
+// Without a console (or with --unattended, which the caller turns into
 // canAskNow false), nothing is asked and nothing is sent.
 func TestUsageNoConsoleNoQuestionNoSend(t *testing.T) {
 	stPath, sends := usageTestHome(t, nil, "y\n")
@@ -90,7 +90,7 @@ func TestUsageNoConsoleNoQuestionNoSend(t *testing.T) {
 	}
 }
 
-// §E.5: Enter is yes, and the yes sends at once; n is no and sends nothing.
+// Enter is yes, and the yes sends at once; n is no and sends nothing.
 func TestUsageAnswerThenSend(t *testing.T) {
 	stPath, sends := usageTestHome(t, nil, "\n")
 	reports := t.TempDir()
@@ -110,7 +110,7 @@ func TestUsageAnswerThenSend(t *testing.T) {
 	}
 }
 
-// §E.5: an answer to an older text is asked again; an answer to the current
+// An answer to an older text is asked again; an answer to the current
 // one is not (and, when on, a scheduled review still sends).
 func TestUsageOlderTextAsksAgain(t *testing.T) {
 	// The answer was to text 1; the program now shows text 2.
@@ -132,7 +132,7 @@ func TestUsageOlderTextAsksAgain(t *testing.T) {
 	}
 }
 
-// §E.6: a new install id when usage goes from off to on; the same one while
+// A new install id when usage goes from off to on; the same one while
 // it stays on or goes off.
 func TestUsageInstallIDOffToOn(t *testing.T) {
 	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)

@@ -134,6 +134,10 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 
 Every send is listed in rosmarops-sends.log, in the data subfolder of your reports folder (on Windows, %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log).
 
+## On a computer your company manages
+
+A company can install RosmarOps with a device manager such as Fleet and read a short summary of each review: counts and codes, never your files, paths, keys or project names. Its configuration cannot hide findings from you, and your report shows exactly what the company reads. See [docs/company.md](docs/company.md).
+
 ## What it does not see
 
 - What an agent does while it runs. RosmarOps reads configuration at rest.

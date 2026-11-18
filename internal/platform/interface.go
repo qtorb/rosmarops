@@ -597,8 +597,13 @@ type RosmarOpsTask struct {
 	Arguments        string
 	WorkingDirectory string
 	UserID           string
-	LogonType        string // e.g. "Interactive"
-	RunLevel         string // "Limited" or "Highest"
+	// GroupID is the principal's group when the task runs for every member of
+	// a group (e.g. "S-1-5-32-545" or "Users") rather than for one user; empty
+	// for a user principal. A company deployment registers the weekly review
+	// this way for everyone on the computer.
+	GroupID   string
+	LogonType string // e.g. "Interactive"
+	RunLevel  string // "Limited" or "Highest"
 	// ExecutionTimeLimit is the task's settings time limit as registered, an
 	// ISO-8601 duration (e.g. "PT25M", "PT1H"); "PT0S" or empty means no limit
 	// (BV-212). Used to spot an own weekly task whose limit is shorter than the

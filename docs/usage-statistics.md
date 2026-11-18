@@ -18,8 +18,8 @@ After each check, while usage statistics are on, one summary in the format
 - `os` and `arch`: `windows`, `darwin` or `linux`, and `amd64` or `arm64`;
 - `channel`: how you installed it: `store` (Microsoft Store), `homebrew`, or
   `other`;
-- `agents`: the AI agents found, as product ids from a fixed list (for
-  example `claude-code`, `cursor`);
+- `agents`: the AI agents found, evaluated or only detected, as product ids
+  from a fixed list (for example `claude-code`, `cursor`, `claude-desktop`);
 - `score` and `class`: the computer's score (0-100) and class (A-D), or
   nothing when there is none;
 - `status`: `green`, `yellow` or `red`;

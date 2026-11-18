@@ -91,7 +91,7 @@ func SendProblems(ctx context.Context, consent ProblemsConsent, body []byte) (in
 }
 
 // UsageConsent is proof that the state records that the person turned usage
-// statistics on (BV-256). It can be obtained only from UsageConsentFromState,
+// statistics on. It can be obtained only from UsageConsentFromState,
 // which reads the state itself; its zero value is unusable, so SendUsage
 // refuses without it and opens no connection.
 type UsageConsent struct{ ok bool }
@@ -114,11 +114,11 @@ func UsageConsentFromState(statePath string) (UsageConsent, error) {
 	return UsageConsent{ok: true}, nil
 }
 
-// usageTimeout caps a usage send (§B.2): one try, no retries, no queue.
+// usageTimeout caps a usage send: one try, no retries, no queue.
 const usageTimeout = 3 * time.Second
 
 // SendUsage POSTs a usage.v1 body to /api/v1/usage over the one host-pinned
-// client, only with the consent the state records (BV-256). Like SendProblems
+// client, only with the consent the state records. Like SendProblems
 // it needs no account, space, credential or cookie. It tries once, within 3
 // seconds, and returns the HTTP status (0 on a network error) and, on a network
 // error, that error.

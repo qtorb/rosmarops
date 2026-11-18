@@ -1,4 +1,4 @@
-// Package usage builds the usage statistics package usage.v1 (BV-256): a short,
+// Package usage builds the usage statistics package usage.v1: a short,
 // anonymous summary of a review that the program sends to app.rosmarops.com
 // only while the state records that the person turned usage statistics on.
 //
@@ -17,6 +17,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
+	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/schemas"
@@ -30,13 +32,13 @@ const (
 	// whose answer is older is asked again.
 	TextVersion = 1
 	// LastFileName is the copy of the last package sent or tried, in the
-	// reports' data folder, overwritten each time (§B.6).
+	// reports' data folder, overwritten each time.
 	LastFileName = "rosmarops-usage-last.json"
 	// SendsLabel is the package's name in rosmarops-sends.log.
 	SendsLabel = "rosmarops-usage.v1"
 )
 
-// The install channels (§B.1).
+// The install channels.
 const (
 	ChannelStore    = "store"
 	ChannelHomebrew = "homebrew"
@@ -68,7 +70,8 @@ type Input struct {
 	Version   string
 	OS, Arch  string
 	Channel   string
-	// Agents are the product ids found; only the known ones are kept.
+	// Agents are the product ids found, evaluated or only detected; only the
+	// known ones are kept.
 	Agents []string
 	// Score is the review's score, nil without one.
 	Score *int
@@ -90,6 +93,39 @@ var (
 	classValues      = map[string]bool{"A": true, "B": true, "C": true, "D": true}
 	statusValues     = map[string]bool{"green": true, "yellow": true, "red": true}
 )
+
+// knownProducts is the closed list of product ids the package may carry: every
+// product the review can find, the evaluated ones (problems' list) and those
+// it only detects (Claude Desktop, Antigravity App and IDE, Copilot in
+// JetBrains, the Cline CLI, n8n, Grok Bot, agent extensions such as
+// Continue). Anything else, even a string that fits the schema's pattern, is
+// left out: no value outside a fixed list ever leaves.
+var knownProducts = func() map[string]bool {
+	m := map[string]bool{}
+	for _, a := range problems.KnownAgents() {
+		m[a] = true
+	}
+	for _, a := range []string{
+		agentdirs.ClaudeDesktop, agentdirs.Antigravity, agentdirs.CopilotJetBrains,
+		agentdirs.ClineCLI, agentdirs.N8N, knowledge.GrokBotProduct,
+	} {
+		m[a] = true
+	}
+	for _, e := range knowledge.AgentExtensions {
+		m[e.Product] = true
+	}
+	return m
+}()
+
+// KnownProducts returns the product ids agents may carry, sorted, for tests.
+func KnownProducts() []string {
+	out := make([]string, 0, len(knownProducts))
+	for a := range knownProducts {
+		out = append(out, a)
+	}
+	sort.Strings(out)
+	return out
+}
 
 // Build returns the usage.v1 package of a review. It is pure: it reads only in.
 // Agents outside the closed list of product ids and finding codes outside the
@@ -130,7 +166,7 @@ func Build(in Input) (Payload, error) {
 	}
 	seen := map[string]bool{}
 	for _, a := range in.Agents {
-		if problems.ValidAgent(a) && !seen[a] {
+		if knownProducts[a] && !seen[a] {
 			seen[a] = true
 			p.Agents = append(p.Agents, a)
 		}

@@ -53,7 +53,7 @@ type State struct {
 	// stable codes only. Optional in state.v2.
 	Declared map[string]Declared `json:"declared,omitempty"`
 
-	// Usage is the person's answer about usage statistics (BV-256): nil until
+	// Usage is the person's answer about usage statistics: nil until
 	// they answer. Optional in state.v2.
 	Usage *Usage `json:"usage,omitempty"`
 
@@ -69,7 +69,7 @@ type Declared struct {
 	KnowledgeVersion string            `json:"knowledge_version"`
 }
 
-// Usage records the usage statistics answer (BV-256): whether they are on,
+// Usage records the usage statistics answer: whether they are on,
 // when the person answered (UTC RFC 3339), the version of the question's text
 // they answered, and the random install id (UUID v4) sent with them.
 type Usage struct {
@@ -87,6 +87,11 @@ type Integrity struct {
 	// BV-222): baseline, console, admin_list or store. Optional; absent in a
 	// state from before it.
 	BinaryAcceptedVia string `json:"binary_accepted_via,omitempty"`
+	// ConfigSource is which configuration ConfigSHA256 fingerprints: "user"
+	// (the person's config.json) or "company" (the administrator's
+	// company.json, in use when the person has no config.json). Empty means
+	// user, so a state from before it reads as it always did.
+	ConfigSource string `json:"config_source,omitempty"`
 }
 
 // Baselines holds the last-known state of every audited surface.

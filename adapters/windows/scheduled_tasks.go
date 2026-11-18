@@ -41,6 +41,7 @@ type psRosmarOps struct {
 	Arguments          string      `json:"Arguments"`
 	WorkingDirectory   string      `json:"WorkingDirectory"`
 	UserID             string      `json:"UserId"`
+	GroupID            string      `json:"GroupId"`
 	LogonType          string      `json:"LogonType"`
 	RunLevel           string      `json:"RunLevel"`
 	ExecutionTimeLimit string      `json:"ExecutionTimeLimit"`
@@ -101,6 +102,7 @@ func (w *WindowsPlatform) ListScheduledTasks(ctx context.Context) ([]platform.Sc
 		`Arguments="$($a0.Arguments)";` +
 		`WorkingDirectory="$($a0.WorkingDirectory)";` +
 		`UserId="$($task.Principal.UserId)";` +
+		`GroupId="$($task.Principal.GroupId)";` +
 		`LogonType="$($task.Principal.LogonType)";` +
 		`RunLevel="$($task.Principal.RunLevel)";` +
 		`ExecutionTimeLimit="$($task.Settings.ExecutionTimeLimit)";` +
@@ -149,7 +151,7 @@ func (r *psRosmarOps) task() *platform.RosmarOpsTask {
 	}
 	t := &platform.RosmarOpsTask{
 		Actions: r.Count, Execute: r.Execute, ExecuteExpanded: r.Expanded, Arguments: r.Arguments,
-		WorkingDirectory: r.WorkingDirectory, UserID: r.UserID, LogonType: r.LogonType, RunLevel: r.RunLevel,
+		WorkingDirectory: r.WorkingDirectory, UserID: r.UserID, GroupID: r.GroupID, LogonType: r.LogonType, RunLevel: r.RunLevel,
 		ExecutionTimeLimit: r.ExecutionTimeLimit,
 	}
 	for _, tr := range r.Triggers {

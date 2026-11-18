@@ -275,3 +275,195 @@ jobs:
           grep -qE 'no tiene systemd de usuario|Programa una revisión cada viernes' "$R" \
             || { echo "weekly section missing (no_systemd or linux pitch)"; exit 1; }
           echo "linux-smoke OK"
+
+  # The company install scripts of docs/company/ (marked untested until the
+  # pilot), run for real on GitHub's runners: install as an administrator,
+  # then one review as an ordinary person with no config.json of their own,
+  # which must take the company configuration, accept the binary through the
+  # administrator's list on the first run, write the company summary and
+  # never create config.json. The version built here must equal the scripts'
+  # $version / VERSION, because it goes into binaries.sha256.
+  company-scripts-linux:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.4"
+          cache: false
+      - name: Build rosmarops-linux-amd64 (version 0.11.2, as install-linux.sh)
+        run: CGO_ENABLED=0 go build -trimpath -ldflags="-X main.version=0.11.2" -o "$RUNNER_TEMP/pkg/rosmarops-linux-amd64" ./cmd/rosmarops
+      - name: Install with docs/company/install-linux.sh and check what it left
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo INSTALLER_PATH="$RUNNER_TEMP/pkg" sh docs/company/install-linux.sh
+          ls -la /etc/rosmarops /etc/systemd/user /etc/systemd/user/timers.target.wants
+          stat -c '%U %a %n' /etc/rosmarops /etc/rosmarops/company.json /etc/rosmarops/binaries.sha256 \
+            /etc/systemd/user /etc/systemd/user/rosmarops-weekly.service /etc/systemd/user/rosmarops-weekly.timer \
+            /usr/local/bin/rosmarops
+          cat /etc/rosmarops/company.json /etc/rosmarops/binaries.sha256
+          listed="$(cut -d' ' -f1 /etc/rosmarops/binaries.sha256)"
+          actual="$(sha256sum /usr/local/bin/rosmarops | cut -d' ' -f1)"
+          echo "listed=$listed actual=$actual"
+          test "$listed" = "$actual" || { echo "binaries.sha256 does not list the installed binary"; exit 1; }
+          test "$(cat /etc/rosmarops/binaries.sha256)" = "$actual  0.11.2" || { echo "binaries.sha256 line is not '<sha>  0.11.2'"; exit 1; }
+          test "$(stat -c '%U %a' /etc/rosmarops)" = "root 755" || { echo "/etc/rosmarops is not root 755"; exit 1; }
+          for f in /etc/rosmarops/company.json /etc/rosmarops/binaries.sha256; do
+            test "$(stat -c '%U %a' "$f")" = "root 644" || { echo "$f is not root 644"; exit 1; }
+          done
+          test -L /etc/systemd/user/timers.target.wants/rosmarops-weekly.timer || { echo "timer not enabled globally"; exit 1; }
+          sha256sum /etc/rosmarops/company.json /etc/rosmarops/binaries.sha256 > "$RUNNER_TEMP/etc-before.sha256"
+      - name: A fake person with one repository and no ~/.rosmarops
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo useradd -m -s /bin/sh fakeuser
+          sudo -u fakeuser -H sh -c 'mkdir -p ~/source/demo && cd ~/source/demo && git init -q && git -c user.email=a@b -c user.name=x commit -q --allow-empty -m x'
+          if sudo test -e /home/fakeuser/.rosmarops; then echo "/home/fakeuser/.rosmarops already exists"; exit 1; fi
+      - name: First unattended review as that person (company configuration, first run)
+        shell: bash
+        run: |
+          set +e
+          sudo -u fakeuser -H /usr/local/bin/rosmarops run --unattended
+          rc=$?
+          set -euo pipefail
+          echo "exit code: $rc (recorded, not required to be 0)"
+          S=/home/fakeuser/.rosmarops/reports/data/rosmarops-summary.json
+          sudo test -f "$S" || { echo "no summary at $S"; exit 1; }
+          sudo cat "$S"
+          sudo cat "$S" | python3 -I -c '
+          import json, sys
+          lines = sys.stdin.read().splitlines()
+          assert len(lines) == 1, "summary is %d lines, not one" % len(lines)
+          d = json.loads(lines[0])
+          for k, v in (("config_source", "company"), ("run", "complete"), ("binary", "first_run")):
+              assert d.get(k) == v, "%s is %r, not %r" % (k, d.get(k), v)
+          print("summary OK: status=%s binary=%s" % (d["status"], d["binary"]))
+          '
+          if sudo test -e /home/fakeuser/.rosmarops/config.json; then echo "config.json was created"; exit 1; fi
+          sha256sum -c "$RUNNER_TEMP/etc-before.sha256"
+          for f in /etc/rosmarops/company.json /etc/rosmarops/binaries.sha256; do
+            test "$(stat -c '%U %a' "$f")" = "root 644" || { echo "$f is no longer root 644"; exit 1; }
+          done
+      - name: Second unattended review (binary unchanged)
+        shell: bash
+        run: |
+          set +e
+          sudo -u fakeuser -H /usr/local/bin/rosmarops run --unattended
+          rc=$?
+          set -euo pipefail
+          echo "exit code: $rc (recorded, not required to be 0)"
+          S=/home/fakeuser/.rosmarops/reports/data/rosmarops-summary.json
+          sudo cat "$S"
+          sudo cat "$S" | python3 -I -c '
+          import json, sys
+          lines = sys.stdin.read().splitlines()
+          assert len(lines) == 1, "summary is %d lines, not one" % len(lines)
+          d = json.loads(lines[0])
+          for k, v in (("config_source", "company"), ("run", "complete"), ("binary", "unchanged")):
+              assert d.get(k) == v, "%s is %r, not %r" % (k, d.get(k), v)
+          print("summary OK: status=%s binary=%s" % (d["status"], d["binary"]))
+          '
+          if sudo test -e /home/fakeuser/.rosmarops/config.json; then echo "config.json was created"; exit 1; fi
+          sha256sum -c "$RUNNER_TEMP/etc-before.sha256"
+
+  company-scripts-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.4"
+          cache: false
+      - name: Build rosmarops.exe (version 0.11.2, as install-windows.ps1)
+        shell: powershell
+        run: |
+          $env:CGO_ENABLED = "0"
+          go build -trimpath "-ldflags=-X main.version=0.11.2" -o "$env:RUNNER_TEMP\rosmarops.exe" ./cmd/rosmarops
+          if ($LASTEXITCODE -ne 0) { throw "go build failed" }
+      - name: Install with docs/company/install-windows.ps1 and check what it left
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:INSTALLER_PATH = "$env:RUNNER_TEMP\rosmarops.exe"
+          powershell -NoProfile -ExecutionPolicy Bypass -File docs/company/install-windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw "install-windows.ps1 exited $LASTEXITCODE" }
+          $bin = Join-Path $env:ProgramFiles 'RosmarOps'
+          $cfg = Join-Path $env:ProgramData 'RosmarOps'
+          icacls $bin
+          icacls $cfg
+          icacls (Join-Path $cfg 'company.json')
+          icacls (Join-Path $cfg 'binaries.sha256')
+          Get-Content (Join-Path $cfg 'company.json')
+          Get-Content (Join-Path $cfg 'binaries.sha256')
+          $actual = (Get-FileHash -Algorithm SHA256 (Join-Path $bin 'rosmarops.exe')).Hash.ToLower()
+          $line = [IO.File]::ReadAllText((Join-Path $cfg 'binaries.sha256'))
+          Write-Output "actual=$actual"
+          if ($line -ne "$actual  0.11.2`n") { throw "binaries.sha256 is '$line', not '<sha>  0.11.2'" }
+          $raw = [IO.File]::ReadAllBytes((Join-Path $cfg 'company.json'))
+          if ($raw[0] -eq 0xEF) { throw "company.json starts with a BOM" }
+          $task = Get-ScheduledTask -TaskName 'RosmarOps weekly review (company)'
+          $task | Select-Object -ExpandProperty Principal | Format-List *
+          $task | Select-Object -ExpandProperty Actions | Format-List Execute, Arguments, WorkingDirectory
+          $task | Select-Object -ExpandProperty Triggers | Format-List *
+          $pr = $task.Principal
+          if ($pr.GroupId -ne 'S-1-5-32-545' -and $pr.GroupId -ne 'Users') { throw "task GroupId is '$($pr.GroupId)'" }
+          if ("$($pr.RunLevel)" -ne 'Limited') { throw "task RunLevel is '$($pr.RunLevel)'" }
+          if ($task.Actions[0].Execute -ne (Join-Path $bin 'rosmarops.exe')) { throw "task runs '$($task.Actions[0].Execute)'" }
+          if ($task.Actions[0].Arguments -ne 'run --unattended') { throw "task arguments are '$($task.Actions[0].Arguments)'" }
+      - name: Unattended review as the runner's user with no config.json (company configuration)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $profileDir = $env:USERPROFILE
+          if (Test-Path (Join-Path $profileDir '.rosmarops')) {
+            # The image already has a ~\.rosmarops: use a fresh profile folder.
+            $profileDir = Join-Path $env:RUNNER_TEMP 'companyprofile'
+            New-Item -ItemType Directory -Force -Path $profileDir | Out-Null
+            $env:USERPROFILE = $profileDir
+            $env:HOME = $profileDir
+          }
+          Write-Output "profile: $profileDir"
+          New-Item -ItemType Directory -Force -Path (Join-Path $profileDir 'source\demo') | Out-Null
+          git -C (Join-Path $profileDir 'source\demo') init -q
+          git -C (Join-Path $profileDir 'source\demo') -c user.email=a@b -c user.name=x commit -q --allow-empty -m x
+          $cfgFile = Join-Path $profileDir '.rosmarops\config.json'
+          if (Test-Path $cfgFile) { throw "$cfgFile exists before the review" }
+          $before = Get-FileHash -Algorithm SHA256 (Join-Path $env:ProgramData 'RosmarOps\*') | ForEach-Object { "$($_.Hash) $($_.Path)" }
+          & "$env:ProgramFiles\RosmarOps\rosmarops.exe" run --unattended
+          # Recorded, not required to be 0: a yellow or red review may exit
+          # non-zero, and the runner would otherwise end the step with it.
+          Write-Output "exit code: $LASTEXITCODE (recorded, not required to be 0)"
+          $global:LASTEXITCODE = 0
+          $s = Join-Path $profileDir '.rosmarops\reports\data\rosmarops-summary.json'
+          if (-not (Test-Path $s)) { throw "no summary at $s" }
+          Get-Content $s
+          $lines = @(Get-Content $s)
+          if ($lines.Count -ne 1) { throw "summary is $($lines.Count) lines, not one" }
+          $d = $lines[0] | ConvertFrom-Json
+          if ($d.config_source -ne 'company') { throw "config_source is '$($d.config_source)'" }
+          if ($d.run -ne 'complete') { throw "run is '$($d.run)'" }
+          if ($d.binary -ne 'first_run') { throw "binary is '$($d.binary)'" }
+          if (Test-Path $cfgFile) { throw "the review created $cfgFile" }
+          $after = Get-FileHash -Algorithm SHA256 (Join-Path $env:ProgramData 'RosmarOps\*') | ForEach-Object { "$($_.Hash) $($_.Path)" }
+          if (Compare-Object $before $after) { throw "the company folder changed during the review" }
+          Write-Output "summary OK: status=$($d.status) binary=$($d.binary)"
+      - name: Uninstall with docs/company/uninstall-windows.ps1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          powershell -NoProfile -ExecutionPolicy Bypass -File docs/company/uninstall-windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw "uninstall-windows.ps1 exited $LASTEXITCODE" }
+          if (Test-Path (Join-Path $env:ProgramFiles 'RosmarOps')) { throw "Program Files\RosmarOps is still there" }
+          if (Test-Path (Join-Path $env:ProgramData 'RosmarOps')) { throw "ProgramData\RosmarOps is still there" }
+          if (Get-ScheduledTask -TaskName 'RosmarOps weekly review (company)' -ErrorAction SilentlyContinue) { throw "the scheduled task is still there" }
+          Write-Output "uninstalled"

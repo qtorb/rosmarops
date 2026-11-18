@@ -19,9 +19,10 @@ import (
 	"github.com/qtorb/rosmarops/internal/spacenet"
 	"github.com/qtorb/rosmarops/internal/state"
 	"github.com/qtorb/rosmarops/internal/usage"
+	"github.com/qtorb/rosmarops/internal/winpkg"
 )
 
-// Usage statistics, program side (BV-256). The pattern is the problem
+// Usage statistics, program side. The pattern is the problem
 // reports': the state records the person's answer, spacenet.SendUsage sends
 // only under the consent read from the state, every attempt is noted in
 // rosmarops-sends.log, and the last package sent or tried is kept as it is in
@@ -44,7 +45,7 @@ var usageTextVersion = usage.TextVersion
 // no review finished this run.
 var lastUsageInput *usage.Input
 
-// newUsageCmd is `rosmarops usage [on|off]` (§B.7).
+// newUsageCmd is `rosmarops usage [on|off]`.
 func newUsageCmd() *cli.Command {
 	return &cli.Command{
 		Name: "usage", Short: "usage.help", Args: cli.AnyArgs,
@@ -123,7 +124,7 @@ func usageUndecided(u *state.Usage) bool {
 	return u == nil || u.TextVersion < usageTextVersion
 }
 
-// askUsage asks the question in a console (§B.4): Enter, s, S, y or Y is yes;
+// askUsage asks the question in a console: Enter, s, S, y or Y is yes;
 // n or N is no; anything else repeats the question once and then counts as no.
 func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) bool {
 	fmt.Fprintln(out)
@@ -151,7 +152,7 @@ func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) bool {
 	return false
 }
 
-// afterReportUsage is the usage step after a review's report (§B.4, §B.5):
+// afterReportUsage is the usage step after a review's report:
 // with someone at a console and no answer to the current text, it asks and
 // records the answer; then, with usage statistics on, it sends this review's
 // package. It never fails the run and never changes the report.
@@ -277,11 +278,11 @@ func usageInputOf(v2 report.V2, spaceConnected bool, settings *platform.ClaudeSe
 	return in
 }
 
-// usageChannel is how this copy was installed (§B.1): the Microsoft Store's
-// own package (storeIdentity), a Homebrew keg (brewCellar), or other.
+// usageChannel is how this copy was installed: the Microsoft Store's
+// own package (winpkg.IdentityIsOwn, the same check the integrity uses), a Homebrew keg (brewCellar), or other.
 func usageChannel(exe string) string {
 	if runtime.GOOS == "windows" {
-		if real, err := currentExe(); err == nil && storeIdentity(currentPackage(), real, os.Getenv("LOCALAPPDATA")) {
+		if real, err := currentExe(); err == nil && winpkg.IdentityIsOwn(currentPackage(), real, os.Getenv("LOCALAPPDATA")) {
 			return usage.ChannelStore
 		}
 		return usage.ChannelOther
@@ -296,7 +297,7 @@ func usageChannel(exe string) string {
 }
 
 // ownPluginEnabled reports RosmarOps's own Claude Code plugin enabled in the
-// user or managed settings (OwnPluginEnabled, BV-253).
+// user or managed settings (OwnPluginEnabled).
 func ownPluginEnabled(s *platform.ClaudeSettingsScan) bool {
 	if s == nil {
 		return false

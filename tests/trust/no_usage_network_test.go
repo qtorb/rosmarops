@@ -15,7 +15,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/usage"
 )
 
-// BV-256 §E.3: usage statistics open no connection unless the state records
+// Usage statistics open no connection unless the state records
 // that the person turned them on. With usage off, and with no answer at all,
 // a review (interactive or scheduled) opens no inet socket; with usage on, the
 // only connection the program asks for is app.rosmarops.com:443, through a
@@ -116,7 +116,7 @@ func TestNoNetwork_UsageSend_OnlyFixedHost(t *testing.T) {
 	}
 }
 
-// BV-256 §E.4: a usage send that fails (the proxy at 127.0.0.1:1 refuses the
+// A usage send that fails (the proxy at 127.0.0.1:1 refuses the
 // connection, as a network with no way out would) leaves the review the same: the same report status
 // and the same exit code as a review with usage off.
 func TestUsageSendFailureChangesNothing(t *testing.T) {
@@ -150,5 +150,35 @@ func TestUsageSendFailureChangesNothing(t *testing.T) {
 	offStatus, offCode := result(usageHome(t, usageAnswer(false)))
 	if onStatus != offStatus || onCode != offCode {
 		t.Errorf("usage on with a failed send: status %s, exit %d; usage off: status %s, exit %d", onStatus, onCode, offStatus, offCode)
+	}
+}
+
+// The company's scheduled review (the no-network company runtime test) runs
+// with a state that has no usage answer: after two scheduled reviews the
+// state still has none and no usage summary was written, so that test checks
+// the company review alone.
+func TestCompanyRuntimeHasNoUsage(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the company sandbox runs on Linux")
+	}
+	s := newCompanySandbox(t, "0.16.0", companyJSON(true))
+	for i := 0; i < 2; i++ {
+		cmd := exec.Command(s.binary, "run", "--unattended")
+		cmd.Dir, cmd.Env = s.work, s.env
+		_, _ = cmd.CombinedOutput()
+	}
+	raw, err := os.ReadFile(filepath.Join(s.home, ".rosmarops", "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &st); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st["usage"]; ok {
+		t.Errorf("the company review's state has a usage answer: %s", st["usage"])
+	}
+	if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(s.home, ".rosmarops", "reports")), usage.LastFileName)); err == nil {
+		t.Error("a usage summary was written in the company review")
 	}
 }

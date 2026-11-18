@@ -24,7 +24,7 @@ func goodInput() usage.Input {
 	}
 }
 
-// §E.1: the package has exactly the schema's keys.
+// The package has exactly the schema's keys.
 func TestBuildHasExactlyTheSchemaKeys(t *testing.T) {
 	p, err := usage.Build(goodInput())
 	if err != nil {
@@ -105,7 +105,7 @@ func TestBuildRefusesValuesOutsideTheirList(t *testing.T) {
 	}
 }
 
-// §E.6 (the generator): a random UUID v4, a new one each time.
+// A random UUID v4, a new one each time.
 func TestNewInstallID(t *testing.T) {
 	re := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	a, err := usage.NewInstallID()
@@ -115,5 +115,25 @@ func TestNewInstallID(t *testing.T) {
 	b, _ := usage.NewInstallID()
 	if !re.MatchString(a) || !re.MatchString(b) || a == b {
 		t.Errorf("ids %q %q", a, b)
+	}
+}
+
+// The products only detected (not evaluated) are sent too, and every product
+// of the closed list fits the schema's pattern.
+func TestBuildKeepsDetectedProducts(t *testing.T) {
+	in := goodInput()
+	in.Agents = []string{"claude-desktop", "antigravity", "github-copilot-jetbrains", "cline-cli", "grok-bot", "continue", "n8n", "not-a-product"}
+	p, err := usage.Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(p.Agents, ","); got != "antigravity,claude-desktop,cline-cli,continue,github-copilot-jetbrains,grok-bot,n8n" {
+		t.Errorf("agents %s", got)
+	}
+	pat := regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
+	for _, prod := range usage.KnownProducts() {
+		if !pat.MatchString(prod) {
+			t.Errorf("product %q does not fit usage.v1's pattern", prod)
+		}
 	}
 }

@@ -133,7 +133,7 @@ func runNoArgs() int {
 	// unanswered window never delays the report.
 	offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), lang, true)
 
-	// BV-256: usage statistics, the window's last step: asked when there is no
+	// Usage statistics, the window's last step: asked when there is no
 	// answer to the current text, sent after the review while they are on.
 	afterReportUsage(filepath.Dir(absPath(htmlPath)), lang, runCanAsk())
 

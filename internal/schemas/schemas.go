@@ -90,7 +90,7 @@ var ProblemsSchema []byte
 
 // UsageSchema is the embedded usage.v1.schema.json schema: the usage
 // statistics the program sends only while the state records that the person
-// turned them on (BV-256), copied byte for byte from qtorb/rosmarops-app.
+// turned them on, copied byte for byte from qtorb/rosmarops-app.
 //
 //go:embed usage.v1.schema.json
 var UsageSchema []byte
@@ -101,3 +101,15 @@ var UsageSchema []byte
 //
 //go:embed v2/space-view.v1.schema.json
 var SpaceViewSchema []byte
+
+// SummaryV1Schema is the embedded summary.v1.json schema: the company summary
+// a company agent may read about one run, counts and codes only.
+//
+//go:embed summary.v1.json
+var SummaryV1Schema []byte
+
+// CompanyV1Schema is the embedded company.v1.json schema: the company
+// configuration an administrator writes and the person can only read.
+//
+//go:embed company.v1.json
+var CompanyV1Schema []byte
