@@ -116,3 +116,43 @@ var systemdDay = map[string]string{
 	"sun": "sunday", "mon": "monday", "tue": "tuesday", "wed": "wednesday",
 	"thu": "thursday", "fri": "friday", "sat": "saturday",
 }
+
+// GlobalWeeklyUnitDir is where an administrator installs a user unit for every
+// person on the machine: <etc>/systemd/user. A company deployment puts the
+// weekly review there instead of in each person's own folder.
+func GlobalWeeklyUnitDir(etcRoot string) string {
+	return filepath.Join(etcRoot, "systemd", "user")
+}
+
+// GlobalWeeklyEnabled reports whether the administrator's weekly review in
+// globalDir is installed and enabled for every user: both unit files exist and
+// timers.target.wants holds the timer's link, which is what
+// "systemctl --global enable" creates. It only looks at files, so a unit that
+// is copied but never enabled is not taken as this computer's review. The
+// caller also uses it to tell that user systemd is present when the person has
+// no systemd folder of their own.
+func GlobalWeeklyEnabled(globalDir string) bool {
+	for _, name := range []string{"rosmarops-weekly.service", "rosmarops-weekly.timer"} {
+		if info, err := os.Stat(filepath.Join(globalDir, name)); err != nil || info.IsDir() {
+			return false
+		}
+	}
+	_, err := os.Lstat(filepath.Join(globalDir, "timers.target.wants", "rosmarops-weekly.timer"))
+	return err == nil
+}
+
+// WeeklyFromSystemdDirs is the weekly state from the person's own unit folder
+// and the administrator's global one. The person's own unit wins when its
+// service file exists, because systemd itself lets a user unit of the same name
+// replace the global one. Otherwise an enabled global unit is read exactly like
+// the person's own: this executable gives WeeklyOwn, another one WeeklyOther. A
+// global unit that is not enabled is WeeklyNone. It never executes anything.
+func WeeklyFromSystemdDirs(personalDir, globalDir, selfExe string) Weekly {
+	if _, err := os.Lstat(filepath.Join(personalDir, "rosmarops-weekly.service")); err == nil {
+		return WeeklyFromSystemd(personalDir, selfExe)
+	}
+	if globalDir != "" && GlobalWeeklyEnabled(globalDir) {
+		return WeeklyFromSystemd(globalDir, selfExe)
+	}
+	return Weekly{State: WeeklyNone}
+}

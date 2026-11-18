@@ -163,6 +163,21 @@
           }
         }
       }
+    },
+    "company": {
+      "description": "The company configuration of this review: whether one exists and is trusted, whether the company reads a summary, and how a binary change was accepted. Absent with no company configuration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "summary_enabled", "config_source", "binary_accepted_via"],
+      "properties": {
+        "state": { "enum": ["trusted", "untrusted", "invalid"] },
+        "company_config_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "company_config_changed": { "type": "boolean" },
+        "summary_enabled": { "type": "boolean" },
+        "report_directory_overridden": { "type": "boolean" },
+        "config_source": { "enum": ["user", "company"] },
+        "binary_accepted_via": { "enum": ["unchanged", "first_run", "console", "admin_list", "store"] }
+      }
     }
   },
   "definitions": {

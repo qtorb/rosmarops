@@ -73,6 +73,11 @@ type Integrity struct {
 	// BV-222): baseline, console, admin_list or store. Optional; absent in a
 	// state from before it.
 	BinaryAcceptedVia string `json:"binary_accepted_via,omitempty"`
+	// ConfigSource is which configuration ConfigSHA256 fingerprints: "user"
+	// (the person's config.json) or "company" (the administrator's
+	// company.json, in use when the person has no config.json). Empty means
+	// user, so a state from before it reads as it always did.
+	ConfigSource string `json:"config_source,omitempty"`
 }
 
 // Baselines holds the last-known state of every audited surface.

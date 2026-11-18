@@ -39,6 +39,8 @@ func TestSchemasInSync(t *testing.T) {
 		"v2/findings-memory.v2.schema.json",
 		"intel/intel.v1.schema.json",
 		"kit.v1.schema.json",
+		"summary.v1.json",
+		"company.v1.json",
 		"results.v1.schema.json",
 		"problems.v1.schema.json",
 		"v2/space-view.v1.schema.json",
