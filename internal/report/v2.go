@@ -67,6 +67,14 @@ type V2 struct {
 	// virtual machine or Windows Sandbox, with the signal; absent otherwise.
 	// Informative: no weight in any score.
 	Environment *hostenv.Env `json:"environment,omitempty"`
+	// Company is the company configuration of this review, when the computer
+	// has one (trusted or not); absent otherwise.
+	Company *Company `json:"company,omitempty"`
+	// CompanyPath is company.json's path, for the «Your company» section; not
+	// in the JSON. CompanyRead is the summary the company reads, shown there
+	// as it is; nil when the company reads none.
+	CompanyPath string          `json:"-"`
+	CompanyRead *CompanySummary `json:"-"`
 	// TestData are the keys treated as test data by default (decision
 	// 2026-10-26, ruido del informe, point 1): shown, not in the JSON.
 	TestData rules.TestData `json:"-"`
@@ -107,6 +115,9 @@ type V2 struct {
 	// storeOld and storeNew are the versions of a Microsoft Store update the
 	// integrity check accepted in this run (BV-222); empty otherwise.
 	storeOld, storeNew string
+	// adminOld and adminNew are the same for an update the administrator's
+	// fingerprint list accepted.
+	adminOld, adminNew string
 	exePath            string
 	weekly             scheduledtasks.Weekly
 	weeklyNoSystemd    bool // BV-165: Linux has no user systemd; the weekly section says so
@@ -469,6 +480,14 @@ type V2Input struct {
 	// the report says so and, when the weekly review still runs another copy,
 	// gives the command with the Store alias. Empty otherwise.
 	StoreUpdateOld, StoreUpdateNew string
+	// AdminListOld and AdminListNew are the versions of an update the
+	// integrity check accepted in this run because the administrator's
+	// fingerprint list holds the new binary; empty otherwise.
+	AdminListOld, AdminListNew string
+	// Company and CompanyPath are the company configuration of this review
+	// and company.json's path; nil and empty without one.
+	Company     *Company
+	CompanyPath string
 
 	// ExePath is the absolute path of the rosmarops.exe that made the report
 	// and Weekly what the scheduled tasks say about its weekly review (J4,
@@ -547,6 +566,10 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		integrityNotChecked: in.IntegrityNotChecked,
 		storeOld:            in.StoreUpdateOld,
 		storeNew:            in.StoreUpdateNew,
+		adminOld:            in.AdminListOld,
+		adminNew:            in.AdminListNew,
+		Company:             in.Company,
+		CompanyPath:         in.CompanyPath,
 		exePath:             in.ExePath,
 		weekly:              in.Weekly,
 		weeklyNoSystemd:     in.WeeklyNoSystemd,

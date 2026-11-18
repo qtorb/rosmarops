@@ -415,3 +415,10 @@ func loadedOnly(scan platform.MCPScan) platform.MCPScan {
 	}
 	return out
 }
+
+// KnownProduct reports a product of the program's closed list (the products
+// it names in reports), never a label the person wrote.
+func KnownProduct(product string) bool {
+	_, ok := clientDisplayNames[product]
+	return ok
+}

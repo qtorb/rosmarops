@@ -14,6 +14,9 @@ const (
 	acceptedViaBaseline = "baseline"
 	acceptedViaConsole  = "console"
 	acceptedViaStore    = "store"
+	// acceptedViaAdminList: the administrator's fingerprint list of a
+	// managed computer holds the new binary with its version.
+	acceptedViaAdminList = "admin_list"
 )
 
 // storeUpdate is a Microsoft Store update the integrity check accepted, for

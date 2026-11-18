@@ -72,6 +72,30 @@ type integrityRun struct {
 	// accepted is set when the check accepted a Microsoft Store update, for
 	// the report; nil: not recorded.
 	accepted *storeUpdate
+	// adminList reports whether the administrator's fingerprint list,
+	// trusted, holds this binary's fingerprint with its version; nil: never
+	// (tests that do not exercise it). session-check and statusline never
+	// get here: they never accept and never write.
+	adminList func(self string) bool
+	// company is the review's company configuration: its source decides what
+	// the configuration fingerprint means, and the check records there how
+	// the binary was accepted. nil: no company configuration.
+	company *companyRun
+}
+
+// source is the configuration in use: user or company.
+func (r integrityRun) source() string {
+	if r.company != nil && r.company.source == configSourceCompany {
+		return configSourceCompany
+	}
+	return configSourceUser
+}
+
+// setBinary records how this review accepted its binary.
+func (r integrityRun) setBinary(how string) {
+	if r.company != nil {
+		r.company.binary = how
+	}
 }
 
 // realStoreCheck is integrityRun.store for a real run: this process's package
@@ -88,14 +112,16 @@ func realStoreCheck(stateVersion string) bool {
 var errAborted = errors.New("integrity: aborted")
 
 // recordReferences sets both references to this binary and this
-// configuration, writes the accepted copy and saves the state.
-func (r integrityRun) recordReferences(self string) error {
+// configuration, writes the accepted copy and saves the state; via is how the
+// binary was accepted.
+func (r integrityRun) recordReferences(self, via string) error {
 	raw, err := os.ReadFile(r.cfgPath)
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
 	}
 	r.st.Integrity.VigilBinarySHA256 = self
-	r.st.Integrity.BinaryAcceptedVia = acceptedViaConsole
+	r.st.Integrity.BinaryAcceptedVia = via
+	r.st.Integrity.ConfigSource = configSourceIn(r.source())
 	r.st.Integrity.ConfigSHA256 = hash.Bytes(raw)
 	r.st.EngineVersion = version
 	if err := writeAcceptedCopy(r.reportDir, raw); err != nil {
@@ -121,6 +147,13 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			do = abortWithIntegrityFailure
 		}
 		o.lang, o.unattended, o.window = r.lang, r.unattended, r.window
+		// The company reads that this review stopped, before the abort that
+		// never returns.
+		code := category
+		if o.stateLost {
+			code = "state_lost"
+		}
+		r.company.writeAbortSummary(report.SummaryIntegrityAbort, code)
 		do(category, why, action, o)
 	}
 	self, err := r.selfHash()
@@ -139,18 +172,56 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		if r.stErr != nil {
 			slog.Warn("integrity: state unavailable", "err", r.stErr)
 		}
+		// With the company configuration in use (no config.json of the
+		// person's), a lost or missing state is a first run only when the
+		// binary passes the administrator's list or the Store check: deleting
+		// the state is never enough to accept any binary.
+		if r.source() == configSourceCompany {
+			via := ""
+			switch {
+			case r.adminList != nil && r.adminList(self):
+				via = acceptedViaAdminList
+			case r.store != nil && r.store("0.0.0"):
+				via = acceptedViaStore
+			}
+			if via != "" {
+				slog.Info("integrity: first run with the company configuration", "accepted_via", via)
+				r.setBinary(binaryFirstRun)
+				return false, r.recordReferences(self, via)
+			}
+		}
 		fmt.Fprintln(r.ask.out, t("console.state_lost", nil))
 		if !r.ask.ask("console.state_confirm") {
 			abort("binary_hash_changed", "RosmarOps lost its integrity reference: the state was lost or reset.",
 				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.", abortOptions{stateLost: true})
 			return false, errAborted
 		}
-		return r.stErr != nil, r.recordReferences(self)
+		r.setBinary(acceptedViaConsole)
+		return r.stErr != nil, r.recordReferences(self, acceptedViaConsole)
 	case zero:
 		// A state written by an earlier init that recorded no reference and
 		// never ran: nothing to compare with yet.
 		slog.Warn("integrity: no reference recorded yet — run 'rosmarops baseline' to establish it")
 		return false, nil
+	}
+	if self != r.st.Integrity.VigilBinarySHA256 && r.adminList != nil && r.st.EngineVersion != "" &&
+		semverGreater(version, r.st.EngineVersion) && r.adminList(self) {
+		// Invariant 8: the administrator's fingerprint list holds this binary
+		// with its version, newer than the recorded one (never an older
+		// version, never the same version with another fingerprint); checked
+		// before the person is asked. The report says so.
+		oldVersion := r.st.EngineVersion
+		slog.Info("integrity: binary accepted by the administrator's list", "old_version", oldVersion, "new_version", version)
+		r.st.Integrity.VigilBinarySHA256 = self
+		r.st.Integrity.BinaryAcceptedVia = acceptedViaAdminList
+		r.st.EngineVersion = version
+		if err := state.SaveState(r.stPath, *r.st); err != nil {
+			return false, fmt.Errorf("save state: %w", err)
+		}
+		r.setBinary(acceptedViaAdminList)
+		if r.company != nil {
+			r.company.adminOld, r.company.adminNew = oldVersion, version
+		}
 	}
 	if self != r.st.Integrity.VigilBinarySHA256 && r.store != nil && r.st.EngineVersion != "" && r.store(r.st.EngineVersion) {
 		// Invariant 8 (BV-222): a Microsoft Store update of RosmarOps itself,
@@ -167,6 +238,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		if r.accepted != nil {
 			*r.accepted = storeUpdate{Old: oldVersion, New: version}
 		}
+		r.setBinary(acceptedViaStore)
 	}
 	if self != r.st.Integrity.VigilBinarySHA256 {
 		// J2: the old and the new version and fingerprint, and the question.
@@ -187,6 +259,26 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		if err := state.SaveState(r.stPath, *r.st); err != nil {
 			return false, fmt.Errorf("save state: %w", err)
 		}
+		r.setBinary(acceptedViaConsole)
+	}
+	// The company configuration in use is an administrator's file, trusted
+	// by its ownership check: a change to it is recorded and reported,
+	// never an abort.
+	if r.source() == configSourceCompany {
+		cur, hashErr := hash.File(r.cfgPath)
+		if hashErr != nil {
+			return false, fmt.Errorf("hash company configuration: %w", hashErr)
+		}
+		if cur != r.st.Integrity.ConfigSHA256 || r.st.Integrity.ConfigSource != configSourceCompany {
+			if r.company != nil && r.st.Integrity.ConfigSource == configSourceCompany {
+				r.company.changed = true
+			}
+			r.st.Integrity.ConfigSHA256, r.st.Integrity.ConfigSource = cur, configSourceCompany
+			if err := state.SaveState(r.stPath, *r.st); err != nil {
+				return false, fmt.Errorf("save state: %w", err)
+			}
+		}
+		return false, nil
 	}
 	// The configuration (adjustment A): what changed, and the question.
 	if cur, hashErr := hash.File(r.cfgPath); hashErr == nil && cur != r.st.Integrity.ConfigSHA256 {
@@ -201,7 +293,23 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			return false, errAborted
 		}
 	}
+	// The person's config.json is in use again: its fingerprint is a user one.
+	if r.st.Integrity.ConfigSource != "" {
+		r.st.Integrity.ConfigSource = ""
+		if err := state.SaveState(r.stPath, *r.st); err != nil {
+			return false, fmt.Errorf("save state: %w", err)
+		}
+	}
 	return false, nil
+}
+
+// configSourceIn is state.integrity.config_source for a source: absent for
+// the person's config.json, as in a state from before it.
+func configSourceIn(source string) string {
+	if source == configSourceCompany {
+		return configSourceCompany
+	}
+	return ""
 }
 
 // ScheduledLogName is the log of a scheduled review, in the reports
