@@ -40,6 +40,7 @@ var schemaSet = map[string][]byte{
 	"space-view.v1":      schemas.SpaceViewSchema,
 	"results.v1":         schemas.ResultsSchema,
 	"problems.v1":        schemas.ProblemsSchema,
+	"usage.v1":           schemas.UsageSchema,
 	"kit.v1":             schemas.KitSchema,
 	"summary.v1":         schemas.SummaryV1Schema,
 	"company.v1":         schemas.CompanyV1Schema,
@@ -491,12 +492,13 @@ func FuzzDifferential(f *testing.F) {
 	})
 }
 
-// Compile refuses every keyword outside §1.2, a format other than
+// Compile refuses every keyword outside §1.2 (propertyNames and maxProperties
+// joined it with usage.v1), a format other than
 // date-time, items as an array and a reference that is not local.
 func TestCompile_RefusesUnsupported(t *testing.T) {
 	for _, s := range []string{
 		`{"patternProperties": {}}`, `{"anyOf": [true]}`, `{"exclusiveMinimum": 1}`,
-		`{"multipleOf": 2}`, `{"contains": true}`, `{"dependencies": {}}`, `{"propertyNames": true}`,
+		`{"multipleOf": 2}`, `{"contains": true}`, `{"dependencies": {}}`,
 		`{"minProperties": 1}`, `{"additionalItems": true}`, `{"format": "email"}`, `{"items": [true]}`,
 		`{"$ref": "http://example.com/s.json"}`, `{"$ref": "other.json#/a"}`, `{"$ref": "#/definitions/missing"}`,
 		`{"type": "decimal"}`, `{"properties": {"a": {"bogus": 1}}}`, `{"definitions": {"a": {"if": {"nope": 1}}}}`,

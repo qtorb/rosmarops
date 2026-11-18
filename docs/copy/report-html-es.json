@@ -1058,5 +1058,14 @@
   "unseen.retries": "Si repite una tarea que falló a medias.",
   "unseen.outbox": "Si quedan mensajes pendientes de enviar.",
   "unseen.running": "Si la pasarela o el canal está en marcha ahora.",
-  "unseen.token": "Si el token de la plataforma es válido."
+  "unseen.token": "Si el token de la plataforma es válido.",
+  "usage.ask.title": "¿Nos ayudas a mejorar RosmarOps?",
+  "usage.ask.body": "Tras cada revisión, RosmarOps enviaría un resumen breve a app.rosmarops.com: su versión, tu sistema y cómo lo instalaste, los agentes que ha encontrado, la nota, la clase y los códigos de hallazgo, si tu espacio y el plugin de Claude Code están conectados, y un identificador de instalación aleatorio.",
+  "usage.ask.never": "Nunca rutas, nombres de ficheros, de proyectos o del ordenador, claves ni el contenido de tus ajustes.",
+  "usage.ask.off": "Puedes apagarlo cuando quieras: rosmarops usage off",
+  "usage.ask.prompt": "¿Enviar estadísticas de uso? [S/n]",
+  "usage.state.on": "Estadísticas de uso: activadas. El último resumen enviado está en data/rosmarops-usage-last.json. Para apagarlas: rosmarops usage off",
+  "usage.state.off": "Estadísticas de uso: apagadas. Para activarlas: rosmarops usage on",
+  "usage.state.undecided": "Estadísticas de uso: apagadas hasta que respondas. RosmarOps lo preguntará al final de la próxima revisión desde una terminal.",
+  "usage.help": "Activa o apaga las estadísticas de uso, o muestra si están activadas."
 }

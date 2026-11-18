@@ -88,6 +88,13 @@ var ResultsSchema []byte
 //go:embed problems.v1.schema.json
 var ProblemsSchema []byte
 
+// UsageSchema is the embedded usage.v1.schema.json schema: the usage
+// statistics the program sends only while the state records that the person
+// turned them on, copied byte for byte from qtorb/rosmarops-app.
+//
+//go:embed usage.v1.schema.json
+var UsageSchema []byte
+
 // SpaceViewSchema is the embedded v2/space-view.v1.schema.json schema: the
 // content of a rosmarops-results v1 package (BV-119/BV-122, copied unchanged
 // from vigil).

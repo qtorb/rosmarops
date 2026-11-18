@@ -24,6 +24,7 @@ The person-facing description is in [README.md](README.md). The promises the cod
 8. If this computer is connected to its space, seal the results package (`internal/results`) and send it (`internal/spacenet`).
 9. Write the report files, the score history, the findings memory and the status line, then save the state.
 10. Print the summary and open the report.
+11. After the report, the problem-report step, then the usage statistics step (`cmd/rosmarops/cmd_usage.go`): with someone at a console and no answer yet, ask once; with usage statistics on, build this review's `usage.v1` summary (`internal/usage`) and send it once (`internal/spacenet`). Neither step changes the report or the exit code.
 
 ```mermaid
 flowchart TD
@@ -107,6 +108,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/agenthooks`: RosmarOps inside Claude Code: the session check and the status line.
 - `internal/notify`: the Windows notification after a scheduled review.
 - `internal/problems`: the local problem notebook and the problem report.
+- `internal/usage`: the usage statistics summary (`usage.v1`): `Build` keeps only fixed values and closed lists, and the result is checked against the schema before it is sent. See [docs/usage-statistics.md](docs/usage-statistics.md).
 
 ### Support
 
@@ -119,7 +121,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/untrusted`: makes text read from disk safe to show.
 - `internal/proc`: starts child processes without a window.
 - `internal/winpath`: trusted Windows system paths from the Windows API.
-- `internal/winpkg`: the Microsoft Store package identity of the running process.
+- `internal/winpkg`: the Microsoft Store package identity of the running process, and the checks on it: `IdentityIsOwn` (RosmarOps's own package, run from its own folder) and `Accepts` (a Store update the integrity check accepts). The usage statistics' channel `store` uses `IdentityIsOwn`.
 
 ## The graph
 
@@ -168,7 +170,7 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 - `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS, Linux): the kit key.
 - The reports directory, `~/.rosmarops/reports/` unless the configuration sets another:
   - `report.html` and `report.<lang>.html`: the visual report, one page per language;
-  - `data/`: everything else. That is `report.md`, `report.json`, `report.v2.json`, the export for your AI, `graph.v2.json`, `index-history.json`, `findings-memory.json`, `config.accepted.json`, the run logs, `rosmarops-sends.log`, `rosmarops-problems.jsonl`, `rosmarops-run.inprogress`, `statusline.txt`, the Claude Code session snapshots in `data/session/`, the sealed `rosmarops-results-*.locked.json` packages, and, on a computer a company manages with the summary on, `rosmarops-summary.json`;
+  - `data/`: everything else. That is `report.md`, `report.json`, `report.v2.json`, the export for your AI, `graph.v2.json`, `index-history.json`, `findings-memory.json`, `config.accepted.json`, the run logs, `rosmarops-sends.log`, `rosmarops-problems.jsonl`, `rosmarops-usage-last.json` (the last usage summary sent or tried), `rosmarops-run.inprogress`, `statusline.txt`, the Claude Code session snapshots in `data/session/`, the sealed `rosmarops-results-*.locked.json` packages, and, on a computer a company manages with the summary on, `rosmarops-summary.json`;
   - `rosmarops-kit-<id>.json`: the exported kit file, when the person creates one.
 
 `tests/trust/no_writes_out_of_scope_test.go` runs the program in a sandbox and fails if anything is written elsewhere.

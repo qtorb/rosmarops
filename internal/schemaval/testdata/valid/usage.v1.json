@@ -1,0 +1,16 @@
+{
+  "schema": "usage.v1",
+  "install_id": "3b2c1d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d",
+  "day": "2026-11-18",
+  "version": "0.15.0",
+  "os": "linux",
+  "arch": "amd64",
+  "channel": "other",
+  "agents": ["claude-code", "cursor"],
+  "score": 72,
+  "class": "C",
+  "status": "yellow",
+  "findings": {"credential_readable": 2, "foreign_agent_config_writable": 1},
+  "space_connected": false,
+  "plugin_installed": true
+}

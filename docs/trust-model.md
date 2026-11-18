@@ -27,6 +27,7 @@ Nothing leaves your devices unless you approve it first.
 - RosmarOps sends nothing unless you approve it. If you connect this computer to your space, it sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time. Every send is listed in rosmarops-sends.log, in the data subfolder of your reports folder (on Windows, %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log).
 - It connects only to app.rosmarops.com, over HTTPS on port 443. It never sends your keys, files, settings or the report in clear, and never checks for updates.
 - If you press «Send» when RosmarOps finds a problem, it sends that problem list to app.rosmarops.com. No account is needed and nothing links it to your space. If you write your email, we use it only to answer you.
+- If you turn on usage statistics, after each check it sends a short summary (format usage.v1) to app.rosmarops.com, only while the state records that you turned them on: its version, your system and how you installed it, the agents it found, the score, class and finding codes, whether your space and the Claude Code plugin are connected, and a random install id. Never paths, file, project or computer names, keys or the content of your settings. Turn them off at any time with `rosmarops usage off`; the last summary sent is in rosmarops-usage-last.json, next to rosmarops-sends.log. Details: [usage-statistics.md](usage-statistics.md).
 
 ---
 

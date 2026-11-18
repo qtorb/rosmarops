@@ -64,7 +64,7 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Problem report.** The list of problems RosmarOps ran into during reviews, kept on the computer as a closed list of codes. It is sent only when the person presses «Send», or after they chose to send the next ones without asking. See [the decision](decisions/0013-problem-reports-with-permission.md).
 
-**Usage statistics.** Anonymous usage counts the person is asked about once. This is decided but not built yet. See [the decision](decisions/0014-usage-statistics-asked-once.md).
+**Usage statistics.** A short anonymous summary of each review (`usage.v1`) that RosmarOps sends only while the person has turned it on. It is asked once, at the end of a review from a console, and turned off or on with `rosmarops usage off` or `rosmarops usage on`. See [what is sent](usage-statistics.md) and [the decision](decisions/0014-usage-statistics-asked-once.md).
 
 ## Company mode
 

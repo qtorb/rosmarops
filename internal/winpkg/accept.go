@@ -21,13 +21,7 @@ import (
 // The fifth condition (a readable state with references) is the caller's.
 // It is a pure function, so it is tested on every system.
 func Accepts(id Identity, exe, localAppData, binVersion, stateVersion string) bool {
-	if id.FamilyName != Family || id.Path == "" || exe == "" {
-		return false
-	}
-	if !InsideDir(exe, id.Path) {
-		return false
-	}
-	if localAppData != "" && InsideDir(exe, filepath.Join(localAppData, "Microsoft", "WindowsApps")) {
+	if !IdentityIsOwn(id, exe, localAppData) {
 		return false
 	}
 	core, pre, ok := parseSemver(binVersion)
@@ -35,6 +29,21 @@ func Accepts(id Identity, exe, localAppData, binVersion, stateVersion string) bo
 		return false
 	}
 	return SemverGreater(binVersion, stateVersion)
+}
+
+// IdentityIsOwn is conditions 1 and 2 of Accepts: the process runs with
+// RosmarOps's own package identity (Family) and its real executable is inside
+// that package's installed folder as Windows reports it, never the
+// %LOCALAPPDATA% alias. The usage statistics report the install channel
+// «store» with this same check, so the two can never disagree.
+func IdentityIsOwn(id Identity, exe, localAppData string) bool {
+	if id.FamilyName != Family || id.Path == "" || exe == "" {
+		return false
+	}
+	if !InsideDir(exe, id.Path) {
+		return false
+	}
+	return localAppData == "" || !InsideDir(exe, filepath.Join(localAppData, "Microsoft", "WindowsApps"))
 }
 
 // InsideDir reports whether p is below dir, without regard to case or to the

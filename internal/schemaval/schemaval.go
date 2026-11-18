@@ -55,6 +55,9 @@ type node struct {
 	minItems, maxItems   *int
 	uniqueItems          bool
 
+	maxProperties *int
+	propertyNames *node
+
 	oneOf, allOf           []*node
 	not, ifN, thenN, elseN *node
 }
@@ -250,6 +253,16 @@ func (c *compiler) compile(v any, at string) (*node, error) {
 				return nil, fmt.Errorf("%s: format %v is not supported", at, val)
 			}
 			n.format = "date-time"
+		case "maxProperties":
+			i, err := nonNegative(val)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %s: %w", at, k, err)
+			}
+			n.maxProperties = &i
+		case "propertyNames":
+			if n.propertyNames, err = sub(k, val); err != nil {
+				return nil, err
+			}
 		case "minLength", "maxLength", "minItems", "maxItems":
 			i, err := nonNegative(val)
 			if err != nil {
@@ -580,7 +593,13 @@ func (n *node) validate(v any, field string, r *Result) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+		if n.maxProperties != nil && len(x) > *n.maxProperties {
+			r.add(field, "Must have at most %d properties", *n.maxProperties)
+		}
 		for _, k := range keys {
+			if n.propertyNames != nil {
+				n.propertyNames.validate(k, child(field, k), r)
+			}
 			if p, ok := n.properties[k]; ok {
 				p.validate(x[k], child(field, k), r)
 				continue
