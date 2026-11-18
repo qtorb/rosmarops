@@ -105,6 +105,22 @@ type V2 struct {
 	// after that action (I6; v3 §15.3); repoRoots the configured roots, for
 	// {projects} (v3 §15.2).
 	radiusProj map[string]map[string]int
+
+	// indexIn is the index's input, kept in memory to score a group of
+	// findings fixed at once (index.WithoutSet); never written.
+	indexIn *index.Input
+
+	// templateFixes are the ids of today's findings that every Claude Code
+	// template the report offers takes away (each template's pass, compared
+	// with today's findings): what «Choose a template» fixes whichever the
+	// person picks. In memory only.
+	templateFixes map[string]bool
+
+	// credServices are, per credential node, the external service it
+	// authenticates to: the service and, when the credential names it, the
+	// project's path (graph.v2 authenticates_to). The report groups the
+	// findings of one service with them; in memory only.
+	credServices map[string]credService
 	repoRoots  []string
 	// committed are the graph's committed_in edges by edge id, for the
 	// «where» line of cred_in_git (BV-219): the commit and the path inside
@@ -626,7 +642,10 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	v.Coverage.BinarySkipped = in.BinarySkipped
 	v.Coverage.Projects = in.Projects
 	v.hidden = hiddenEntries(append(append([]config.AllowHit{}, in.AllowHits...), res.Silenced.Rotated...))
-	v.Index, v.radiusProj = buildIndex(in, res, v)
+	var ii index.Input
+	v.Index, v.radiusProj, ii = buildIndexInput(in, res, v)
+	v.indexIn = &ii
+	v.credServices = credServicesOf(in.Graph)
 	v.historyMissing = in.PriorRuns && !in.HistoryReset && len(in.History) == 0 // B8
 	v.AgentsOverview = agentsOverview(res.AgentsOverview, v.Index)
 	// BV-235: the classes from the six axes, and the factory pass (R0′, R1).
@@ -886,6 +905,13 @@ var MemoryUntracked = map[string]bool{
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).
 func buildIndex(in V2Input, res rules.Result, v V2) (index.Index, map[string]map[string]int) {
+	idx, proj, _ := buildIndexInput(in, res, v)
+	return idx, proj
+}
+
+// buildIndexInput is buildIndex that also returns the index's input, which
+// the report keeps in memory to score a group of findings fixed at once.
+func buildIndexInput(in V2Input, res rules.Result, v V2) (index.Index, map[string]map[string]int, index.Input) {
 	ii := index.Input{
 		GraphBuilt: in.Graph != nil, Inference: inference(in.bases()),
 		Findings: v.Findings, Today: v.Today, MediumReadable: map[string]int{},
@@ -914,7 +940,7 @@ func buildIndex(in V2Input, res rules.Result, v V2) (index.Index, map[string]map
 		idx.Machine = index.MachineScore{Score: index.Score{Unavailable: index.ReasonCoverage}}
 	}
 	idx.HistoryReset = in.HistoryReset
-	return idx, index.ActionProjections(ii)
+	return idx, index.ActionProjections(ii), ii
 }
 
 func statusRank(s finding.Status) int {

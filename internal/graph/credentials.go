@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -173,8 +174,16 @@ type serviceIdentity struct {
 // identifyService works out the service behind a credential. The service
 // comes from the pattern table, except for JWTs, which are decoded locally
 // (without verifying the signature) to recognise Supabase project keys.
-// Only iss, ref and role are read; no other claim reaches the graph.
-func identifyService(patternID, credService, secret string) serviceIdentity {
+// Only iss, ref and role are read; no other claim reaches the graph. A
+// database URL is Supabase's when its host (dbHost, read after the «@») is a
+// Supabase database host: the project comes from the host, or, for the
+// shared pooler, from the user name; the password is never read.
+func identifyService(patternID, credService, secret, dbHost string) serviceIdentity {
+	if patternID == "database_url_with_credentials" {
+		if ref, ok := supabaseDBRef(secret, dbHost); ok {
+			return serviceIdentity{service: "supabase", path: "https://" + ref + ".supabase.co"}
+		}
+	}
 	if patternID == "jwt_token" {
 		if ref, role, ok := supabaseJWTClaims(secret); ok {
 			return serviceIdentity{
@@ -190,6 +199,39 @@ func identifyService(patternID, credService, secret string) serviceIdentity {
 		path:          "service://" + credService,
 		observedScope: supabaseKeyScopes[patternID],
 	}
+}
+
+// supabaseRef is a Supabase project reference: 20 lowercase letters and
+// digits.
+var supabaseRef = regexp.MustCompile(`^[a-z0-9]{20}$`)
+
+// supabaseDBRef is the Supabase project of a database URL: db.<ref>.supabase.co
+// for a direct connection, or a *.pooler.supabase.com host with the user
+// postgres.<ref> for the pooler. secret is the URL's credential segment
+// («scheme://user:password@»): only the user, before the first «:» after
+// the scheme, is looked at.
+func supabaseDBRef(secret, host string) (string, bool) {
+	if r, ok := strings.CutSuffix(host, ".supabase.co"); ok {
+		if ref, ok := strings.CutPrefix(r, "db."); ok && supabaseRef.MatchString(ref) {
+			return ref, true
+		}
+		return "", false
+	}
+	if !strings.HasSuffix(host, ".pooler.supabase.com") {
+		return "", false
+	}
+	_, rest, ok := strings.Cut(secret, "://")
+	if !ok {
+		return "", false
+	}
+	user, _, ok := strings.Cut(rest, ":")
+	if !ok {
+		return "", false
+	}
+	if ref, ok := strings.CutPrefix(strings.ToLower(user), "postgres."); ok && supabaseRef.MatchString(ref) {
+		return ref, true
+	}
+	return "", false
 }
 
 // supabaseJWTClaims decodes a JWT payload (second segment, base64url with or
@@ -367,7 +409,15 @@ func credentialsFromRepos(inputs []credentialInput, families map[string]string, 
 			if !known {
 				credType, service = CredentialGenericSecret, ServiceUnknown
 			}
-			ident := identifyService(patternID, service, secret)
+			host := ""
+			if patternID == "database_url_with_credentials" {
+				if v := ev.Value.Reveal(); strings.HasSuffix(secret, "@") {
+					if i := strings.Index(v, secret); i >= 0 {
+						host = secrets.DBHostAfter(v, i+len(secret))
+					}
+				}
+			}
+			ident := identifyService(patternID, service, secret, host)
 			if ident.observed {
 				// A JWT that names its Supabase project is that project's API key.
 				credType = CredentialAPIKey

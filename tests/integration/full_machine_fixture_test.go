@@ -84,7 +84,7 @@ func fmEnvRepos() []string { return fmRepos()[5:9] }
 func fmCommittedRepos() graph.Repos {
 	cs := []finding.CommittedSecret{{
 		PatternID: "supabase_secret_key",
-		Ref:       graph.Identifier(fmSalt)("supabase_secret_key", "sb_secret_"+repeat("S", 40)),
+		Ref:       graph.Identifier(fmSalt)("supabase_secret_key", "sb_secret_"+repeat("S", 40), ""),
 		Repo:      fmRepos()[9], Presence: finding.PresenceTracked,
 		File: "config/keys.ts", Line: 3,
 		Commit: "0123456789abcdef0123456789abcdef01234567", HasRemote: true,

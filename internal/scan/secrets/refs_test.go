@@ -27,7 +27,7 @@ func TestContentSpanMatchesClassifyEnv(t *testing.T) {
 			t.Fatalf("%s: not classified", c.key)
 		}
 		var got []string
-		MatchRefs([]byte("# config\n"+line+"\n"), BuiltinPatterns(), nil, func(_, secret string) Ref {
+		MatchRefs([]byte("# config\n"+line+"\n"), BuiltinPatterns(), nil, func(_, secret, _ string) Ref {
 			got = append(got, secret)
 			return Ref{Fingerprint: "x"}
 		})
@@ -40,7 +40,7 @@ func TestContentSpanMatchesClassifyEnv(t *testing.T) {
 // MatchRefs sets the line and the Ref; Match never does.
 func TestMatchRefsLineAndRef(t *testing.T) {
 	content := []byte("a\nb\ntoken = ghp_" + strings.Repeat("z", 36) + "\n")
-	m := MatchRefs(content, BuiltinPatterns(), nil, func(_, _ string) Ref { return Ref{Fingerprint: "fp"} })
+	m := MatchRefs(content, BuiltinPatterns(), nil, func(_, _, _ string) Ref { return Ref{Fingerprint: "fp"} })
 	if len(m) != 1 || m[0].Line != 3 || m[0].Ref == nil || m[0].Ref.Fingerprint != "fp" {
 		t.Fatalf("%+v", m)
 	}

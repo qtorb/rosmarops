@@ -43,8 +43,8 @@ func noiseReport(t *testing.T, extra ...platform.CredentialEntry) report.V2 {
 		root := fmt.Sprintf("/src/webapp-%02d", i)
 		webapp = append(webapp, root)
 		cs = append(cs,
-			finding.CommittedSecret{PatternID: "supabase_secret_key", Ref: id("supabase_secret_key", sb), Repo: root, Presence: finding.PresenceTracked, File: "scripts/smoke_test.ps1", Line: 3, HasRemote: true},
-			finding.CommittedSecret{PatternID: "supabase_secret_key", Ref: id("supabase_secret_key", sb), Repo: root, Presence: finding.PresenceTracked, File: "vars_raw.txt", Line: 1, HasRemote: true})
+			finding.CommittedSecret{PatternID: "supabase_secret_key", Ref: id("supabase_secret_key", sb, ""), Repo: root, Presence: finding.PresenceTracked, File: "scripts/smoke_test.ps1", Line: 3, HasRemote: true},
+			finding.CommittedSecret{PatternID: "supabase_secret_key", Ref: id("supabase_secret_key", sb, ""), Repo: root, Presence: finding.PresenceTracked, File: "vars_raw.txt", Line: 1, HasRemote: true})
 	}
 	roots = append(roots, webapp...)
 	fams = append(fams, webapp)
@@ -58,7 +58,7 @@ func noiseReport(t *testing.T, extra ...platform.CredentialEntry) report.V2 {
 		if k.presence == finding.PresenceTracked {
 			line = 2
 		}
-		cs = append(cs, finding.CommittedSecret{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", stripe(k.c)), Repo: "/src/tool", Presence: k.presence, File: k.file, Line: line})
+		cs = append(cs, finding.CommittedSecret{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", stripe(k.c), ""), Repo: "/src/tool", Presence: k.presence, File: k.file, Line: line})
 	}
 	v1Findings := []finding.Finding{{ID: "st:1", Severity: finding.SeverityRed, Category: "secret_tracked", Evidence: finding.Evidence{RepoPath: "/src/webapp-00", File: "vars_raw.txt"}, Committed: cs}}
 	v1 := report.Build("t", v1Findings, nil, 0, 0, 0, 0, nil)

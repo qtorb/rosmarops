@@ -32,11 +32,11 @@ func cto7Report(t *testing.T) report.V2 {
 	v1Findings := []finding.Finding{
 		{
 			ID: "st:1", Severity: finding.SeverityRed, Category: "secret_tracked", Evidence: finding.Evidence{RepoPath: "/src/a", File: "billing/keys.ts"},
-			Committed: []finding.CommittedSecret{{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", stripe), Repo: "/src/a", Presence: finding.PresenceTracked, File: "billing/keys.ts", Line: 3, HasRemote: true}},
+			Committed: []finding.CommittedSecret{{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", stripe, ""), Repo: "/src/a", Presence: finding.PresenceTracked, File: "billing/keys.ts", Line: 3, HasRemote: true}},
 		},
 		{
 			ID: "st:2", Severity: finding.SeverityRed, Category: "secret_tracked", Evidence: finding.Evidence{RepoPath: "/src/b", File: "pay/pay_test.go"},
-			Committed: []finding.CommittedSecret{{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", fake), Repo: "/src/b", Presence: finding.PresenceTracked, File: "pay/pay_test.go", Line: 9}},
+			Committed: []finding.CommittedSecret{{PatternID: "stripe_secret_key", Ref: id("stripe_secret_key", fake, ""), Repo: "/src/b", Presence: finding.PresenceTracked, File: "pay/pay_test.go", Line: 9}},
 		},
 		{ID: "hk:1", Severity: finding.SeverityRed, Category: "git_hook_with_network", GroupDetail: "pre-commit", Evidence: finding.Evidence{RepoPath: "/src/a"}},
 		{ID: "hk:2", Severity: finding.SeverityRed, Category: "git_hook_with_network", GroupDetail: "pre-push", Evidence: finding.Evidence{RepoPath: "/src/b"}},

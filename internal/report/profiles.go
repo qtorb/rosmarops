@@ -5,6 +5,8 @@ import (
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/platform"
+	"github.com/qtorb/rosmarops/internal/profiles"
+	"github.com/qtorb/rosmarops/internal/rules"
 )
 
 // ProfileInput is one measured profile of Claude Code (CTO-50 §1, BV-236 §4):
@@ -57,6 +59,7 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 			byProduct[a.Product][a.AgentID] = true
 		}
 	}
+	var ccPasses []map[string]bool
 	for _, p := range in.Profiles {
 		product := p.Product
 		if product == "" {
@@ -69,6 +72,9 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 		r := profilePass(in, fams, p)
 		if r == nil {
 			continue
+		}
+		if product == knowledge.ClaudeCodeProduct && offeredTemplate(p.ID, v.OS) {
+			ccPasses = append(ccPasses, r.findings)
 		}
 		for i := range v.Index.Agents {
 			a := &v.Index.Agents[i]
@@ -96,4 +102,36 @@ func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 		}
 		v.Index.Machine.Profiles = append(v.Index.Machine.Profiles, mp)
 	}
+	v.templateFixes = fixedByAll(v.Findings, ccPasses)
+}
+
+// offeredTemplate reports a Claude Code template the report offers on this
+// system: P2 only on macOS and Linux, as «Choose a template» shows them.
+func offeredTemplate(id, goos string) bool {
+	if id == profiles.P2 {
+		return goos != "" && goos != "windows"
+	}
+	return true
+}
+
+// fixedByAll are today's findings that no template pass has: each of them
+// goes away whichever template the person picks. No pass, none.
+func fixedByAll(fs []rules.Finding, passes []map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	if len(passes) == 0 {
+		return out
+	}
+	for _, f := range fs {
+		gone := true
+		for _, p := range passes {
+			if p[f.ID] {
+				gone = false
+				break
+			}
+		}
+		if gone {
+			out[f.ID] = true
+		}
+	}
+	return out
 }
