@@ -16,7 +16,7 @@ A small company wants to install RosmarOps on its computers with a device manage
 - **The administrator fingerprint list** (`binaries.sha256`, same folder, same check) is a third way, after the person and before the Microsoft Store, to accept a new binary: its SHA-256 must be listed with its own version. It never accepts an older version, or the same version with another fingerprint. With the company configuration in use and no state, the first review is a first run only if the binary passes the list or the Store check. `session-check` and `statusline` never accept through the list.
 - **A change to the company configuration in use** is recorded (`state.integrity.config_source = company`, `config_sha256` of `company.json`) and reported, never an abort: its trust comes from the ownership check.
 - **Writes:** RosmarOps never writes, creates or changes the permissions of the company configuration, the list, or their folders.
-- **The weekly review** a company installs (a scheduled task for the Users group on Windows, a global systemd user timer on Linux) is recognised as this computer's weekly review when it runs this same program.
+- **The weekly review** a company installs (a scheduled task for the Users group on Windows, a global systemd user timer on Linux) is recognised as this computer's weekly review when it runs this same program. While a trusted company configuration is in use, that Windows group task does not raise `own_task_changed`; without one, or for a group task of another program, the warning stays as before.
 
 ## Consequences
 

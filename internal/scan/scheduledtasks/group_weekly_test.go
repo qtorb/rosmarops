@@ -72,3 +72,50 @@ func TestWeeklyOf_UserTaskUnchangedByGroup(t *testing.T) {
 		t.Error("a group task taken as the person's own task")
 	}
 }
+
+// The company's group weekly review raises own_task_changed only when no
+// trusted company configuration is in use; with one, it is expected, like the
+// person's own task. Every other task is reported as before.
+func TestScanScheduledTasks_CompanyTask(t *testing.T) {
+	company := self
+	company.Company = true
+	scan := func(s scheduledtasks.Self, tasks ...platform.ScheduledTask) []string {
+		var got []string
+		for _, f := range scheduledtasks.ScanScheduledTasks(tasks, sentinel, nil, s, false).Findings {
+			got = append(got, f.Category)
+		}
+		return got
+	}
+
+	if got := scan(company, companyTask()); len(got) != 0 {
+		t.Errorf("company task, trusted company configuration: %v", got)
+	}
+	// Without a company configuration in use (none, or not trusted, which
+	// the review never uses): reported as today.
+	if got := scan(self, companyTask()); len(got) != 1 || got[0] != "own_task_changed" {
+		t.Errorf("company task, no company configuration: %v", got)
+	}
+	// A group task that runs another executable is not the company's review
+	// of this RosmarOps: reported as a new task, as today.
+	otherExe := companyTask()
+	otherExe.RosmarOps.Execute, otherExe.RosmarOps.ExecuteExpanded = `D:\old\rosmarops.exe`, `D:\old\rosmarops.exe`
+	if got, want := scan(company, otherExe), scan(self, otherExe); len(got) != 1 || len(want) != 1 || got[0] != want[0] {
+		t.Errorf("group task, other exe: %v with the company configuration, %v without", got, want)
+	}
+	// A group task of this exe that is not the company's review (elevated):
+	// own_task_changed even with the company configuration.
+	elevated := companyTask()
+	elevated.RosmarOps.RunLevel = "Highest"
+	if got := scan(company, elevated); len(got) != 1 || got[0] != "own_task_changed" {
+		t.Errorf("elevated group task, trusted company configuration: %v", got)
+	}
+	// The person's own task altered: own_task_changed, with or without the
+	// company configuration.
+	changed := ownTask()
+	changed.RosmarOps.RunLevel = "Highest"
+	for _, s := range []scheduledtasks.Self{self, company} {
+		if got := scan(s, changed); len(got) != 1 || got[0] != "own_task_changed" {
+			t.Errorf("own task changed (company %v): %v", s.Company, got)
+		}
+	}
+}
