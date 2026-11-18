@@ -58,6 +58,11 @@ type companyRun struct {
 	adminOld, adminNew string
 }
 
+// inUse reports that this review uses the company configuration: it is
+// trusted and the person has no config.json of their own. An untrusted or
+// invalid file never gets here (resolveRunConfig leaves the source as user).
+func (c *companyRun) inUse() bool { return c != nil && c.source == configSourceCompany }
+
 // summaryOn reports a trusted company configuration that turns the summary on.
 func (c *companyRun) summaryOn() bool { return c != nil && c.loaded.SummaryEnabled() }
 

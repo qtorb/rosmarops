@@ -76,8 +76,10 @@ type ScanResult struct {
 //
 // The returned NewBaseline contains every task (replacing the old baseline).
 //
-// RosmarOps's own weekly review that still meets J6 (self.Owns) is no finding;
-// one that runs this same exe but no longer meets J6 is own_task_changed.
+// RosmarOps's own weekly review that still meets J6 (self.Owns) is no finding,
+// nor is the company's group weekly review while a trusted company
+// configuration is in use (self.companyWeekly); any other task that runs this
+// same exe but is not the person's own weekly review is own_task_changed.
 func ScanScheduledTasks(
 	tasks []platform.ScheduledTask,
 	baseline []state.ScheduledTaskBase,
@@ -119,6 +121,13 @@ func ScanScheduledTasks(
 		// A fresh run has no comparable baseline: record it, warn about
 		// nothing (BV-93, B2).
 		if fresh {
+			continue
+		}
+
+		// The company's group weekly review, with the company configuration
+		// in use and trusted: expected, like the person's own task. Any other
+		// group task of this exe still falls through to own_task_changed.
+		if self.companyWeekly(t) {
 			continue
 		}
 

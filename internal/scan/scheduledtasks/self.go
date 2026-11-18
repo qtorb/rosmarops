@@ -91,11 +91,14 @@ func adequateLimit(r *platform.RosmarOpsTask) bool {
 
 // Self is this RosmarOps (decision 2026-10-26, integridad y revisión
 // semanal, J4–J6): the absolute path of the running rosmarops.exe, the
-// current user (domain and name) and the catalog's languages.
+// current user (domain and name) and the catalog's languages. Company is set
+// when this review uses a trusted company configuration (config_source
+// company): only then is the company's group task taken as expected.
 type Self struct {
 	Exe          string
 	Domain, User string
 	Langs        []string
+	Company      bool
 }
 
 // dir is the folder of a Windows (or POSIX) path, without the separator.
@@ -155,6 +158,15 @@ func (s Self) groupWeekly(t platform.ScheduledTask) bool {
 		args = args || r.Arguments == "run --lang "+l+" --unattended"
 	}
 	return args
+}
+
+// companyWeekly is the company's group weekly review (groupWeekly: a group
+// principal, this same executable) while this review uses a trusted company
+// configuration. The person did not register it, so it is not their own
+// task altered; without a trusted company configuration the same task is
+// reported as before.
+func (s Self) companyWeekly(t platform.ScheduledTask) bool {
+	return s.Company && s.groupWeekly(t)
 }
 
 // ownWithShortLimit is an own weekly task (J6 in every other way) whose

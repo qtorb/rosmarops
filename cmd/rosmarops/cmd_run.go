@@ -415,7 +415,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		langs = append(langs, l)
 	}
 	sort.Strings(langs)
-	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs}
+	self := scheduledtasks.Self{Exe: exePath, Domain: os.Getenv("USERDOMAIN"), User: os.Getenv("USERNAME"), Langs: langs, Company: comp.inUse()}
 	weekly := scheduledtasks.Weekly{State: scheduledtasks.WeeklyNone}
 	weeklyNoSystemd := false
 	// The checks that do not apply on this system yet (ErrNotApplicable),
