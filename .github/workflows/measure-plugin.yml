@@ -1,0 +1,182 @@
+# Measure the Claude Code plugin (BV-253 §C): a measurement workflow, not part
+# of a release. It runs on pushes to its own branch and by hand.
+#   C.1 `rosmarops session-check`, 20 runs cold and warm, with 1 and with 200
+#       projects that have a snapshot: median, p95, max
+#       (tests/manual/sessioncheck-timing).
+#   C.2 What Claude Code shows with the plugin loaded through --plugin-dir
+#       (exec-form hook) when `rosmarops` is NOT on the PATH. Output is kept
+#       literally.
+#   C.3 (macOS and Linux) Whether a skill's `!` command runs inside or outside
+#       the sandbox with the P2 template (tests/manual/p2-template). A probe
+#       skill tries to write a file in the home folder and read ~/.ssh. Both
+#       are blocked inside the sandbox.
+# No API key is given to Claude Code. Every step runs under a temporary home,
+# and nothing here uses the network beyond checkout, Go and npm.
+
+name: measure-plugin
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [bv-253-plugin-propio]
+    paths:
+      - .github/workflows/measure-plugin.yml
+      - tests/manual/sessioncheck-timing/**
+      - tests/manual/p2-template/**
+      - cmd/rosmarops/**
+      - adapters/windows/ownplugin.go
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      CLAUDE_VERSION: "2.1.326"
+      # macOS has no timeout(1): perl's alarm does the same.
+      TMO: 'tmo() { if command -v timeout >/dev/null; then timeout "$@"; else perl -e "alarm shift; exec @ARGV" "$@"; fi; }'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: qtorb/rosmarops-claude-code
+          ref: bv-253-plugin
+          path: plugin
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.4"
+
+      - name: Build rosmarops (kept off the PATH)
+        run: |
+          mkdir -p "$RUNNER_TEMP/rbin"
+          exe=""; [ "$RUNNER_OS" = Windows ] && exe=".exe"
+          go build -o "$RUNNER_TEMP/rbin/rosmarops$exe" ./cmd/rosmarops
+          echo "RBIN=$RUNNER_TEMP/rbin/rosmarops$exe" >> "$GITHUB_ENV"
+          go build -o "$RUNNER_TEMP/timing$exe" ./tests/manual/sessioncheck-timing
+          echo "TIMING=$RUNNER_TEMP/timing$exe" >> "$GITHUB_ENV"
+
+      - name: C.1 session-check timing
+        run: |
+          {
+            "$TIMING" -bin "$RBIN" -projects 1 -runs 20
+            "$TIMING" -bin "$RBIN" -projects 200 -runs 20
+          } | tee c1.txt
+
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@$CLAUDE_VERSION" && claude --version
+
+      - name: C.2 plugin hook without rosmarops on the PATH
+        run: |
+          set +e
+          eval "$TMO"
+          unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+          H="$RUNNER_TEMP/c2home"; P="$H/project"; mkdir -p "$P"
+          export HOME="$H" USERPROFILE="$H"
+          plugin="$GITHUB_WORKSPACE/plugin"
+          {
+            echo "## command -v rosmarops"
+            command -v rosmarops; echo "exit=$?"
+            echo "## claude -p (stream-json, hook events)"
+            cd "$P"
+            tmo 90 claude --plugin-dir "$plugin" -p "hola" --output-format stream-json \
+              --verbose --include-hook-events --debug-file "$H/debug.log" < /dev/null > out.json 2> err.txt
+            echo "exit=$?"
+            echo "### stdout"; cat out.json
+            echo "### stderr"; cat err.txt
+            echo "### debug log, hook lines"; grep -i -E "hook|sessionstart|rosmarops|spawn|ENOENT" "$H/debug.log" | head -80
+          } 2>&1 | tee "$GITHUB_WORKSPACE/c2.txt"
+          if [ "$RUNNER_OS" != Windows ]; then
+            # Interactive start, onboarding and folder trust already accepted.
+            printf '{"hasCompletedOnboarding":true,"theme":"dark","projects":{"%s":{"hasTrustDialogAccepted":true}}}' "$P" > "$H/.claude.json"
+            cd "$P"
+            if [ "$RUNNER_OS" = Linux ]; then
+              tmo 40 script -qfec "claude --plugin-dir $plugin" "$H/tui.txt" < /dev/null
+            else
+              ( tmo 40 script -q "$H/tui.txt" claude --plugin-dir "$plugin" < /dev/null ) || true
+            fi
+            {
+              echo "## interactive screen (ANSI removed)"
+              sed -e 's/\x1b\[[0-9;?]*[A-Za-z]//g' -e 's/\x1b\][^\a]*\a//g' "$H/tui.txt" | tr -s ' \r' | grep -v '^\s*$' | head -120
+            } | tee -a "$GITHUB_WORKSPACE/c2.txt"
+          fi
+          true
+
+      - name: C.3 skill ! command with the P2 template
+        if: runner.os != 'Windows'
+        run: |
+          set +e
+          eval "$TMO"
+          unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get install -y bubblewrap socat > /dev/null
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          fi
+          # The probe skill runs a script that lives in the project, pre-approved
+          # with allowed-tools, so Claude Code's permission check sees only
+          # «sh ./c3-probe.sh». The script tries what the sandbox of P2 blocks:
+          # a write in the home folder, a read of ~/.ssh, and a read of the
+          # reports folder (~/.rosmarops/reports), which /rosmarops needs.
+          probe="$RUNNER_TEMP/probe"
+          mkdir -p "$probe/.claude-plugin" "$probe/skills/probe"
+          echo '{"name":"probe","version":"0.0.1"}' > "$probe/.claude-plugin/plugin.json"
+          cat > "$probe/skills/probe/SKILL.md" <<'MD'
+          ---
+          name: probe
+          description: Sandbox probe for BV-253 C.3.
+          allowed-tools: Bash(sh ./c3-probe.sh)
+          ---
+          Result: !`sh ./c3-probe.sh`
+          MD
+          for mode in p2 control; do
+            H="$RUNNER_TEMP/c3-$mode"; P="$H/project"
+            mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh" "$H/.rosmarops/reports"
+            echo secret-c3 > "$H/.ssh/c3-secret"
+            echo report-c3 > "$H/.rosmarops/reports/c3-report.txt"
+            cat > "$P/c3-probe.sh" <<'SH'
+          {
+            echo RAN
+            touch "$HOME/c3-outside-write" && echo WROTE-HOME
+            cat "$HOME/.ssh/c3-secret" > /dev/null && echo READ-SSH
+            cat "$HOME/.rosmarops/reports/c3-report.txt" > /dev/null && echo READ-REPORTS
+          } > ./c3-result.txt 2>&1
+          cat ./c3-result.txt
+          SH
+            if [ $mode = p2 ]; then
+              go run ./tests/manual/p2-template > "$H/.claude/settings.json"
+              go run ./tests/manual/p2-template -project > "$P/.claude/settings.json"
+            fi
+            (
+              export HOME="$H"; cd "$P"
+              echo "## $mode"
+              tmo 90 claude --plugin-dir "$probe" -p "/probe:probe" --output-format stream-json \
+                --verbose --debug-file "$H/debug.log" < /dev/null > out.json 2> err.txt
+              echo "exit=$?"
+              echo "### file written in home: $( [ -e "$H/c3-outside-write" ] && echo YES || echo NO )"
+              echo "### c3-result.txt (written by the script in the project)"; cat c3-result.txt 2>&1
+              echo "### stdout"; cat out.json
+              echo "### stderr"; cat err.txt
+              echo "### debug log, shell/sandbox/skill lines"; grep -i -E "sandbox|skill|probe|shell|bwrap|seatbelt" "$H/debug.log" | head -60
+            ) 2>&1 | tee -a c3.txt
+          done
+          true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: measure-plugin-${{ runner.os }}
+          path: |
+            c1.txt
+            c2.txt
+            c3.txt
+          if-no-files-found: ignore
