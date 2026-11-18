@@ -201,9 +201,10 @@ func TestBV111_IsolatedActionRendered(t *testing.T) {
 	const title = "Run Hermes Agent in a container"
 	const how = "runs its terminal, file and code tools inside that container"
 	for name, out := range outputs {
-		// The HTML shows the action title; every surface shows the how line
-		// with the config.yaml path.
-		if name == "html" && !strings.Contains(out, title) {
+		// Every surface shows the how line with the config.yaml path; the
+		// Markdown names the action (the HTML's action title was «What to do
+		// first»'s, which left the page).
+		if name == "markdown" && !strings.Contains(out, title) {
 			t.Errorf("%s lacks the action title %q", name, title)
 		}
 		if !strings.Contains(out, how) {

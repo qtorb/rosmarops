@@ -113,17 +113,19 @@ func TestBV215TodayNotEmpty(t *testing.T) {
 	}
 	raw, _ := os.ReadFile(page)
 	s := string(raw)
-	i := strings.Index(s, `<section class="now"`)
-	if i < 0 {
-		t.Fatal("no step 2 section")
+	// The first screen never says there is nothing to fix when there are
+	// findings, and the key finding's row, with its steps, is in its
+	// problem's steps.
+	_, first, _ := strings.Cut(s, `<div class="r3" id="top">`)
+	first, _, _ = strings.Cut(first, `<div class="r3-steps">`)
+	if strings.Contains(first, cat.Text("html.none", nil)) {
+		t.Errorf("the first screen says %q with %d findings", cat.Text("html.none", nil), len(v2.Findings))
 	}
-	j := strings.Index(s[i:], `</section>`)
-	step2 := s[i : i+j]
-	if strings.Contains(step2, cat.Text("html.none", nil)) {
-		t.Errorf("step 2 still says %q:\n%s", cat.Text("html.none", nil), step2)
+	if !strings.Contains(first, `<table class="r3-tbl">`) {
+		t.Error("the first screen has no problems")
 	}
-	title := strings.SplitN(cat.Text("html.action."+code+".title", nil), "{", 2)[0]
-	if title == "" || !strings.Contains(step2, title) {
-		t.Errorf("step 2 does not show the action %s (%q):\n%s", code, title, step2)
+	_, steps, _ := strings.Cut(s, `<div class="r3-steps">`)
+	if !strings.Contains(steps, `<div class="rb" id="`+cred.ID+`">`) {
+		t.Errorf("the key finding (action %s) has no row in its problem's steps", code)
 	}
 }

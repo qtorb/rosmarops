@@ -59,6 +59,34 @@ func (c htmlCtx) issues() []issue {
 	return issuesOf(c.pendingFindings(), c.v.credServices)
 }
 
+// issueRows are a problem's rows as the report counts findings: one per
+// credential and rule however many agents reach it (credRows), in order.
+func (c htmlCtx) issueRows(is issue) []*credRow {
+	var out []*credRow
+	seen := map[*credRow]bool{}
+	for _, f := range is.findings {
+		r := c.rows[f.ID]
+		if r == nil {
+			r = &credRow{rep: f, ids: []string{f.ID}}
+		}
+		if !seen[r] {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// rowFixed reports a row every finding of which the templates take away.
+func (c htmlCtx) rowFixed(r *credRow) bool {
+	for _, id := range r.ids {
+		if !c.v.templateFixes[id] {
+			return false
+		}
+	}
+	return len(r.ids) > 0
+}
+
 // renderR3 is the first screen.
 func (c htmlCtx) renderR3(iss []issue) {
 	c.w(`<div class="r3" id="top">`)
@@ -221,7 +249,13 @@ func serviceDisplay(service string) string {
 // steps. Links lead to the problem's steps.
 func (c htmlCtx) issueFix(is issue, n int) string {
 	href := `href="#p-` + strconv.Itoa(n) + `"`
-	k, total := templateFixesIn(c.v, is), len(is.findings)
+	rows := c.issueRows(is)
+	k, total := 0, len(rows)
+	for _, r := range rows {
+		if c.rowFixed(r) {
+			k++
+		}
+	}
 	service := is.service
 	if is.kind == issueOne {
 		if f := is.findings[0]; f.Rule == rules.RuleCredInGit {
@@ -258,9 +292,9 @@ func (c htmlCtx) pill(is issue) string {
 func (c htmlCtx) renderR3Findings(iss []issue) {
 	urgent, review, findings := 0, 0, 0
 	for _, is := range iss {
-		for _, f := range is.findings {
+		for _, r := range c.issueRows(is) {
 			findings++
-			if f.Severity == rules.SeverityRed {
+			if r.rep.Severity == rules.SeverityRed {
 				urgent++
 			} else {
 				review++
@@ -287,7 +321,7 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 			if i == r3Shown {
 				rest := 0
 				for _, r := range iss[r3Shown:] {
-					rest += len(r.findings)
+					rest += len(c.issueRows(r))
 				}
 				c.w(`<tr class="r3-more"><td></td><td colspan="4"><a href="#p-%d">%s</a></td></tr>`, r3Shown+1,
 					c.t("html.r3.more", map[string]string{"groups": strconv.Itoa(len(iss) - r3Shown), "findings": strconv.Itoa(rest)}))
@@ -301,12 +335,13 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 			// On a phone the number, the count and the level go above the
 			// problem: «{n} · {count} findings» (the count alone is left out
 			// for one finding, which the catalog has no singular for).
+			count := len(c.issueRows(is))
 			lead := strconv.Itoa(n)
-			if len(is.findings) > 1 {
-				lead += " · " + strconv.Itoa(len(is.findings)) + " " + html.EscapeString(lowerFirst(c.cat.Text("html.r3.col.count", nil)))
+			if count > 1 {
+				lead += " · " + strconv.Itoa(count) + " " + html.EscapeString(lowerFirst(c.cat.Text("html.r3.col.count", nil)))
 			}
 			c.w(`<tr><th scope="row" class="c-n">%d</th><td class="c-p"><span class="r3-m">%s %s</span><b>%s</b>%s</td><td class="c-c">%d</td><td class="c-l">%s</td><td class="c-f">%s</td></tr>`,
-				n, lead, c.pill(is), c.issueTitle(is), detail, len(is.findings), c.pill(is), c.issueFix(is, n))
+				n, lead, c.pill(is), c.issueTitle(is), detail, count, c.pill(is), c.issueFix(is, n))
 		}
 		c.w(`</tbody></table>`)
 	}
@@ -318,8 +353,8 @@ func (c htmlCtx) renderR3Template(iss []issue) {
 	var groups []string
 	for i, is := range iss {
 		got := false
-		for _, f := range is.findings {
-			if f.Severity == rules.SeverityRed && c.v.templateFixes[f.ID] {
+		for _, r := range c.issueRows(is) {
+			if r.rep.Severity == rules.SeverityRed && c.rowFixed(r) {
 				k++
 				got = true
 			}
@@ -375,25 +410,32 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 		if d := c.issueDetail(is); d != "" {
 			c.w(`<p class="r3-p-d">%s</p>`, d)
 		}
-		if now, then, ok := issueGain(c.v, is); ok {
-			c.w(`<p class="proj">%s</p>`, c.t("html.gain", map[string]string{"now": strconv.Itoa(now), "then": strconv.Itoa(then)}))
+		if now, then, agent, ok := issueGain(c.v, c.sheetScore(), is); ok {
+			p := map[string]string{"now": strconv.Itoa(now), "then": strconv.Itoa(then)}
+			key := "html.gain"
+			if agent != "" {
+				key, p["agent"] = "html.gain.agent", c.agentName(agent)
+			}
+			c.w(`<p class="proj">%s</p>`, c.t(key, p))
 		}
-		done := map[*credRow]bool{}
 		var reps []rules.Finding
-		for _, f := range is.findings {
-			r := c.rows[f.ID]
-			if r == nil {
-				reps = append(reps, f)
-				continue
-			}
-			if !done[r] {
-				done[r] = true
-				reps = append(reps, r.rep)
-			}
+		for _, r := range c.issueRows(is) {
+			reps = append(reps, r.rep)
 		}
-		sort.SliceStable(reps, func(a, b int) bool {
-			return reps[a].Severity == rules.SeverityRed && reps[b].Severity != rules.SeverityRed
-		})
+		// Urgent rows first; within each level, the rows of the agent whose
+		// score the first screen shows first.
+		scored, hasScored := c.scored()
+		rank := func(f rules.Finding) int {
+			r := 0
+			if f.Severity != rules.SeverityRed {
+				r += 2
+			}
+			if !hasScored || !c.ofScoredAgent(f, scored) {
+				r++
+			}
+			return r
+		}
+		sort.SliceStable(reps, func(a, b int) bool { return rank(reps[a]) < rank(reps[b]) })
 		for _, f := range reps {
 			c.renderRow(f)
 		}
@@ -430,6 +472,7 @@ func r3CSS() string {
 
 const r3Rules = `.r3{max-width:1040px;margin:0 auto;padding:28px 16px 8px;display:flex;flex-direction:column;gap:20px;color:var(--ds-ink)}
 body{background:var(--ds-surface)}
+.js.alt .r3{display:none}
 .r3 a{color:var(--ds-brand)}
 .r3 :focus-visible,.r3-steps :focus-visible{outline:2px solid var(--ds-brand);outline-offset:2px;border-radius:4px}
 .r3-head{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 24px;flex-wrap:wrap;padding-bottom:14px;border-bottom:2px solid var(--ds-ink)}

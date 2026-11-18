@@ -42,14 +42,9 @@ func TestLimitLine(t *testing.T) {
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
-			// BV-236 §1: the sheet replaces step 1; the projects line with the time limit (html.meta.projects) is no longer in the HTML.
-			// The projects checked are in the sheet's scope.
-			want := `<dd>` + htmlEscape(cat.Text("sheet.scope", map[string]string{
-				"agents":   cat.Plural("sheet.scope.agents", len(v.Index.Scope.Evaluated), map[string]string{"n": strconv.Itoa(len(v.Index.Scope.Evaluated))}),
-				"projects": cat.Plural("sheet.scope.projects", 48, map[string]string{"n": "48"}),
-			})) + `</dd>`
-			if !strings.Contains(page, want) {
-				t.Errorf("%s: no scope %q in the sheet", lang, want)
+			// The projects checked are in the first screen's line of data.
+			if !strings.Contains(page, `<p class="r3-meta">`) || !strings.Contains(page, " · 48 ") {
+				t.Errorf("%s: the line of data does not count the 48 projects", lang)
 			}
 			// No warn line when the limit was not reached.
 			if strings.Contains(page, htmlEscape(cat.Text("html.limit.reached", map[string]string{"left": "0", "projects": "48"}))) {
@@ -58,14 +53,20 @@ func TestLimitLine(t *testing.T) {
 		}
 	})
 
-	t.Run("one project uses the singular", func(t *testing.T) {
+	t.Run("one project is counted", func(t *testing.T) {
 		v := buildV2Limit(t, []string{"/src/only"}, report.Build("t", nil, nil, 0, 0, 0, 0, nil), 5, false, 0)
 		cat, _ := catalog.Load("en")
 		page := renderHTML(t, "en", v)
-		// BV-236 §1: the sheet replaces step 1; the projects line with the time limit (html.meta.projects.one) is no longer in the HTML.
-		// The sheet's scope says «1 project».
-		if !strings.Contains(page, htmlEscape(cat.Text("sheet.scope.projects.one", map[string]string{"n": "1"}))+`</dd>`) {
-			t.Errorf("no singular project in the sheet's scope")
+		// The signed line of data has one form, «{projects} projects»; its
+		// project count is 1 here.
+		want := htmlEscape(cat.Text("html.r3.meta", map[string]string{
+			"date": "", "os": "", "agents": strconv.Itoa(len(v.Index.Scope.Evaluated)), "projects": "1", "version": "",
+		}))
+		_, tail, _ := strings.Cut(want, " · ")
+		_, tail, _ = strings.Cut(tail, " · ")
+		tail, _, _ = strings.Cut(tail, " · RosmarOps")
+		if !strings.Contains(page, tail) {
+			t.Errorf("the line of data does not count one project: %q", tail)
 		}
 	})
 

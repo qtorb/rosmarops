@@ -19,10 +19,11 @@ The invariants these decisions set are listed in [CLAUDE.md](../../CLAUDE.md) an
 | 0011 | [The exposure class A-D](0011-exposure-class.md): six weighted axes give a letter that must agree with the band. | 2026-11-09 |
 | 0012 | [Factory scores and sandbox templates P0-P3](0012-factory-scores-and-sandbox-templates.md): products scored at their defaults; templates measured by the same engine. | 2026-11-08 |
 | 0013 | [Problem reports with permission](0013-problem-reports-with-permission.md): a closed list of problem codes, kept locally, sent only after «Send» or the opt-in. | 2026-11-10 |
-| 0014 | [Usage statistics, asked once](0014-usage-statistics-asked-once.md): decided, not built yet; ask once, then send a closed summary. | 2026-11-18 |
+| 0014 | [Usage statistics, asked once](0014-usage-statistics-asked-once.md): built in 0.15.0; ask once, then send a closed summary. | 2026-11-18 |
 | 0015 | [RosmarOps inside Claude Code](0015-rosmarops-inside-claude-code.md): a session check, a status line and the plugin that carries the hook. | 2026-11-12 |
 | 0016 | [Agent memory files are never opened](0016-agent-memory-files-never-opened.md): memory is recorded from file metadata only. | 2026-11-17 |
 | 0017 | [Declared answers: Grok Bot and Cursor](0017-declared-answers.md): closed questions for settings that cannot be read on disk; no answer means the least controlled case. | 2026-11-14 |
 | 0018 | [Company mode](0018-company-mode.md): a company configuration only administrators can change, a summary of counts and codes, and the administrator's fingerprint list. | 2026-11-12 |
 | 0019 | [The reports folder on Linux, no findings question at the end of run, and the problem list's agent and system](0019-linux-reports-findings-hint-problem-fields.md): reports in ~/RosmarOps on Linux, moved once; one line instead of the question; agent and os_version filled. | 2026-11-19 |
+| 0020 | [The report in three blocks](0020-report-in-three-blocks.md): result, findings grouped by problem at draw time, and the template; Supabase database URLs by host. | 2026-11-18 |
 | 0021 | [Journey tests before publishing](0021-journey-tests-before-publishing.md): R1-R3 on the candidate's bytes on three machines, between build and publish; the gate turns on with JOURNEYS_GATE. | 2026-11-19 |

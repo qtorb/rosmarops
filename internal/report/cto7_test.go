@@ -92,8 +92,9 @@ func TestCTO7Report(t *testing.T) {
 			t.Errorf("%s: key rendered %s", lang, m)
 		}
 		for _, want := range []string{
-			// BV-236 §1: the sheet replaces step 1; the headline (html.headline.cred_in_git.one) is no longer in the HTML.
-			`<h2 id="today-title">` + htmlEscape(cat.Text("html.action.rotate_credential.title", nil)) + `</h2>`,
+			// The key in git is rotated (the problem's «How to fix it»), with
+			// the rotate steps in its row.
+			htmlEscape(cat.Text("html.r3.fix.rotate", map[string]string{"service": "Stripe"})),
 			htmlEscape(cat.Text("html.f.cred_in_git.title", map[string]string{"cred_name": cat.Text("html.cred.stripe.name", nil)})),
 			htmlEscape(cat.Text("html.f.cred_in_git.impact.remote", nil)),
 			`<ol class="rot"><li>` + htmlEscape(cat.Text("html.fix.rotate.step1", nil)) + `</li>`,
@@ -108,12 +109,6 @@ func TestCTO7Report(t *testing.T) {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: no %q", lang, want)
 			}
-		}
-		// Step 2 with rotate_credential has no effort hint.
-		_, step2, _ := strings.Cut(page, `<section class="now"`)
-		step2, _, _ = strings.Cut(step2, `</section>`)
-		if strings.Contains(step2, `class="hint"`) {
-			t.Errorf("%s: rotate_credential with a hint", lang)
 		}
 	}
 	// The signals do not count: no v2 finding comes from them, and the

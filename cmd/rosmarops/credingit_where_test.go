@@ -113,15 +113,14 @@ func bv219Findings(v2 string) int {
 }
 
 // bv219Where checks that the page shows want twice, both outside
-// «Technical details» (BV-219 B2): below the title of step 2 (one key) and
-// in step 3's row (the other key), before «what it means».
+// «Technical details» (BV-219 B2): in each key's row of its problem's
+// steps, before «what it means».
 func bv219Where(t *testing.T, page, want string) {
 	t.Helper()
-	step2, step3, ok := strings.Cut(page, `<section aria-labelledby="step3">`)
+	_, steps, ok := strings.Cut(page, `<div class="r3-steps">`)
 	if !ok {
-		t.Fatal("no step 3 in the page")
+		t.Fatal("no problems' steps in the page")
 	}
-	_, step2, _ = strings.Cut(step2, `<section class="now"`)
 	visible := func(s string) string { // s without its details.tech blocks
 		var b strings.Builder
 		for {
@@ -133,13 +132,13 @@ func bv219Where(t *testing.T, page, want string) {
 			_, s, _ = strings.Cut(rest, `</details>`)
 		}
 	}
-	for name, part := range map[string]string{"step 2": step2, "step 3": step3} {
-		if n := strings.Count(visible(part), want); n != 1 {
-			t.Errorf("%s shows the «where» line %d times outside «Technical details», want 1: %q", name, n, want)
-		}
-		_, after, _ := strings.Cut(visible(part), want)
+	vis := visible(steps)
+	if n := strings.Count(vis, want); n != 2 {
+		t.Errorf("the problems' steps show the «where» line %d times outside «Technical details», want 2: %q", n, want)
+	}
+	for _, after := range strings.Split(vis, want)[1:] {
 		if !strings.HasPrefix(after, `</p><p class="imp">`) && !strings.HasPrefix(after, `</p><p>`) {
-			t.Errorf("%s: the «where» line is not right before «what it means»: %.80q", name, after)
+			t.Errorf("the «where» line is not right before «what it means»: %.80q", after)
 		}
 	}
 }

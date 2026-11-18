@@ -134,10 +134,19 @@ func TestWhereLine_MergedRow(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		// Step 2 shows today's own «where» line (BV-219 B2); the merged row
-		// is in step 3, where it is the only one.
-		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-		inner := onlyWhere(t, step3) // exactly one line for the whole of step 3
+		// The merged row is in its problem's steps, the only «Found in»
+		// line (the key in git has its own «In …, which git tracks» line).
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		var found []string
+		for _, part := range strings.Split(steps, whereOpen)[1:] {
+			if line, _, _ := strings.Cut(part, `</p>`); strings.HasPrefix(line, htmlEscape(cat.Text("html.where", nil))) {
+				found = append(found, line)
+			}
+		}
+		if len(found) != 1 {
+			t.Fatalf("%s: %d «Found in» lines, want 1", lang, len(found))
+		}
+		inner := found[0]
 		// Combined uniqueSorted = /aaa/.env:2, /dup/.env:1, /zzz/.env:3.
 		if !strings.HasPrefix(inner, htmlEscape(cat.Text("html.where", nil))+` <code>/aaa/.env:2</code>`) {
 			t.Errorf("%s: merged line %q does not start with the first combined location", lang, inner)
@@ -165,8 +174,8 @@ func TestWhereLine_Keys(t *testing.T) {
 	}
 }
 
-// BV-219 B2: today's finding shows its «Found in» line in step 2, right
-// below its title and before «what it means», outside «Technical details».
+// BV-219 B2: today's finding shows its «Found in» line in its row, in its
+// problem's steps, outside «Technical details».
 func TestWhereLine_Step2(t *testing.T) {
 	g := v2Graph(t)
 	v := clearLocations(buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil)))
@@ -183,19 +192,10 @@ func TestWhereLine_Step2(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		step2, _, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-		_, step2, _ = strings.Cut(step2, `<section class="now"`)
-		inner := onlyWhere(t, step2)
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		inner := onlyWhere(t, steps)
 		if inner != htmlEscape(cat.Text("html.where", nil))+` <code>/src/today/.env:1</code>` {
-			t.Errorf("%s: step 2 line is %q", lang, inner)
-		}
-		_, after, _ := strings.Cut(step2, whereOpen+inner+`</p>`)
-		if !strings.HasPrefix(after, `<p class="imp">`) {
-			t.Errorf("%s: step 2's «Found in» line is not right before «what it means»: %.60q", lang, after)
-		}
-		_, before, _ := strings.Cut(step2, `<p class="tf">`)
-		if !strings.Contains(before, whereOpen) {
-			t.Errorf("%s: step 2's «Found in» line is not below the finding's title", lang)
+			t.Errorf("%s: the row's line is %q", lang, inner)
 		}
 	}
 }

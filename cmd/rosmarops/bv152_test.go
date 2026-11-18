@@ -108,9 +108,9 @@ func TestDoubleClickPackageFailDoesNotKillReview(t *testing.T) {
 	if !strings.Contains(page, "This check couldn&#39;t be sent to your space.") {
 		t.Error("the «Your space» section does not show report.space_rejected")
 	}
-	// It is the normal report: it has the sheet (BV-236 §1: it replaces the
-	// step-1 situation section), which the red run-failed page does not.
-	if !strings.Contains(page, `<article class="sheet"`) {
-		t.Error("report.html is not the normal report (no sheet)")
+	// It is the normal report: it has the first screen in three blocks,
+	// which the red run-failed page does not.
+	if !strings.Contains(page, `<div class="r3" id="top">`) {
+		t.Error("report.html is not the normal report (no first screen)")
 	}
 }

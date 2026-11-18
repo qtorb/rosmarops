@@ -263,28 +263,25 @@ func issuesOf(fs []rules.Finding, svc map[string]credService) []issue {
 	return final
 }
 
-// issueGain is a problem's «if you fix this»: the computer's score now and
-// with every finding of the problem fixed at once (index.WithoutSet). ok is
-// false when the computer has no score or the problem does not move it.
-func issueGain(v V2, is issue) (now, then int, ok bool) {
-	if v.indexIn == nil || v.Index.Machine.Value == nil {
-		return 0, 0, false
+// issueGain is a problem's «if you fix this»: the shown score now and with
+// every finding of the problem fixed at once (index.WithoutSet). The shown
+// score is the computer's; when the computer has none, the agent's that the
+// first screen shows (agentID is then that agent, "" for the computer). ok
+// is false without a score or when the problem does not move it.
+func issueGain(v V2, shown index.MachineScore, is issue) (now, then int, agentID string, ok bool) {
+	if v.indexIn == nil || shown.Value == nil {
+		return 0, 0, "", false
 	}
-	_, m := index.WithoutSet(*v.indexIn, is.ids())
-	if m == nil || *m <= *v.Index.Machine.Value {
-		return 0, 0, false
-	}
-	return *v.Index.Machine.Value, *m, true
-}
-
-// templateFixesIn are the problem's findings every offered Claude Code
-// template takes away.
-func templateFixesIn(v V2, is issue) int {
-	n := 0
-	for _, f := range is.findings {
-		if v.templateFixes[f.ID] {
-			n++
+	agents, m := index.WithoutSet(*v.indexIn, is.ids())
+	if v.Index.Machine.Value == nil {
+		a, has := agents[shown.AgentID]
+		if !has || a <= *shown.Value {
+			return 0, 0, "", false
 		}
+		return *shown.Value, a, shown.AgentID, true
 	}
-	return n
+	if m == nil || *m <= *shown.Value {
+		return 0, 0, "", false
+	}
+	return *shown.Value, *m, "", true
 }

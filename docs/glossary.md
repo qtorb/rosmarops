@@ -21,6 +21,8 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 - a **v1 finding** (`finding.Finding`), from the older scanners: a new VS Code extension, a new scheduled task, a changed shell profile and similar;
 - a **v2 finding** (`rules.Finding`), from a rule over the graph. This is the product's main kind.
 
+**Problem.** What the report's first screen lists: the findings one change fixes, grouped while the page is drawn. A service's credentials within reach of agents (by project when the credential names one) are one problem; one agent able to change other agents' settings is one problem; any other finding is a problem of its own. Problems exist only in the HTML: the JSON and the counts the program sends are of findings. See [the decision](decisions/0020-report-in-three-blocks.md).
+
 **Rule.** The code that turns a pattern in the graph into v2 findings, such as `cred_read_and_send` or `cred_in_git`. Rules live in `internal/rules`.
 
 ## Scores

@@ -61,16 +61,16 @@ func TestRenderHTML(t *testing.T) {
 			t.Errorf("%s: html lang", lang)
 		}
 		last := -1
-		// BV-158: the steps, then «How to fix it», then «More information»'s
-		// cells (since the last check, the weekly review) when not connected.
-		// BV-236 §1: the sheet (its title and «Result») replaces step 1's
-		// title (html.step.1) and the score's name (html.index.name), first.
-		for _, k := range []string{"sheet.title", "sheet.result", "html.step.2", "html.today.fixes", "html.step.3", "html.agentfix.title", "html.since.title", "html.weekly.title"} {
-			i := strings.Index(page, htmlEscape(cat.Text(k, nil)))
-			if i <= last {
-				t.Errorf("%s: %s out of order (%d after %d)", lang, k, i, last)
+		// The first screen's three blocks, then «How to fix it», then «More
+		// information»'s cells (since the last check, the weekly review) when
+		// not connected.
+		for _, k := range []string{"html.r3.title", "html.r3.h1", "html.r3.h2", "html.r3.h3", "html.agentfix.title", "html.since.title", "html.weekly.title"} {
+			i := strings.Index(page[last+1:], htmlEscape(cat.Text(k, nil)))
+			if i < 0 {
+				t.Errorf("%s: %s missing or out of order (after %d)", lang, k, last)
+				continue
 			}
-			last = i
+			last += 1 + i
 		}
 		// The older checks left the HTML; a pointer to the technical report.
 		pointer := htmlEscape(cat.Text("html.legacy.pointer", map[string]string{"file": report.DataSubdir + "/" + report.MarkdownFileName}))
@@ -128,9 +128,9 @@ func sheetNotes(page string) string {
 
 // J14 (decision 2026-10-26, integridad y revisión semanal, §7): with no
 // graph the page cannot look clean — no card; the score unavailable for
-// coverage, never not_applicable; step 2 html.today.incomplete and step 3
-// html.rest.incomplete instead of «nothing to fix» and «nothing else
-// pending»; in en and es. With a graph and no agent, not_applicable stays.
+// coverage, never not_applicable; the findings block says the review did not
+// finish (html.today.incomplete) instead of «nothing to fix»; in en and es.
+// With a graph and no agent, not_applicable stays.
 func TestRenderHTML_NoScoreNoFindings(t *testing.T) {
 	v := buildV2(t, nil, report.Build("t", nil, []finding.ScanError{{Scope: "global_timeout", Message: "x"}}, 0, 0, 0, 0, nil))
 	if v.Coverage.GraphBuilt || v.Index.Machine.Unavailable != index.ReasonCoverage {
@@ -149,17 +149,14 @@ func TestRenderHTML_NoScoreNoFindings(t *testing.T) {
 		}
 		for _, want := range []string{
 			unavailable(index.ReasonCoverage),
-			`<p class="none">` + htmlEscape(cat.Text("html.today.incomplete", nil)) + `</p>`,
-			`<p class="empty">` + htmlEscape(cat.Text("html.rest.incomplete", nil)) + `</p>`,
+			`<p class="r3-empty">` + htmlEscape(cat.Text("html.today.incomplete", nil)) + `</p>`,
 		} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s: no graph, no %q", lang, want)
 			}
 		}
-		for _, k := range []string{"html.none", "html.step.3.none"} {
-			if strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
-				t.Errorf("%s: no graph, but %s", lang, k)
-			}
+		if strings.Contains(page, htmlEscape(cat.Text("html.none", nil))) {
+			t.Errorf("%s: no graph, but html.none", lang)
 		}
 		if strings.Contains(page, htmlEscape(cat.Text("html.index.reason.not_applicable", nil))) {
 			t.Errorf("%s: no graph, but the not_applicable reason", lang)
@@ -169,54 +166,38 @@ func TestRenderHTML_NoScoreNoFindings(t *testing.T) {
 		if !strings.Contains(page, unavailable(index.ReasonNotApplicable)) {
 			t.Errorf("%s: graph with no agent: not applicable line missing", lang)
 		}
-		for _, k := range []string{"html.none", "html.step.3.none"} {
-			if !strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
-				t.Errorf("%s: graph with no finding: no %s", lang, k)
-			}
+		if !strings.Contains(page, `<p class="r3-empty">`+htmlEscape(cat.Text("html.none", nil))+`</p>`) {
+			t.Errorf("%s: graph with no finding: no html.none", lang)
 		}
-		for _, k := range []string{"html.today.incomplete", "html.rest.incomplete"} {
-			if strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
-				t.Errorf("%s: graph built, but %s", lang, k)
-			}
+		if strings.Contains(page, htmlEscape(cat.Text("html.today.incomplete", nil))) {
+			t.Errorf("%s: graph built, but html.today.incomplete", lang)
 		}
 	}
 }
 
-// BV-41: today's projection shows before the fix box, only with a score
-// that rises and an action that is not partial. (BV-158 removed the history
-// notice from the report; the fix box button is now class "wide".)
+// Each problem's steps say how the computer's score would move with every
+// finding of the problem fixed at once (html.gain), only when it rises.
 func TestRenderHTML_Projection(t *testing.T) {
 	g := v2Graph(t)
 	base := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	a := base.Index.Agents[0]
-	if a.Value == nil || a.Projection == nil || a.Projection.Value <= *a.Value {
-		t.Fatalf("scenario: %v → %+v, want a rise", a.Value, a.Projection)
+	m, _, ok := sheetScore(renderHTML(t, "en", base))
+	if !ok {
+		t.Fatal("scenario: no score")
 	}
+	gain := regexp.MustCompile(`<p class="proj">[^<]*?(\d+) → (\d+)</p>`)
 	for _, lang := range []string{"en", "es"} {
-		cat, _ := catalog.Load(lang)
-		proj := htmlEscape(cat.Text("html.today.projection", map[string]string{"now": strconv.Itoa(*a.Value), "then": strconv.Itoa(a.Projection.Value)}))
-
 		page := renderHTML(t, lang, base)
-		// The step-2 fix button is the first class="wide" (before «How to fix
-		// it»'s copy button); the projection shows above it.
-		p, fix := strings.Index(page, proj), strings.Index(page, `class="wide"`)
-		if p < 0 || fix < 0 || p > fix {
-			t.Errorf("%s: projection missing or after the fix box", lang)
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		got := gain.FindAllStringSubmatch(steps, -1)
+		if len(got) == 0 {
+			t.Fatalf("%s: no problem says what fixing it does", lang)
 		}
-
-		partial := cloneV2(base)
-		for i := range partial.Findings[0].Actions {
-			if partial.Findings[0].Actions[i].ID == partial.Today.ActionID {
-				partial.Findings[0].Actions[i].Completeness = rules.CompletenessPartial
+		for _, g := range got {
+			now, _ := strconv.Atoi(g[1])
+			then, _ := strconv.Atoi(g[2])
+			if now != m || then <= now {
+				t.Errorf("%s: gain %d → %d, want from %d upwards", lang, now, then, m)
 			}
-		}
-		if strings.Contains(renderHTML(t, lang, partial), proj) {
-			t.Errorf("%s: projection shown for a partial action", lang)
-		}
-		flat := cloneV2(base)
-		flat.Index.Agents[0].Projection = &index.Projection{ActionID: flat.Today.ActionID, Value: *a.Value}
-		if strings.Contains(renderHTML(t, lang, flat), htmlEscape(cat.Text("html.today.projection", map[string]string{"now": strconv.Itoa(*a.Value), "then": strconv.Itoa(*a.Value)}))) {
-			t.Errorf("%s: projection shown without a rise", lang)
 		}
 	}
 }
@@ -244,23 +225,16 @@ func TestRenderHTML_TitleOthers(t *testing.T) {
 	if v.Findings[0].Params.Scope != "service_role" || v.Findings[0].OthersCount() != 1 {
 		t.Fatalf("title %s, others %d", v.Findings[0].Params.Scope, v.Findings[0].OthersCount())
 	}
-	// BV-43, v3 §4–§5: the other keys are a pill after today's title in
-	// step 2 (after the master «i»), and in a step 3 row's body. Without a
-	// today, the finding is a row.
+	// BV-43: the other keys are a pill in the finding's row, in its
+	// problem's steps, once (with or without a today).
 	row := cloneV2(v)
 	row.Today = rules.Today{}
 	for lang, pill := range map[string]string{
 		"en": `<span class="tchip">+1 more key in the same file</span>`,
 		"es": `<span class="tchip">+1 clave más en el mismo fichero</span>`,
 	} {
-		page := renderHTML(t, lang, v)
-		_, step2, _ := strings.Cut(page, `<section class="now"`)
-		step2, _, _ = strings.Cut(step2, `</section>`)
-		if !regexp.MustCompile(`<p class="tf">[^<]*<button type="button" class="i"[^>]*>.*?</button><span class="gl"[^>]*>.*?</span>` + regexp.QuoteMeta(pill) + `</p>`).MatchString(step2) {
-			t.Errorf("%s: no pill after today's title and its «i» in step 2", lang)
-		}
-		if n := strings.Count(page, pill); n != 1 {
-			t.Errorf("%s: pill %d times, want 1 (step 2)", lang, n)
+		if n := strings.Count(renderHTML(t, lang, v), pill); n != 1 {
+			t.Errorf("%s: pill %d times, want 1", lang, n)
 		}
 		if n := strings.Count(renderHTML(t, lang, row), pill); n != 1 {
 			t.Errorf("%s: pill %d times in the rows, want 1", lang, n)

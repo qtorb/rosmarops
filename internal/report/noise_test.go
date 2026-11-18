@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -139,14 +140,8 @@ func TestNoise_RealCase(t *testing.T) {
 			"cred_name": cat.Text("html.cred.supabase.service_role.name", nil),
 			"agent":     listNames(cat, rowAgents(v)),
 		}))
-		// BV-236 §1: the sheet's «Findings» repeat the first rows' titles;
-		// the row is one, in the sheet and in the flow.
-		_, sheet, _ := strings.Cut(page, `<article class="sheet"`)
-		sheet, flow, _ := strings.Cut(sheet, `</article>`)
-		if n := strings.Count(sheet, want); n > 1 {
-			t.Errorf("%s: %d rows %q in the sheet", lang, n, want)
-		}
-		_, flow, _ = strings.Cut(flow, `<main class="rep">`)
+		// The row is one, in its problem's steps.
+		_, flow, _ := strings.Cut(page, `<main class="rep">`)
 		if n := strings.Count(flow, want); n != 1 {
 			t.Errorf("%s: %d rows %q", lang, n, want)
 		}
@@ -235,7 +230,9 @@ func TestNoise_Step3Cap(t *testing.T) {
 			git = f
 		}
 	}
-	for _, n := range []int{8, 9, 20} {
+	// A key of an unknown service in git, no agent reads it: one problem
+	// each. The table shows six; with more, a last row leads to the others.
+	for _, n := range []int{6, 7, 20} {
 		v := cloneV2(base)
 		v.Today = rules.Today{}
 		v.Findings = nil
@@ -253,28 +250,18 @@ func TestNoise_Step3Cap(t *testing.T) {
 			if n == 20 {
 				writeCapture(t, "step3-cap."+lang+".html", page)
 			}
-			_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-			step3, _, _ = strings.Cut(step3, `</section>`)
-			if !strings.Contains(step3, htmlEscape(cat.Plural("html.step.3.hint", n, map[string]string{"count": fmt.Sprint(n)}))) {
-				t.Errorf("%d %s: the hint does not count every row", n, lang)
+			_, table, _ := strings.Cut(page, `<table class="r3-tbl">`)
+			table, _, _ = strings.Cut(table, `</table>`)
+			if got := strings.Count(table, `<th scope="row" class="c-n">`); got != min(n, 6) {
+				t.Errorf("%d %s: %d problems shown", n, lang, got)
 			}
-			shown, fold, folded := strings.Cut(step3, `<details class="rest">`)
-			if got := strings.Count(shown, `<details class="row">`); got != min(n, 8) {
-				t.Errorf("%d %s: %d rows shown", n, lang, got)
+			more := htmlEscape(cat.Text("html.r3.more", map[string]string{"groups": fmt.Sprint(n - 6), "findings": fmt.Sprint(n - 6)}))
+			if has := strings.Contains(table, `<a href="#p-7">`+more+`</a>`); has != (n > 6) {
+				t.Errorf("%d %s: «the others» row %v", n, lang, has)
 			}
-			if folded != (n > 8) {
-				t.Fatalf("%d %s: fold %v", n, lang, folded)
-			}
-			if !folded {
-				continue
-			}
-			rest := n - 8
-			summary := `<summary><span class="chev" aria-hidden="true">›</span>` + htmlEscape(cat.Plural("html.step.3.more", rest, map[string]string{"count": fmt.Sprint(rest)})) + `</summary><div class="grp">`
-			if !strings.HasPrefix(fold, summary) || strings.Count(fold, `<details class="row">`) != rest {
-				t.Errorf("%d %s: fold %.300s", n, lang, fold)
-			}
-			if lang == "es" && n == 20 && !strings.Contains(fold, "Ver los 12 avisos restantes") {
-				t.Error("es: no «Ver los 12 avisos restantes»")
+			_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+			if got := strings.Count(steps, `<section class="r3-p"`); got != n {
+				t.Errorf("%d %s: %d problems' steps, want every one", n, lang, got)
 			}
 		}
 	}
@@ -308,32 +295,25 @@ func TestNoise_CountsByRow(t *testing.T) {
 		for _, lang := range []string{"en", "es"} {
 			cat, _ := catalog.Load(lang)
 			page := renderHTML(t, lang, v)
-			// BV-236 §1: the sheet replaces step 1; the counts line (html.step.1.counts) is no longer in the HTML.
-			// The sheet's «Findings» count rows too: its count («1 finding»
-			// with one row, Albert 15-11) and at most three rows.
-			_, sheet, _ := strings.Cut(page, `<h2 class="sh-h" id="sh-findings">`)
-			sheet, _, _ = strings.Cut(sheet, `</section>`)
-			rows := red + yellow
-			count := ""
-			switch {
-			case rows > 3:
-				count = cat.Text("sheet.findings.count.first", map[string]string{"n": fmt.Sprint(rows)})
-			case rows == 1:
-				count = cat.Text("sheet.findings.count.one", nil)
-			default:
-				count = cat.Text("sheet.findings.count", map[string]string{"n": fmt.Sprint(rows)})
+			// The first screen counts rows too: «{findings} findings» and
+			// the problems' «Findings» column add up to the rows, and the
+			// problems' steps show every row once.
+			_, counts, _ := strings.Cut(page, `<p class="r3-counts">`)
+			counts, _, _ = strings.Cut(counts, `</p>`)
+			if !strings.Contains(counts, " · "+fmt.Sprint(red+yellow)+" ") {
+				t.Errorf("%s %s: counts %q, want %d rows", name, lang, counts, red+yellow)
 			}
-			if !strings.Contains(sheet, `<em>`+htmlEscape(count)+`</em>`) {
-				t.Errorf("%s %s: the sheet lacks %q", name, lang, count)
+			sum := 0
+			for _, m := range regexp.MustCompile(`<td class="c-c">(\d+)</td>`).FindAllStringSubmatch(page, -1) {
+				k, _ := strconv.Atoi(m[1])
+				sum += k
 			}
-			if n := strings.Count(sheet, `<tr><td>`); n != min(rows, 3) {
-				t.Errorf("%s %s: %d rows in the sheet, counts %d+%d", name, lang, n, red, yellow)
+			if sum != red+yellow {
+				t.Errorf("%s %s: the problems count %d rows, counts %d+%d", name, lang, sum, red, yellow)
 			}
-			shown := strings.Count(page, `<div class="tbox">`)
-			_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-			step3, _, _ = strings.Cut(step3, `</section>`)
-			if shown += strings.Count(step3, `<details class="row">`); shown != red+yellow {
-				t.Errorf("%s %s: %d rows in steps 2 and 3, counts %d+%d", name, lang, shown, red, yellow)
+			_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+			if shown := strings.Count(steps, `<details class="row">`); shown != red+yellow {
+				t.Errorf("%s %s: %d rows in the problems' steps, counts %d+%d", name, lang, shown, red, yellow)
 			}
 			line := cat.Text("console.summary", map[string]string{
 				"status": cat.Text("report.status."+v.Status, nil), "red": fmt.Sprint(red), "yellow": fmt.Sprint(yellow),
@@ -371,7 +351,7 @@ func TestNoise_Wording(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
-		// BV-236 §1: the promise line is right under the sheet.
+		// The promise line is right under the first screen's header.
 		_, head, _ := strings.Cut(sheetNotes(page), `<p class="meta promise">`)
 		head, _, _ = strings.Cut(head, `</p>`)
 		if strings.Contains(head, "nada ha salido") || strings.Contains(head, "nothing left") ||
@@ -382,16 +362,8 @@ func TestNoise_Wording(t *testing.T) {
 		if all := htmlEscape(cat.Text("html.step.1.coverage.all", map[string]string{"evaluated": listNames(cat, []string{"Claude Code", "Cursor"})})); !strings.Contains(page, "<p>"+all+"</p>") {
 			t.Errorf("%s: no coverage line %q", lang, all)
 		}
-		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-		step3, _, _ = strings.Cut(step3, `</section>`)
-		hint := regexp.MustCompile(`<span class="hint">([^<]*)</span>`).FindStringSubmatch(step3)
-		if hint == nil || strings.Contains(hint[1], "cuando tengas tiempo") || strings.Contains(hint[1], "when you have time") {
-			t.Errorf("%s: step 3 hint %v", lang, hint)
-		}
-		after := htmlEscape(cat.Text("html.after.rotate", nil))
-		if !strings.Contains(page, `<p class="after">`+after+`</p></div></section>`) || strings.Contains(page, htmlEscape(cat.Text("html.after.full", nil))+`</p></div></section>`) {
-			t.Errorf("%s: step 2 does not end with html.after.rotate", lang)
-		}
+		// html.after.rotate closed «What to do first», which left the page;
+		// the export for your AI keeps it.
 		if ai := report.RenderAIExport(v, cat, "/h"); !strings.Contains(ai, cat.Text("html.after.rotate", nil)+"\n") {
 			t.Errorf("%s: the export for your AI lacks html.after.rotate", lang)
 		}

@@ -12,10 +12,9 @@ import (
 	"github.com/qtorb/rosmarops/internal/report"
 )
 
-// informe HTML v3 §8, structure: one h1; three step sections, each labelled
-// by an element of the page; today's finding is not in the step 3 list; the
-// step 3 hint counts the list; without findings, html.none and
-// html.step.3.none.
+// The page's structure: one h1; every labelled section labelled by an
+// element of the page, the first screen's three blocks among them; every
+// finding in its problem's steps, once; without findings, html.none.
 func TestRenderHTML_V3Structure(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
@@ -23,45 +22,27 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 		t.Fatalf("%d findings — test would be vacuous", len(v.Findings))
 	}
 	for _, lang := range []string{"en", "es"} {
-		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
 		if strings.Count(page, "<h1") != 1 {
 			t.Errorf("%s: %d h1", lang, strings.Count(page, "<h1"))
 		}
 		labels := regexp.MustCompile(`<section[^>]*aria-labelledby="([^"]+)"`).FindAllStringSubmatch(page, -1)
-		// BV-236 §1–§3: the sheet's three sections, «Computer profile» and
-		// Claude Code's view, steps 2 and 3 and §11's section (the sheet
-		// replaces step 1's section); BV-238: Grok Bot's view, always there.
-		if len(labels) != 9 {
-			t.Errorf("%s: %d labelled sections, want 9", lang, len(labels))
-		}
+		blocks := 0
 		for _, l := range labels {
 			if !strings.Contains(page, `id="`+l[1]+`"`) {
 				t.Errorf("%s: section labelled by missing %s", lang, l[1])
 			}
-		}
-		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-		step3, _, _ = strings.Cut(step3, `</section>`)
-		rows := strings.Count(step3, `<details class="row">`)
-		if rows != len(v.Findings)-1 {
-			t.Errorf("%s: %d rows for %d findings and today", lang, rows, len(v.Findings))
-		}
-		for _, f := range v.Findings {
-			if f.ID != v.Today.FindingID {
-				continue
-			}
-			title := htmlEscape(cat.Text("html.f.cred.title", map[string]string{"agent": f.Params.Agent, "cred_name": cat.Text("html.cred.supabase.service_role.name", nil)}))
-			if strings.Contains(step3, `<span class="t">`+title+`</span>`) {
-				t.Errorf("%s: today's finding in the step 3 list", lang)
+			if strings.HasPrefix(l[1], "r3-h") {
+				blocks++
 			}
 		}
-		hint := htmlEscape(cat.Plural("html.step.3.hint", rows, map[string]string{"count": strconv.Itoa(rows)}))
-		if !strings.Contains(step3, `<span class="hint">`+hint+`</span>`) {
-			t.Errorf("%s: no hint %q", lang, hint)
+		if blocks != 3 {
+			t.Errorf("%s: %d of the first screen's blocks labelled, want 3", lang, blocks)
 		}
-		// Groups: a dot and the group text, no count.
-		if !strings.Contains(step3, `<div class="grp"><span class="dot" style="background:var(--ambfill)"></span>`+htmlEscape(cat.Text("html.group.yellow", nil))+`</div>`) {
-			t.Errorf("%s: no yellow group label", lang)
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		steps, _, _ = strings.Cut(steps, `<section aria-labelledby="dismissed">`)
+		if rows := strings.Count(steps, `<details class="row">`); rows != len(v.Findings) {
+			t.Errorf("%s: %d rows in the problems' steps for %d findings", lang, rows, len(v.Findings))
 		}
 	}
 
@@ -69,11 +50,8 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 	none := buildV2(t, &empty, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
-		page := renderHTML(t, lang, none)
-		for _, k := range []string{"html.none", "html.step.3.none"} {
-			if !strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
-				t.Errorf("%s: no %s without findings", lang, k)
-			}
+		if page := renderHTML(t, lang, none); !strings.Contains(page, htmlEscape(cat.Text("html.none", nil))) {
+			t.Errorf("%s: no html.none without findings", lang)
 		}
 	}
 }

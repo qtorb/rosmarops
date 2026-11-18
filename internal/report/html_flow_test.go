@@ -9,19 +9,19 @@ import (
 )
 
 // flowChildren returns the tag (plus its class, as "tag.class") of each
-// direct child element of the single `<div class="flow" id="todo">`, in document
-// order. It fails if the page does not have exactly one `.flow`.
+// direct child element of the single `<div id="todo">` (the problems'
+// steps), in document order. It fails if the page does not have exactly one.
 //
 // A tiny depth tracker, no HTML dependency: every `<` inside text is escaped,
 // so each `<tag …>` opens one level and each `</tag>` closes one. Void tags
 // (<br> …) and self-closing `<… />` tags do not nest; any <svg>/<template>
 // subtree is stripped first, so their self-closing children never count. The
-// `</div>` seen at depth 0 is the flow's own close.
+// `</div>` seen at depth 0 is the container's own close.
 func flowChildren(t *testing.T, page string) []string {
 	t.Helper()
-	const open = `<div class="flow" id="todo">`
+	const open = `<div id="todo">`
 	if n := strings.Count(page, open); n != 1 {
-		t.Fatalf("want exactly one <div class=\"flow\" id=\"todo\">, got %d", n)
+		t.Fatalf("want exactly one <div id=\"todo\">, got %d", n)
 	}
 	rest := page[strings.Index(page, open)+len(open):]
 	for _, sub := range []*regexp.Regexp{
@@ -58,18 +58,16 @@ func flowChildren(t *testing.T, page string) []string {
 	return kids
 }
 
-// TestRenderHTML_SingleFlowThreeColumns (BV-141): the three steps live in one
-// `.flow` grid as direct children (s1, the step-2 section, the step-3
-// section), so the three columns start at the same height. The today
-// finding's jump anchor (span.fa) is inside the step-2 section, never a stray
-// grid child. «Your space» is painted after the flow and before «How your
-// agents work» (section.ov), at full width — never inside the flow. Checked
-// with and without «Your space», in en and es.
+// TestRenderHTML_SingleFlowThreeColumns: below the first screen, the
+// problems' steps are one block (div.r3-steps) in `<div id="todo">`, every
+// problem a section of it with its id, each finding's anchor inside its row,
+// never a stray child. «Your space» is painted after them and before «How
+// your agents work» (section.ov), at full width. Checked with and without
+// «Your space», in en and es.
 func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
-	g := v2Graph(t) // yields a today finding, so span.fa is emitted
+	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
-	// BV-236 §1: the sheet replaces step 1; section.s1 is no longer in the HTML.
-	want := []string{"section.now", "section"}
+	want := []string{"div.r3-steps"}
 
 	for _, lang := range []string{"en", "es"} {
 		for _, withSpace := range []bool{false, true} {
@@ -78,30 +76,21 @@ func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
 
 			got := flowChildren(t, page)
 			if strings.Join(got, ",") != strings.Join(want, ",") {
-				t.Errorf("%s (space=%v): flow direct children = %v, want %v", lang, withSpace, got, want)
+				t.Errorf("%s (space=%v): direct children = %v, want %v", lang, withSpace, got, want)
 			}
-			// The anchor is nested, not a flow child.
-			for _, k := range got {
-				if strings.HasPrefix(k, "span") {
-					t.Errorf("%s (space=%v): span %q is a direct child of .flow", lang, withSpace, k)
+			for _, f := range v.Findings {
+				if !strings.Contains(page, `<div class="rb" id="`+f.ID+`">`) {
+					t.Errorf("%s: finding %s has no anchor in its row", lang, f.ID)
 				}
 			}
-			if !strings.Contains(page, `<span class="fa"`) {
-				t.Fatalf("%s: test is vacuous — no today anchor to place", lang)
-			}
-
-			// «Your space» placement (BV-158): always painted, after the flow
-			// (and after «How to fix it»), outside the flow; before section.ov
-			// when there is one (the overview is in «More information», which
-			// only the not-connected report shows, after the space).
 			if !strings.Contains(page, `<section class="space"`) {
 				t.Errorf("%s (space=%v): section.space missing", lang, withSpace)
 			}
-			flowEnd := strings.Index(page, `<div class="flow" id="todo">`)
+			todo := strings.Index(page, `<div id="todo">`)
 			spacePos := strings.Index(page, `<section class="space"`)
 			ovPos := strings.Index(page, `<section class="ov"`)
-			if !(spacePos > flowEnd && (ovPos < 0 || spacePos < ovPos)) {
-				t.Errorf("%s: section.space at %d is not after the flow (%d) and before section.ov (%d)", lang, spacePos, flowEnd, ovPos)
+			if !(spacePos > todo && (ovPos < 0 || spacePos < ovPos)) {
+				t.Errorf("%s: section.space at %d is not after the steps (%d) and before section.ov (%d)", lang, spacePos, todo, ovPos)
 			}
 		}
 	}

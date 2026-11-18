@@ -90,12 +90,6 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 	if v.Findings[0].Params.Agent != "Claude Code" {
 		t.Fatal("the report does not start with Claude Code's finding: test would be vacuous")
 	}
-	var today rules.Finding
-	for _, f := range v.Findings {
-		if f.ID == v.Today.FindingID {
-			today = f
-		}
-	}
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
 		page := renderHTML(t, lang, v)
@@ -112,18 +106,10 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 		if lab := sheetLabel(page); !strings.Contains(lab, "Cursor") {
 			t.Errorf("%s: the score's label is not Cursor's: %q", lang, lab)
 		}
-		// BV-236 §1: the sheet replaces step 1; the headline (h1.hl, Cursor's first finding) is no longer in the HTML.
-		s := claude
-		if today.Params.Agent == "Cursor" {
-			s = cursor
-		}
-		if s.Projection != nil && s.Projection.Value > *s.Value {
-			pill := htmlEscape(cat.Text("html.today.projection.agent", map[string]string{"agent": today.Params.Agent, "now": strconv.Itoa(*s.Value), "then": strconv.Itoa(s.Projection.Value)}))
-			if !strings.Contains(page, `<div class="proj">`+pill+`</div>`) {
-				t.Errorf("%s: no pill %q", lang, pill)
-			}
-		} else {
-			t.Errorf("%s: today's finding has no projection: test would be vacuous", lang)
+		// Each problem's steps say how the shown score (the computer's,
+		// Cursor's) would move with the problem fixed.
+		if !regexp.MustCompile(`<p class="proj">[^<]*` + strconv.Itoa(*cursor.Value) + ` → \d+</p>`).MatchString(page) {
+			t.Errorf("%s: no problem's «if you fix this» from Cursor's %d", lang, *cursor.Value)
 		}
 		// v3 §17.2: a line per agent whose score changed, in step 1's order;
 		// no series.
@@ -132,15 +118,13 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 		if ci < 0 || cl < 0 || ci > cl || strings.Contains(page, "33 → 29") {
 			t.Errorf("%s: score lines Cursor %d, Claude Code %d", lang, ci, cl)
 		}
-		_, step3, _ := strings.Cut(page, `<section aria-labelledby="step3">`)
-		groups := strings.Split(step3, `<div class="grp">`)[1:]
-		if len(groups) != 2 {
-			t.Fatalf("%s: %d groups in step 3", lang, len(groups))
-		}
-		for _, grp := range groups {
-			row := regexp.MustCompile(`<span class="t">([^<]*)</span>`).FindStringSubmatch(grp)
-			if row == nil || !strings.Contains(row[1], "Cursor") {
-				t.Errorf("%s: first row of a group is not Cursor's: %v", lang, row)
+		// In each problem's steps, the rows of the agent with the shown
+		// score come first.
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		for _, sec := range strings.Split(steps, `<section class="r3-p"`)[1:] {
+			rows := regexp.MustCompile(`<span class="t">([^<]*)</span>`).FindAllStringSubmatch(sec, -1)
+			if len(rows) > 1 && strings.Contains(sec, "Cursor") && !strings.Contains(rows[0][1], "Cursor") {
+				t.Errorf("%s: first row of a problem is not Cursor's: %v", lang, rows[0][1])
 			}
 		}
 	}
@@ -168,7 +152,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // once»'s CSS and list script (checked: one CSS line, one script line) and
 // the test-environment tag's style rule (checked: the one added CSS line),
 // at BV-251 with the agent's «Who can give it orders» line in the agents
-// window (checked: the one added block);
+// window (checked: the one added block), at BV-260 with the first screen in
+// three blocks (signed design of 18-11) in place of the sheet and of «What
+// to do first» / «What remains», and each problem's steps below it;
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
