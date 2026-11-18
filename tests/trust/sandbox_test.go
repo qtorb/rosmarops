@@ -41,21 +41,50 @@ var externalTools = []string{"npm", "pnpm", "git", "code"}
 // and a ~/.claude.json declaring one MCP server.
 func newSandbox(t *testing.T) *sandbox {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
+	return newSandboxWith(t, sandboxOpts{})
+}
+
+// sandboxOpts vary the sandbox: ldflags (from the sandbox root) for the
+// build, and the name of the user folder under the root ("home" when empty).
+type sandboxOpts struct {
+	ldflags  func(root string) string
+	homeName string
+}
+
+// buildBinary builds rosmarops into a new temporary folder with ldflags.
+func buildBinary(t *testing.T, ldflags string) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "rosmarops")
+	args := []string{"build", "-o", bin}
+	if ldflags != "" {
+		args = append(args, "-ldflags", ldflags)
 	}
-	binDir := t.TempDir()
-	bin := filepath.Join(binDir, "rosmarops")
-	build := exec.Command("go", "build", "-o", bin, "./cmd/rosmarops")
+	build := exec.Command("go", append(args, "./cmd/rosmarops")...)
 	build.Dir = repoRoot(t)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build rosmarops: %v\n%s", err, out)
 	}
+	return bin
+}
 
+func newSandboxWith(t *testing.T, o sandboxOpts) *sandbox {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
+	}
 	root := t.TempDir()
+	ldflags := ""
+	if o.ldflags != nil {
+		ldflags = o.ldflags(root)
+	}
+	bin := buildBinary(t, ldflags)
+	homeName := o.homeName
+	if homeName == "" {
+		homeName = "home"
+	}
 	s := &sandbox{
 		root:   root,
-		home:   filepath.Join(root, "home"),
+		home:   filepath.Join(root, homeName),
 		work:   filepath.Join(root, "work"),
 		repo:   filepath.Join(root, "src", "demo-repo"),
 		binary: bin,

@@ -133,6 +133,30 @@ func (s Self) ownsIgnoringLimit(t platform.ScheduledTask) bool {
 	return args && s.User != "" && user && r.LogonType == "Interactive" && r.RunLevel == "Limited"
 }
 
+// groupWeekly is the weekly review a company deployment registers for every
+// member of a group (the principal is a group, not the person), whatever its
+// name: one action that runs this same executable, as registered (the same
+// comparison as for the person's own task), with "run --unattended" or
+// "run --lang <code> --unattended", and not elevated. The person did not create
+// it, so it does not have to run as them or from the executable's folder; it is
+// still this computer's weekly review, not another copy and not missing.
+// Its ExecutionTimeLimit is not checked: the update the report offers would
+// create a personal task, not change the company's.
+func (s Self) groupWeekly(t platform.ScheduledTask) bool {
+	r := t.RosmarOps
+	if r == nil || s.Exe == "" || r.GroupID == "" || r.UserID != "" || r.Actions != 1 || r.Execute != s.Exe {
+		return false
+	}
+	if r.RunLevel == "Highest" {
+		return false
+	}
+	args := r.Arguments == "run --unattended"
+	for _, l := range s.Langs {
+		args = args || r.Arguments == "run --lang "+l+" --unattended"
+	}
+	return args
+}
+
 // ownWithShortLimit is an own weekly task (J6 in every other way) whose
 // ExecutionTimeLimit is shorter than the review can need (BV-212): the report
 // offers to update it, as it does for another copy's task.
@@ -189,12 +213,15 @@ func when(r *platform.RosmarOpsTask) (day, at string, ok bool) {
 }
 
 // WeeklyOf is the weekly review's state among tasks: this RosmarOps's own
-// (with one weekly trigger on one day, to say when), else one of another
-// rosmarops.exe (its normalized executable differs from this exe), else
-// none. A task of this exe that is not its own (other arguments, folder or
-// principal) is none: the command updates it.
+// (with one weekly trigger on one day, to say when), else one a company
+// registered for a group that runs this same exe (groupWeekly, reported the
+// same way), else one of another rosmarops.exe (its normalized executable
+// differs from this exe), else none. A task of this exe that is neither (other
+// arguments, folder or principal) is none: the command updates it. The
+// person's own task wins over the group's, being the one they chose.
 func WeeklyOf(tasks []platform.ScheduledTask, s Self) Weekly {
 	var other, ownShort string
+	var group *Weekly
 	for _, t := range tasks {
 		r := t.RosmarOps
 		if r == nil {
@@ -203,6 +230,12 @@ func WeeklyOf(tasks []platform.ScheduledTask, s Self) Weekly {
 		if s.Owns(t) {
 			if day, at, ok := when(r); ok {
 				return Weekly{State: WeeklyOwn, Day: day, Time: at}
+			}
+			continue
+		}
+		if s.groupWeekly(t) {
+			if day, at, ok := when(r); ok && group == nil {
+				group = &Weekly{State: WeeklyOwn, Day: day, Time: at}
 			}
 			continue
 		}
@@ -218,6 +251,8 @@ func WeeklyOf(tasks []platform.ScheduledTask, s Self) Weekly {
 		}
 	}
 	switch {
+	case group != nil:
+		return *group
 	case ownShort != "":
 		return Weekly{State: WeeklyOther, Other: ownShort}
 	case other != "":

@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/qtorb/rosmarops/internal/winpkg"
 )
@@ -14,6 +12,9 @@ const (
 	acceptedViaBaseline = "baseline"
 	acceptedViaConsole  = "console"
 	acceptedViaStore    = "store"
+	// acceptedViaAdminList: the administrator's fingerprint list of a
+	// managed computer holds the new binary with its version.
+	acceptedViaAdminList = "admin_list"
 )
 
 // storeUpdate is a Microsoft Store update the integrity check accepted, for
@@ -49,68 +50,11 @@ var (
 // The fifth condition (a readable state with references) is the caller's: the
 // check only runs in the branch of a changed binary against a recorded one.
 func storeAccepts(id winpkg.Identity, exe, localAppData, binVersion, stateVersion string) bool {
-	if id.FamilyName != winpkg.Family || id.Path == "" || exe == "" {
-		return false
-	}
-	if !insideDir(exe, id.Path) {
-		return false
-	}
-	if localAppData != "" && insideDir(exe, filepath.Join(localAppData, "Microsoft", "WindowsApps")) {
-		return false
-	}
-	core, pre, ok := parseSemver(binVersion)
-	if !ok || pre != "" || winpkg.Version(id.FullName) != core+".0" {
-		return false
-	}
-	return semverGreater(binVersion, stateVersion)
+	return winpkg.Accepts(id, exe, localAppData, binVersion, stateVersion)
 }
 
-// insideDir reports whether p is below dir, without regard to case or to the
-// slash used (Windows paths).
-func insideDir(p, dir string) bool {
-	norm := func(s string) string {
-		return strings.TrimRight(strings.ToLower(strings.ReplaceAll(s, "/", `\`)), `\`)
-	}
-	np, nd := norm(p), norm(dir)
-	return nd != "" && strings.HasPrefix(np, nd+`\`)
-}
+// semverGreater reports whether a > b by semver precedence (winpkg's).
+func semverGreater(a, b string) bool { return winpkg.SemverGreater(a, b) }
 
-// parseSemver splits a strict semver («1.2.3» or «1.2.3-pre») into its numeric
-// core and prerelease.
-func parseSemver(v string) (core, pre string, ok bool) {
-	core, pre, _ = strings.Cut(v, "-")
-	parts := strings.Split(core, ".")
-	if len(parts) != 3 {
-		return "", "", false
-	}
-	for _, p := range parts {
-		if p == "" || (len(p) > 1 && p[0] == '0') {
-			return "", "", false
-		}
-		if _, err := strconv.Atoi(p); err != nil {
-			return "", "", false
-		}
-	}
-	return core, pre, true
-}
-
-// semverGreater reports whether a > b by semver precedence; false when either
-// is not a version (an empty engine_version is never older).
-func semverGreater(a, b string) bool {
-	ca, pa, okA := parseSemver(a)
-	cb, pb, okB := parseSemver(b)
-	if !okA || !okB {
-		return false
-	}
-	xa, xb := strings.Split(ca, "."), strings.Split(cb, ".")
-	for i := 0; i < 3; i++ {
-		na, _ := strconv.Atoi(xa[i])
-		nb, _ := strconv.Atoi(xb[i])
-		if na != nb {
-			return na > nb
-		}
-	}
-	// Same core: a release is greater than its prereleases; two prereleases
-	// or two releases are not ordered here (never greater).
-	return pa == "" && pb != ""
-}
+// insideDir reports whether p is below dir (winpkg's, for Windows paths).
+func insideDir(p, dir string) bool { return winpkg.InsideDir(p, dir) }

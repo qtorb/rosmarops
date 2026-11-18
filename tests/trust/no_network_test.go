@@ -433,3 +433,41 @@ func goListFor(t *testing.T, goos, goarch string, args ...string) []string {
 	}
 	return lines
 }
+
+// TestNoNetwork_CompanyRuntime (T10): a scheduled review of a managed
+// computer, with the company configuration in use and the summary on, opens
+// no inet socket under strace. The statistics of use are off (the state has
+// none): this is the company review alone.
+func TestNoNetwork_CompanyRuntime(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("runtime network check is implemented for Linux")
+	}
+	strace, err := exec.LookPath("strace")
+	if err != nil {
+		t.Skip("strace not available: runtime network check not executed")
+	}
+	s := newCompanySandbox(t, "0.16.0", companyJSON(true))
+	traces := map[string]string{}
+	for _, step := range []string{"first", "second"} {
+		out := filepath.Join(t.TempDir(), step+".strace")
+		cmd := exec.Command(strace, "-f", "-qq", "-Y", "-e", "trace=connect,sendto,sendmsg", "-o", out, s.binary, "run", "--unattended")
+		cmd.Dir, cmd.Env = s.work, s.env
+		_, _ = cmd.CombinedOutput() // a yellow/red review exits non-zero; the trace is what matters
+		traces[step] = out
+	}
+	assertNoInet(t, traces)
+	s.summary(t)
+}
+
+// TestNoNetwork_CompanyPackages (T10): the package of the company
+// configuration and the one that writes the summary bring in no network
+// package and not internal/spacenet.
+func TestNoNetwork_CompanyPackages(t *testing.T) {
+	for _, pkg := range []string{"./internal/company", "./internal/report"} {
+		for _, dep := range goListFor(t, runtime.GOOS, runtime.GOARCH, "-deps", pkg) {
+			if isNet(dep) || strings.HasSuffix(dep, "/internal/spacenet") {
+				t.Errorf("%s imports %s", pkg, dep)
+			}
+		}
+	}
+}

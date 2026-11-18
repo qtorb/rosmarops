@@ -3,6 +3,7 @@
 Date: 2026-05-21
 Amended: 2026-10-30
 Amended: 2026-11-14
+Amended: 2026-11-18 (company mode)
 
 ## Context
 
@@ -17,7 +18,7 @@ RosmarOps writes only to:
 3. `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted. If the configuration in use is another file, `rosmarops findings` writes nothing and says so.
 4. The configured reports folder (default `~/.rosmarops/reports/`), including its `data` subfolder.
 
-No other file create, write, open-for-write or mkdir call is allowed. RosmarOps never creates scheduled tasks: the report gives the command, and the person runs it.
+No other file create, write, open-for-write or mkdir call is allowed. RosmarOps never writes, creates or changes the permissions of the company configuration, the administrator fingerprint list, or their folders (see [ADR 0018](0018-company-mode.md)); the company summary is written inside the reports folder. RosmarOps never creates scheduled tasks: the report gives the command, and the person runs it.
 
 ## Consequences
 

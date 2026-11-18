@@ -65,3 +65,11 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 **Problem report.** The list of problems RosmarOps ran into during reviews, kept on the computer as a closed list of codes. It is sent only when the person presses «Send», or after they chose to send the next ones without asking. See [the decision](decisions/0013-problem-reports-with-permission.md).
 
 **Usage statistics.** Anonymous usage counts the person is asked about once. This is decided but not built yet. See [the decision](decisions/0014-usage-statistics-asked-once.md).
+
+## Company mode
+
+**Company configuration.** `company.json`, which an administrator puts in a folder only administrators can change. It can only turn the company summary on or off and say where to look for projects. RosmarOps reads it only after checking who can change it. See [docs/company.md](company.md).
+
+**Company summary.** `rosmarops-summary.json` in the reports data folder: counts and codes of one review that the company's own agent reads. Never paths, keys or names.
+
+**Administrator fingerprint list.** `binaries.sha256`, next to the company configuration: the programs an administrator approved, by SHA-256 and version. A listed newer version is accepted without asking the person.

@@ -345,6 +345,9 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	c.renderHowFix(local)
 	// b) «Your space» (always): connected status, or the pitch to connect.
 	c.renderYourSpace()
+	// «Your company», only with a company configuration: a section of the
+	// body, before the footer notes.
+	c.renderCompany()
 	// BV-210 §2: the problem-notebook lines — sent this run (checkbox), and/or
 	// still unsent (we'll ask next time).
 	c.renderProblemsNote()
@@ -585,6 +588,9 @@ func (c htmlCtx) renderNotes() {
 	}
 	if v.storeNew != "" { // BV-222: a Microsoft Store update accepted by the integrity check
 		c.w(`<p class="meta">%s</p>`, html.EscapeString(c.cat.Text("report.integrity.binary_store", map[string]string{"old": v.storeOld, "new": v.storeNew})))
+	}
+	if v.adminNew != "" { // an update the administrator's fingerprint list accepted
+		c.w(`<p class="meta">%s</p>`, html.EscapeString(c.cat.Text("report.integrity.binary_admin_list", map[string]string{"old": v.adminOld, "new": v.adminNew})))
 	}
 	// BV-148: the program's knowledge is more than 14 days older than its last
 	// review — it may miss newer agent behaviour. Compared offline, against the
@@ -1579,6 +1585,7 @@ func HTMLKeys() []string {
 		"html.signals.title", "html.signals.note")
 	// v3 §12 (BV-54)
 	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
+	keys = append(keys, CompanyHTMLKeys...) // «Your company» and the administrator's list
 	// BV-94, B9: what the configuration hides (shown as a warning in step 1,
 	// BV-158)
 	keys = append(keys, "html.silenced.config.one", "html.silenced.config.other")

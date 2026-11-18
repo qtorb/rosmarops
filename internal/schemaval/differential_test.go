@@ -41,6 +41,8 @@ var schemaSet = map[string][]byte{
 	"results.v1":         schemas.ResultsSchema,
 	"problems.v1":        schemas.ProblemsSchema,
 	"kit.v1":             schemas.KitSchema,
+	"summary.v1":         schemas.SummaryV1Schema,
+	"company.v1":         schemas.CompanyV1Schema,
 	"intel.v1":           schemas.IntelSchema,
 	// BV-249 §6: the release files' schemas, read from schemas/release/ (they
 	// are not embedded: only tests build those files).

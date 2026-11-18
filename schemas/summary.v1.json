@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://rosmarops.com/schemas/summary.v1.json",
+  "title": "RosmarOps — Company summary",
+  "description": "What a company agent may read about one RosmarOps run. Counts and codes only: no paths, previews, file contents, names chosen by the person, or identifiers derived from paths.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "generated_unix", "version", "rules_version",
+               "run", "abort_code", "status", "red_total", "yellow_total",
+               "machine_band", "machine_index", "by_rule", "agents", "not_checked",
+               "config_source", "binary"],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "generated_at":   { "type": "string", "format": "date-time" },
+    "generated_unix": { "type": "integer", "minimum": 0 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?$" },
+    "rules_version": {
+      "oneOf": [ { "type": "null" }, { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,40}$" } ]
+    },
+    "run": { "enum": ["complete", "integrity_abort", "failed"] },
+    "abort_code": {
+      "oneOf": [
+        { "type": "null" },
+        { "enum": ["binary_hash_changed", "config_hash_changed", "state_lost",
+                   "company_config_untrusted", "company_config_invalid", "run_failed"] }
+      ]
+    },
+    "status":       { "enum": ["green", "yellow", "red"] },
+    "red_total":    { "type": "integer", "minimum": 0 },
+    "yellow_total": { "type": "integer", "minimum": 0 },
+    "machine_band": { "oneOf": [ { "type": "null" }, { "enum": ["exposed", "open_gaps", "contained"] } ] },
+    "machine_index": { "oneOf": [ { "type": "null" }, { "type": "integer", "minimum": 0, "maximum": 100 } ] },
+    "by_rule": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "severity", "count"],
+        "properties": {
+          "rule":     { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+          "severity": { "enum": ["red", "yellow"] },
+          "count":    { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "product", "count", "red", "yellow", "band"],
+        "properties": {
+          "type":    { "enum": ["ai_client", "mcp_server", "extension", "bot"] },
+          "product": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+          "count":   { "type": "integer", "minimum": 1 },
+          "red":     { "type": "integer", "minimum": 0 },
+          "yellow":  { "type": "integer", "minimum": 0 },
+          "band":    { "oneOf": [ { "type": "null" }, { "enum": ["exposed", "open_gaps", "contained"] } ] }
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" }
+    },
+    "config_source": { "enum": ["user", "company"] },
+    "binary": { "enum": ["unchanged", "first_run", "console", "admin_list", "store"] }
+  }
+}

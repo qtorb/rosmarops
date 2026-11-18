@@ -14,7 +14,7 @@ The person-facing description is in [README.md](README.md). The promises the cod
 
 `rosmarops run` and a double click both end in `runWith` in `cmd/rosmarops/cmd_run.go`. Its steps, in order:
 
-1. Load the configuration (`internal/config`) and the state (`internal/state`). A missing state is replaced by a default one with a fresh salt, and the run says it cannot be compared.
+1. Load the configuration (`internal/config`) and the state (`internal/state`). On a computer a company manages, the company configuration (`internal/company`) is read first; it is the configuration in use only when the person has none of their own. A missing state is replaced by a default one with a fresh salt, and the run says it cannot be compared.
 2. Check integrity: the binary and the configuration against the references in the state. The person confirms a change in the console, a Microsoft Store update is accepted on its own, and anything else stops the run with a red report (`cmd/rosmarops/integrity.go`, `storeaccept.go`).
 3. Only now use the configured reports directory, and mark the review as in progress in the problem notebook (`internal/problems`).
 4. Find the projects (`internal/scan/projects`) and compute the global time limit from their number (`scan.GlobalTimeoutFor`).
@@ -79,6 +79,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/scan/workflows`: empty (a `.gitkeep` only).
 - `internal/skills`: the agent skills on disk (`SKILL.md` and scripts).
 - `internal/firstrun`: finds the projects of a first use, or asks for the folder.
+- `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)).
 - `internal/hostenv`: tells whether the review runs in a container, WSL, a virtual machine or Windows Sandbox.
 - `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML and YAML the agents use.
 
@@ -167,7 +168,7 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 - `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS, Linux): the kit key.
 - The reports directory, `~/.rosmarops/reports/` unless the configuration sets another:
   - `report.html` and `report.<lang>.html`: the visual report, one page per language;
-  - `data/`: everything else. That is `report.md`, `report.json`, `report.v2.json`, the export for your AI, `graph.v2.json`, `index-history.json`, `findings-memory.json`, `config.accepted.json`, the run logs, `rosmarops-sends.log`, `rosmarops-problems.jsonl`, `rosmarops-run.inprogress`, `statusline.txt`, the Claude Code session snapshots in `data/session/`, and the sealed `rosmarops-results-*.locked.json` packages;
+  - `data/`: everything else. That is `report.md`, `report.json`, `report.v2.json`, the export for your AI, `graph.v2.json`, `index-history.json`, `findings-memory.json`, `config.accepted.json`, the run logs, `rosmarops-sends.log`, `rosmarops-problems.jsonl`, `rosmarops-run.inprogress`, `statusline.txt`, the Claude Code session snapshots in `data/session/`, the sealed `rosmarops-results-*.locked.json` packages, and, on a computer a company manages with the summary on, `rosmarops-summary.json`;
   - `rosmarops-kit-<id>.json`: the exported kit file, when the person creates one.
 
 `tests/trust/no_writes_out_of_scope_test.go` runs the program in a sandbox and fails if anything is written elsewhere.
@@ -180,5 +181,5 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 - **Two meanings of "class".** A credential's class (`high`, `medium`, ... in `internal/rules`) sets the weight of its findings. An agent's exposure class (A-D in `internal/exposure`) describes how exposed it is.
 - **`allow` and `schedule` are not built.** The commands exist and print «not implemented yet».
 - **`internal/scan/deps` and `internal/scan/workflows` are empty folders.**
-- **Where the configuration is looked up.** `rosmarops run` from a console reads `rosmarops.config.json` in the working folder if it exists, and `~/.rosmarops/config.json` otherwise. A scheduled review and a double click read only `~/.rosmarops/config.json`.
+- **Where the configuration is looked up.** `rosmarops run` from a console reads `rosmarops.config.json` in the working folder if it exists, and `~/.rosmarops/config.json` otherwise. A scheduled review and a double click read only `~/.rosmarops/config.json`. Without either, on a computer a company manages, the company configuration is used in memory (see [docs/company.md](docs/company.md)).
 - **Very long files.** These go over 1,400 lines: `internal/rules/overview.go`, `internal/rules/rules.go`, `internal/report/html.go`, `internal/platform/interface.go` and `cmd/rosmarops/cmd_run.go`. In the last one, `runWith` alone is about 1,050 lines.
