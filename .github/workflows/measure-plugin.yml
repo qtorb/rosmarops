@@ -138,7 +138,8 @@ jobs:
           ---
           Result: !`sh ./c3-probe.sh`
           MD
-          for mode in p2 control; do
+          # CTO-68 §3.2: p2-user is P2 with only the user's settings, no project block.
+          for mode in p2 p2-user control; do
             H="$RUNNER_TEMP/c3-$mode"; P="$H/project"
             mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh" "$H/.rosmarops/reports"
             echo secret-c3 > "$H/.ssh/c3-secret"
@@ -146,6 +147,7 @@ jobs:
             cat > "$P/c3-probe.sh" <<'SH'
           {
             echo RAN
+            cat ./c3-probe.sh > /dev/null && echo READ-PROJECT
             touch "$HOME/c3-outside-write" && echo WROTE-HOME
             cat "$HOME/.ssh/c3-secret" > /dev/null && echo READ-SSH
             cat "$HOME/.rosmarops/reports/c3-report.txt" > /dev/null && echo READ-REPORTS
@@ -155,6 +157,10 @@ jobs:
             if [ $mode = p2 ]; then
               go run ./tests/manual/p2-template > "$H/.claude/settings.json"
               go run ./tests/manual/p2-template -project > "$P/.claude/settings.json"
+            fi
+            if [ $mode = p2-user ]; then
+              go run ./tests/manual/p2-template > "$H/.claude/settings.json"
+              rm -rf "$P/.claude"
             fi
             (
               export HOME="$H"; cd "$P"
@@ -166,6 +172,8 @@ jobs:
               echo "### c3-result.txt (written by the script in the project)"; cat c3-result.txt 2>&1
               echo "### stdout"; cat out.json
               echo "### stderr"; cat err.txt
+              echo "### project settings file present: $( [ -e "$P/.claude/settings.json" ] && echo YES || echo NO )"
+              echo "### debug log, lines naming the project"; grep -F "$P" "$H/debug.log" | grep -i -E "sandbox|denyRead|allowRead|re-open" | head -20
               echo "### debug log, shell/sandbox/skill lines"; grep -i -E "sandbox|skill|probe|shell|bwrap|seatbelt" "$H/debug.log" | head -60
             ) 2>&1 | tee -a c3.txt
           done
