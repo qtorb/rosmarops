@@ -18,11 +18,14 @@ name: measure-plugin
 on:
   workflow_dispatch: {}
   push:
-    branches: [bv-253-plugin-propio]
+    branches: [bv-253-plugin-propio, bv-254-p2]
     paths:
       - .github/workflows/measure-plugin.yml
       - tests/manual/sessioncheck-timing/**
       - tests/manual/p2-template/**
+      - tests/manual/statusline-seed/**
+      - internal/profiles/**
+      - internal/agenthooks/**
       - cmd/rosmarops/**
       - adapters/windows/ownplugin.go
 
@@ -50,7 +53,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: qtorb/rosmarops-claude-code
-          ref: bv-253-plugin
+          ref: main
           path: plugin
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -146,6 +149,7 @@ jobs:
             cat > "$P/c3-probe.sh" <<'SH'
           {
             echo RAN
+            cat ./c3-probe.sh > /dev/null && echo READ-PROJECT
             touch "$HOME/c3-outside-write" && echo WROTE-HOME
             cat "$HOME/.ssh/c3-secret" > /dev/null && echo READ-SSH
             cat "$HOME/.rosmarops/reports/c3-report.txt" > /dev/null && echo READ-REPORTS
@@ -153,8 +157,10 @@ jobs:
           cat ./c3-result.txt
           SH
             if [ $mode = p2 ]; then
+              # BV-254: the program's P2 (profiles.Block, the text the report
+              # copies), user settings only; no project block any more.
               go run ./tests/manual/p2-template > "$H/.claude/settings.json"
-              go run ./tests/manual/p2-template -project > "$P/.claude/settings.json"
+              rm -rf "$P/.claude"
             fi
             (
               export HOME="$H"; cd "$P"
@@ -166,9 +172,39 @@ jobs:
               echo "### c3-result.txt (written by the script in the project)"; cat c3-result.txt 2>&1
               echo "### stdout"; cat out.json
               echo "### stderr"; cat err.txt
+              echo "### debug log, lines naming the project"; grep -F "$P" "$H/debug.log" | grep -i -E "sandbox|denyRead|allowRead|re-open" | head -20
               echo "### debug log, shell/sandbox/skill lines"; grep -i -E "sandbox|skill|probe|shell|bwrap|seatbelt" "$H/debug.log" | head -60
             ) 2>&1 | tee -a c3.txt
           done
+          true
+
+      - name: C.4 session-check additionalContext through the plugin hook
+        run: |
+          set +e
+          eval "$TMO"
+          unset ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN
+          # BV-254 (CTO-68 §6 A): rosmarops on the PATH, a last review in its
+          # data folder; Claude Code runs the plugin's SessionStart hook and
+          # must take the hookSpecificOutput (no key: it never reaches the
+          # model).
+          H="$RUNNER_TEMP/c4home"; P="$H/project"; mkdir -p "$P"
+          go run ./tests/manual/statusline-seed -data "$H/.rosmarops/reports/data"
+          export HOME="$H" USERPROFILE="$H" PATH="$(dirname "$RBIN"):$PATH"
+          {
+            echo "## command -v rosmarops"; command -v rosmarops
+            echo "## rosmarops session-check, by hand"
+            printf '{"session_id":"s","transcript_path":"%s/t.jsonl","cwd":"%s","hook_event_name":"SessionStart","source":"startup"}' "$P" "$P" | rosmarops session-check
+            echo "exit=$?"
+            cd "$P"
+            echo "## claude -p (stream-json, hook events)"
+            tmo 90 claude --plugin-dir "$GITHUB_WORKSPACE/plugin" -p "hola" --output-format stream-json \
+              --verbose --include-hook-events --debug-file "$H/debug.log" < /dev/null > out.json 2> err.txt
+            echo "exit=$?"
+            echo "### hook events"; grep -E '"hook_(started|response)"' out.json
+            echo "### apiKeySource and cost"; grep -o -E '"apiKeySource":"[^"]*"|"total_cost_usd":[0-9.]+' out.json
+            echo "### stderr"; cat err.txt
+            echo "### debug log, hook and context lines"; grep -i -E "hook|additionalContext|hookSpecificOutput|context" "$H/debug.log" | grep -v "hooks module" | head -40
+          } 2>&1 | tee "$GITHUB_WORKSPACE/c4.txt"
           true
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -179,4 +215,5 @@ jobs:
             c1.txt
             c2.txt
             c3.txt
+            c4.txt
           if-no-files-found: ignore

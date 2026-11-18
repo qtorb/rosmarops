@@ -527,6 +527,11 @@ func (c htmlCtx) renderProjects() {
 		}
 		c.w(`</ul></details>`)
 	}
+	// BV-254: a project whose Claude Code sandbox cannot read the project
+	// itself (the old second sandbox text), with the advice to remove it.
+	for _, path := range c.v.SandboxBlockedProjects {
+		c.w(`<p class="warn"><code>%s</code>: %s</p>`, html.EscapeString(untrusted.PlainText(path)), c.t("cc.P2.old", nil))
+	}
 	if p.New > 0 {
 		c.w(`<p>%s</p>`, c.t(c.cat.One("html.projects.new", p.New), map[string]string{"count": n(p.New)}))
 	}

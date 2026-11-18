@@ -98,7 +98,10 @@ func hooksDataDir() (string, error) {
 // nothing is said or written past the budget.
 type sessionResult struct {
 	message string
-	write   func() (bool, error)
+	// latest is statusline's line for the last review (BV-254): Claude gets
+	// it as additionalContext, even when there is nothing to tell.
+	latest string
+	write  func() (bool, error)
 }
 
 // runSessionCheck is `rosmarops session-check` (BV-226 §1). It always exits
@@ -128,9 +131,7 @@ func runSessionCheck(cli.Invocation) error {
 			slog.Debug("session-check: snapshot not written", "err", err)
 		}
 	}
-	if res.message != "" {
-		_ = agenthooks.Output(sessionOutput, res.message)
-	}
+	_ = agenthooks.Output(sessionOutput, res.message, res.latest)
 	return nil
 }
 
@@ -167,6 +168,7 @@ func sessionWork(in io.Reader) sessionResult {
 	snap := agenthooks.SnapshotOf(items)
 	return sessionResult{
 		message: agenthooks.Message(cat, tell, !seen),
+		latest:  latestLine(data, cat),
 		write:   func() (bool, error) { return agenthooks.WriteSnapshot(snapPath, snap) },
 	}
 }
@@ -190,14 +192,20 @@ func runStatusline(cli.Invocation) error {
 	if err != nil {
 		return nil
 	}
-	raw, err := os.ReadFile(filepath.Join(data, agenthooks.StatuslineFile))
-	if err != nil {
-		return nil
-	}
-	if line := agenthooks.ShowStatusline(raw, cat.Lang(), statuslineNow(), time.Local, cat); line != "" {
+	if line := latestLine(data, cat); line != "" {
 		fmt.Fprintln(sessionOutput, line)
 	}
 	return nil
+}
+
+// latestLine is statusline's line for the last review in data, in cat's
+// language, or "" without one.
+func latestLine(data string, cat catalog.Catalog) string {
+	raw, err := os.ReadFile(filepath.Join(data, agenthooks.StatuslineFile))
+	if err != nil {
+		return ""
+	}
+	return agenthooks.ShowStatusline(raw, cat.Lang(), statuslineNow(), time.Local, cat)
 }
 
 // writeRunStatusline leaves a finished run's line for statusline (BV-226 §2):

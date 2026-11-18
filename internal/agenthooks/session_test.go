@@ -229,11 +229,12 @@ func TestShownName(t *testing.T) {
 	}
 }
 
-// TestOutputOnlySystemMessage (BV-226 §1): the whole output is one JSON
-// object with only systemMessage; nothing in plain text, no additionalContext.
+// TestOutputOnlySystemMessage (BV-226 §1): without a latest result the whole
+// output is one JSON object with only systemMessage; nothing in plain text,
+// no additionalContext.
 func TestOutputOnlySystemMessage(t *testing.T) {
 	var b bytes.Buffer
-	if err := Output(&b, "RosmarOps · line\n- item"); err != nil {
+	if err := Output(&b, "RosmarOps · line\n- item", ""); err != nil {
 		t.Fatal(err)
 	}
 	var m map[string]any
@@ -289,5 +290,43 @@ func TestSnapshot(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, fmt.Sprintf("%016d.json", 0))); err == nil {
 		t.Error("the oldest snapshot was kept")
+	}
+}
+
+// TestOutputLatestResult (BV-254, CTO-68 §6 A): with a latest result the
+// object adds hookSpecificOutput for SessionStart, with the fixed English
+// prefix and the line as given; systemMessage is unchanged, and absent when
+// there is nothing to tell. With neither, nothing is written.
+func TestOutputLatestResult(t *testing.T) {
+	type out struct {
+		SystemMessage      *string `json:"systemMessage"`
+		HookSpecificOutput *struct {
+			HookEventName     string `json:"hookEventName"`
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	line := "RosmarOps · 2 en rojo · 72 · hace 3 días"
+	for _, msg := range []string{"RosmarOps · line", ""} {
+		var b bytes.Buffer
+		if err := Output(&b, msg, line); err != nil {
+			t.Fatal(err)
+		}
+		var o out
+		dec := json.NewDecoder(&b)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&o); err != nil {
+			t.Fatalf("not one JSON object of the known fields: %v", err)
+		}
+		if msg == "" && o.SystemMessage != nil || msg != "" && (o.SystemMessage == nil || *o.SystemMessage != msg) {
+			t.Errorf("systemMessage %v, want %q", o.SystemMessage, msg)
+		}
+		if o.HookSpecificOutput == nil || o.HookSpecificOutput.HookEventName != "SessionStart" ||
+			o.HookSpecificOutput.AdditionalContext != "RosmarOps latest result: "+line {
+			t.Errorf("hookSpecificOutput %+v", o.HookSpecificOutput)
+		}
+	}
+	var b bytes.Buffer
+	if err := Output(&b, "", ""); err != nil || b.Len() != 0 {
+		t.Errorf("nothing to say wrote %q (%v)", b.String(), err)
 	}
 }

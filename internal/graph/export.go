@@ -94,6 +94,26 @@ func ClosesWindowsDrive(inForce []Node, repoRoots []string, home string) bool {
 	return len(sessions) > 0
 }
 
+// SandboxBlocksOwnProject are the projects whose Claude Code sessions run
+// the terminal in a sandbox that cannot read the project itself (CTO-68 §4,
+// BV-254): blockReadsOutsideWorkingDirectories in force and the project under
+// a sandbox denyRead of any layer, which Claude Code then does not re-open;
+// the repository's own allowRead does not count. In repoRoots order.
+func SandboxBlocksOwnProject(inForce []Node, repoRoots []string, home string) []string {
+	sorted := append([]Node{}, inForce...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	var out []string
+	for _, s := range claudeSessions(sorted, repoRoots, home) {
+		if s.root == "" || s.sb.enabledCap == nil || !s.blocksReadsOutside(sorted) {
+			continue
+		}
+		if s.sandboxDenies(s.root, home) {
+			out = append(out, s.root)
+		}
+	}
+	return out
+}
+
 // CredentialFiles returns the distinct files of a credential's locations.
 func CredentialFiles(cred Node) []string { return credentialFiles(cred) }
 

@@ -1523,7 +1523,7 @@ func HTMLKeys() []string {
 		"env.container.dockersock", "env.wsl", "env.vm", "env.wsb",
 		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
-		"html.projects.title", "html.projects.summary", "html.projects.item",
+		"html.projects.title", "html.projects.summary", "html.projects.item", "cc.P2.old",
 		"html.projects.source.home", "html.projects.source.root", "html.projects.source.claude",
 		"html.projects.source.workspace", "html.projects.source.previous", "html.projects.source.listed",
 		"html.projects.new", "html.projects.gone", "html.projects.not_searched.title",
