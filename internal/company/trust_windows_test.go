@@ -24,21 +24,18 @@ func icacls(t *testing.T, path string, args ...string) {
 	}
 }
 
-// adminOnly gives path the permissions the install script sets: owner
-// Administrators, full control for Administrators and SYSTEM, read for Users,
-// nothing inherited.
-func adminOnly(t *testing.T, path string) {
-	t.Helper()
-	icacls(t, path, "/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-545:(OI)(CI)RX")
-	icacls(t, path, "/setowner", "*S-1-5-32-544", "/T")
-}
-
+// companyFolder lays out a company folder in the order the install script
+// does: the folder first gets its permissions (owner Administrators, full
+// control for Administrators and SYSTEM, read for Users, nothing inherited
+// from above), then the two files are written in it and inherit them, and the
+// owner is set on everything.
 func companyFolder(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "RosmarOps")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	icacls(t, dir, "/inheritance:r", "/grant:r", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-545:(OI)(CI)RX")
 	for name, content := range map[string]string{
 		ConfigName: `{"schema_version":1,"summary":{"enabled":true}}`,
 		ListName:   sha + "  0.16.0\n",
@@ -47,7 +44,7 @@ func companyFolder(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	adminOnly(t, dir)
+	icacls(t, dir, "/setowner", "*S-1-5-32-544", "/T")
 	return dir
 }
 
