@@ -42,6 +42,18 @@
       "format": "date-time",
       "description": "When the person last declined («Not now») the connect offer at the end of a double-click review (BV-158, decision A). The offer is not shown again until 7 days after it. Optional."
     },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "decided_at", "text_version", "install_id"],
+      "description": "The person's answer about usage statistics (BV-256): whether they are on, when they answered, the version of the question's text they answered, and the random install id sent with them. Absent until the person answers. Optional.",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "decided_at": {"type": "string", "format": "date-time"},
+        "text_version": {"type": "integer", "minimum": 1},
+        "install_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"}
+      }
+    },
     "declared": {
       "type": "object",
       "additionalProperties": false,

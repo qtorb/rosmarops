@@ -120,6 +120,8 @@ var staticKeys = []string{
 	// CTO-32 C3/C4: the terminal send prompt, the auto-send untick box and the
 	// «ask again» command confirmation.
 	"problems.terminal.send", "problems.autosent.body", "problems.autosent.body.one", "problems.ok", "problems.ask_again", "problems.ask.done",
+	// BV-256: the usage statistics question, printed by the run (cmd/rosmarops).
+	"usage.ask.title", "usage.ask.body", "usage.ask.never", "usage.ask.off", "usage.ask.prompt",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/
@@ -310,6 +312,10 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 	}
 	if v.ProblemsUnsent > 0 && !v.ProblemsWillAsk {
 		w("%s\n\n", cat.Plural("report.problems.unsent", v.ProblemsUnsent, map[string]string{"n": strconv.Itoa(v.ProblemsUnsent)}))
+	}
+	// BV-256: whether usage statistics are on, with how to change it.
+	if v.UsageState != "" {
+		w("%s\n\n", t(v.UsageState, nil))
 	}
 	// BV-148: when the agent knowledge was last reviewed, and the same stale
 	// warning the HTML shows when the program is more than 14 days older than it.

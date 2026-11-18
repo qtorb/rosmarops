@@ -97,6 +97,7 @@ func runNoArgs() int {
 
 	// The «checking this computer» line is printed by runWith once the number
 	// of projects, and so the time limit, is known (BV-155).
+	lastUsageInput = nil
 	htmlPath, err := runWith(lang, runMode{window: true, log: log})
 	if err != nil {
 		// B3 (BV-93): a double click never fails in silence — the red
@@ -131,6 +132,10 @@ func runNoArgs() int {
 	// after an automatic send) runs after the report has opened, so an
 	// unanswered window never delays the report.
 	offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), lang, true)
+
+	// BV-256: usage statistics, the window's last step: asked when there is no
+	// answer to the current text, sent after the review while they are on.
+	afterReportUsage(filepath.Dir(absPath(htmlPath)), lang, runCanAsk())
 
 	if reportOpened {
 		if isTerminal(os.Stdout) {

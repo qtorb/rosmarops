@@ -49,13 +49,7 @@ var (
 // The fifth condition (a readable state with references) is the caller's: the
 // check only runs in the branch of a changed binary against a recorded one.
 func storeAccepts(id winpkg.Identity, exe, localAppData, binVersion, stateVersion string) bool {
-	if id.FamilyName != winpkg.Family || id.Path == "" || exe == "" {
-		return false
-	}
-	if !insideDir(exe, id.Path) {
-		return false
-	}
-	if localAppData != "" && insideDir(exe, filepath.Join(localAppData, "Microsoft", "WindowsApps")) {
+	if !storeIdentity(id, exe, localAppData) {
 		return false
 	}
 	core, pre, ok := parseSemver(binVersion)
@@ -63,6 +57,20 @@ func storeAccepts(id winpkg.Identity, exe, localAppData, binVersion, stateVersio
 		return false
 	}
 	return semverGreater(binVersion, stateVersion)
+}
+
+// storeIdentity is conditions 1 and 2 of storeAccepts: the process runs with
+// RosmarOps's own package identity and its real executable is inside that
+// package's installed folder, never the %LOCALAPPDATA% alias. The usage
+// statistics' channel «store» is this same check (BV-256).
+func storeIdentity(id winpkg.Identity, exe, localAppData string) bool {
+	if id.FamilyName != winpkg.Family || id.Path == "" || exe == "" {
+		return false
+	}
+	if !insideDir(exe, id.Path) {
+		return false
+	}
+	return localAppData == "" || !insideDir(exe, filepath.Join(localAppData, "Microsoft", "WindowsApps"))
 }
 
 // insideDir reports whether p is below dir, without regard to case or to the

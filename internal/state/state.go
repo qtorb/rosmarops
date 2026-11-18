@@ -53,6 +53,10 @@ type State struct {
 	// stable codes only. Optional in state.v2.
 	Declared map[string]Declared `json:"declared,omitempty"`
 
+	// Usage is the person's answer about usage statistics (BV-256): nil until
+	// they answer. Optional in state.v2.
+	Usage *Usage `json:"usage,omitempty"`
+
 	Integrity Integrity `json:"integrity"`
 	Baselines Baselines `json:"baselines"`
 }
@@ -63,6 +67,16 @@ type Declared struct {
 	Answers          map[string]string `json:"answers"`
 	AnsweredAt       string            `json:"answered_at"`
 	KnowledgeVersion string            `json:"knowledge_version"`
+}
+
+// Usage records the usage statistics answer (BV-256): whether they are on,
+// when the person answered (UTC RFC 3339), the version of the question's text
+// they answered, and the random install id (UUID v4) sent with them.
+type Usage struct {
+	Enabled     bool   `json:"enabled"`
+	DecidedAt   string `json:"decided_at"`
+	TextVersion int    `json:"text_version"`
+	InstallID   string `json:"install_id"`
 }
 
 // Integrity holds hashes used for the self-integrity check on startup.

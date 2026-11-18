@@ -1202,5 +1202,14 @@
   "unseen.retries": "Whether it retries a task that failed halfway.",
   "unseen.outbox": "Whether messages are waiting to be sent.",
   "unseen.running": "Whether the gateway or channel is running right now.",
-  "unseen.token": "Whether the platform token is valid."
+  "unseen.token": "Whether the platform token is valid.",
+  "usage.ask.title": "Help improve RosmarOps?",
+  "usage.ask.body": "After each scan, RosmarOps would send a short summary to app.rosmarops.com: its version, your system and how you installed it, the agents it found, the score, class and finding codes, whether your space and the Claude Code plugin are connected, and a random install id.",
+  "usage.ask.never": "Never paths, file, project or computer names, keys or the content of your settings.",
+  "usage.ask.off": "You can turn it off at any time: rosmarops usage off",
+  "usage.ask.prompt": "Send usage statistics? [Y/n]",
+  "usage.state.on": "Usage statistics: on. The last summary sent is in data/rosmarops-usage-last.json. To turn them off: rosmarops usage off",
+  "usage.state.off": "Usage statistics: off. To turn them on: rosmarops usage on",
+  "usage.state.undecided": "Usage statistics: off until you answer. RosmarOps will ask at the end of the next scan from a terminal.",
+  "usage.help": "Turn usage statistics on or off, or show whether they are on."
 }

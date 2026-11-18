@@ -160,6 +160,11 @@ type V2 struct {
 	// (BV-254, CTO-68 §4): «Projects checked» shows cc.P2.old in each. In
 	// memory only: report.v2 does not change.
 	SandboxBlockedProjects []string `json:"-"`
+
+	// UsageState is the catalog key of the report's usage statistics line
+	// (BV-256): usage.state.on, usage.state.off or usage.state.undecided; ""
+	// shows no line. In memory only.
+	UsageState string `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;

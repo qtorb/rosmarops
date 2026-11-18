@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -82,6 +83,53 @@ func SendProblems(ctx context.Context, consent ProblemsConsent, body []byte) (in
 	}
 	c, base := problemsClient()
 	resp, err := do(ctx, c, http.MethodPost, base+"/api/v1/problems", "", body)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+// UsageConsent is proof that the state records that the person turned usage
+// statistics on (BV-256). It can be obtained only from UsageConsentFromState,
+// which reads the state itself; its zero value is unusable, so SendUsage
+// refuses without it and opens no connection.
+type UsageConsent struct{ ok bool }
+
+// ErrNoUsageConsent is returned when a usage send is attempted while the state
+// does not record that the person turned usage statistics on.
+var ErrNoUsageConsent = errors.New("spacenet: usage statistics are not turned on")
+
+// UsageConsentFromState returns a usable UsageConsent only when the state at
+// statePath records usage.enabled == true. Otherwise it returns
+// ErrNoUsageConsent and no network can happen.
+func UsageConsentFromState(statePath string) (UsageConsent, error) {
+	st, err := state.LoadState(statePath)
+	if err != nil {
+		return UsageConsent{}, err
+	}
+	if st.Usage == nil || !st.Usage.Enabled {
+		return UsageConsent{}, ErrNoUsageConsent
+	}
+	return UsageConsent{ok: true}, nil
+}
+
+// usageTimeout caps a usage send (§B.2): one try, no retries, no queue.
+const usageTimeout = 3 * time.Second
+
+// SendUsage POSTs a usage.v1 body to /api/v1/usage over the one host-pinned
+// client, only with the consent the state records (BV-256). Like SendProblems
+// it needs no account, space, credential or cookie. It tries once, within 3
+// seconds, and returns the HTTP status (0 on a network error) and, on a network
+// error, that error.
+func SendUsage(ctx context.Context, consent UsageConsent, body []byte) (int, error) {
+	if !consent.ok {
+		return 0, ErrNoUsageConsent
+	}
+	ctx, cancel := context.WithTimeout(ctx, usageTimeout)
+	defer cancel()
+	c, base := problemsClient()
+	resp, err := do(ctx, c, http.MethodPost, base+"/api/v1/usage", "", body)
 	if err != nil {
 		return 0, err
 	}

@@ -130,6 +130,7 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 
 - **Your results, if you connect this computer to your space.** It sends only your results, encrypted, only to app.rosmarops.com, after each check. You can disconnect at any time.
 - **A problem list, if you press «Send».** When RosmarOps runs into a problem, it asks you whether to send it. The list carries error codes, the version and the system, never your files, paths, names or keys. You can tick «Send the next ones without asking», and untick it with `rosmarops problems ask`.
+- **Usage statistics, if you turn them on.** At the end of a check from a terminal, RosmarOps asks once whether to send a short summary after each check: version, system, the agents found, score, class and finding codes. Never paths, names, keys or the content of your settings. Turn them off with `rosmarops usage off`. What is sent and what is kept: [docs/usage-statistics.md](docs/usage-statistics.md).
 
 Every send is listed in rosmarops-sends.log, in the data subfolder of your reports folder (on Windows, %USERPROFILE%\.rosmarops\reports\data\rosmarops-sends.log).
 
@@ -148,7 +149,7 @@ Whatever it could not read is listed in the report and never counted as clean.
 
 RosmarOps reads broad parts of your computer, which is the same shape malware has. So every claim is something you can check:
 
-- network only with your permission, and only to app.rosmarops.com: your encrypted results, if you connect your space, and the problem list, if you press «Send»;
+- network only with your permission, and only to app.rosmarops.com: your encrypted results, if you connect your space, the problem list, if you press «Send», and usage statistics, if you turn them on;
 - writes only inside `~/.rosmarops/` and its reports folder;
 - secrets never shown in full;
 - it never sends anything you haven't approved, and there is no option that sends by default.

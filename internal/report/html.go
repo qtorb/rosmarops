@@ -376,6 +376,10 @@ func (c *htmlCtx) renderProblemsNote() {
 	if c.v.ProblemsUnsent > 0 && !c.v.ProblemsWillAsk {
 		c.w(`<p class="problems-note">%s</p>`, c.cat.Plural("report.problems.unsent", c.v.ProblemsUnsent, map[string]string{"n": strconv.Itoa(c.v.ProblemsUnsent)}))
 	}
+	// BV-256: whether usage statistics are on, with how to change it.
+	if c.v.UsageState != "" {
+		c.w(`<p class="problems-note">%s</p>`, c.t(c.v.UsageState, nil))
+	}
 }
 
 // scoredAgentsOf are the evaluated agents with a score, lowest first (ties by
@@ -1524,6 +1528,7 @@ func HTMLKeys() []string {
 		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
 		"html.projects.title", "html.projects.summary", "html.projects.item", "cc.P2.old",
+		"usage.state.on", "usage.state.off", "usage.state.undecided",
 		"html.projects.source.home", "html.projects.source.root", "html.projects.source.claude",
 		"html.projects.source.workspace", "html.projects.source.previous", "html.projects.source.listed",
 		"html.projects.new", "html.projects.gone", "html.projects.not_searched.title",

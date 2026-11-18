@@ -108,6 +108,7 @@ func runRun(inv cli.Invocation) error {
 		defer log.Close()
 		m.log = log
 	}
+	lastUsageInput = nil
 	htmlPath, err := runWith(inv.Flags["lang"], m)
 	if err != nil && unattended {
 		// B3 (BV-93): a scheduled review never fails in silence — a red page,
@@ -124,6 +125,11 @@ func runRun(inv cli.Invocation) error {
 		}
 		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
 		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
+	}
+	// BV-256: usage statistics, last: asked only with a console and never in a
+	// scheduled review; sent after every review while they are on.
+	if err == nil {
+		afterReportUsage(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], !unattended && runCanAsk())
 	}
 	return err
 }
@@ -1068,6 +1074,8 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// the program truly cannot ask: no one present, or the ask was already made
 	// and declined this run.
 	v2.ProblemsWillAsk = presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking && !problemsAskedThisRun
+	// BV-256: the report's usage statistics line, from the state's answer.
+	v2.UsageState = usageStateKey(st.Usage)
 
 	// Write report files.
 	progress.line("console.progress.report", nil)
@@ -1166,6 +1174,10 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			}
 		}
 	}
+
+	// BV-256: this review, for the usage package sent after the report.
+	ui2 := usageInputOf(v2, st.SpacePermission, builtSettings, exePath)
+	lastUsageInput = &ui2
 
 	// BV-151: the report is written — the window says so and the taskbar clears,
 	// just before the summary (and, on a double click, report_opened).
