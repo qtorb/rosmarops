@@ -302,12 +302,22 @@ func sessionSandbox(inForce []Node, root string) sandboxState {
 		}
 		return joinLike(root, p), true
 	}
+	// CTO-68 §4 (BV-254): while blockReadsOutsideWorkingDirectories is in
+	// force, Claude Code leaves out the allowRead and allowWrite entries of the
+	// repository's settings: the project's .claude/settings.json and its
+	// .claude/settings.local.json (which counts as the repository's unless git
+	// reports it untracked; the program does not ask git, so it counts it as
+	// the repository's).
+	blockReads := claudeSession{root: root}.blocksReadsOutside(inForce)
 	for i := range inForce {
 		c := inForce[i]
 		if !isSandboxSetting(c) || !appliesTo(c, root) {
 			continue
 		}
 		key, value, _ := strings.Cut(c.Rule, "=")
+		if blockReads && repositoryLayer(c) && (key+"=" == ruleSandboxAllowRead || key+"=" == ruleSandboxAllowWrite) {
+			continue
+		}
 		switch key + "=" {
 		case ruleSandboxEnabled, ruleSandboxFail, ruleSandboxUnsandboxed, ruleSandboxAutoAllow:
 			if p := keys[key]; p == nil || layerRank(c) < p.rank {
@@ -345,6 +355,13 @@ func sessionSandbox(inForce []Node, root string) sandboxState {
 	sort.Strings(st.denyRead)
 	sort.Strings(st.domains)
 	return st
+}
+
+// repositoryLayer reports a capability of a project's own settings: its
+// .claude/settings.json or its .claude/settings.local.json.
+func repositoryLayer(c Node) bool {
+	scope, _ := layerRoot(c.AppliesIn)
+	return scope == "project" || scope == "local"
 }
 
 // worstMode is the most permissive mode of the sessions, and its capability:

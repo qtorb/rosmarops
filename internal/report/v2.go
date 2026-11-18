@@ -154,6 +154,12 @@ type V2 struct {
 	// «Do you use Grok Bot?» row is not shown (BV-248 decision 4, Albert 16-11
 	// point 3): it shows only while B0 has no answer. In memory only.
 	GrokBotNoRow bool `json:"-"`
+
+	// SandboxBlockedProjects are the projects (~/… under the user folder)
+	// where Claude Code's sandbox keeps the terminal out of the project itself
+	// (BV-254, CTO-68 §4): «Projects checked» shows cc.P2.old in each. In
+	// memory only: report.v2 does not change.
+	SandboxBlockedProjects []string `json:"-"`
 }
 
 // NotCheckedCodes are the codes of NotChecked, in the order they are shown;
@@ -600,6 +606,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		applyClasses(&v, classes(v.AgentsOverview, v.Findings, *in.Graph, v.Index), factoryPass(in, fams))
 		// BV-236 §4: the measured profiles of Claude Code, in memory.
 		applyProfiles(&v, in, fams)
+		v.SandboxBlockedProjects = sandboxBlockedProjects(*in.Graph, in.RepoRoots, in.Home)
 	}
 	// The technical report keeps the v1 categories of §2.1 that do not
 	// pass to v2 and are not retired (M5): only they count in its status.
@@ -1280,4 +1287,37 @@ func WriteV2(r Report, v V2, loc *time.Location, dir string) (mdPath, jsonPath, 
 		return "", "", "", fmt.Errorf("write report v2: %w", err)
 	}
 	return mdPath, jsonPath, v2Path, nil
+}
+
+// sandboxBlockedProjects are the projects where a Claude Code agent's sandbox
+// cannot read the project itself (graph.SandboxBlocksOwnProject), as ~/… paths,
+// each once, in repoRoots order.
+func sandboxBlockedProjects(g graph.Graph, repoRoots []string, home string) []string {
+	nodes := make(map[string]graph.Node, len(g.Nodes))
+	for _, n := range g.Nodes {
+		nodes[n.ID] = n
+	}
+	caps := map[string][]graph.Node{}
+	for _, e := range g.Edges {
+		if e.Type != graph.EdgeHas {
+			continue
+		}
+		if a, c := nodes[e.From], nodes[e.To]; a.Kind == graph.KindAgent && a.Platform == knowledge.ClaudeCodeProduct && c.InForce {
+			caps[e.From] = append(caps[e.From], c)
+		}
+	}
+	blocked := map[string]bool{}
+	for _, cs := range caps {
+		for _, r := range graph.SandboxBlocksOwnProject(cs, repoRoots, home) {
+			blocked[r] = true
+		}
+	}
+	var out []string
+	for _, r := range repoRoots {
+		if blocked[r] {
+			out = append(out, TildePath(r, home))
+			delete(blocked, r)
+		}
+	}
+	return out
 }

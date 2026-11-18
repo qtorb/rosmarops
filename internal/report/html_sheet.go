@@ -788,8 +788,8 @@ func (c htmlCtx) renderApply(where string) {
 		case profiles.P3:
 			steps, nb, see, cp = []string{"cc.S5", "cc.S6"}, "cc.S7", "cc.see.cmd", "cc.copy.cmd"
 		case profiles.P2:
-			// BV-249 §3.1: its two steps and its closing note (Albert 17-11).
-			steps, nb = []string{"cc.P2.step.1", "cc.P2.step.2"}, "cc.S4.P2"
+			// BV-249 §3.1, BV-254: its step and its closing note.
+			steps, nb = []string{"cc.P2.step.1"}, "cc.S4.P2"
 		}
 		for i, s := range steps {
 			c.w(`<span><i>%d</i>%s</span>`, i+1, c.t(s, nil))
@@ -808,14 +808,6 @@ func (c htmlCtx) renderApply(where string) {
 				note = "try.linux"
 			}
 			c.renderTry(tryID(where, "cc", 0), "Claude Code", c.claudeTryCmds(profiles.ClaudeSessionCommand), note)
-		}
-		if id == profiles.P2 {
-			// BV-249 §3.1: the second text, for each project.
-			pid2 := pid + "-project"
-			c.w(`<div class="bt"><button type="button" class="btn s" data-see="%s" aria-controls="%s" aria-expanded="false">%s</button><button type="button" class="btn p" data-copy="%s" data-done="%s" data-fail="%s">%s</button></div>`,
-				pid2, pid2, c.t(see, nil), pid2, c.t("cc.copied", nil), c.t("copy.C1", nil), c.t(cp, nil))
-			c.w(`<pre class="ptext" id="%s" tabindex="-1">%s</pre><span class="live" aria-live="polite"></span>`, pid2,
-				html.EscapeString(c.cat.Text("cc.P2.T2", nil)+"\n\n"+profiles.ProjectBlock(id)))
 		}
 		c.w(`</div>`)
 		c.w(`<p class="proof" data-p="%s"%s>%s %s</p>`, id, hide(id == c.uses()[0].profile),
@@ -1092,7 +1084,7 @@ func sheetKeys() []string {
 		"cc.see.text", "cc.copy.text", "cc.S5", "cc.S6", "cc.S7", "cc.see.cmd", "cc.copy.cmd", "cc.T1", "copy.C1", "cc.copied", "cc.lab",
 		"cc.R1", "report.accepted.title", "report.accepted.on", "cc.back", "sheet.findings.count.one", "pc.others",
 		// BV-249 §3.1: «Sandboxed development»
-		"cc.name.P2", "cc.P2.step.1", "cc.P2.step.2", "cc.P2.T2", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
+		"cc.name.P2", "cc.P2.step.1", "cc.P2.does.2", "cc.P2.no.1", "cc.P2.no.2", "cc.P2.nc",
 		"cc.P2.asks.1", "cc.S4.P2",
 		// BV-249 §8: «Try it just this once»
 		"try.button", "try.intro", "try.linux", "try.grok.macos",

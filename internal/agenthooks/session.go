@@ -432,13 +432,33 @@ func itemText(cat catalog.Catalog, it Item) string {
 	}
 }
 
-// Output is the hook's whole standard output: one JSON object whose only
-// field is systemMessage, the text Claude Code shows the person and not the
-// model (https://code.claude.com/docs/en/hooks#json-output).
-func Output(w io.Writer, message string) error {
-	b, err := json.Marshal(struct {
-		SystemMessage string `json:"systemMessage"`
-	}{message})
+// LatestResultPrefix starts the additionalContext session-check gives
+// Claude (BV-254, CTO-68 §6 option A): fixed and in English, for the model,
+// not the person; the line after it is statusline's, in its own language.
+const LatestResultPrefix = "RosmarOps latest result: "
+
+// Output is the hook's whole standard output: one JSON object
+// (https://code.claude.com/docs/en/hooks#json-output). systemMessage is the
+// text Claude Code shows the person, when there is one; with a latest
+// result, hookSpecificOutput.additionalContext gives it to Claude, so that
+// /rosmarops can show it inside a sandbox that cannot read the reports
+// (BV-254). With neither, nothing is written.
+func Output(w io.Writer, message, latest string) error {
+	type specific struct {
+		HookEventName     string `json:"hookEventName"`
+		AdditionalContext string `json:"additionalContext"`
+	}
+	out := struct {
+		SystemMessage      string    `json:"systemMessage,omitempty"`
+		HookSpecificOutput *specific `json:"hookSpecificOutput,omitempty"`
+	}{SystemMessage: message}
+	if latest != "" {
+		out.HookSpecificOutput = &specific{HookEventName: "SessionStart", AdditionalContext: LatestResultPrefix + latest}
+	}
+	if message == "" && latest == "" {
+		return nil
+	}
+	b, err := json.Marshal(out)
 	if err != nil {
 		return err
 	}
