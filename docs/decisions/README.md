@@ -23,3 +23,4 @@ The invariants these decisions set are listed in [CLAUDE.md](../../CLAUDE.md) an
 | 0015 | [RosmarOps inside Claude Code](0015-rosmarops-inside-claude-code.md): a session check, a status line and the plugin that carries the hook. | 2026-11-12 |
 | 0016 | [Agent memory files are never opened](0016-agent-memory-files-never-opened.md): memory is recorded from file metadata only. | 2026-11-17 |
 | 0017 | [Declared answers: Grok Bot and Cursor](0017-declared-answers.md): closed questions for settings that cannot be read on disk; no answer means the least controlled case. | 2026-11-14 |
+| 0018 | [Company mode](0018-company-mode.md): a company configuration only administrators can change, a summary of counts and codes, and the administrator's fingerprint list. | 2026-11-12 |

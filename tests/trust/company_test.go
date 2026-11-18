@@ -647,8 +647,8 @@ func TestAdminListIntegrity(t *testing.T) {
 		"the list is not trusted": {newer, func() {
 			writeCompanyFile(t, s, "binaries.sha256", listLine(t, newer, "0.16.0"), 0o666)
 		}},
-		"the fingerprint is not listed": {newer, func() { list(listLine(t, s.binary, "0.15.0")) }},
-		"an older version":              {older, func() { list(listLine(t, older, "0.14.0")) }},
+		"the fingerprint is not listed":         {newer, func() { list(listLine(t, s.binary, "0.15.0")) }},
+		"an older version":                      {older, func() { list(listLine(t, older, "0.14.0")) }},
 		"the same version, another fingerprint": {twin, func() { list(listLine(t, twin, "0.15.0")) }},
 		"a malformed line":                      {newer, func() { list(listLine(t, newer, "0.16.0"), "not a line\n") }},
 		"listed with another version":           {newer, func() { list(listLine(t, newer, "0.16.1")) }},
