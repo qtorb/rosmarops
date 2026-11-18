@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,6 +46,17 @@ func companyFlags(version, owner, stopSuffix string) func(root string) string {
 	}
 }
 
+// skipWithoutCompanyMode skips the black-box company tests off Linux: macOS
+// has no company mode, and on Windows the sandboxed run is not implemented;
+// there internal/company's tests check the permissions on the runner and the
+// company-scripts-windows job runs a real install and review.
+func skipWithoutCompanyMode(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("the black-box company tests run on Linux")
+	}
+}
+
 func companyFolder(root string) string { return filepath.Join(root, "machine", "rosmarops") }
 
 // companyJSON is a company configuration with the summary on or off.
@@ -57,6 +69,7 @@ func companyJSON(enabled bool) string {
 // administrator's list holds the sandbox's binary with its version.
 func newCompanySandbox(t *testing.T, version, company string) *sandbox {
 	t.Helper()
+	skipWithoutCompanyMode(t)
 	s := newSandboxWith(t, sandboxOpts{ldflags: companyFlags(version, "", ""), homeName: "fakeuser"})
 	dir := companyFolder(s.root)
 	mustMkdir(t, dir)
@@ -528,6 +541,7 @@ func TestCompanyConfigTrust(t *testing.T) {
 		})
 	}
 	t.Run("owned by a normal user", func(t *testing.T) {
+		skipWithoutCompanyMode(t)
 		s := newSandboxWith(t, sandboxOpts{ldflags: companyFlags("0.16.0", strconv.Itoa(os.Getuid()+1), ""), homeName: "fakeuser"})
 		mustMkdir(t, companyFolder(s.root))
 		for _, d := range []string{filepath.Dir(companyFolder(s.root)), companyFolder(s.root)} {
