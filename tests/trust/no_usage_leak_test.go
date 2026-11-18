@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -22,6 +23,9 @@ import (
 // the package does carry what the review found (the agent and findings), so
 // the test cannot pass on an empty package.
 func TestUsagePackageCarriesNoSecrets(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
+	}
 	bin := buildBin(t, "./cmd/rosmarops", nil)
 	home := usageHome(t, usageAnswer(true))
 	const (

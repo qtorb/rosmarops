@@ -120,6 +120,9 @@ func TestNoNetwork_UsageSend_OnlyFixedHost(t *testing.T) {
 // connection, as a network with no way out would) leaves the review the same: the same report status
 // and the same exit code as a review with usage off.
 func TestUsageSendFailureChangesNothing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
+	}
 	bin := buildBin(t, "./cmd/rosmarops", nil)
 	result := func(home string) (string, int) {
 		code := 0
