@@ -10,6 +10,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/agenthooks"
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // TestSessionCheckLatestResult (BV-254, CTO-68 §6 A): with a last review,
@@ -47,7 +48,7 @@ func TestSessionCheckLatestResult(t *testing.T) {
 
 	t.Run("with a last review", func(t *testing.T) {
 		home, proj, out := bv226Home(t, selfRef(t))
-		data := filepath.Join(home, ".rosmarops", "reports", "data")
+		data := filepath.Join(report.DefaultReportDirIn(home), "data")
 		if err := agenthooks.WriteStatusline(data, checked, map[string]string{"en": agenthooks.StatuslineText(en, 1, 2, 64)}); err != nil {
 			t.Fatal(err)
 		}

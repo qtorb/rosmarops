@@ -58,6 +58,7 @@ var (
 // aborted records the abort instead of exiting.
 type aborted struct {
 	category string
+	text     string
 	o        abortOptions
 	n        int
 }
@@ -72,8 +73,8 @@ func newRun(t *testing.T, cat catalog.Catalog, st *state.State, stPath, cfgPath,
 		st:  st, stPath: stPath, cfgPath: cfgPath, reportDir: reports,
 		unattended: unattended, lang: "en",
 		selfHash: func() (string, error) { return self, nil },
-		abort: func(category, _, _ string, o abortOptions) {
-			ab.category, ab.o = category, o
+		abort: func(category, text string, o abortOptions) {
+			ab.category, ab.text, ab.o = category, text, o
 			ab.n++
 		},
 	}

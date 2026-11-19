@@ -60,6 +60,12 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Status line.** The line Claude Code shows below its prompt. RosmarOps can provide it with the last review's score, counts and date, and never a path or a name.
 
+## Reports and integrity
+
+**Reports folder.** Where each review writes its pages (`report.html` and one per language) and, in `data/`, everything else it keeps. `~/.rosmarops/reports/` on Windows and macOS, `~/RosmarOps/` on Linux, where a browser installed as a snap cannot open a hidden folder; `report_directory` in the configuration sets another. See [the decision](decisions/0019-linux-reports-findings-hint-problem-fields.md).
+
+**Integrity check.** The comparison, before every command but `init`, `baseline`, `--help` and `--version`, of the program and its configuration with the references in the state. A change is accepted only by the person in a console, by the administrator's list or by a Microsoft Store update; otherwise the command stops with a red report. See [the decision](decisions/0006-self-integrity-check.md).
+
 ## Problems and statistics
 
 **Problem report.** The list of problems RosmarOps ran into during reviews, kept on the computer as a closed list of codes. It is sent only when the person presses «Send», or after they chose to send the next ones without asking. See [the decision](decisions/0013-problem-reports-with-permission.md).

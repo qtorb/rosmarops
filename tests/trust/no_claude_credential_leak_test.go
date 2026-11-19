@@ -32,7 +32,7 @@ func TestNoClaudeCredentialSecretLeak(t *testing.T) {
 	s.runAll(t, nil)
 	dir := filepath.Join(s.home, ".rosmarops")
 
-	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", report.DataSubdir, "graph.v2.json"))
+	graphRaw, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(s.home), report.DataSubdir, "graph.v2.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

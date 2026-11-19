@@ -39,7 +39,7 @@ These cannot be violated by any code you write. They are the product.
    - `~/.rosmarops/state.json`
    - the kit key file: `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS and Linux)
    - `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted.
-   - the configured reports directory (default `~/.rosmarops/reports/`).
+   - the configured reports directory (default `~/.rosmarops/reports/`; `~/RosmarOps/` on Linux).
    No other `os.Create`, `os.WriteFile`, `os.OpenFile`, or `os.MkdirAll` calls outside these paths.
    RosmarOps never writes, creates or changes the permissions of the company configuration, the administrator fingerprint list, or their folders.
 

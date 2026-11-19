@@ -218,7 +218,7 @@ func (s *sandbox) setFirstUseAside(t *testing.T) {
 				} `json:"projects"`
 			} `json:"coverage"`
 		}
-		b, err := os.ReadFile(filepath.Join(s.home, ".rosmarops", "reports", "data", "report.v2.json"))
+		b, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(s.home), "data", "report.v2.json"))
 		if err == nil {
 			err = json.Unmarshal(b, &v2)
 		}
@@ -316,14 +316,17 @@ func (s *sandbox) runAll(t *testing.T, wrap func(step string, argv []string) []s
 			s.setFirstUseAside(t)
 		}
 	}
-	reports := filepath.Join(s.home, ".rosmarops", "reports")
+	reports := report.DefaultReportDirIn(s.home)
 	data := filepath.Join(reports, report.DataSubdir)
 	// BV-183: the three HTML pages stay in the reports root; everything else is
-	// in data/. The write test covers them all (data/ is under ~/.rosmarops).
-	for _, f := range []string{"report.html", "report.en.html", "report.es.html", filepath.Join("..", "firstuse", "config.json")} {
+	// in data/. The write test covers them all.
+	for _, f := range []string{"report.html", "report.en.html", "report.es.html"} {
 		if _, err := os.Stat(filepath.Join(reports, f)); err != nil {
 			t.Fatalf("run did not complete: no %s in %s: %v", f, reports, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(s.home, ".rosmarops", "firstuse", "config.json")); err != nil {
+		t.Fatalf("run did not complete: no firstuse/config.json: %v", err)
 	}
 	for _, f := range []string{
 		"graph.v2.json", "report.v2.json", "index-history.json", "findings-memory.json",

@@ -69,7 +69,7 @@ func TestNoNetwork_Usage_NoSendWithoutConsent(t *testing.T) {
 			cmd.Env = append(os.Environ(), "HOME="+home, "USERPROFILE="+home)
 			_, _ = cmd.CombinedOutput()
 			traces[name+" "+strings.Join(args, " ")] = out
-			if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(home, ".rosmarops", "reports")), usage.LastFileName)); err == nil {
+			if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(home))), usage.LastFileName)); err == nil {
 				t.Errorf("%s %v: a usage package was written", name, args)
 			}
 		}
@@ -99,7 +99,7 @@ func TestNoNetwork_UsageSend_OnlyFixedHost(t *testing.T) {
 		}
 	}
 	// The package tried is kept as it was, and it is a valid usage.v1.
-	raw, err := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(home, ".rosmarops", "reports")), usage.LastFileName))
+	raw, err := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(home))), usage.LastFileName))
 	if err != nil {
 		t.Fatalf("no %s: %v", usage.LastFileName, err)
 	}
@@ -110,7 +110,7 @@ func TestNoNetwork_UsageSend_OnlyFixedHost(t *testing.T) {
 	if _, err := usage.Marshal(p); err != nil || p.InstallID != usageAnswer(true).InstallID {
 		t.Errorf("last package %s: %v", raw, err)
 	}
-	log, _ := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(home, ".rosmarops", "reports")), "rosmarops-sends.log"))
+	log, _ := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(home))), "rosmarops-sends.log"))
 	if !strings.Contains(string(log), usage.SendsLabel) {
 		t.Errorf("sends log has no %s line:\n%s", usage.SendsLabel, log)
 	}
@@ -134,7 +134,7 @@ func TestUsageSendFailureChangesNothing(t *testing.T) {
 				code = ee.ExitCode()
 			}
 		}
-		raw, err := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(home, ".rosmarops", "reports")), report.V2FileName))
+		raw, err := os.ReadFile(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(home))), report.V2FileName))
 		if err != nil {
 			t.Fatalf("no %s: %v", report.V2FileName, err)
 		}
@@ -178,7 +178,7 @@ func TestCompanyRuntimeHasNoUsage(t *testing.T) {
 	if _, ok := st["usage"]; ok {
 		t.Errorf("the company review's state has a usage answer: %s", st["usage"])
 	}
-	if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(s.home, ".rosmarops", "reports")), usage.LastFileName)); err == nil {
+	if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(s.home))), usage.LastFileName)); err == nil {
 		t.Error("a usage summary was written in the company review")
 	}
 }

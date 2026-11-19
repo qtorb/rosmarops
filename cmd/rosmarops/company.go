@@ -56,6 +56,9 @@ type companyRun struct {
 	binary string
 	// adminOld and adminNew are an update the administrator's list accepted.
 	adminOld, adminNew string
+	// noSummary: a command that is not a review (status, findings…) never
+	// writes the company summary, not even when it stops.
+	noSummary bool
 }
 
 // inUse reports that this review uses the company configuration: it is
@@ -64,7 +67,7 @@ type companyRun struct {
 func (c *companyRun) inUse() bool { return c != nil && c.source == configSourceCompany }
 
 // summaryOn reports a trusted company configuration that turns the summary on.
-func (c *companyRun) summaryOn() bool { return c != nil && c.loaded.SummaryEnabled() }
+func (c *companyRun) summaryOn() bool { return c != nil && !c.noSummary && c.loaded.SummaryEnabled() }
 
 // resolveRunConfig is the configuration of a review: the person's
 // config.json at cfgPath when it exists; else, with a trusted company

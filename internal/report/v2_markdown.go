@@ -63,6 +63,17 @@ var staticKeys = []string{
 	"console.first_run.agents_only", "console.checking.one", "console.checking.other", "console.checking.agents_only", "console.report_opened", "console.report_snap_hint", "console.report_not_opened", "console.press_enter",
 	"html.limit.one", "html.limit.other", "html.limit.reached",
 	"console.binary_changed", "console.binary_confirm", "console.state_lost", "console.state_confirm",
+	// What a command says when it stops because RosmarOps or its configuration
+	// changed and nobody could confirm it (each is a .why and an .action), the
+	// line before starting from scratch, the hint that replaces the findings
+	// question at the end of run, and the one-time move of the reports on Linux.
+	"integrity.abort.binary.why", "integrity.abort.binary.action", "integrity.abort.config.why", "integrity.abort.config.action",
+	"integrity.abort.state.why", "integrity.abort.state.action", "integrity.abort.unverifiable.why", "integrity.abort.unverifiable.action",
+	"console.state_new_identity", "console.findings_hint", "console.reports_moved",
+	// The total of findings when a project did not finish in time.
+	"findings.count.at_least", "findings.count.at_least.one_project",
+	// A problem summary when the unreadable configuration's agent is not known.
+	"problems.summary.config_unreadable.no_agent",
 	"notify.done.same", "notify.done.new.one", "notify.done.new.other", "notify.done.changed", "notify.done.not_comparable",
 	"notify.aborted",
 	// BV-226: what session-check says in Claude Code and the status line.

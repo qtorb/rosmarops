@@ -20,8 +20,13 @@ import (
 
 // ManagedSettingsDir holds Claude Code's managed settings files on Linux
 // (https://code.claude.com/docs/en/managed-settings: /etc/claude-code/
-// managed-settings.json). There is no enterprise Cursor hooks file on Linux.
+// managed-settings.json).
 const ManagedSettingsDir = "/etc/claude-code"
+
+// CursorEnterpriseHooks is Cursor's enterprise hooks file on Linux and WSL
+// (https://cursor.com/docs/hooks: /etc/cursor/hooks.json), read like Claude
+// Code's managed settings.
+const CursorEnterpriseHooks = "/etc/cursor/hooks.json"
 
 // LinuxPlatform implements platform.Platform on Linux.
 type LinuxPlatform struct {
@@ -30,16 +35,18 @@ type LinuxPlatform struct {
 
 var _ platform.Platform = (*LinuxPlatform)(nil)
 
-// New returns the Linux platform: the agents' files on the Linux layout and
-// Claude Code's managed settings at their Linux location.
+// New returns the Linux platform: the agents' files on the Linux layout, and
+// Claude Code's managed settings and Cursor's enterprise hooks at their Linux
+// locations.
 func New() *LinuxPlatform {
-	return NewWith(ManagedSettingsDir)
+	return NewWith(ManagedSettingsDir, CursorEnterpriseHooks)
 }
 
-// NewWith is New with Claude Code's managed settings folder given. For tests.
-func NewWith(managedDir string) *LinuxPlatform {
+// NewWith is New with Claude Code's managed settings folder and Cursor's
+// enterprise hooks file given. For tests.
+func NewWith(managedDir, cursorEnterpriseHooks string) *LinuxPlatform {
 	return &LinuxPlatform{windows.NewOn(windows.Options{
-		Layout: agentdirs.LinuxLayout, ManagedDir: managedDir,
+		Layout: agentdirs.LinuxLayout, ManagedDir: managedDir, CursorEnterpriseHooks: cursorEnterpriseHooks,
 	})}
 }
 

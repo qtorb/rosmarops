@@ -48,7 +48,7 @@ func TestDoubleClickSpanishOpensReport(t *testing.T) {
 	if code := runNoArgs(); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	if len(opened) != 1 || opened[0] != filepath.Join(reports, "report.html") || picked {
 		t.Errorf("opened %v, picker %v", opened, picked)
 	}
@@ -130,7 +130,7 @@ func TestDoubleClickPickedFolder(t *testing.T) {
 			} `json:"projects"`
 		} `json:"coverage"`
 	}
-	b, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", report.DataSubdir, report.V2FileName))
+	b, _ := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), report.DataSubdir, report.V2FileName))
 	if err := json.Unmarshal(b, &v2); err != nil {
 		t.Fatal(err)
 	}

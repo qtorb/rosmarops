@@ -264,12 +264,12 @@ jobs:
           if grep -q 'AF_INET' "$trace"; then
             echo "network connection during run:"; grep 'AF_INET' "$trace"; exit 1
           fi
-          R="$H"/.rosmarops/reports/report.es.html
+          R="$H"/RosmarOps/report.es.html  # the reports folder on Linux
           test -s "$R" || { echo "no Spanish report"; exit 1; }
           for a in "Claude Code" "Cursor" "Hermes Agent"; do
             grep -qF "$a" "$R" || { echo "report does not name $a"; exit 1; }
           done
-          if grep -rqF "$SECRET" "$H/.rosmarops"; then
+          if grep -rqF "$SECRET" "$H/.rosmarops" "$H/RosmarOps"; then
             echo "full secret leaked into an output"; exit 1
           fi
           grep -qE 'no tiene systemd de usuario|Programa una revisión cada viernes' "$R" \
@@ -333,7 +333,7 @@ jobs:
           rc=$?
           set -euo pipefail
           echo "exit code: $rc (recorded, not required to be 0)"
-          S=/home/fakeuser/.rosmarops/reports/data/rosmarops-summary.json
+          S=/home/fakeuser/RosmarOps/data/rosmarops-summary.json
           sudo test -f "$S" || { echo "no summary at $S"; exit 1; }
           sudo cat "$S"
           sudo cat "$S" | python3 -I -c '
@@ -358,7 +358,7 @@ jobs:
           rc=$?
           set -euo pipefail
           echo "exit code: $rc (recorded, not required to be 0)"
-          S=/home/fakeuser/.rosmarops/reports/data/rosmarops-summary.json
+          S=/home/fakeuser/RosmarOps/data/rosmarops-summary.json
           sudo cat "$S"
           sudo cat "$S" | python3 -I -c '
           import json, sys

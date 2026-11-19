@@ -343,7 +343,12 @@ func SaveState(path string, st State) error {
 		return fmt.Errorf("state to save %w", err)
 	}
 
+	// The state's folder (~/.rosmarops) may not exist yet: on Linux the
+	// reports no longer live inside it, so nothing else has created it.
 	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create state folder %s: %w", dir, err)
+	}
 	tmp, err := os.CreateTemp(dir, ".state-*.json.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp state file in %s: %w", dir, err)

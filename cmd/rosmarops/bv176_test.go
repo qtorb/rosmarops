@@ -70,7 +70,7 @@ func bv176Setup(t *testing.T) (stPath, reportDir string) {
 	if err := kit.Save(storePath, kit.Stored{KitID: kitID, Secret: sec, SpaceCredential: cred}); err != nil {
 		t.Fatal(err)
 	}
-	return filepath.Join(rosmaDir, "state.json"), filepath.Join(rosmaDir, "reports")
+	return filepath.Join(rosmaDir, "state.json"), report.DefaultReportDirIn(filepath.Dir(rosmaDir))
 }
 
 // bv176Stubs installs the common seams and returns a pointer to the send-call

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -47,18 +48,53 @@ type findingChoice struct {
 var dismissUIHook = showDismiss
 
 // offerDismissAfterReport shows the «No me afecta» UI for the last review and
-// saves the person's choice. onlyIfNew gates the automatic offer after a review
-// to runs with at least one new finding (BV-184 point 3); `rosmarops findings`
-// passes false. A missing or unreadable report just means no offer. now is the
-// clock (tests pass a fixed one).
+// saves the person's choice. onlyIfNew gates the automatic offer after a
+// double-click review to runs with at least one new finding (BV-184 point 3);
+// `rosmarops findings` passes false. A missing or unreadable report just means
+// no offer. now is the clock (tests pass a fixed one).
 func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now time.Time) {
+	o, ok := loadDismissOffer(lang, cfgPath, onlyIfNew)
+	if !ok {
+		return
+	}
+	choice, saved := dismissUIHook(o.cards, o.cat)
+	if !saved {
+		return // «Not now» or closed: nothing changes
+	}
+	if err := saveFindingChoice(cfgPath, o.reportDir, stPath, o.cfg.AllowList, o.cards, choice, now.Local().Format("2006-01-02")); err != nil {
+		slog.Warn("dismiss: the choice could not be saved", "err", err)
+	}
+}
+
+// findingsHintAfterReport is what run prints after the report instead of
+// asking about the findings: one line naming `rosmarops findings`, under the
+// same conditions the question had (a configuration of the person's own and
+// at least one new finding).
+func findingsHintAfterReport(out io.Writer, lang, cfgPath string) {
+	if o, ok := loadDismissOffer(lang, cfgPath, true); ok {
+		fmt.Fprintln(out, o.cat.Text("console.findings_hint", nil))
+	}
+}
+
+// dismissOffer is what the findings UI shows: the last review's findings and
+// where the choice is saved.
+type dismissOffer struct {
+	cat       catalog.Catalog
+	cfg       config.Config
+	reportDir string
+	cards     []report.FindingCard
+}
+
+// loadDismissOffer reads the last review's findings for the UI; false when
+// there is nothing to offer.
+func loadDismissOffer(lang, cfgPath string, onlyIfNew bool) (dismissOffer, bool) {
 	// CTO-49 v2: what is dismissed is only ever written to
 	// ~/.rosmarops/config.json. A configuration read from anywhere else (a
 	// ./rosmarops.config.json in the working directory) is never offered for
 	// change; `rosmarops findings` says so (findings.config_outside).
 	if outside, err := dismissConfigOutside(cfgPath); outside {
 		slog.Info("dismiss: configuration outside ~/.rosmarops; not offering", "path", cfgPath, "err", err)
-		return
+		return dismissOffer{}, false
 	}
 	cat, err := catalog.Load(lang)
 	if err != nil {
@@ -67,14 +103,14 @@ func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now t
 	cfg, err := config.LoadConfig(cfgPath)
 	if err != nil {
 		slog.Info("dismiss: config not read; not offering", "err", err)
-		return
+		return dismissOffer{}, false
 	}
 	reportDir := cfg.ReportDirectory
 	if reportDir == "" {
 		reportDir, err = report.DefaultReportDir()
 		if err != nil {
 			slog.Info("dismiss: report dir not resolved; not offering", "err", err)
-			return
+			return dismissOffer{}, false
 		}
 	}
 	home, _ := os.UserHomeDir()
@@ -83,22 +119,16 @@ func offerDismissAfterReport(lang, cfgPath, stPath string, onlyIfNew bool, now t
 	v, err := report.ReadV2(report.DataDir(reportDir), searchProjects(cfg, state.State{}).Repos(), 0)
 	if err != nil {
 		slog.Info("dismiss: last review not read; not offering", "err", err)
-		return
+		return dismissOffer{}, false
 	}
 	cards := report.FindingCards(v, cat, home)
 	if len(cards) == 0 {
-		return // nothing to dismiss or to recover
+		return dismissOffer{}, false // nothing to dismiss or to recover
 	}
 	if onlyIfNew && !anyNewCard(cards) {
-		return // after a review, only when something is new (BV-184 point 3)
+		return dismissOffer{}, false // after a review, only when something is new (BV-184 point 3)
 	}
-	choice, saved := dismissUIHook(cards, cat)
-	if !saved {
-		return // «Not now» or closed: nothing changes
-	}
-	if err := saveFindingChoice(cfgPath, reportDir, stPath, cfg.AllowList, cards, choice, now.Local().Format("2006-01-02")); err != nil {
-		slog.Warn("dismiss: the choice could not be saved", "err", err)
-	}
+	return dismissOffer{cat: cat, cfg: cfg, reportDir: reportDir, cards: cards}, true
 }
 
 // saveFindingChoice writes both lists after the person saved (BV-236 §5):

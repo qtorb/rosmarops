@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
@@ -48,6 +49,8 @@ func runNoArgs() int {
 	if err != nil {
 		cat, _ = catalog.Load(catalog.DefaultLang)
 	}
+	// On Linux the reports move to ~/RosmarOps before the folder is looked at.
+	moveOldReports(os.Stdout, cat)
 	// BV-211 §2: a double click gets its own console; turn off QuickEdit so a
 	// click does not freeze the run in «Select» mode, and restore the original
 	// mode on exit. A console inherited from PowerShell or cmd is left untouched.
@@ -84,9 +87,7 @@ func runNoArgs() int {
 		// first use.
 		if reportDir, dirErr := report.DefaultReportDir(); dirErr == nil && priorReportsExist(reportDir) {
 			slog.Warn("double click: reports present but no config or state — treating as state lost (J1)")
-			abortIntegrity("binary_hash_changed",
-				"RosmarOps lost its integrity reference: the state was lost or reset.",
-				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.",
+			abortIntegrity("binary_hash_changed", abortState,
 				abortOptions{lang: lang, stateLost: true, window: true})
 			return exitIntegrity
 		}
@@ -222,13 +223,25 @@ func openReport(path string) bool {
 }
 
 // printReportOpened prints console.report_opened and, when the default
-// browser is a snap (Linux only), console.report_snap_hint with the report's
+// browser is a snap (Linux only) and the report is inside a hidden folder,
+// which a snap browser cannot read, console.report_snap_hint with the report's
 // absolute path (BV-219 B4).
 func printReportOpened(w io.Writer, cat catalog.Catalog, htmlPath string) {
 	fmt.Fprintln(w, cat.Text("console.report_opened", nil))
-	if browserIsSnap() {
+	if inHiddenFolder(absPath(htmlPath)) && browserIsSnap() {
 		fmt.Fprintln(w, cat.Text("console.report_snap_hint", map[string]string{"path": absPath(htmlPath)}))
 	}
+}
+
+// inHiddenFolder reports whether a folder in path's chain (not the file
+// itself) has a name that starts with a dot.
+func inHiddenFolder(path string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(filepath.Dir(path)), "/") {
+		if strings.HasPrefix(part, ".") && part != "." && part != ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // priorReportsExist reports whether the reports directory already holds a

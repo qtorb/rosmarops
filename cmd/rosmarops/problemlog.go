@@ -2,6 +2,7 @@ package main
 
 import (
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -59,25 +60,36 @@ func problemsFromRun(day string, scanErrors []finding.ScanError, findings []find
 	// Only the code and the agent's product id are taken — never the path or the
 	// parser detail (S2 of BV-202).
 	if g != nil {
-		agentByPath := map[string]string{}
-		for _, n := range g.Nodes {
-			if n.Kind == graph.KindAgent && n.ConfigPath != "" && problems.ValidAgent(n.ID) {
-				agentByPath[n.ConfigPath] = n.ID
-			}
-		}
 		for _, sf := range g.Coverage.SourcesFailed {
 			if !strings.HasPrefix(sf.Reason, graph.ReasonParseError+":") {
 				continue
 			}
 			e := problems.Entry{Code: problems.ConfigUnreadable, Step: problems.StepAgents, Day: day}
-			if id, ok := agentByPath[sf.Path]; ok {
-				e.Agent = id
-			}
+			e.Agent = agentOfFile(g, sf.Path)
 			out = append(out, e)
 		}
 	}
 
 	return out
+}
+
+// agentOfFile is the product id of the agent whose configuration folder holds
+// the file at path: an agent node's ConfigPath is its folder and its product is
+// in Platform (its ID is a hash). The deepest folder wins; "" when no known
+// agent's folder holds it.
+func agentOfFile(g *graph.Graph, path string) string {
+	file := filepath.Clean(path)
+	best, bestLen := "", -1
+	for _, n := range g.Nodes {
+		if n.Kind != graph.KindAgent || n.ConfigPath == "" || !problems.ValidAgent(n.Platform) {
+			continue
+		}
+		dir := filepath.Clean(n.ConfigPath)
+		if (file == dir || strings.HasPrefix(file, dir+string(filepath.Separator))) && len(dir) > bestLen {
+			best, bestLen = n.Platform, len(dir)
+		}
+	}
+	return best
 }
 
 // today is this run's local day in the notebook's format.

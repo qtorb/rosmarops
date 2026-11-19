@@ -96,7 +96,7 @@ func TestDoubleClickPackageFailDoesNotKillReview(t *testing.T) {
 		t.Fatal("the package step was not reached (built graph is nil?)")
 	}
 
-	reportDir := filepath.Join(rosmaDir, "reports")
+	reportDir := report.DefaultReportDirIn(filepath.Dir(rosmaDir))
 	htmlPath := filepath.Join(reportDir, report.HTMLFileName)
 	raw, err := os.ReadFile(htmlPath)
 	if err != nil {

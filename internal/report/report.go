@@ -10,7 +10,9 @@ package report
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -331,13 +333,60 @@ func RenderMarkdown(r Report) string {
 	return sb.String()
 }
 
-// DefaultReportDir returns the default directory for report files.
+// DefaultReportDir returns the default directory for report files:
+// ~/.rosmarops/reports, and ~/RosmarOps on Linux, where a browser installed as
+// a snap cannot read a hidden folder and so cannot open the report.
 func DefaultReportDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home dir: %w", err)
 	}
-	return filepath.Join(home, ".rosmarops", "reports"), nil
+	return defaultReportDirFor(runtime.GOOS, home), nil
+}
+
+// LinuxReportDirName is the default reports folder in the user's folder on
+// Linux.
+const LinuxReportDirName = "RosmarOps"
+
+// DefaultReportDirIn is DefaultReportDir for the user folder home.
+func DefaultReportDirIn(home string) string { return defaultReportDirFor(runtime.GOOS, home) }
+
+func defaultReportDirFor(goos, home string) string {
+	if goos == "linux" {
+		return filepath.Join(home, LinuxReportDirName)
+	}
+	return LegacyReportDir(home)
+}
+
+// LegacyReportDir is ~/.rosmarops/reports: the default reports directory on
+// macOS and Windows, and on Linux before it moved to ~/RosmarOps.
+func LegacyReportDir(home string) string { return filepath.Join(home, ".rosmarops", "reports") }
+
+// MoveOldReports moves ~/.rosmarops/reports, whole (data/ included: the
+// history, the findings memory, the accepted configuration, the problem
+// notebook and the pending results packages), to ~/RosmarOps on Linux, once:
+// only when the old folder exists and the new one does not. When both exist
+// nothing is moved (both is true) and the new folder is the one in use. The
+// caller decides that the default folder is the one in use (no
+// report_directory in the person's configuration).
+func MoveOldReports(goos, home string) (moved, both bool, err error) {
+	if goos != "linux" || home == "" {
+		return false, false, nil
+	}
+	old, dst := LegacyReportDir(home), defaultReportDirFor(goos, home)
+	info, err := os.Lstat(old)
+	if err != nil || !info.IsDir() {
+		return false, false, nil // nothing to move (a link is never followed)
+	}
+	if _, err := os.Lstat(dst); err == nil {
+		return false, true, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return false, false, fmt.Errorf("reports folder %s: %w", dst, err)
+	}
+	if err := os.Rename(old, dst); err != nil {
+		return false, false, fmt.Errorf("move reports to %s: %w", dst, err)
+	}
+	return true, false, nil
 }
 
 // DataSubdir is the subfolder of the reports directory that holds everything

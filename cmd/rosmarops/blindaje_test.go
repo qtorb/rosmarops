@@ -140,7 +140,7 @@ func TestRunFailed_WindowAborts(t *testing.T) {
 // silence.
 func TestDoubleClick_StateLostWhenReportsButNoConfigState(t *testing.T) {
 	home := homeEnv(t)
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	if err := os.MkdirAll(reports, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestDoubleClick_StateLostWhenReportsButNoConfigState(t *testing.T) {
 	var opts abortOptions
 	prev := abortIntegrity
 	t.Cleanup(func() { abortIntegrity = prev })
-	abortIntegrity = func(category, why, action string, o abortOptions) { called, opts = true, o }
+	abortIntegrity = func(category, text string, o abortOptions) { called, opts = true, o }
 	prevLang, prevDetect := systemLang, detectProjects
 	t.Cleanup(func() { systemLang, detectProjects = prevLang, prevDetect })
 	systemLang = func() string { return "en" }
@@ -178,7 +178,7 @@ func TestDoubleClick_FirstUseInitializes(t *testing.T) {
 	var aborted bool
 	prev := abortIntegrity
 	t.Cleanup(func() { abortIntegrity = prev })
-	abortIntegrity = func(category, why, action string, o abortOptions) { aborted = true }
+	abortIntegrity = func(category, text string, o abortOptions) { aborted = true }
 	prevLang, prevDetect, prevPick, prevOpen, prevDelay := systemLang, detectProjects, pickFolder, openReportFile, closeDelay
 	t.Cleanup(func() {
 		systemLang, detectProjects, pickFolder, openReportFile, closeDelay = prevLang, prevDetect, prevPick, prevOpen, prevDelay
@@ -207,7 +207,7 @@ func TestDoubleClick_FirstUseInitializes(t *testing.T) {
 func TestIntegrityBeforeConfig_LogInDefaultDir(t *testing.T) {
 	home := homeEnv(t)
 	dir := filepath.Join(home, ".rosmarops")
-	defaultReports := filepath.Join(dir, "reports")
+	defaultReports := report.DefaultReportDirIn(home)
 	customReports := filepath.Join(t.TempDir(), "custom-reports")
 	cfgPath, stPath := filepath.Join(dir, "config.json"), filepath.Join(dir, "state.json")
 	if err := os.MkdirAll(dir, 0o700); err != nil {

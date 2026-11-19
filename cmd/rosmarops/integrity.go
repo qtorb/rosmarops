@@ -50,6 +50,16 @@ func (a asker) ask(key string) bool {
 
 func isZeroHash(h string) bool { return h == "" || h == zeroHash }
 
+// The catalog keys of an integrity abort's text: each has a .why and an
+// .action. None sends the person to baseline: accepting a new version is the
+// question every command asks in a console.
+const (
+	abortBinary       = "integrity.abort.binary"
+	abortConfig       = "integrity.abort.config"
+	abortState        = "integrity.abort.state"
+	abortUnverifiable = "integrity.abort.unverifiable" // .why takes {error}
+)
+
 // integrityRun is what the run's integrity check reads and may update.
 type integrityRun struct {
 	ask        asker
@@ -64,7 +74,7 @@ type integrityRun struct {
 	selfHash   func() (string, error)
 	// abort is abortWithIntegrityFailure, which never returns; tests
 	// replace it.
-	abort func(category, why, action string, o abortOptions)
+	abort func(category, text string, o abortOptions)
 	// store reports whether a changed binary is a Microsoft Store update the
 	// check accepts without asking (storeAccepts with this process's package
 	// identity); nil: never (tests that do not exercise it).
@@ -141,7 +151,7 @@ func (r integrityRun) recordReferences(self, via string) error {
 // run's integrity was not checked. Every rejection aborts with a red report
 // and never returns.
 func (r integrityRun) check() (notChecked bool, err error) {
-	abort := func(category, why, action string, o abortOptions) {
+	abort := func(category, text string, o abortOptions) {
 		do := r.abort
 		if do == nil {
 			do = abortWithIntegrityFailure
@@ -154,13 +164,12 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			code = "state_lost"
 		}
 		r.company.writeAbortSummary(report.SummaryIntegrityAbort, code)
-		do(category, why, action, o)
+		do(category, text, o)
 	}
 	self, err := r.selfHash()
 	if err != nil {
 		slog.Error("integrity: could not hash binary", "err", err)
-		abort("binary_hash_changed", "Could not verify binary integrity: "+err.Error(),
-			"Run 'rosmarops baseline' after verifying the binary is trustworthy.", abortOptions{})
+		abort("binary_hash_changed", abortUnverifiable, abortOptions{detail: err.Error()})
 		return false, errAborted
 	}
 	t := func(key string, p map[string]string) string { return r.ask.cat.Text(key, p) }
@@ -191,9 +200,14 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			}
 		}
 		fmt.Fprintln(r.ask.out, t("console.state_lost", nil))
+		// Starting from scratch gives this computer a new identity: say so
+		// before the question when it was connected to a space, or when the
+		// state cannot be read and so that cannot be known.
+		if r.ask.terminal && (r.stErr != nil || r.st.SpacePermission) {
+			fmt.Fprintln(r.ask.out, t("console.state_new_identity", nil))
+		}
 		if !r.ask.ask("console.state_confirm") {
-			abort("binary_hash_changed", "RosmarOps lost its integrity reference: the state was lost or reset.",
-				"If you reset or reinstalled RosmarOps yourself, run it by hand and confirm. If not, inspect ~/.rosmarops.", abortOptions{stateLost: true})
+			abort("binary_hash_changed", abortState, abortOptions{stateLost: true})
 			return false, errAborted
 		}
 		r.setBinary(acceptedViaConsole)
@@ -201,7 +215,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 	case zero:
 		// A state written by an earlier init that recorded no reference and
 		// never ran: nothing to compare with yet.
-		slog.Warn("integrity: no reference recorded yet — run 'rosmarops baseline' to establish it")
+		slog.Warn("integrity: no reference recorded yet")
 		return false, nil
 	}
 	if self != r.st.Integrity.VigilBinarySHA256 && r.adminList != nil && r.st.EngineVersion != "" &&
@@ -248,9 +262,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 		}))
 		if !r.ask.ask("console.binary_confirm") {
 			slog.Error("integrity: binary hash mismatch", "stored", old[:16]+"…", "computed", self[:16]+"…")
-			abort("binary_hash_changed", "RosmarOps binary hash does not match the last baseline.",
-				"If you updated RosmarOps intentionally, run it by hand and confirm. "+
-					"If not, do not run RosmarOps again — treat as potential compromise.", abortOptions{})
+			abort("binary_hash_changed", abortBinary, abortOptions{})
 			return false, errAborted
 		}
 		r.st.Integrity.VigilBinarySHA256 = self
@@ -287,9 +299,7 @@ func (r integrityRun) check() (notChecked bool, err error) {
 			return false, confirmErr
 		}
 		if !ok {
-			abort("config_hash_changed", "Config file hash does not match the last baseline.",
-				"If you edited the configuration intentionally, run RosmarOps by hand and confirm the change. "+
-					"If not, inspect the file for unexpected changes.", abortOptions{configRejected: true})
+			abort("config_hash_changed", abortConfig, abortOptions{configRejected: true})
 			return false, errAborted
 		}
 	}

@@ -36,7 +36,7 @@ func TestNoNetwork_ProblemNotebook_NoSendWithoutConsent(t *testing.T) {
 	// both false/absent by default).
 	s.runAll(t, nil)
 
-	dataDir := report.DataDir(filepath.Join(s.home, ".rosmarops", "reports"))
+	dataDir := report.DataDir(filepath.Join(report.DefaultReportDirIn(s.home)))
 	seedProblem := func() {
 		if _, err := problems.New(dataDir).Record(problems.Entry{
 			Code: problems.StepFailed, Step: "mcp", Day: problems.Day(time.Now()),
@@ -84,7 +84,7 @@ func TestProblemReleaseIgnoresDemoVar(t *testing.T) {
 	s := newSandbox(t)
 	s.runAll(t, nil)
 
-	dataDir := report.DataDir(filepath.Join(s.home, ".rosmarops", "reports"))
+	dataDir := report.DataDir(filepath.Join(report.DefaultReportDirIn(s.home)))
 	// Clear any notebook the first run may have made.
 	_ = os.Remove(filepath.Join(dataDir, problems.NotebookName))
 

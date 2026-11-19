@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // TestDoubleClickNoSlogOnStderr (BV-215): the first double click writes no
@@ -28,7 +30,7 @@ func TestDoubleClickNoSlogOnStderr(t *testing.T) {
 		t.Errorf("the first double click wrote slog to the console (stderr):\n%s", s)
 	}
 	if runtime.GOOS == "darwin" {
-		log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", "last-run-log.txt"))
+		log, _ := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "data", "last-run-log.txt"))
 		if !strings.Contains(string(log), "language: system display language") {
 			t.Errorf("the display-language line is not in the run log:\n%s", log)
 		}

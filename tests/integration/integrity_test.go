@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // integrityEnv builds the binary and an isolated home (decision
@@ -113,7 +115,7 @@ func TestInitRecordsReferences(t *testing.T) {
 	if st.Integrity.Binary != sha256Hex(exe) || st.Integrity.Config != sha256Hex(cfg) {
 		t.Errorf("references %+v", st.Integrity)
 	}
-	copyRaw, err := os.ReadFile(filepath.Join(dir, "reports", "data", "config.accepted.json"))
+	copyRaw, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "data", "config.accepted.json"))
 	if err != nil || string(copyRaw) != string(cfg) {
 		t.Errorf("accepted copy: %v", err)
 	}
@@ -141,7 +143,7 @@ func TestAbortWritesRedHTML(t *testing.T) {
 		if code := rosmarops(t, bin, work, env, args...); code != 2 {
 			t.Fatalf("unattended %v: exit %d, want 2", unattended, code)
 		}
-		reports := filepath.Join(home, ".rosmarops", "reports")
+		reports := filepath.Join(report.DefaultReportDirIn(home))
 		page, err := os.ReadFile(filepath.Join(reports, "report.html"))
 		if err != nil {
 			t.Fatalf("unattended %v: no report.html: %v", unattended, err)
@@ -182,7 +184,7 @@ func TestBinaryChangedUnattended(t *testing.T) {
 	if code := rosmarops(t, bin, work, env, "run", "--unattended"); code != 2 {
 		t.Fatalf("exit %d, want 2", code)
 	}
-	page, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "report.html"))
+	page, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "report.html"))
 	if err != nil || !strings.Contains(string(page), catalogText(t, "en", "html.unattended.pending")) ||
 		!strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.status.red")+`</h1>`) {
 		t.Errorf("red report: %v", err)
@@ -212,7 +214,7 @@ func TestStateLostUnattended(t *testing.T) {
 	if st.Integrity.Binary != zero || st.Integrity.Config != zero {
 		t.Errorf("references fixed in silence: %+v", st.Integrity)
 	}
-	page, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "report.html"))
+	page, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "report.html"))
 	if err != nil || !strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.integrity.state_lost")+`</h1>`) {
 		t.Errorf("headline is not html.integrity.state_lost: %v", err)
 	}
@@ -246,7 +248,7 @@ func TestStateDeletedOrUnreadable(t *testing.T) {
 			}
 			// J11: the red report says the state was lost, in the HTML and
 			// the Markdown; the v1 JSON keeps binary_hash_changed.
-			reports := filepath.Join(home, ".rosmarops", "reports")
+			reports := filepath.Join(report.DefaultReportDirIn(home))
 			page, err := os.ReadFile(filepath.Join(reports, "report.html"))
 			if err != nil || !strings.Contains(string(page), `<h1 class="hl">`+catalogText(t, "en", "html.integrity.state_lost")+`</h1>`) {
 				t.Errorf("%s %v: report.html headline is not html.integrity.state_lost: %v", c.name, args, err)
@@ -288,7 +290,7 @@ func TestUnattendedConfigAndLog(t *testing.T) {
 	if code := rosmarops(t, bin, work, env, "run", "--unattended"); code == 1 || code == 2 {
 		t.Fatalf("unattended: exit %d", code)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
 		t.Fatal(err)
 	}

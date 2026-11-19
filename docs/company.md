@@ -63,7 +63,7 @@ The first review on a computer with the company configuration, and no state yet,
 
 ## What the company reads
 
-With `summary.enabled` on, each review writes `~/.rosmarops/reports/data/rosmarops-summary.json`, one JSON line that follows [schemas/summary.v1.json](../schemas/summary.v1.json). The company's agent reads that file. It holds:
+With `summary.enabled` on, each review writes `rosmarops-summary.json` in the `data` folder of the reports folder (`~/.rosmarops/reports/data/` on Windows and macOS, `~/RosmarOps/data/` on Linux), one JSON line that follows [schemas/summary.v1.json](../schemas/summary.v1.json). The company's agent reads that file. It holds:
 
 - the program's version and the rules' version;
 - whether the review finished, stopped for integrity or failed;
@@ -103,7 +103,7 @@ echo started
 
 ## Fleet policies
 
-These policies use the `parse_json` table of fleetd. A policy passes when the query returns a row. They are untested until the pilot. On Linux, replace the path with `/home/%/.rosmarops/reports/data/rosmarops-summary.json`.
+These policies use the `parse_json` table of fleetd. A policy passes when the query returns a row. They are untested until the pilot. On Linux, replace the path with `/home/%/RosmarOps/data/rosmarops-summary.json`.
 
 No red findings, a finished review, and a summary less than 8 days old:
 
