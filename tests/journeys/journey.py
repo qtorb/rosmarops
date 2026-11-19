@@ -187,21 +187,24 @@ class Journey:
         if SYSTEM != "windows":
             return
         texts = []
+        log_lines = []
         rep = self.reports_dir(home)
         for f in ([os.path.join(rep, "last-run-log.txt")] if rep else []) + [console]:
             try:
                 with open(f, encoding="utf-8", errors="replace") as fh:
                     texts.append(fh.read())
             except OSError:
-                pass
+                texts.append("")
+        if rep:
+            log_lines = texts[0].splitlines() or ["(the run log is empty or missing)"]
         lines = "\n".join(texts).splitlines()
         for w in windows:
             shown = any("window self-test: shown" in ln and f"window={w}" in ln for ln in lines)
             self.check(f"{label}: the {w} window opened (its self-test)", shown,
                        "" if shown else "no «window self-test: shown» line for it in the run's log")
             if not shown:
-                print(f"  {label}: the run log's window lines:")
-                for ln in [ln for ln in lines if "window" in ln][-12:]:
+                print(f"  {label}: the run log's last lines:" + ("" if rep else " (no reports folder)"))
+                for ln in log_lines[-25:]:
                     print("    | " + ln)
 
     def reports_dir(self, home):
