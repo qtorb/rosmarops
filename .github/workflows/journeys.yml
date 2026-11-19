@@ -1,30 +1,19 @@
-# journeys: the journey tests (CTO-74). This first version holds only the
-# probe of point 0, run by hand: whether the machines can reproduce what a
-# person sees. Nothing here builds or publishes RosmarOps.
-#   - ubuntu-24.04: snapd starts, `snap install firefox` finishes, and inside
-#     the snap's confinement a file under a hidden folder of the home is not
-#     readable while the same file in a visible folder is (the control). A
-#     headless screenshot of each file is taken too, as a complement.
-#   - windows-latest: the test-signed MSIX that msix.yml builds installs with
-#     Add-AppxPackage once its certificate is trusted, and runs through its
-#     alias.
-# Each check writes one line to the job summary. The job fails if a check the
-# journeys depend on fails; a screenshot that is not taken does not fail it.
+# journeys: the journey tests (CTO-74). This version holds only the second
+# probe of point 0, Linux only, run by hand: whether ubuntu-24.04 with the
+# Firefox snap tells a file under a hidden folder of the home from the same
+# file in a visible folder.
+#   - The machine's confinement: snap debug confinement, AppArmor, and the
+#     snap's home connection.
+#   - A real open of each file inside the snap (one byte read), not test -r:
+#     access() checks the file's permissions, AppArmor decides at the open.
+#   - A headless screenshot of each, 60 s each, as a complement.
+# The windows-latest MSIX probe passed in the first run and is not repeated.
+# Each check writes one line to the job summary; the job fails if the open
+# check does not tell the two files apart.
 name: journeys
 
 on:
   workflow_dispatch:
-    inputs:
-      msix_run:
-        description: "msix.yml run whose test package is installed (its artifact must still exist)"
-        required: false
-        default: "44391502775"
-        type: string
-      msix_version:
-        description: "Version of that package"
-        required: false
-        default: "0.15.0"
-        type: string
   # Temporary, for the probe only: a workflow can be dispatched only once it is
   # on the default branch, so until then a push of this file to its own branch
   # runs it. Removed before the journeys themselves are added.
@@ -54,10 +43,23 @@ jobs:
           if snap list firefox; then ok "\`snap list firefox\` lists the snap"; else ko "\`snap list firefox\` does not list it"; fi
           echo "firefox on PATH: $(command -v firefox || echo none) -> $(readlink -f "$(command -v firefox)" 2>/dev/null || true)"
 
-      - name: Read check inside the snap, with its control
+      - name: Confinement of this machine
         shell: bash
         run: |
-          set -u
+          set +e
+          line() { echo "- ℹ️ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          c=$(snap debug confinement 2>&1); line "\`snap debug confinement\`: $c"
+          if command -v aa-status >/dev/null; then
+            sudo aa-status --enabled; line "\`aa-status --enabled\`: exit $?"
+          fi
+          line "\`/sys/module/apparmor/parameters/enabled\`: $(cat /sys/module/apparmor/parameters/enabled 2>&1)"
+          h=$(snap connections firefox 2>&1 | grep home); line "\`snap connections firefox | grep home\`: ${h:-none}"
+          true
+
+      - name: Open check inside the snap, with its control
+        shell: bash
+        run: |
+          set +e
           ok() { echo "- ✅ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
           ko() { echo "- ❌ $1" | tee -a "$GITHUB_STEP_SUMMARY"; echo fail > "$RUNNER_TEMP/gate"; }
           hidden="$HOME/.rosmarops/reports/probe.html"
@@ -65,33 +67,49 @@ jobs:
           mkdir -p "$(dirname "$hidden")" "$(dirname "$control")"
           printf '<!doctype html><title>probe</title><h1>RosmarOps probe</h1>\n' > "$hidden"
           cp "$hidden" "$control"
-          if snap run --shell firefox -c "test -r '$control'"; then
-            ok "control: \`~/RosmarOpsControl/probe.html\` readable inside the snap"
+          # A real open (read one byte), not test -r: access() checks only the
+          # file's permissions, while AppArmor decides at the open.
+          open_in_snap() { snap run --shell firefox -c "head -c1 '$1' >/dev/null" 2>&1; }
+          out=$(open_in_snap "$control"); rc=$?
+          if [ $rc -eq 0 ]; then
+            ok "control: \`~/RosmarOpsControl/probe.html\` opens inside the snap"
           else
-            ko "control: \`~/RosmarOpsControl/probe.html\` NOT readable inside the snap (the machine is not valid)"
+            ko "control: \`~/RosmarOpsControl/probe.html\` does NOT open inside the snap (exit $rc: $out); the machine is not valid"
           fi
-          if snap run --shell firefox -c "test -r '$hidden'"; then
-            ko "hidden: \`~/.rosmarops/reports/probe.html\` readable inside the snap (expected not readable)"
+          out=$(open_in_snap "$hidden"); rc=$?
+          if [ $rc -eq 0 ]; then
+            ko "hidden: \`~/.rosmarops/reports/probe.html\` opens inside the snap (expected not to)"
           else
-            ok "hidden: \`~/.rosmarops/reports/probe.html\` not readable inside the snap, as expected"
+            ok "hidden: \`~/.rosmarops/reports/probe.html\` does not open inside the snap, as expected (exit $rc: $out)"
           fi
+          sudo journalctl -k --since "-2min" 2>/dev/null | grep -i 'apparmor="DENIED"' | tail -5 || true
+          true
 
-      - name: Headless screenshots (complement, never fails the job)
+      - name: Headless screenshots (60 s each; complement, never fails the job)
         shell: bash
         run: |
-          set -u
-          line() { echo "- $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          set +e
+          line() { echo "- ℹ️ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          mkdir -p "$RUNNER_TEMP/shots"
           shot() {
             out="$HOME/RosmarOpsControl/$1.png"
             rm -f "$out"
-            timeout 180 snap run firefox --headless --screenshot "$out" "file://$2" > "$RUNNER_TEMP/$1.log" 2>&1
-            echo "exit $?" >> "$RUNNER_TEMP/$1.log"
-            if [ -s "$out" ]; then line "ℹ️ screenshot of the $1 file: taken ($(stat -c %s "$out") bytes)"; else line "ℹ️ screenshot of the $1 file: not taken"; fi
+            timeout 60 snap run firefox --headless --screenshot "$out" "file://$2" > "$RUNNER_TEMP/$1.log" 2>&1
+            rc=$?
+            if [ -s "$out" ]; then
+              cp "$out" "$RUNNER_TEMP/shots/"
+              line "screenshot of the $1 file: taken ($(stat -c %s "$out") bytes, exit $rc)"
+            elif [ $rc -eq 124 ]; then
+              line "screenshot of the $1 file: no screenshot (60 s timeout)"
+            else
+              line "screenshot of the $1 file: no screenshot (exit $rc)"
+            fi
+            pkill -f 'firefox.*--headless' 2>/dev/null
             tail -5 "$RUNNER_TEMP/$1.log"
           }
           shot control "$HOME/RosmarOpsControl/probe.html"
           shot hidden "$HOME/.rosmarops/reports/probe.html"
-          mkdir -p "$RUNNER_TEMP/shots" && cp "$HOME"/RosmarOpsControl/*.png "$RUNNER_TEMP/shots/" 2>/dev/null || true
+          true
 
       - name: Upload the screenshots
         if: always()
@@ -99,60 +117,14 @@ jobs:
         with:
           name: probe-snap-screenshots
           path: ${{ runner.temp }}/shots/
-          if-no-files-found: ignore
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Result
+        if: always()
         shell: bash
         run: |
           if [ "${{ steps.snap.outputs.gate }}" = fail ] || [ -e "$RUNNER_TEMP/gate" ]; then
             echo "a check failed"; exit 1
           fi
 
-  probe-msix:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: The test package from msix.yml
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: rosmarops-msix-${{ inputs.msix_version || '0.15.0' }}
-          path: msix
-          run-id: ${{ inputs.msix_run || '44391502775' }}
-          github-token: ${{ github.token }}
-
-      - name: Trust the test certificate, install, run through the alias
-        shell: powershell
-        env:
-          VERSION: ${{ inputs.msix_version || '0.15.0' }}
-        run: |
-          $fail = $false
-          function Line($ok, $text) {
-            $mark = if ($ok) { '✅' } else { '❌' }
-            "- $mark $text" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-            if (-not $ok) { $script:fail = $true }
-          }
-          "### windows-latest · MSIX" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          $msix = "msix/rosmarops-$env:VERSION-x64-test.msix"
-          $cer = "msix/rosmarops-$env:VERSION-x64-test.cer"
-          Line (Test-Path $msix) "test package downloaded ($msix)"
-          try {
-            Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
-            Line $true "certificate imported into LocalMachine\TrustedPeople"
-          } catch { Line $false "certificate not imported: $($_.Exception.Message)" }
-          try {
-            Add-AppxPackage -Path $msix -ErrorAction Stop
-            Line $true "Add-AppxPackage installed the package"
-          } catch { Line $false "Add-AppxPackage failed: $($_.Exception.Message)" }
-          $pkg = Get-AppxPackage | Where-Object { $_.Name -like '*RosmarOps*' }
-          Line ($null -ne $pkg) "Get-AppxPackage lists it ($($pkg.PackageFullName))"
-          $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\rosmarops.exe'
-          Line (Test-Path $alias) "alias present ($alias)"
-          $out = & $alias --version 2>&1 | Out-String
-          Line (($LASTEXITCODE -eq 0) -and ($out -match [regex]::Escape($env:VERSION))) "alias runs: $($out.Trim())"
-          if ($pkg) { Line ($pkg.InstallLocation -like '*WindowsApps*') "installed folder: $($pkg.InstallLocation)" }
-          Get-AppxPackage | Where-Object { $_.Name -like '*RosmarOps*' } | Remove-AppxPackage -ErrorAction SilentlyContinue
-          if ($fail) { exit 1 }
