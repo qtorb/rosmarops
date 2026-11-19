@@ -4,7 +4,8 @@
 // workflow (BV-254): session-check then has a latest result to pass to Claude
 // Code. Never part of the program.
 //
-//	go run ./tests/manual/statusline-seed -data ~/.rosmarops/reports/data
+//	go run ./tests/manual/statusline-seed -data ~/.rosmarops/reports/data   (macOS, Windows)
+//	go run ./tests/manual/statusline-seed -data ~/RosmarOps/data            (Linux)
 package main
 
 import (

@@ -1,8 +1,10 @@
 package trust_test
 
 // Trust test (CLAUDE.md invariant 2): running the real binary — init,
-// baseline, run — writes nothing outside <HOME>/.rosmarops/, including writes
-// made by the child processes it starts (npm, pnpm, git, code) when present.
+// baseline, run — writes nothing outside <HOME>/.rosmarops/ and the reports
+// folder in use (the default one: ~/.rosmarops/reports, or ~/RosmarOps on
+// Linux), including writes made by the child processes it starts (npm, pnpm,
+// git, code) when present.
 
 import (
 	"bytes"
@@ -23,6 +25,7 @@ import (
 func TestNoWritesOutOfScope(t *testing.T) {
 	s := newSandbox(t)
 	allowed := filepath.Join(s.home, ".rosmarops")
+	reports := report.DefaultReportDirIn(s.home)
 
 	before := snapshot(t, s.root)
 	s.runAll(t, nil)
@@ -31,12 +34,12 @@ func TestNoWritesOutOfScope(t *testing.T) {
 	var culprits []string
 	for _, change := range changedPaths(before, after) {
 		_, path, _ := strings.Cut(change, ": ")
-		if !pathUnder(path, allowed) {
+		if !pathUnder(path, allowed) && !pathUnder(path, reports) {
 			culprits = append(culprits, change)
 		}
 	}
 	if len(culprits) > 0 {
-		t.Fatalf("%d path(s) changed outside %s:\n%s", len(culprits), allowed, strings.Join(culprits, "\n"))
+		t.Fatalf("%d path(s) changed outside %s and %s:\n%s", len(culprits), allowed, reports, strings.Join(culprits, "\n"))
 	}
 }
 
@@ -69,7 +72,7 @@ func TestReviewDoesNotWriteConfig(t *testing.T) {
 // CTO-49 v2 (b): dismissing a finding with `rosmarops findings` writes the
 // configuration only at ~/.rosmarops/config.json. The other paths it changes
 // are the ones writeDismissed re-points (state.json and the accepted copy in
-// the reports' data/), all inside ~/.rosmarops.
+// the reports' data/), inside ~/.rosmarops and the reports folder.
 func TestFindingsDismissWritesOnlyHomeConfig(t *testing.T) {
 	s := newSandbox(t)
 	s.runAll(t, nil)
@@ -77,7 +80,7 @@ func TestFindingsDismissWritesOnlyHomeConfig(t *testing.T) {
 	allowed := map[string]bool{
 		s.configPath():                         true,
 		filepath.Join(rosmarops, "state.json"): true,
-		filepath.Join(rosmarops, "reports", report.DataSubdir, "config.accepted.json"): true,
+		filepath.Join(report.DefaultReportDirIn(s.home), report.DataSubdir, "config.accepted.json"): true,
 	}
 
 	before := snapshot(t, s.root)

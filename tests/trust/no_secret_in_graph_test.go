@@ -26,6 +26,7 @@ import (
 	windows "github.com/qtorb/rosmarops/adapters/windows"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/pipeline"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/scan/credfiles"
 	"github.com/qtorb/rosmarops/internal/scan/repos"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
@@ -413,7 +414,7 @@ func TestNoSecretInGraph(t *testing.T) {
 		t.Fatalf("BuildGraph: %v", err)
 	}
 
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	path, err := graph.WriteFile(reports, g)
 	if err != nil {
 		t.Fatalf("WriteFile: %v", err)

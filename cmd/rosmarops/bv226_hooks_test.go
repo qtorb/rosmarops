@@ -16,6 +16,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
 	"github.com/qtorb/rosmarops/internal/hash"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -101,7 +102,7 @@ func TestSessionCheckCommand(t *testing.T) {
 	if !strings.Contains(m["systemMessage"], "«PreToolUse»") {
 		t.Errorf("message %q", m["systemMessage"])
 	}
-	if got := files(t, filepath.Join(home, ".rosmarops", "reports", "data", agenthooks.SessionDir)); len(got) != 1 {
+	if got := files(t, filepath.Join(report.DefaultReportDirIn(home), "data", agenthooks.SessionDir)); len(got) != 1 {
 		t.Errorf("snapshots %v", got)
 	}
 	// Cursor's input, and a clear: silence, nothing written anew.
@@ -133,7 +134,7 @@ func TestSessionCheckIntegrityChanged(t *testing.T) {
 	if json.Unmarshal(out.Bytes(), &m) != nil || m["systemMessage"] != en.Text("session.integrity_changed", nil) {
 		t.Errorf("output %q", out.String())
 	}
-	if got := files(t, filepath.Join(home, ".rosmarops", "reports")); len(got) != 0 {
+	if got := files(t, filepath.Join(report.DefaultReportDirIn(home))); len(got) != 0 {
 		t.Errorf("wrote %v", got)
 	}
 	if after, _ := os.ReadFile(stPath); !bytes.Equal(before, after) {
@@ -166,7 +167,7 @@ func TestSessionCheckOverBudget(t *testing.T) {
 	if out.Len() != 0 {
 		t.Errorf("said %q", out.String())
 	}
-	if got := files(t, filepath.Join(home, ".rosmarops", "reports")); len(got) != 0 {
+	if got := files(t, filepath.Join(report.DefaultReportDirIn(home))); len(got) != 0 {
 		t.Errorf("wrote %v", got)
 	}
 }
@@ -175,7 +176,7 @@ func TestSessionCheckOverBudget(t *testing.T) {
 // 8 days, the aborted line, and the integrity line with a changed binary.
 func TestStatuslineCommand(t *testing.T) {
 	home, _, out := bv226Home(t, selfRef(t))
-	data := filepath.Join(home, ".rosmarops", "reports", "data")
+	data := filepath.Join(report.DefaultReportDirIn(home), "data")
 	en, _ := catalog.Load("en")
 	checked := time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)
 	prevNow := statuslineNow
@@ -197,7 +198,7 @@ func TestStatuslineCommand(t *testing.T) {
 	if got := show(checked.Add(9*24*time.Hour + time.Minute)); !strings.HasSuffix(got, en.Text("statusline.stale", map[string]string{"days": "9"})) {
 		t.Errorf("stale: %q", got)
 	}
-	writeAbortedStatusline(filepath.Join(home, ".rosmarops", "reports"), checked)
+	writeAbortedStatusline(filepath.Join(report.DefaultReportDirIn(home)), checked)
 	if got := show(checked); got != en.Text("statusline.aborted", nil) {
 		t.Errorf("aborted: %q", got)
 	}
@@ -246,7 +247,7 @@ func TestSessionCheckCursorSilent(t *testing.T) {
 		if out.Len() != 0 {
 			t.Errorf("said %q for %s", out.String(), raw)
 		}
-		if got := files(t, filepath.Join(home, ".rosmarops", "reports")); len(got) != 0 {
+		if got := files(t, filepath.Join(report.DefaultReportDirIn(home))); len(got) != 0 {
 			t.Errorf("wrote %v for %s", got, raw)
 		}
 	}

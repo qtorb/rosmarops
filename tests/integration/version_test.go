@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // BV-72: the version comes from the build, as release.yml sets it from the
@@ -60,7 +62,7 @@ func TestVersionFromLdflags(t *testing.T) {
 			EngineVersion string `json:"engine_version"`
 		} `json:"provenance"`
 	}
-	readJSON(t, filepath.Join(home, ".rosmarops", "reports", "data", "graph.v2.json"), &g)
+	readJSON(t, filepath.Join(report.DefaultReportDirIn(home), "data", "graph.v2.json"), &g)
 	if g.Provenance.EngineVersion != "9.9.9" {
 		t.Errorf("graph: engine_version %q", g.Provenance.EngineVersion)
 	}

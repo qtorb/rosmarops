@@ -49,7 +49,9 @@ Implement the method on `WindowsPlatform`. The macOS and Linux platforms (`adapt
 - Read files through the bounded reader the other readers use (`readBounded`). Record the read status of every file you open; a file that could not be read must show up as not read, never as clean.
 - Never keep a secret value in the scan. Credentials go through `internal/scan/credfiles` (step 5).
 
-Tests: add a reader test next to the reader. Cline: `adapters/windows/cline_internal_test.go`, `adapters/windows/newagents_test.go`, `adapters/darwin/darwin_test.go`.
+Tests: add a reader test next to the reader. Cline: `adapters/windows/cline_internal_test.go`, `adapters/windows/newagents_test.go`, `adapters/darwin/darwin_test.go`. A test that runs a review and then reads its output finds it with `report.DefaultReportDirIn(home)`, never `~/.rosmarops/reports`: on Linux the reports are in `~/RosmarOps`.
+
+A file an administrator puts under `/etc` (Claude Code's `/etc/claude-code/`, Cursor's `/etc/cursor/hooks.json`) is passed to the reader by the Linux platform (`adapters/linux/platform.go`), as macOS does with its own locations.
 
 ### 5. The shared readers
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -11,10 +12,14 @@ import (
 )
 
 // ResultsFileName is the closed package's name (AP-17 §2):
-// rosmarops-results-<YYYY-MM-DD>-<host_id[:8]>.locked.json. The date is the
-// run's local date, as the report's own file names are.
+// rosmarops-results-<YYYY-MM-DD>-<8 hex>.locked.json, the 8 hex being the
+// first ones of host_id without its «host_» prefix (the same 8 the space
+// shows for this computer). The date is the run's local date, as the report's
+// own file names are. Packages still pending under the older name
+// (host_ and 3 hex) are found and sent all the same: the sender matches any
+// rosmarops-results-*.locked.json.
 func ResultsFileName(now time.Time, hostID string) string {
-	h := hostID
+	h := strings.TrimPrefix(hostID, "host_")
 	if len(h) > 8 {
 		h = h[:8]
 	}

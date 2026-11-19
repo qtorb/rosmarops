@@ -99,7 +99,7 @@ func TestBV172_RejectForgetsAndReoffers(t *testing.T) {
 			}
 			// The report is not connected, says it could not be sent, and offers to
 			// create/connect a space.
-			raw, err := os.ReadFile(filepath.Join(rosmaDir, "reports", report.HTMLFileName))
+			raw, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(filepath.Dir(rosmaDir)), report.HTMLFileName))
 			if err != nil {
 				t.Fatal(err)
 			}

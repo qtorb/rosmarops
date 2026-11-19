@@ -24,3 +24,4 @@ The invariants these decisions set are listed in [CLAUDE.md](../../CLAUDE.md) an
 | 0016 | [Agent memory files are never opened](0016-agent-memory-files-never-opened.md): memory is recorded from file metadata only. | 2026-11-17 |
 | 0017 | [Declared answers: Grok Bot and Cursor](0017-declared-answers.md): closed questions for settings that cannot be read on disk; no answer means the least controlled case. | 2026-11-14 |
 | 0018 | [Company mode](0018-company-mode.md): a company configuration only administrators can change, a summary of counts and codes, and the administrator's fingerprint list. | 2026-11-12 |
+| 0019 | [The reports folder on Linux, no findings question at the end of run, and the problem list's agent and system](0019-linux-reports-findings-hint-problem-fields.md): reports in ~/RosmarOps on Linux, moved once; one line instead of the question; agent and os_version filled. | 2026-11-19 |

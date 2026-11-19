@@ -31,18 +31,42 @@ func (w *WindowsPlatform) ListCursor(_ context.Context, repoRoots []string) (pla
 		return platform.CursorScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
 	enterprise := ""
+	cliDir := filepath.Join(home, ".cursor")
 	switch {
 	case w.layout == agentdirs.MacOSLayout:
 		enterprise = w.cursorEnterprise
+	case w.layout == agentdirs.LinuxLayout:
+		enterprise = w.cursorEnterprise
+		cliDir = CursorCLIConfigDir(home, os.Getenv)
 	case runtime.GOOS == "windows":
 		enterprise = cursorEnterpriseHooks // where it exists, as managed settings
 	}
-	return ReadCursor(home, enterprise, repoRoots), nil
+	return ReadCursorWith(home, enterprise, cliDir, repoRoots), nil
+}
+
+// CursorCLIConfigDir is the folder of Cursor's CLI configuration
+// (cli-config.json) on Linux, resolved as the CLI does
+// (https://cursor.com/docs/cli/reference/configuration): $CURSOR_CONFIG_DIR,
+// else $XDG_CONFIG_HOME/cursor, else ~/.cursor. A relative value is ignored,
+// as the XDG specification asks.
+func CursorCLIConfigDir(home string, getenv func(string) string) string {
+	if d := getenv("CURSOR_CONFIG_DIR"); filepath.IsAbs(d) {
+		return filepath.Clean(d)
+	}
+	if d := getenv("XDG_CONFIG_HOME"); filepath.IsAbs(d) {
+		return filepath.Join(d, "cursor")
+	}
+	return filepath.Join(home, ".cursor")
 }
 
 // ReadCursor is ListCursor with the home folder and the enterprise hooks
-// file given. For tests.
+// file given, and cli-config.json in ~/.cursor. For tests.
 func ReadCursor(home, enterpriseHooks string, repoRoots []string) platform.CursorScan {
+	return ReadCursorWith(home, enterpriseHooks, filepath.Join(home, ".cursor"), repoRoots)
+}
+
+// ReadCursorWith is ReadCursor with the folder of cli-config.json given.
+func ReadCursorWith(home, enterpriseHooks, cliDir string, repoRoots []string) platform.CursorScan {
 	dir := filepath.Join(home, ".cursor")
 	scan := platform.CursorScan{ConfigDir: dir}
 	if info, err := os.Stat(dir); err == nil && info.IsDir() {
@@ -56,7 +80,7 @@ func ReadCursor(home, enterpriseHooks string, repoRoots []string) platform.Curso
 	}
 	add(filepath.Join(dir, "permissions.json"), platform.CursorPermissions, platform.CursorScopeUser, "")
 	add(filepath.Join(dir, "sandbox.json"), platform.CursorSandbox, platform.CursorScopeUser, "")
-	add(filepath.Join(dir, "cli-config.json"), platform.CursorCLI, platform.CursorScopeUser, "")
+	add(filepath.Join(cliDir, "cli-config.json"), platform.CursorCLI, platform.CursorScopeUser, "")
 	add(filepath.Join(dir, "hooks.json"), platform.CursorHooks, platform.CursorScopeUser, "")
 	if enterpriseHooks != "" {
 		add(enterpriseHooks, platform.CursorHooks, platform.CursorScopeEnterprise, "")

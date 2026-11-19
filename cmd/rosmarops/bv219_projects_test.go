@@ -33,10 +33,12 @@ func bv219Repo(t *testing.T, p string) {
 func bv219Setup(t *testing.T, home string, cfg config.Config) (cfgPath, reports string) {
 	t.Helper()
 	dir := filepath.Join(home, ".rosmarops")
-	reports = filepath.Join(dir, "reports")
+	reports = report.DefaultReportDirIn(home)
 	cfgPath = filepath.Join(dir, "config.json")
-	if err := os.MkdirAll(reports, 0o700); err != nil {
-		t.Fatal(err)
+	for _, d := range []string{dir, reports} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := config.WriteConfig(cfgPath, cfg); err != nil {
 		t.Fatal(err)

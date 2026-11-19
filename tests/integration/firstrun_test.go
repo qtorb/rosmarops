@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // firstRunEnv builds the binary and a fake user folder, with the Windows
@@ -155,7 +157,7 @@ func TestDoubleClickFirstUse(t *testing.T) {
 	if !strings.Contains(out, found) {
 		t.Errorf("window: not %q:\n%s", found, out)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	if want := strings.ReplaceAll(en["console.report_not_opened"], "{path}", filepath.Join(reports, "report.html")); !opened && !strings.Contains(out, want) {
 		t.Errorf("window lacks %q (no browser here):\n%s", want, out)
 	}
@@ -260,7 +262,7 @@ func TestPagesWithLang(t *testing.T) {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	rosmarops(t, bin, filepath.Join(root, "work"), env, "run", "--lang", "es")
-	checkPages(t, filepath.Join(home, ".rosmarops", "reports"), "es")
+	checkPages(t, filepath.Join(report.DefaultReportDirIn(home)), "es")
 }
 
 // U3: no more than 100 repositories; the rest go to the log with their
@@ -287,7 +289,7 @@ func TestDoubleClickLimit(t *testing.T) {
 			} `json:"projects"`
 		} `json:"coverage"`
 	}
-	readJSON(t, filepath.Join(home, ".rosmarops", "reports", "data", "report.v2.json"), &v2)
+	readJSON(t, filepath.Join(report.DefaultReportDirIn(home), "data", "report.v2.json"), &v2)
 	p := v2.Coverage.Projects
 	over := 0
 	for _, n := range p.NotSearched {
@@ -331,7 +333,7 @@ func TestDoubleClickNothingFound(t *testing.T) {
 	if cfg.RepoRoots == nil || len(cfg.RepoRoots) != 0 {
 		t.Errorf("repo_roots %v", cfg.RepoRoots)
 	}
-	log, _ := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", "last-run-log.txt"))
+	log, _ := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "data", "last-run-log.txt"))
 	// On macOS the picker opens (here, a fake osascript that cancels):
 	// only «no folder chosen» (BV-102).
 	if (runtime.GOOS != "darwin" && !strings.Contains(string(log), "folder picker not opened")) || !strings.Contains(string(log), "no folder chosen") {
@@ -360,7 +362,7 @@ func TestDoubleClickConfigWithoutState(t *testing.T) {
 		t.Errorf("window lacks console.press_enter:\n%s", out)
 	}
 	// The red page in report.html and in each language (U7), with no link.
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	for _, name := range []string{"report.html", "report.en.html", "report.es.html"} {
 		raw, err := os.ReadFile(filepath.Join(reports, name))
 		if err != nil || !strings.Contains(string(raw), `<h1 class="hl">`) || strings.Contains(string(raw), `class="lang"`) {

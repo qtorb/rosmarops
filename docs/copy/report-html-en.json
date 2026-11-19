@@ -27,6 +27,7 @@
   "problems.summary.output_invalid": "a result didn't pass its own check",
   "problems.summary.space_rejected": "your space didn't accept the results",
   "problems.summary.config_unreadable": "we couldn't read {agent}'s configuration",
+  "problems.summary.config_unreadable.no_agent": "we couldn't read the configuration of one of your agents",
   "problems.summary.report_not_opened": "we couldn't open the report",
   "problems.summary.several": "{n} problems, including {first}",
   "report.problems.unsent.one": "There is {n} unsent problem. We'll ask you the next time you open RosmarOps.",

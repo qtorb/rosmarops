@@ -3,9 +3,12 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/problems"
 	"github.com/qtorb/rosmarops/internal/scan"
 )
@@ -59,16 +62,20 @@ func TestProblemsFromRunMapsEveryCode(t *testing.T) {
 }
 
 func TestConfigUnreadableTakesAgentIDNeverPath(t *testing.T) {
-	g := &graph.Graph{
-		Nodes: []graph.Node{
-			{ID: "cline", Kind: graph.KindAgent, ConfigPath: "/home/alice/.cline/config.json"},
-		},
-		Coverage: graph.Coverage{
-			SourcesFailed: []graph.SourceFailed{
-				{Path: "/home/alice/.cline/config.json", Reason: graph.Reason(graph.ReasonParseError, "/home/alice/.cline/config.json: oops")},
-				{Path: "/home/bob/.secret/config.toml", Reason: graph.Reason(graph.ReasonParseError, "/home/bob/.secret/config.toml: oops")},
-			},
-		},
+	// A real agent node, as the graph builds it: its ID is a hash, its product
+	// is in Platform and its ConfigPath is its folder, not the file.
+	frag := graph.FromCursor(platform.CursorScan{
+		Exists: true, ConfigDir: "/home/alice/.cursor",
+		Files: []platform.CursorFile{{
+			Path: "/home/alice/.cursor/permissions.json", Kind: platform.CursorPermissions, Scope: platform.CursorScopeUser,
+			Status: platform.MCPSourceFailed, Reason: graph.Reason(graph.ReasonParseError, "/home/alice/.cursor/permissions.json: oops"),
+		}},
+	}, platform.ClaudeSettingsScan{}, time.Now())
+	g := &graph.Graph{Nodes: frag.Nodes, Coverage: frag.Coverage}
+	g.Coverage.SourcesFailed = append(g.Coverage.SourcesFailed,
+		graph.SourceFailed{Path: "/home/bob/.secret/config.toml", Reason: graph.Reason(graph.ReasonParseError, "/home/bob/.secret/config.toml: oops")})
+	if len(g.Nodes) == 0 || strings.Contains(g.Nodes[0].ID, "cursor") {
+		t.Fatalf("not a real agent node: %+v", g.Nodes)
 	}
 	got := problemsFromRun("2026-11-09", nil, nil, g)
 
@@ -77,7 +84,7 @@ func TestConfigUnreadableTakesAgentIDNeverPath(t *testing.T) {
 		if e.Code != problems.ConfigUnreadable {
 			continue
 		}
-		if e.Agent == "cline" {
+		if e.Agent == "cursor" {
 			withAgent++
 		}
 		if e.Agent == "" {
@@ -91,9 +98,33 @@ func TestConfigUnreadableTakesAgentIDNeverPath(t *testing.T) {
 		}
 	}
 	if withAgent != 1 {
-		t.Errorf("want 1 config_unreadable attributed to cline, got %d", withAgent)
+		t.Errorf("want 1 config_unreadable attributed to cursor, got %d (%+v)", withAgent, got)
 	}
 	if withoutAgent != 1 {
 		t.Errorf("want 1 config_unreadable with no agent (unmatched path), got %d", withoutAgent)
+	}
+	// A folder that only shares a prefix with the agent's is not its folder.
+	g.Coverage.SourcesFailed = []graph.SourceFailed{{Path: "/home/alice/.cursor-old/mcp.json", Reason: graph.Reason(graph.ReasonParseError, "x")}}
+	if got := problemsFromRun("2026-11-09", nil, nil, g); len(got) != 1 || got[0].Agent != "" {
+		t.Errorf("a sibling folder was taken for the agent's: %+v", got)
+	}
+}
+
+// A config_unreadable problem with no known agent says «one of your agents»,
+// never a placeholder; with one, the product's name.
+func TestSummaryConfigUnreadableWithoutAgent(t *testing.T) {
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		none := summaryOf(cat, problems.Entry{Code: problems.ConfigUnreadable})
+		if none != cat.Text("problems.summary.config_unreadable.no_agent", nil) || strings.Contains(none, "{") {
+			t.Errorf("%s: %q", lang, none)
+		}
+		named := summaryOf(cat, problems.Entry{Code: problems.ConfigUnreadable, Agent: "cursor"})
+		if !strings.Contains(named, "Cursor") || strings.Contains(named, "{") {
+			t.Errorf("%s: %q", lang, named)
+		}
 	}
 }

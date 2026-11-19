@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/memory"
+	"github.com/qtorb/rosmarops/internal/report"
 	"github.com/qtorb/rosmarops/internal/schemas"
 	"github.com/qtorb/rosmarops/internal/schemaval"
 )
@@ -46,7 +47,7 @@ func TestRunWithProjectHookWritesMemory(t *testing.T) {
 		t.Fatalf("run: exit %d, want 0", code)
 	}
 
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	raw, err := os.ReadFile(filepath.Join(reports, "data", memory.FileName))
 	if err != nil {
 		t.Fatalf("findings memory not written: %v", err)

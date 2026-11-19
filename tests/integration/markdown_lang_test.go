@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // BV-45: the technical Markdown is always English. A run with --lang en and
@@ -91,7 +93,7 @@ func TestMarkdownAlwaysEnglish(t *testing.T) {
 		}
 	}
 
-	all, _ := filepath.Glob(filepath.Join(home, ".rosmarops", "reports", "data", "*.md"))
+	all, _ := filepath.Glob(filepath.Join(report.DefaultReportDirIn(home), "data", "*.md"))
 	var mds, exports []string // the technical Markdown; the exports for your AI
 	for _, p := range all {
 		if strings.HasSuffix(p, ".ai.md") {
