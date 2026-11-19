@@ -25,6 +25,12 @@ on:
         required: false
         default: "0.15.0"
         type: string
+  # Temporary, for the probe only: a workflow can be dispatched only once it is
+  # on the default branch, so until then a push of this file to its own branch
+  # runs it. Removed before the journeys themselves are added.
+  push:
+    branches: [bv2-263-recorridos]
+    paths: [".github/workflows/journeys.yml"]
 
 permissions: {}
 
@@ -113,15 +119,15 @@ jobs:
       - name: The test package from msix.yml
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: rosmarops-msix-${{ inputs.msix_version }}
+          name: rosmarops-msix-${{ inputs.msix_version || '0.15.0' }}
           path: msix
-          run-id: ${{ inputs.msix_run }}
+          run-id: ${{ inputs.msix_run || '44391502775' }}
           github-token: ${{ github.token }}
 
       - name: Trust the test certificate, install, run through the alias
         shell: powershell
         env:
-          VERSION: ${{ inputs.msix_version }}
+          VERSION: ${{ inputs.msix_version || '0.15.0' }}
         run: |
           $fail = $false
           function Line($ok, $text) {
