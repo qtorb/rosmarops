@@ -182,14 +182,15 @@ class Journey:
     # --- what a review left -------------------------------------------------
     def window_checks(self, home, console, label, windows):
         """Windows: each window the command opened logged its self-test
-        «shown» line, in the run's log (last-run-log.txt) or, for a command
+        «shown» line, in the run's log (data/last-run-log.txt) or, for a command
         without a run log, on the console with its other log lines."""
         if SYSTEM != "windows":
             return
         texts = []
         log_lines = []
         rep = self.reports_dir(home)
-        for f in ([os.path.join(rep, "last-run-log.txt")] if rep else []) + [console]:
+        # The run log lives in the reports folder's data/ (report.DataDir).
+        for f in ([os.path.join(rep, "data", "last-run-log.txt")] if rep else []) + [console]:
             try:
                 with open(f, encoding="utf-8", errors="replace") as fh:
                     texts.append(fh.read())
