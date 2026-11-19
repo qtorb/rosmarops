@@ -64,9 +64,13 @@ func TestNoDatabasePasswordInAnyOutput(t *testing.T) {
 		cmd.Dir, cmd.Env = home, env
 		_, _ = cmd.CombinedOutput()
 	}
-	out := filepath.Join(home, ".rosmarops")
+	// Every file the review wrote, wherever this system puts its reports.
+	reports := ""
 	files := 0
-	_ = filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(home, func(p string, d fs.DirEntry, err error) error {
+		if err == nil && d.IsDir() && p == filepath.Join(home, "code") {
+			return filepath.SkipDir // the planted project itself
+		}
 		if err != nil || d.IsDir() {
 			return nil
 		}
@@ -75,6 +79,9 @@ func TestNoDatabasePasswordInAnyOutput(t *testing.T) {
 			return nil
 		}
 		files++
+		if d.Name() == "report.en.html" {
+			reports = filepath.Dir(p)
+		}
 		for _, leak := range []string{pass, "PlantedDB"} {
 			if strings.Contains(string(raw), leak) {
 				t.Errorf("%s carries the database password", p)
@@ -85,7 +92,7 @@ func TestNoDatabasePasswordInAnyOutput(t *testing.T) {
 	if files < 5 {
 		t.Fatalf("only %d files written: the review did not run", files)
 	}
-	page, err := os.ReadFile(filepath.Join(out, "reports", "report.en.html"))
+	page, err := os.ReadFile(filepath.Join(reports, "report.en.html"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +103,7 @@ func TestNoDatabasePasswordInAnyOutput(t *testing.T) {
 	var g struct {
 		Nodes []struct{ Kind, Type, Service string } `json:"nodes"`
 	}
-	raw, err := os.ReadFile(filepath.Join(out, "reports", "data", "graph.v2.json"))
+	raw, err := os.ReadFile(filepath.Join(reports, "data", "graph.v2.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
