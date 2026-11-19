@@ -113,7 +113,13 @@ func TestBV227ConsoleWaiting(t *testing.T) {
 func TestBV227TimerStartsAtPress(t *testing.T) {
 	// A fake clock: the answer timeout is a channel the test fires.
 	fire := make(chan time.Time, 1)
-	after := func(time.Duration) <-chan time.Time { return fire }
+	// The limit after the press (connection plus OK) is not under test here.
+	after := func(d time.Duration) <-chan time.Time {
+		if d == connectPressedLimit {
+			return nil
+		}
+		return fire
+	}
 
 	// Pressed after 9 minutes: the answer timeout then fires (minute 10), and
 	// the window must not be killed; the connection's own result arrives later.

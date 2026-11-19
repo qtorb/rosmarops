@@ -1,0 +1,8 @@
+# R1, the Spanish leg on a system whose language is not chosen by the locale:
+# rosmarops run --lang es, on the computer the first leg set up.
+if-asked connect.console.prompt send \r
+# The questions about settings that live inside an app (Cursor, Grok Bot):
+# Enter is «I don't know», the least controlled case.
+if-asked decl.unknown send \r
+if-asked usage.ask.prompt send n\r
+expect-exit 0 timeout 600s
