@@ -43,7 +43,7 @@ func TestFindingsSelfTestShownLogged(t *testing.T) {
 	}
 	log.Reset()
 	noteSelfTestShown("save\n", "findings", findingsSelfTestEnv)
-	if strings.Contains(log.String(), "window self-test: shown") || !strings.Contains(log.String(), `line="save\n"`) {
+	if strings.Contains(log.String(), "window self-test: shown") || !strings.Contains(log.String(), "first line is not SHOWN") || !strings.Contains(log.String(), "save") {
 		t.Fatalf("an answer is not «shown», and is logged as it came; got:\n%s", log)
 	}
 }
