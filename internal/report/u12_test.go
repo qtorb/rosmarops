@@ -39,7 +39,7 @@ func TestRenderHTML_DetectedNoneEvaluated(t *testing.T) {
 		notApplicable := htmlEscape(cat.Text("html.index.reason.not_applicable", nil))
 
 		page := renderHTML(t, lang, only)
-		if !strings.Contains(page, `<div class="unavail">`+unavailable(index.ReasonAgentsNotEvaluated)+`</div>`) ||
+		if !strings.Contains(page, `<div class="r3-res"><p>`+unavailable(index.ReasonAgentsNotEvaluated)+`</p>`) ||
 			!strings.Contains(page, `<p>`+listed+`</p>`) || strings.Contains(page, notApplicable) {
 			t.Errorf("%s: only Copilot: reason or list wrong", lang)
 		} else {
@@ -48,7 +48,7 @@ func TestRenderHTML_DetectedNoneEvaluated(t *testing.T) {
 		}
 
 		page = renderHTML(t, lang, none)
-		if !strings.Contains(page, `<div class="unavail">`+unavailable(index.ReasonNotApplicable)+`</div>`) ||
+		if !strings.Contains(page, `<div class="r3-res"><p>`+unavailable(index.ReasonNotApplicable)+`</p>`) ||
 			strings.Contains(page, htmlEscape(strings.SplitN(cat.Text("html.step.1.coverage.none", nil), "{", 2)[0])) {
 			t.Errorf("%s: no agent: not «%s»", lang, cat.Text("html.index.reason.not_applicable", nil))
 		} else {
@@ -60,7 +60,7 @@ func TestRenderHTML_DetectedNoneEvaluated(t *testing.T) {
 		// rest).
 		page = renderHTML(t, lang, evaluated)
 		_, _, scored := sheetScore(page) // BV-236 §1: the score is the sheet's
-		if !scored || strings.Contains(page, `<div class="unavail">`) ||
+		if !scored || strings.Contains(page, `<div class="r3-res"><p>`) ||
 			!strings.Contains(page, htmlEscape(strings.SplitN(cat.Text("html.step.1.coverage", nil), "{", 2)[0])) ||
 			strings.Contains(page, htmlEscape(cat.Text("html.index.reason.agents_not_evaluated", nil))) {
 			t.Errorf("%s: with Claude Code evaluated, the page changed", lang)

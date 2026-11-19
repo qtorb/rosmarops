@@ -7,7 +7,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -204,15 +203,6 @@ func icon(kind, colour string, size int) string {
 	return head + `<circle cx="12" cy="12" r="10" fill="` + colour + `"/><path d="m7.5 12.5 3 3 6-6.5" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 }
 
-// sevFill is the fill token of a severity: icons, the card's left bar and
-// the today block's border (§1).
-func sevFill(sev string) string {
-	if sev == rules.SeverityRed {
-		return "var(--redfill)"
-	}
-	return "var(--ambfill)"
-}
-
 // bandVar is the colour token of a band.
 var bandVar = map[string]string{
 	index.BandExposed: "var(--red)", index.BandOpenGaps: "var(--amb)", index.BandContained: "var(--grn)",
@@ -316,26 +306,22 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.score[v.Index.Agents[i].AgentID] = &v.Index.Agents[i]
 	}
 	c.w(`<!DOCTYPE html><html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>%s</title><script>document.documentElement.classList.add('js')</script><style>%s</style></head><body>`,
-		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS()+sheetCSS())
+		html.EscapeString(cat.Lang()), c.t("html.doc_title", nil), htmlCSS()+c.osCSS()+sheetCSS()+r3CSS())
 
 	// BV-236 §1: the top bar and the sheet replace the old header and step 1.
 	c.renderBar()
-	c.w(`<div class="rep">`)
-	c.renderSheet()
-	c.renderSheetNotes()
-	c.w(`</div>`)
-	// BV-236 §2–§3: «Computer profile» and Claude Code in detail, views of the
-	// same page; without JavaScript they show here, below the sheet.
+	// The first screen in three blocks: result, findings by problem, template.
+	iss := c.issues()
+	c.renderR3(iss)
+	// «Computer profile» and Claude Code in detail, views of the same page;
+	// without JavaScript they show here, below the first screen.
 	c.renderProfileViews()
 	c.w(`<main class="rep">`)
 
-	// §2 The flow: «What to do first» and «What remains», direct children of a
-	// single `.flow` grid (BV-141), and the folded dismissed and accepted
-	// findings.
-	today, hasToday := c.todayFinding()
-	c.w(`<div class="flow" id="todo">`)
-	c.renderStep2(today, hasToday)
-	c.renderStep3(today.ID)
+	// Each problem's steps, behind the table's links, then the folded
+	// dismissed and accepted findings.
+	c.w(`<div id="todo">`)
+	c.renderR3Steps(iss)
 	c.renderDismissed()
 	c.renderAccepted()
 	c.w(`</div>`)
@@ -462,33 +448,6 @@ func unknownBody(agent string) string {
 // one with no agent, which weighs in every agent's score.
 func (c htmlCtx) ofScoredAgent(f rules.Finding, a *index.AgentIndex) bool {
 	return rules.IsMachineFinding(f) || len(f.Evidence.Nodes) > 0 && f.Evidence.Nodes[0] == a.AgentID
-}
-
-// todayFinding is today's finding, when there is one with its action.
-func (c htmlCtx) todayFinding() (rules.Finding, bool) {
-	for _, f := range c.v.Findings {
-		if f.ID == c.v.Today.FindingID {
-			return f, true
-		}
-	}
-	return rules.Finding{}, false
-}
-
-// stepHead is a step's head (v3 §2): the decorative number, the title as
-// tag with its id, the hint under it, and the arrow to the next step.
-func (c htmlCtx) stepHead(n int, tag, id, title, hint string, arrow bool) {
-	if hint != "" {
-		hint = `<span class="hint">` + hint + `</span>`
-	}
-	idAttr := ""
-	if id != "" {
-		idAttr = ` id="` + id + `"`
-	}
-	c.w(`<div class="head"><div class="num" aria-hidden="true">%d</div><div><%s class="step"%s>%s</%s>%s</div>`, n, tag, idAttr, title, tag, hint)
-	if arrow {
-		c.w(`<span class="line" aria-hidden="true"></span>`)
-	}
-	c.w(`</div>`)
 }
 
 // renderCoverage is «What we could not read» (§6.1), only when there are
@@ -670,210 +629,6 @@ func rotatedNested(entry string) string {
 		return entry
 	}
 	return string(out)
-}
-
-// adjustActions are the actions that change a settings file (v3 §4: the
-// hint and the copy button).
-var adjustActions = map[string]bool{
-	rules.ActionAskReadRule: true, rules.ActionAskEditRule: true, rules.ActionBlockReadsOutside: true, rules.ActionManualDefaultMode: true,
-}
-
-// renderStep2 is v3 §4: what you do today.
-// todayFA is the invisible jump anchor agents_overview.services links to
-// (BV-121). It lives inside section.now, not before it, so it is never a
-// stray child of the `.flow` grid (BV-141). Empty when there is no today
-// finding.
-func (c htmlCtx) todayFA(f rules.Finding, ok bool) string {
-	if !ok {
-		return ""
-	}
-	return fmt.Sprintf(`<span class="fa" id="%s"></span>`, html.EscapeString(f.ID))
-}
-
-func (c htmlCtx) renderStep2(f rules.Finding, ok bool) {
-	var a rules.Action
-	found := false
-	if ok {
-		for _, x := range f.Actions {
-			if x.ID == c.v.Today.ActionID {
-				a, found = x, true
-			}
-		}
-	}
-	if ok && f.Rule == rules.RulePackageKnownMalicious { // BV-100: no auto-action; bespoke hero
-		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
-		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
-		c.findingWhere(f) // BV-219 B2: where it is, below the title
-		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
-			c.impact(f), html.EscapeString(c.cat.Text("finding.package_known_malicious.action", malParams(f))))
-		return
-	}
-	if ok && f.Rule == rules.RuleProjectHookRunsRepoScript { // BV-107: no auto-action; bespoke hero
-		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
-		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
-		c.findingWhere(f) // BV-219 B2: where it is, below the title
-		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
-			c.impact(f), html.EscapeString(c.cat.Text("finding.project_hook_runs_repo_script.fix", c.params(f))))
-		return
-	}
-	if ok && f.Rule == rules.RuleMCPExternalAction { // BV-117/BV-121/BV-124: why below the title, then the action
-		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
-		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
-		c.findingWhere(f) // BV-219 B2: where it is, below the title
-		c.w(`<p class="imp">%s</p><p>%s</p></div></section>`,
-			c.impact(f), html.EscapeString(mcpAction(c.cat, c.params(f))))
-		return
-	}
-	if ok && (f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData) { // BV-175: why, then the steps
-		c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
-		c.stepHead(2, "p", "", c.t("html.step.2", nil), "", true)
-		c.w(`<div class="tbox"><h2 id="today-title">%s</h2>`, c.title(f))
-		c.findingWhere(f) // BV-219 B2: where it is, below the title
-		c.w(`<p class="imp">%s</p>%s</div></section>`,
-			c.impact(f), c.n8nSteps(f))
-		return
-	}
-	if !found {
-		c.w(`<section class="now" aria-labelledby="step2">%s`, c.todayFA(f, ok))
-		c.stepHead(2, "p", "step2", c.t("html.step.2", nil), "", true)
-		none := "html.none"
-		if !c.v.Coverage.GraphBuilt {
-			none = "html.today.incomplete" // the review did not finish (J14)
-		}
-		c.w(`<p class="none">%s</p></section>`, c.t(none, nil))
-		return
-	}
-	p := c.params(f)
-	hint := ""
-	if adjustActions[a.Code] {
-		hint = c.t("html.step.2.hint", nil)
-	}
-	c.w(`<section class="now" aria-labelledby="today-title">%s`, c.todayFA(f, true))
-	c.stepHead(2, "p", "", c.t("html.step.2", nil), hint, true)
-	c.w(`<div class="tbox"><h2 id="today-title">%s</h2><div class="lbl">%s</div><p class="tf">%s%s%s</p>`,
-		c.t("html.action."+a.Code+".title", p), c.t("html.today.fixes", nil), c.rowTitle(f), c.masterHelp(f), c.others(f))
-	c.findingWhere(f) // BV-219 B2: where it is, below the finding's title
-	c.w(`<p class="imp">%s`, c.impact(f))
-	if f.Rule == rules.RuleCredReadAndSend && f.Radius == rules.RadiusAnyProject {
-		c.w(` %s%s`, c.t(c.cat.One("html.today.reach", c.v.repos), p), c.help("auto"))
-	}
-	c.w(`%s</p>`, c.gitEnvHelp(f))
-	// The projection (BV-41): only with a score, a rise, and an action that
-	// is not partial.
-	if s, ok := c.agentScore(f); ok && s.Value != nil && s.Projection != nil &&
-		s.Projection.Value > *s.Value && a.Completeness != rules.CompletenessPartial {
-		key := "html.today.projection"
-		if len(c.v.Index.Scope.Evaluated) > 1 {
-			key = "html.today.projection.agent" // v3 §10.3: whose score it is
-		}
-		c.w(`<div class="proj">%s</div>`, c.t(key, map[string]string{"agent": s.Agent, "now": strconv.Itoa(*s.Value), "then": strconv.Itoa(s.Projection.Value)}))
-	}
-	after := "html.after.full"
-	if howOnly(a) {
-		mp := copyParams(p)
-		mp["file"] = userPath(a.File, c.home, c.v.homePrefix())
-		c.w(`<p class="how">%s</p><p class="after">%s</p></div></section>`,
-			c.t(howKey(c.cat, a.Code), mp), c.t("html.after.full", p))
-		return
-	}
-	if a.Code == rules.ActionRotateCredential {
-		c.renderRotate(f, a, true)
-		c.w(`<p class="after">%s</p></div></section>`, c.t("html.after.rotate", p)) // v3 §13.2
-		return
-	}
-	if a.Code == rules.ActionRemoveFromDisk {
-		c.w(`<p>%s</p><ul>`, c.t("html.fix.remove", p))
-		for _, l := range a.Locations {
-			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(l)))
-		}
-		c.w(`</ul>`)
-	} else {
-		prompt, add := "html.agent.prompt.merge", "html.fix.manual.add"
-		if !a.FileExists {
-			prompt, add = "html.agent.prompt.create", "html.fix.manual.create"
-		}
-		pp := copyParams(p)
-		pp["file"] = userPath(a.File, c.home, c.v.homePrefix())
-		c.w(`<pre hidden>%s
-
-%s</pre><button type="button" class="wide" data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
-			c.t(prompt, pp), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.copied", p), c.t("html.fix.copy", p))
-		c.w(`<p class="how">%s %s</p>`, c.t("html.fix.step2", p), c.t("html.fix.step3", p))
-		mp := copyParams(p)
-		mp["file"] = userPath(a.File, c.home, "~")
-		settings := ""
-		if strings.EqualFold(filepath.ToSlash(mp["file"]), "~/.claude/settings.json") {
-			settings = c.help("settings")
-		}
-		c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
-			c.t("html.fix.manual", p), c.manualOpen(mp), settings, c.t(add, p), html.EscapeString(untrusted.VisiblePaste(a.Value)), c.t("html.fix.manual.save", p))
-		after = map[string]string{
-			rules.CompletenessFull: "html.after.full", rules.CompletenessRadiusOnly: "html.after.radius", rules.CompletenessPartial: "html.after.partial",
-		}[a.Completeness]
-	}
-	env := ""
-	if a.Completeness == rules.CompletenessRadiusOnly {
-		env = c.help("env")
-	}
-	c.w(`<p class="after">%s%s</p></div></section>`, c.t(after, p), env)
-}
-
-// step3Cap is how many rows step 3 shows before the rest fold (v3 §12.3).
-const step3Cap = 8
-
-// renderStep3 is v3 §5: every row but today's, in two groups; one row per
-// credential (§12.2), the first step3Cap shown and the rest folded (§12.3).
-func (c htmlCtx) renderStep3(todayID string) {
-	var list []rules.Finding
-	for _, f := range c.v.Findings {
-		if r := c.rows[f.ID]; !slices.Contains(r.ids, todayID) && f.Accepted == nil {
-			list = append(list, f)
-		}
-	}
-	// Within each group, the score's agent's rows first, each agent in the
-	// report's order (v3 §10.5).
-	if a, ok := c.scored(); ok {
-		sort.SliceStable(list, func(i, j int) bool { return c.ofScoredAgent(list[i], a) && !c.ofScoredAgent(list[j], a) })
-	}
-	var rows []rules.Finding
-	for _, sev := range []string{rules.SeverityRed, rules.SeverityYellow} {
-		done := map[*credRow]bool{}
-		for _, f := range list {
-			if r := c.rows[f.ID]; f.Severity == sev && !done[r] {
-				done[r] = true
-				rows = append(rows, r.rep)
-			}
-		}
-	}
-	c.w(`<section aria-labelledby="step3">`)
-	n := strconv.Itoa(len(rows))
-	c.stepHead(3, "h2", "step3", c.t("html.step.3", nil), html.EscapeString(c.cat.Plural("html.step.3.hint", len(rows), map[string]string{"count": n})), false)
-	if len(rows) == 0 {
-		empty := "html.step.3.none"
-		if !c.v.Coverage.GraphBuilt {
-			empty = "html.rest.incomplete" // the review did not finish (J14)
-		}
-		c.w(`<p class="empty">%s</p></section>`, c.t(empty, nil))
-		return
-	}
-	for i, f := range rows {
-		if i == step3Cap {
-			rest := len(rows) - step3Cap
-			c.w(`<details class="rest"><summary><span class="chev" aria-hidden="true">›</span>%s</summary>`,
-				html.EscapeString(c.cat.Plural("html.step.3.more", rest, map[string]string{"count": strconv.Itoa(rest)})))
-		}
-		if i == 0 || i == step3Cap || f.Severity != rows[i-1].Severity {
-			c.w(`<div class="grp"><span class="dot" style="background:%s"></span>%s</div>`, sevFill(f.Severity), c.t("html.group."+f.Severity, nil))
-		}
-		c.renderRow(f)
-	}
-	if len(rows) > step3Cap {
-		c.w(`</details>`)
-	}
-	c.w(`</section>`)
 }
 
 // renderDismissed is the folded «Dismissed by you» section (BV-184), after
@@ -1434,15 +1189,6 @@ func (c htmlCtx) multi(f rules.Finding) bool {
 	return r != nil && len(r.agents) > 1
 }
 
-// masterHelp is the «i» of master after the title of a finding whose
-// credential is the Supabase service_role key (§4).
-func (c htmlCtx) masterHelp(f rules.Finding) string {
-	if (f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable) && c.credKey(f) == "supabase.service_role" {
-		return c.help("master")
-	}
-	return ""
-}
-
 // configHelp is the «i» of config at the end of the impact of
 // foreign_agent_config_writable (§4).
 func (c htmlCtx) configHelp(f rules.Finding) string {
@@ -1520,7 +1266,7 @@ func HTMLKeys() []string {
 		"html.doc_title", "html.header", "html.header_sent", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
-		"html.card.button", "html.card.counts", "html.card.method",
+		"html.card.button", "html.card.counts", "html.card.counts.one", "html.card.method",
 		"html.none",
 		"html.meta.projects.one", "html.meta.projects.other", // BV-158: the step-1 projects/limit line
 		"html.limit.one", "html.limit.other", "html.limit.reached",
@@ -1574,9 +1320,10 @@ func HTMLKeys() []string {
 		"severity.red", "severity.yellow",
 		"html.verdict.new", "html.verdict.still", "html.verdict.again", "html.verdict.not_checked",
 	}
+	keys = append(keys, r3Keys()...)
 	// v3
-	keys = append(keys, "html.step.1", "html.step.1.counts", "html.step.2", "html.step.2.hint", "html.step.3",
-		"html.step.3.hint.one", "html.step.3.hint.other", "html.step.3.none", "html.rest.incomplete", "html.today.fixes", "html.today.incomplete",
+	keys = append(keys, "html.step.1", "html.step.1.counts",
+		"html.today.incomplete",
 		"html.step.1.other", "html.unknown.body.cursor", "html.unknown.body.grok-build", "html.today.projection.agent")
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
@@ -1589,7 +1336,7 @@ func HTMLKeys() []string {
 		"html.projects.new.one", "html.projects.gone.one", "html.f.own_instructions_writable.impact.one",
 		"html.signals.title", "html.signals.note")
 	// v3 §12 (BV-54)
-	keys = append(keys, "html.testdata.one", "html.testdata.other", "html.step.3.more.one", "html.step.3.more.other")
+	keys = append(keys, "html.testdata.one", "html.testdata.other")
 	keys = append(keys, CompanyHTMLKeys...) // «Your company» and the administrator's list
 	// BV-94, B9: what the configuration hides (shown as a warning in step 1,
 	// BV-158)
@@ -1606,7 +1353,7 @@ func HTMLKeys() []string {
 	keys = append(keys, moreKeys()...)
 	// v3 §15 (BV-63)
 	keys = append(keys, "html.gain.if_gone", "html.gain.agent.if_gone", "html.fix.none", "html.step.1.counts.multi",
-		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.same_as_today")
+		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.counts.total.one", "ai.same_as_today")
 	// v3 §11 (BV-61)
 	keys = append(keys, overviewKeys()...)
 	// BV-121: the agents_overview services list (§11).

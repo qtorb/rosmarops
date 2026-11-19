@@ -72,12 +72,11 @@ func TestRulesVersion2_NotComparable(t *testing.T) {
 		page := renderHTML(t, lang, run2)
 		// BV-158: the not-comparable line left step 1's meta; it is now in «Since
 		// the last check» (renderSince → memory.not_comparable, checked below).
-		// BV-236 §1: the sheet replaces step 1's meta; the sheet's result,
-		// where the score is, has no arrow.
-		_, meta, _ := strings.Cut(page, `<section class="sh-sec" aria-labelledby="sh-result">`)
+		// The first screen's result, where the score is, has no arrow.
+		_, meta, _ := strings.Cut(page, `<section class="r3-card" aria-labelledby="r3-h1">`)
 		meta, _, _ = strings.Cut(meta, `</section>`)
 		if meta == "" {
-			t.Fatalf("%s: no sheet result", lang)
+			t.Fatalf("%s: no result block", lang)
 		}
 		if strings.Contains(meta, " → ") || strings.Contains(meta, "→") {
 			t.Errorf("%s: an arrow in %s", lang, meta)

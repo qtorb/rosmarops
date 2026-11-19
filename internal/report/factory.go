@@ -26,8 +26,9 @@ func evaluate(in V2Input, g graph.Graph, fams map[string]string) rules.Result {
 // factoryResult is the second, factory pass of a review (BV-235, R1): the
 // index and the classes with every agent at its product defaults.
 type factoryResult struct {
-	idx     index.Index
-	classes map[string]exposure.Agent // by agent id
+	idx      index.Index
+	classes  map[string]exposure.Agent // by agent id
+	findings map[string]bool           // the pass's finding ids
 }
 
 // factoryPass evaluates in.FactoryGraph, the graph of this computer with
@@ -73,7 +74,11 @@ func passOf(fin V2Input, g graph.Graph, fams map[string]string) *factoryResult {
 	}
 	idx, _ := buildIndex(fin, res, vf)
 	ov := agentsOverview(res.AgentsOverview, idx)
-	return &factoryResult{idx: idx, classes: classes(ov, res.Findings, g, idx)}
+	ids := map[string]bool{}
+	for _, f := range res.Findings {
+		ids[f.ID] = true
+	}
+	return &factoryResult{idx: idx, classes: classes(ov, res.Findings, g, idx), findings: ids}
 }
 
 // classes are the six-axis classes of every agent of an overview (BV-235,

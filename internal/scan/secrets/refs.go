@@ -22,7 +22,7 @@ type Ref struct {
 
 // Identify turns a pattern and the secret it matched into a Ref. The secret
 // is in clear: an Identify function must never log or keep it.
-type Identify func(patternID, secret string) Ref
+type Identify func(patternID, secret, dbHost string) Ref
 
 // MatchRefs is MatchTimed that also sets, on every match, its offset in
 // content and the Ref identify makes of its secret. The secret is the same
@@ -64,4 +64,22 @@ func contentSpan(patternID string, content []byte, start, end int) string {
 		raw = string(content[start:end])
 	}
 	return strings.TrimSpace(raw)
+}
+
+// DBHostAfter is the host of a database URL whose credential segment (the
+// pattern's match) ends at end, the «@»: the text after it up to a port, a
+// path, a query, a quote or a space. It is only the host, never the
+// password, so a reader can tell which service the database belongs to.
+func DBHostAfter(text string, end int) string {
+	if end <= 0 || end > len(text) || text[end-1] != '@' {
+		return ""
+	}
+	rest := text[end:]
+	if i := strings.IndexAny(rest, ":/?#\"' \t\r\n"); i >= 0 {
+		rest = rest[:i]
+	}
+	if len(rest) > 253 {
+		return ""
+	}
+	return strings.ToLower(rest)
 }

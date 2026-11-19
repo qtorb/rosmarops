@@ -52,80 +52,64 @@ func between(t *testing.T, page, from, to string) string {
 	return rest[:j]
 }
 
-// TestBV236Sheet: the sheet's numbers come from the engine (index.machine,
-// its factory value, the kinds of the evaluated agents and the agents'
-// groups), in EN and ES.
+// TestBV236Sheet: the first screen's numbers come from the engine
+// (index.machine, its factory value and class, the kinds of the evaluated
+// agents), in EN and ES.
 func TestBV236Sheet(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		v, page, cat := bv236Page(t, lang)
-		sheet := between(t, page, `<article class="sheet"`, `</article>`)
+		first := between(t, page, `<div class="r3" id="top">`, `<footer class="r3-foot">`)
 		m := v.Index.Machine
 		if m.Value == nil || m.FactoryValue == nil || m.Letter == nil || m.Letter.Class == nil {
 			t.Fatalf("machine score incomplete: %+v", m)
 		}
 		var machineAgent string
 		for _, a := range v.Index.Agents {
-			if a.Value != nil && *a.Value == *m.Value && machineAgent == "" {
+			if a.AgentID == m.AgentID {
 				machineAgent = a.Agent
 			}
 		}
-		agents, repos := len(v.Index.Scope.Evaluated), v.Index.Scope.Repos
 		for _, want := range []string{
-			esc(cat.Text("sheet.title", nil)), esc(cat.Text("sheet.sub", nil)),
-			esc(cat.Text("sheet.scope", map[string]string{
-				"agents":   cat.Plural("sheet.scope.agents", agents, map[string]string{"n": strconv.Itoa(agents)}),
-				"projects": cat.Plural("sheet.scope.projects", repos, map[string]string{"n": strconv.Itoa(repos)}),
-			})),
-			"RosmarOps 0.12.0", ">Windows<",
-			`big">` + strconv.Itoa(*m.Value) + `</b>`,
-			esc(cat.Text("sheet.result.label", map[string]string{"agent": machineAgent})),
-			esc(cat.Text("sheet.class."+*m.Letter.Class, nil)),
-			"<b>" + strconv.Itoa(*m.FactoryValue) + "</b>",
-			esc(cat.Text("sheet.reading.L1", map[string]string{"agent": machineAgent})),
-			esc(cat.Text("sheet.act.A1", nil)), esc(cat.Text("sheet.act.profile", nil)), esc(cat.Text("sheet.act.findings", nil)),
-			esc(cat.Text("sheet.foot.P1", nil)),
+			esc(cat.Text("html.r3.title", nil)), esc(cat.Text("html.r3.sub", nil)),
+			"RosmarOps 0.12.0", " · Windows · ",
+			`<b>` + strconv.Itoa(*m.Value) + `</b>`,
+			"<b>" + esc(machineAgent) + "</b>",
+			esc(strings.ToLower(cat.Text("sheet.class."+*m.Letter.Class, nil)[:1]) + cat.Text("sheet.class."+*m.Letter.Class, nil)[1:]),
+			" " + strconv.Itoa(*m.FactoryValue) + ".",
+			esc(cat.Text("html.r3.tpl.button", nil)),
 		} {
-			if !strings.Contains(sheet, want) {
-				t.Errorf("%s: the sheet lacks %q", lang, want)
+			if !strings.Contains(first, want) {
+				t.Errorf("%s: the first screen lacks %q", lang, want)
 			}
 		}
-		if d := *m.Value - *m.FactoryValue; d == 0 && !strings.Contains(sheet, esc(cat.Text("sheet.reading.L4", nil))) {
-			t.Errorf("%s: score equals the factory score but no L4", lang)
-		}
-		// The strip: five kinds, each the worst state among the evaluated agents.
+		// The strip, in «How the score is worked out»: five kinds, each the
+		// worst state among the evaluated agents.
 		rank := map[string]int{rules.StateNobody: 7, rules.StateModel: 6, rules.StateBounded: 5, rules.StateYou: 4, rules.StateBlocked: 3, rules.StateUnknown: 2, rules.StateNoneKnown: 1}
 		for _, kind := range rules.KindOrder {
 			worst := rules.StateUnknown
-			first := true
+			firstState := true
 			for _, o := range v.AgentsOverview {
 				if !o.Evaluated {
 					continue
 				}
 				for _, k := range o.Kinds {
-					if k.Kind == kind && (first || rank[k.State] > rank[worst]) {
-						worst, first = k.State, false
+					if k.Kind == kind && (firstState || rank[k.State] > rank[worst]) {
+						worst, firstState = k.State, false
 					}
 				}
 			}
-			if !strings.Contains(sheet, `data-kind="`+kind+`" data-state="`+worst+`"`) {
+			if !strings.Contains(first, `data-kind="`+kind+`" data-state="`+worst+`"`) {
 				t.Errorf("%s: kind %s is not %s", lang, kind, worst)
 			}
 		}
-		// Findings: at most three rows, «{n} findings · the first 3».
-		if n := strings.Count(between(t, sheet, `<tbody>`, `</tbody>`), "<tr>"); n != 3 {
-			t.Errorf("%s: %d finding rows, want 3", lang, n)
+		// Problems: at most six rows and the counts line.
+		if n := strings.Count(between(t, first, `<tbody>`, `</tbody>`), `<th scope="row"`); n < 1 || n > 6 {
+			t.Errorf("%s: %d problems shown, want 1 to 6", lang, n)
 		}
-		if !strings.Contains(sheet, "/") || !regexp.MustCompile(`<em>\d+ `).MatchString(sheet) {
-			t.Errorf("%s: no findings count", lang)
+		if !strings.Contains(first, `<p class="r3-counts">`) {
+			t.Errorf("%s: no counts line", lang)
 		}
-		// Every «would go up to» names a group's score above the agent's.
-		for _, mm := range regexp.MustCompile(`(\d+)</td></tr>`).FindAllStringSubmatch(sheet, -1) {
-			n, _ := strconv.Atoi(mm[1])
-			if n <= *m.Value {
-				t.Errorf("%s: «would go up to %d» not above %d", lang, n, *m.Value)
-			}
-		}
-		// The promise line stays, under the sheet.
+		// The promise line stays, under the header.
 		if !strings.Contains(between(t, page, `<div class="sheetnotes">`, `</div>`), esc(cat.Text("html.header", map[string]string{"date": cat.DayLabel(fmNow.UTC())}))) {
 			t.Errorf("%s: the «sent nothing» line is gone", lang)
 		}
@@ -137,7 +121,7 @@ func TestBV236Sheet(t *testing.T) {
 }
 
 // TestBV236ProfileViewWithoutJS: without JavaScript the profile views show
-// below the sheet with «I write code» (P1 for Claude Code): the default
+// below the first screen with «I write code» (P1 for Claude Code): the default
 // fragments are not hidden, the others are; the text to copy is T1 and the
 // literal block.
 func TestBV236ProfileViewWithoutJS(t *testing.T) {
@@ -147,9 +131,9 @@ func TestBV236ProfileViewWithoutJS(t *testing.T) {
 		if !strings.Contains(page, `.js .view{display:none}`) || regexp.MustCompile(`(^|[\n}])\.view\{display:none`).MatchString(page) {
 			t.Errorf("%s: the views are hidden without JavaScript", lang)
 		}
-		sheetEnd, pc, flow := strings.Index(page, `</article>`), strings.Index(page, `<section class="view pcv" id="v-pc"`), strings.Index(page, `<div class="flow" id="todo">`)
+		sheetEnd, pc, flow := strings.Index(page, `<footer class="r3-foot">`), strings.Index(page, `<section class="view pcv" id="v-pc"`), strings.Index(page, `<div id="todo">`)
 		if sheetEnd < 0 || pc < sheetEnd || flow < pc {
-			t.Errorf("%s: the profile view is not between the sheet and the flow", lang)
+			t.Errorf("%s: the profile view is not between the first screen and the problems' steps", lang)
 		}
 		if !strings.Contains(page, `name="use" value="code" data-profile="P1" checked`) {
 			t.Errorf("%s: «I write code» is not the default use", lang)
@@ -237,8 +221,8 @@ func TestBV236AcceptedInReport(t *testing.T) {
 		!strings.Contains(acc, esc(cat.Text("report.accepted.on", map[string]string{"date": "14 de noviembre de 2026"}))) {
 		t.Errorf("no «Asumidos por ti (1)» with the date:\n%s", acc)
 	}
-	if strings.Contains(between(t, page, `<div class="flow" id="todo">`, `<section aria-labelledby="accepted">`), `id="`+first+`"`) {
-		t.Error("the accepted finding is still pending in the flow")
+	if strings.Contains(between(t, page, `<div id="todo">`, `<section aria-labelledby="accepted">`), `id="`+first+`"`) {
+		t.Error("the accepted finding is still pending in the problems' steps")
 	}
 }
 
@@ -262,7 +246,8 @@ func TestBV236PassesWriteNothing(t *testing.T) {
 }
 
 // TestBV236Browser checks in a real browser, when Playwright is installed
-// (skipped otherwise): the sheet fits 1280×800, the views open and close,
+// (skipped otherwise): the first screen's block 3 position is logged (the
+// signed design has no fold limit), the views open and close,
 // and with the clipboard denied the text shows, selected, with C1 — in the
 // profile bar and in today's copies.
 func TestBV236Browser(t *testing.T) {
@@ -298,11 +283,11 @@ const [file, c1] = process.argv.slice(1);
   p.on('pageerror', e => errs.push(e.message));
   await p.goto('file://' + file);
   const fail = m => { console.error(m); process.exitCode = 1 };
-  const bottom = await p.evaluate(() => document.querySelector('.sheet').getBoundingClientRect().bottom);
-  if (bottom > 800) fail('the sheet ends at ' + bottom + 'px, below 800');
+  const bottom = await p.evaluate(() => document.querySelector('#r3-h3').closest('section').getBoundingClientRect().bottom);
+  console.log('first screen: block 3 ends at ' + Math.round(bottom) + 'px');
   if (await p.isVisible('#v-pc')) fail('the profile view shows with JavaScript before it is opened');
   await p.click('a[data-view="v-pc"]');
-  if (!(await p.isVisible('#v-pc')) || await p.isVisible('.sheet')) fail('the profile view does not open');
+  if (!(await p.isVisible('#v-pc')) || await p.isVisible('.r3')) fail('the profile view does not open');
   const h = await p.evaluate(() => document.documentElement.scrollHeight);
   if (h > 800) fail('«Computer profile» is ' + h + 'px tall, over 800');
   await p.click('#v-pc .apply:not([hidden]) button[data-copy]');
@@ -325,13 +310,15 @@ const [file, c1] = process.argv.slice(1);
   if (!(await p.isVisible('#v-cc .apply[data-p="P3"]')) || await p.isVisible('#v-cc .apply[data-p="P1"]')) fail('choosing P3 does not change the bar');
   await p.click('#v-cc a[data-view="v-pc"]');
   await p.click('#v-pc a.back');
-  if (!(await p.isVisible('.sheet'))) fail('«← Report» does not close the view');
+  if (!(await p.isVisible('.r3'))) fail('«← Report» does not close the view');
   const today = await p.$('button[data-copied]');
   if (today) {
+    // The copy lives in a finding's row, in its problem's steps: open it.
+    await today.evaluate(b => { for (let d = b.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) d.open = true });
     await today.scrollIntoViewIfNeeded();
     await today.click();
     const ok = await p.evaluate(b => { const pre = b.previousElementSibling, l = b.nextElementSibling; return !pre.hidden && l.textContent === document.querySelector('[data-copyfail]').getAttribute('data-copyfail') }, today);
-    if (!ok) fail('denied: today\'s copy does not show the text with C1');
+    if (!ok) fail('denied: a row\'s copy does not show the text with C1');
   }
   if (errs.length) fail('page errors: ' + errs.join('; '));
   await b.close();

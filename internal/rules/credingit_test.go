@@ -20,7 +20,7 @@ import (
 // reports it: identified with the salt, the value discarded.
 func committed(value, patternID, repo, presence, file string, line int, remote bool) finding.CommittedSecret {
 	return finding.CommittedSecret{
-		PatternID: patternID, Ref: graph.Identifier(salt)(patternID, value), Repo: repo, Presence: presence,
+		PatternID: patternID, Ref: graph.Identifier(salt)(patternID, value, ""), Repo: repo, Presence: presence,
 		File: file, Line: line, Commit: "0123456789abcdef0123456789abcdef01234567", HasRemote: remote,
 	}
 }

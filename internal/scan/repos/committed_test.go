@@ -39,7 +39,7 @@ func TestScanAllRepos_CommittedSecrets(t *testing.T) {
 	var progress []int
 	cfg := repos.ScanConfig{
 		Patterns: secrets.BuiltinPatterns(),
-		Identify: func(patternID, secret string) secrets.Ref {
+		Identify: func(patternID, secret, _ string) secrets.Ref {
 			seen[secret]++
 			return secrets.Ref{Fingerprint: "fp:" + secret[len(secret)-4:], Service: "github"}
 		},

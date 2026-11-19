@@ -409,8 +409,17 @@ func systemdExecArg(exe string) string {
 // common line, one per evaluated agent in the columns' order, the scope;
 // then what this system does not check yet (decision 2026-10-29, point 3).
 func (c htmlCtx) renderAssumeDialog() {
-	c.w(`<dialog id="as-dialog" aria-labelledby="as-dlg-title" hidden><button type="button" class="b2" id="as-close">%s</button><h2 id="as-dlg-title">%s</h2><ul><li>%s</li>`,
-		c.t("html.ov.close", nil), c.t("html.assume.title", nil), c.t("html.assume.common", nil))
+	c.w(`<dialog id="as-dialog" aria-labelledby="as-dlg-title" hidden><button type="button" class="b2" id="as-close">%s</button><h2 id="as-dlg-title">%s</h2><ul>`,
+		c.t("html.ov.close", nil), c.t("html.assume.title", nil))
+	c.renderAssumeItems(true)
+	c.w(`</ul></dialog>`)
+}
+
+// renderAssumeItems are the analysis assumptions, one item each: the
+// window's list, and the first screen's «Analysis assumptions» fold. anchor
+// gives the not-checked item its id (only once per page).
+func (c htmlCtx) renderAssumeItems(anchor bool) {
+	c.w(`<li>%s</li>`, c.t("html.assume.common", nil))
 	for _, a := range overviewColumns(c.v) {
 		product := a.Product
 		if product == "" {
@@ -426,13 +435,16 @@ func (c htmlCtx) renderAssumeDialog() {
 	}
 	c.w(`<li>%s</li>`, c.t(c.v.osKey("html.assume.scope"), nil))
 	if len(c.v.NotChecked) > 0 {
-		c.w(`<li id="not-checked"><strong>%s</strong> %s<ul>`, c.t("html.na.title", nil), c.t("html.na.intro", nil))
+		id := ""
+		if anchor {
+			id = ` id="not-checked"`
+		}
+		c.w(`<li%s><strong>%s</strong> %s<ul>`, id, c.t("html.na.title", nil), c.t("html.na.intro", nil))
 		for _, code := range c.v.NotChecked {
 			c.w(`<li>%s</li>`, c.t("html.na."+code, nil))
 		}
 		c.w(`</ul></li>`)
 	}
-	c.w(`</ul></dialog>`)
 }
 
 // rowAssumptionsInDialog are the row assumptions whose text the window of the

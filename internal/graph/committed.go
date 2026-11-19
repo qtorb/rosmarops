@@ -16,12 +16,12 @@ import (
 // repository and in a .env file is the same node. The value is used only
 // here and never kept.
 func Identifier(salt []byte) secrets.Identify {
-	return func(patternID, secret string) secrets.Ref {
+	return func(patternID, secret, dbHost string) secrets.Ref {
 		credType, service, known := CredentialKind(patternID)
 		if !known {
 			credType, service = CredentialGenericSecret, ServiceUnknown
 		}
-		ident := identifyService(patternID, service, secret)
+		ident := identifyService(patternID, service, secret, dbHost)
 		if ident.observed {
 			credType = CredentialAPIKey
 		}

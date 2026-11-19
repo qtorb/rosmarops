@@ -422,7 +422,11 @@ func matchAll(content []byte, patterns []Pattern, perPattern map[string]time.Dur
 				m.Offset = loc[0]
 				m.Line = 1 + bytes.Count(content[:loc[0]], []byte("\n"))
 				if secret := contentSpan(p.ID, content, loc[0], loc[1]); secret != "" {
-					r := identify(p.ID, secret)
+					host := ""
+					if p.ID == "database_url_with_credentials" {
+						host = DBHostAfter(string(content), loc[1])
+					}
+					r := identify(p.ID, secret, host)
 					m.Ref = &r
 				}
 			}

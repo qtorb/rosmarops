@@ -446,6 +446,30 @@ func Compute(in Input) Index {
 	return idx
 }
 
+// WithoutSet is the score of every evaluated agent, and of the computer,
+// with a set of findings fixed at once: the same formula as today, over the
+// findings that are not in ids (the report's «If you fix this» for a group of
+// findings). The scores are of that one set: two sets' gains do not add up.
+// machine is nil when the computer has no score.
+func WithoutSet(in Input, ids map[string]bool) (agents map[string]int, machine *int) {
+	rest := in
+	rest.Findings = nil
+	for _, f := range in.Findings {
+		if !ids[f.ID] {
+			rest.Findings = append(rest.Findings, f)
+		}
+	}
+	rest.Previous = nil
+	idx := Compute(rest)
+	agents = map[string]int{}
+	for _, a := range idx.Agents {
+		if a.Value != nil {
+			agents[a.AgentID] = *a.Value
+		}
+	}
+	return agents, idx.Machine.Value
+}
+
 // covered reports the coverage conditions of §2 for agent a, per agent
 // (BV-101, decision 3; LECTURA-103 §2): the graph was built and no source of
 // THIS agent (a source inside its configuration folder) failed to be read. A

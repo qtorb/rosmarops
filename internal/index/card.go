@@ -45,7 +45,7 @@ func Card(a AgentIndex, silenced int, day time.Time, cat catalog.Catalog) (svg, 
 	name := cat.Text("html.index.name", nil)
 	of := cat.Text("html.index.of", nil)
 	band := cat.Text("band."+a.Band, nil)
-	counts := cat.Text("html.card.counts", map[string]string{"red": strconv.Itoa(a.Red), "yellow": strconv.Itoa(a.Yellow)})
+	counts := cat.Text(cat.One("html.card.counts", a.Red), map[string]string{"red": strconv.Itoa(a.Red), "yellow": strconv.Itoa(a.Yellow)})
 	// The silenced count follows the counts (informe HTML v3 §9.3): 14px,
 	// #A3A098.
 	sil, silText := "", ""

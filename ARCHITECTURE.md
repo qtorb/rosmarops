@@ -109,7 +109,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 
 ### Output
 
-- `internal/report`: builds and writes the reports: Markdown, JSON, the v2 JSON, the HTML pages and the export for your AI.
+- `internal/report`: builds and writes the reports: Markdown, JSON, the v2 JSON, the HTML pages and the export for your AI. The HTML's first screen (`html_r3.go`) groups the findings by problem while it draws the page (`issues.go`): by the service a credential opens, and by the agent that can change other agents' settings. There is no field for it in `report.v2`: the groups are drawn from data the JSON already has, so the findings and their counts stay the same for every other reader. See [the decision](docs/decisions/0020-report-in-three-blocks.md).
 - `internal/spacenet`: the only package that uses the network: HTTPS to `app.rosmarops.com`, only with permission.
 - `internal/results`: the sealed results package for the space.
 - `internal/kit`: the user's kit key, its file format and its storage on each computer.
