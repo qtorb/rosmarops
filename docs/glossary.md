@@ -64,6 +64,8 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Reports folder.** Where each review writes its pages (`report.html` and one per language) and, in `data/`, everything else it keeps. `~/.rosmarops/reports/` on Windows and macOS, `~/RosmarOps/` on Linux, where a browser installed as a snap cannot open a hidden folder; `report_directory` in the configuration sets another. See [the decision](decisions/0019-linux-reports-findings-hint-problem-fields.md).
 
+**Journey test.** A run of a candidate RosmarOps as a person would, through a terminal with planned answers, on a test computer: R1 the first time, R2 an update from the last published version, R3 a computer with 60 projects. They run before a release is published. Not the same R2 as the factory scores' reference computer (`TestR2FactoryScores`). See [the how-to](how-to/journeys.md).
+
 **Integrity check.** The comparison, before every command but `init`, `baseline`, `--help` and `--version`, of the program and its configuration with the references in the state. A change is accepted only by the person in a console, by the administrator's list or by a Microsoft Store update; otherwise the command stops with a red report. See [the decision](decisions/0006-self-integrity-check.md).
 
 ## Problems and statistics

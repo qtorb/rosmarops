@@ -175,6 +175,12 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 
 `tests/trust/no_writes_out_of_scope_test.go` runs the program in a sandbox and fails if anything is written elsewhere.
 
+## Tests that run the real program
+
+- `tests/trust`: the invariants, mechanically (network, writes, secrets, integrity, and that what reaches the console comes from the catalog).
+- `tests/integration`: the real binary on fixture computers.
+- `tests/journeys` and `.github/workflows/journeys.yml`: the journey tests R1-R3, a candidate driven as a person would through a pseudo-terminal (ConPTY on Windows) on ubuntu-24.04 with Firefox as a snap, windows-latest (also through the MSIX test package) and macos-latest, with test computers built by `tests/journeys/makehome`. `release.yml` runs them between `build` and `publish`, on the same bytes; they block the publication once `JOURNEYS_GATE` is `on`. See [docs/how-to/journeys.md](docs/how-to/journeys.md).
+
 ## Known oddities
 
 - **`adapters/windows` is used on all three systems.** Its files have no build constraint. `adapters/darwin` and `adapters/linux` call its readers with their own folder layout (`internal/agentdirs`).

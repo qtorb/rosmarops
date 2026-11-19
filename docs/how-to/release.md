@@ -36,14 +36,16 @@ Either way works:
 |---|---|---|
 | `tag` | manual runs only | The checks above, then creates the tag. |
 | `verify` | Linux | The same checks as CI: `go vet` and `staticcheck` for Linux, Windows and macOS, `gofumpt`, the release flags, `go test -count=1 ./...`. |
-| `release` | Linux | Builds `rosmarops.exe` (with the icon and version resource from `go run ./tools/winres -version X.Y.Z`), runs `govulncheck` on it, builds `rosmarops-macos-apple-silicon`, `rosmarops-macos-intel`, `rosmarops-linux-amd64` and `rosmarops-linux-arm64`, runs the network trust tests, writes `SHA256SUMS.txt`, creates the build provenance attestation and the GitHub release. |
+| `build` | Linux | Builds `rosmarops.exe` (with the icon and version resource from `go run ./tools/winres -version X.Y.Z`), runs `govulncheck` on it, builds `rosmarops-macos-apple-silicon`, `rosmarops-macos-intel`, `rosmarops-linux-amd64` and `rosmarops-linux-arm64`, runs the network trust tests, writes `SHA256SUMS.txt`, and keeps them as the artifact `release-candidate`. |
+| `journeys` | Linux, Windows, macOS | The journey tests (`journeys.yml`) on exactly those binaries: see [journeys](journeys.md). They block `publish` only when the repository variable `JOURNEYS_GATE` is `on`. |
+| `publish` | Linux | Checks every file against `build`'s `SHA256SUMS.txt`, creates the build provenance attestation and the GitHub release. |
 | `sample-report` | Windows | Checks the released `rosmarops.exe` by its SHA-256, makes the sample report with `scripts/sample-report/generate.ps1`, and adds `sample-report.en.html` and `sample-report.es.html` to the release. |
 | `factory-scores` | Linux | Runs `TestR2FactoryScores`, `TestExposurePotential` and `TestProfileScores` in `tests/trust` with their output variables set, and adds `factory-scores.json`, `exposure-potential.json` and `profile-scores.json` to the release. |
 | `e2e-realistic` | Windows | Runs the released `rosmarops.exe` on a test computer with 48 projects (`scripts/e2e/make-home.ps1`, `scripts/e2e/run.ps1`). A failure turns the whole run red. |
 
 Every executable is built with `CGO_ENABLED=0`, `-trimpath` and `-ldflags="-X main.version=X.Y.Z"`. `SHA256SUMS.txt` covers only the executables, not the JSON files or the sample report.
 
-If a job after `release` fails, the GitHub release already exists. Fix the cause and re-run the failed job within a day (the jobs after `release` take `rosmarops.exe` from an Actions artifact kept for one day). Do not delete and re-create the tag.
+If a job after `publish` fails, the GitHub release already exists. Fix the cause and re-run the failed job within a day (the jobs after `publish` take `rosmarops.exe` from an Actions artifact kept for one day). Do not delete and re-create the tag. If `journeys` fails with the gate on, nothing is published: fix the cause, then re-run the failed jobs of the run.
 
 ## 4. Microsoft Store (MSIX)
 
@@ -104,4 +106,4 @@ The program Homebrew builds does not match `SHA256SUMS.txt`, because it is built
 - `brew install qtorb/rosmarops/rosmarops` (or `brew upgrade rosmarops`) installs `X.Y.Z` on macOS or Linux.
 - If the Go version in `release.yml` changed, the reproducible build commands in [the trust model](../trust-model.md) («At release») name the new version.
 
-See also [ARCHITECTURE.md](../../ARCHITECTURE.md) and [the network decision](../decisions/0001-network-only-in-spacenet.md): the `release` job runs the network trust tests again before it publishes.
+See also [ARCHITECTURE.md](../../ARCHITECTURE.md) and [the network decision](../decisions/0001-network-only-in-spacenet.md): the `build` job runs the network trust tests again before anything is published.

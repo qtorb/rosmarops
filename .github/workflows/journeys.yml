@@ -42,12 +42,12 @@ permissions: {}
 
 env:
   GOTOOLCHAIN: local
-  # Checks expected to fail until the fixes of the Linux feedback on 0.15.0
-  # (qtorb/rosmarops#141) are on master: a failure there is reported as
-  # «expected red» and does not fail the journey; a pass says it can leave the
-  # list. Empty this list once #141 is merged.
-  JOURNEY_EXPECTED_RED: "Firefox (snap) opens the report,run: asks,usage: asks,status: asks,findings: asks,problems ask: asks,run --unattended: its console,ends without asking about each finding"
-  JOURNEY_EXPECTED_RED_WHY: "fixed in qtorb/rosmarops#141"
+  # Checks expected to fail for a known reason, with the fix's reference (a
+  # comma-separated list of pieces of check names): a failure there is
+  # reported as «expected red» and does not fail the journey, and a pass says
+  # it can leave the list. Empty: every check must pass.
+  JOURNEY_EXPECTED_RED: ""
+  JOURNEY_EXPECTED_RED_WHY: ""
 
 jobs:
   candidate:

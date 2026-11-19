@@ -216,8 +216,9 @@ jobs:
     # and checks: exit 0, no AF_INET socket call, the Spanish report exists and
     # names Claude Code, Cursor and Hermes Agent, no full secret in any output,
     # and the weekly section (no user systemd on the runner → the no-systemd
-    # text, or the Linux pitch if it is there).
-    runs-on: ubuntu-latest
+    # text, or the Linux pitch if it is there). ubuntu-24.04, not -latest
+    # (Ubuntu 26 since 2026-09-17): the version people run.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
