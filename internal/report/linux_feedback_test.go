@@ -107,27 +107,38 @@ func TestResultsFileName(t *testing.T) {
 	}
 }
 
-// Both the score and its factory reference at 0: neither the reference nor
-// the comparison is shown; otherwise both are, as before.
+// Both the score and its factory reference at 0: the result does not show
+// the reference; otherwise it does, as before.
 func TestSaturatedScoreHidesReference(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
 		cat, _ := catalog.Load(lang)
-		ref := htmlEscape(cat.Text("sheet.reference", nil))
-		same := htmlEscape(cat.Text("sheet.reading.L4", nil))
+		// The reference's sentence: what follows the class in the signed text.
+		_, ref, _ := strings.Cut(cat.Text("html.r3.result", map[string]string{"reference": "\x00"}), "). ")
+		ref, _, _ = strings.Cut(ref, "\x00")
+		result := func(page string) string {
+			_, r, _ := strings.Cut(page, `<p class="r3-text">`)
+			r, _, _ = strings.Cut(r, `</p>`)
+			return r
+		}
 		zero, forty := 0, 40
 		v.Index.Machine.Value, v.Index.Machine.FactoryValue = &zero, &zero
-		page := renderHTML(t, lang, v)
-		if strings.Contains(page, `<div class="res-k">`+ref+`</div>`) || strings.Contains(page, same) {
-			t.Errorf("%s: reference or comparison shown with both at 0", lang)
+		if r := result(renderHTML(t, lang, v)); strings.Contains(r, htmlEscape(ref)) || !strings.HasSuffix(r, ").") {
+			t.Errorf("%s: reference shown with both at 0: %q", lang, r)
 		}
 		v.Index.Machine.Value, v.Index.Machine.FactoryValue = &forty, &forty
-		page = renderHTML(t, lang, v)
-		if !strings.Contains(page, `<div class="res-k">`+ref+`</div>`) || !strings.Contains(page, same) {
-			t.Errorf("%s: reference or comparison missing with both at 40", lang)
+		if r := result(renderHTML(t, lang, v)); !strings.Contains(r, htmlEscape(ref)+"40.") {
+			t.Errorf("%s: reference missing with both at 40: %q", lang, r)
 		}
 	}
+}
+
+// counts is the first screen's line of counts.
+func counts(page string) string {
+	_, c, _ := strings.Cut(page, `<p class="r3-counts">`)
+	c, _, _ = strings.Cut(c, `</p>`)
+	return c
 }
 
 // A project that ran out of time makes the findings' count a lower bound,
@@ -153,12 +164,12 @@ func TestCountWhenProjectsDidNotFinish(t *testing.T) {
 			found := false
 			for n := 0; n < 50; n++ {
 				want := cat.Text(c.key, map[string]string{"n": strconv.Itoa(n), "k": strconv.Itoa(c.k)})
-				if strings.Contains(page, `<em>`+htmlEscape(want)+`</em>`) {
+				if strings.Contains(page, `<p class="r3-counts">`) && strings.Contains(counts(page), htmlEscape(want)) {
 					found = true
 				}
 			}
 			if !found {
-				t.Errorf("%s %s: no %s in the sheet", c.name, lang, c.key)
+				t.Errorf("%s %s: no %s in the problems' count", c.name, lang, c.key)
 			}
 			if strings.Contains(visibleText(page), "{k}") || strings.Contains(visibleText(page), "{n}") {
 				t.Errorf("%s %s: placeholder left", c.name, lang)
@@ -168,7 +179,7 @@ func TestCountWhenProjectsDidNotFinish(t *testing.T) {
 	// No time-out: the plain count, never «at least».
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	cat, _ := catalog.Load("en")
-	if at := strings.SplitN(cat.Text("findings.count.at_least", nil), "{n}", 2)[0]; strings.Contains(renderHTML(t, "en", v), "<em>"+at) {
+	if at := strings.SplitN(cat.Text("findings.count.at_least", nil), "{n}", 2)[0]; strings.Contains(counts(renderHTML(t, "en", v)), at) {
 		t.Error("«at least» without a time-out")
 	}
 }

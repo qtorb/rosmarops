@@ -255,7 +255,10 @@ func TestNoise_Step3Cap(t *testing.T) {
 			if got := strings.Count(table, `<th scope="row" class="c-n">`); got != min(n, 6) {
 				t.Errorf("%d %s: %d problems shown", n, lang, got)
 			}
-			more := htmlEscape(cat.Text("html.r3.more", map[string]string{"groups": fmt.Sprint(n - 6), "findings": fmt.Sprint(n - 6)}))
+			piece := func(key string, k int) string {
+				return cat.Text(cat.One(key, k), map[string]string{"n": fmt.Sprint(k)})
+			}
+			more := htmlEscape(cat.Text("html.r3.more", map[string]string{"groups": piece("html.r3.groups", n-6), "findings": piece("html.r3.findings", n-6)}))
 			if has := strings.Contains(table, `<a href="#p-7">`+more+`</a>`); has != (n > 6) {
 				t.Errorf("%d %s: «the others» row %v", n, lang, has)
 			}

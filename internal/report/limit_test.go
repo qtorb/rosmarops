@@ -57,15 +57,10 @@ func TestLimitLine(t *testing.T) {
 		v := buildV2Limit(t, []string{"/src/only"}, report.Build("t", nil, nil, 0, 0, 0, 0, nil), 5, false, 0)
 		cat, _ := catalog.Load("en")
 		page := renderHTML(t, "en", v)
-		// The signed line of data has one form, «{projects} projects»; its
-		// project count is 1 here.
-		want := htmlEscape(cat.Text("html.r3.meta", map[string]string{
-			"date": "", "os": "", "agents": strconv.Itoa(len(v.Index.Scope.Evaluated)), "projects": "1", "version": "",
-		}))
-		_, tail, _ := strings.Cut(want, " · ")
-		_, tail, _ = strings.Cut(tail, " · ")
-		tail, _, _ = strings.Cut(tail, " · RosmarOps")
-		if !strings.Contains(page, tail) {
+		// The line of data counts one project with its form for one.
+		_, meta, _ := strings.Cut(page, `<p class="r3-meta">`)
+		meta, _, _ = strings.Cut(meta, `</p>`)
+		if tail := htmlEscape(cat.Text("html.r3.projects.one", nil)); !strings.Contains(meta, " · "+tail+" · ") {
 			t.Errorf("the line of data does not count one project: %q", tail)
 		}
 	})

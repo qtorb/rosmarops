@@ -113,9 +113,30 @@ func (c htmlCtx) renderR3Head() {
 		c.t("html.r3.title", nil), env, c.t("html.r3.sub", nil),
 		c.t("html.r3.meta", map[string]string{
 			"date": c.local.Format("2006-01-02 15:04"), "os": osName(c.v.OS),
-			"agents": strconv.Itoa(len(c.v.Index.Scope.Evaluated)), "projects": strconv.Itoa(c.v.repos),
+			"agents": c.r3Count("html.r3.agents", len(c.v.Index.Scope.Evaluated)), "projects": c.r3Count("html.r3.projects", c.v.repos),
 			"version": version,
 		}))
+}
+
+// r3Count is one count of the first screen's lines: its piece for one when n
+// is 1 and the catalog has it, else the piece for several.
+func (c htmlCtx) r3Count(key string, n int) string {
+	return c.cat.Text(c.cat.One(key, n), map[string]string{"n": strconv.Itoa(n)})
+}
+
+// r3Findings is the findings' count of the problems' line. A project that ran
+// out of time kept only what it had found: the count is then a lower bound,
+// and says how many projects did not finish.
+func (c htmlCtx) r3Findings(n int) string {
+	k := timedOutProjects(c.v)
+	if k == 0 {
+		return c.r3Count("html.r3.findings", n)
+	}
+	key := "findings.count.at_least"
+	if k == 1 {
+		key = "findings.count.at_least.one_project"
+	}
+	return c.cat.Text(key, map[string]string{"n": strconv.Itoa(n), "k": strconv.Itoa(k)})
 }
 
 // r3Title is a block's title: its number in a circle and its name.
@@ -180,6 +201,14 @@ func (c htmlCtx) renderR3Result() {
 	text := c.cat.Text("html.r3.result", map[string]string{
 		"agent": mark, "class_phrase": phrase, "class": class, "provisional": prov, "reference": ref,
 	})
+	// Both the score and its factory reference at 0, the score is at its
+	// floor: the reference cannot show what the settings change, so its
+	// sentence, the last one, is not shown.
+	if scoreSaturated(m) {
+		if i := strings.LastIndex(text, ". "); i >= 0 && strings.Contains(text[i:], ref) {
+			text = text[:i+1]
+		}
+	}
 	text = strings.Replace(html.EscapeString(text), mark, "<b>"+html.EscapeString(c.agentName(m.AgentID))+"</b>", 1)
 	c.w(`<p class="r3-text">%s</p></div>`, text)
 	if len(c.v.Dismissed) > 0 { // the score leaves out what the person dismissed
@@ -304,8 +333,8 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 	c.w(`<section class="r3-card" aria-labelledby="r3-h2"><div class="r3-top">%s<p class="r3-counts">%s</p></div>`,
 		c.r3Title(2, "r3-h2", "html.r3.h2"),
 		c.t("html.r3.counts", map[string]string{
-			"groups": strconv.Itoa(len(iss)), "findings": strconv.Itoa(findings),
-			"urgent": strconv.Itoa(urgent), "review": strconv.Itoa(review),
+			"groups": c.r3Count("html.r3.groups", len(iss)), "findings": c.r3Findings(findings),
+			"urgent": c.r3Count("html.r3.urgent", urgent), "review": c.r3Count("html.r3.review", review),
 		}))
 	if len(iss) == 0 {
 		empty := "html.none"
@@ -324,7 +353,7 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 					rest += len(c.issueRows(r))
 				}
 				c.w(`<tr class="r3-more"><td></td><td colspan="4"><a href="#p-%d">%s</a></td></tr>`, r3Shown+1,
-					c.t("html.r3.more", map[string]string{"groups": strconv.Itoa(len(iss) - r3Shown), "findings": strconv.Itoa(rest)}))
+					c.t("html.r3.more", map[string]string{"groups": c.r3Count("html.r3.groups", len(iss)-r3Shown), "findings": c.r3Count("html.r3.findings", rest)}))
 				break
 			}
 			n := i + 1
@@ -449,6 +478,9 @@ func r3Keys() []string {
 	return []string{
 		"html.r3.title", "html.r3.sub", "html.r3.meta", "html.r3.h1", "html.r3.h2", "html.r3.h3",
 		"html.r3.result", "html.r3.provisional", "html.r3.counts",
+		"html.r3.agents", "html.r3.agents.one", "html.r3.projects", "html.r3.projects.one",
+		"html.r3.groups", "html.r3.groups.one", "html.r3.findings", "html.r3.findings.one",
+		"html.r3.urgent", "html.r3.urgent.one", "html.r3.review",
 		"html.r3.col.n", "html.r3.col.problem", "html.r3.col.count", "html.r3.col.level", "html.r3.col.fix",
 		"html.r3.group.cred.one", "html.r3.group.cred.other", "html.r3.group.cred.project", "html.r3.group.cred.project.one",
 		"html.r3.group.cred.detail", "html.r3.group.cred.git", "html.r3.group.cred.git.one",

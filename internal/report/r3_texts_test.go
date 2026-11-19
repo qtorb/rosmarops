@@ -7,17 +7,29 @@ import (
 )
 
 // The first screen's texts are the signed ones, literally (design of the
-// report in three blocks, §5, signed 18-11-2026), in Spanish and English.
+// report in three blocks, §5, signed 18-11-2026; the counts in pieces with
+// their form for one, signed 19-11-2026), in Spanish and English.
 var r3Texts = []struct{ key, es, en string }{
 	{"html.r3.title", "Informe RosmarOps", "RosmarOps report"},
 	{"html.r3.sub", "Qué pueden hacer tus agentes de IA sin preguntarte en este ordenador, y qué cambiar.", "What your AI agents can do without asking you on this computer, and what to change."},
-	{"html.r3.meta", "{date} · {os} · {agents} agentes · {projects} proyectos · RosmarOps {version}", "{date} · {os} · {agents} agents · {projects} projects · RosmarOps {version}"},
+	{"html.r3.meta", "{date} · {os} · {agents} · {projects} · RosmarOps {version}", "{date} · {os} · {agents} · {projects} · RosmarOps {version}"},
+	{"html.r3.agents", "{n} agentes", "{n} agents"},
+	{"html.r3.agents.one", "1 agente", "1 agent"},
+	{"html.r3.projects", "{n} proyectos", "{n} projects"},
+	{"html.r3.projects.one", "1 proyecto", "1 project"},
 	{"html.r3.h1", "Resultado", "Result"},
 	{"html.r3.h2", "Avisos", "Findings"},
 	{"html.r3.h3", "Para que no vuelva a pasar", "So it doesn't happen again"},
 	{"html.r3.result", "Nota de {agent}, tu agente con menos control: {class_phrase} (clase {class}{provisional}). Con los ajustes de fábrica sacaría {reference}.", "Score of {agent}, your agent with the least control: {class_phrase} (class {class}{provisional}). With factory settings it would get {reference}."},
 	{"html.r3.provisional", ", provisional", ", provisional"},
-	{"html.r3.counts", "{groups} problemas · {findings} avisos · {urgent} urgentes · {review} para revisar", "{groups} problems · {findings} findings · {urgent} urgent · {review} to review"},
+	{"html.r3.counts", "{groups} · {findings} · {urgent} · {review}", "{groups} · {findings} · {urgent} · {review}"},
+	{"html.r3.groups", "{n} problemas", "{n} problems"},
+	{"html.r3.groups.one", "1 problema", "1 problem"},
+	{"html.r3.findings", "{n} avisos", "{n} findings"},
+	{"html.r3.findings.one", "1 aviso", "1 finding"},
+	{"html.r3.urgent", "{n} urgentes", "{n} urgent"},
+	{"html.r3.urgent.one", "1 urgente", "1 urgent"},
+	{"html.r3.review", "{n} para revisar", "{n} to review"},
 	{"html.r3.col.n", "Nº", "No."},
 	{"html.r3.col.problem", "Problema", "Problem"},
 	{"html.r3.col.count", "Avisos", "Findings"},
@@ -37,7 +49,7 @@ var r3Texts = []struct{ key, es, en string }{
 	{"html.r3.fix.tpl_all", "Con una plantilla (bloque 3)", "With a template (block 3)"},
 	{"html.r3.fix.tpl_some", "La plantilla arregla {k} de {n}; quedan {rest}", "The template fixes {k} of {n}; {rest} remain"},
 	{"html.r3.fix.steps", "Ver los pasos ›", "See the steps ›"},
-	{"html.r3.more", "Los otros {groups} problemas ({findings} avisos) ›", "The other {groups} problems ({findings} findings) ›"},
+	{"html.r3.more", "Los otros {groups} ({findings}) ›", "The other {groups} ({findings}) ›"},
 	{"html.r3.tpl.body", "Elige una plantilla: contestas una pregunta («¿Para qué usas tus agentes?») y te damos un texto para pegar en tu agente. Te enseña el cambio antes de guardarlo.", "Choose a template: you answer one question («What do you use your agents for?») and we give you a text to paste into your agent. It shows you the change before saving it."},
 	{"html.r3.tpl.fixes", "Arregla {k} de tus avisos urgentes (grupos {groups}).", "It fixes {k} of your urgent findings (groups {groups})."},
 	{"html.r3.tpl.fixes_none", "Deja a {agent} con menos permisos desde hoy.", "It leaves {agent} with fewer permissions from today."},
