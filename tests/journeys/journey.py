@@ -321,9 +321,9 @@ def r1(args):
         home = j.make_home(label)
         if not args.msix_cand:
             binary = j.install(home, args.bin)
-        ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=WINDOWS_OPENED["no arguments"])
+        ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=R1_WINDOWS)
         j.check(f"{label}: no arguments ends without an unplanned question", ok, why)
-        j.window_checks(home, os.path.join(j.out, label + ".txt"), label, WINDOWS_OPENED["no arguments"])
+        j.window_checks(home, os.path.join(j.out, label + ".txt"), label, R1_WINDOWS)
         rep = j.review_checks(home, lang, os.path.join(j.out, label + ".txt"), label)
         if SYSTEM == "linux":
             j.snap_gate(label)
@@ -346,7 +346,13 @@ def r1(args):
 # window opens and answers itself («Not now», nothing saved), and the window's
 # «shown» line in the run's log proves it opened. A person's click is not
 # tested here.
-WINDOWS_OPENED = {"no arguments": ("connect", "findings"), "findings": ("findings",)}
+# R1, the first review: every finding is new, so after the report the double
+# click offers to connect and then the findings window.
+R1_WINDOWS = ("connect", "findings")
+# R2, after the update: the previous version already reviewed this computer, so
+# no finding is new and the double click offers only to connect; `findings`
+# always opens its window.
+R2_WINDOWS = {"no arguments": ("connect",), "findings": ("findings",)}
 SELFTEST_HOOK = {"connect": "ROSMAROPS_CONNECT_WINDOW_SELFTEST", "findings": "ROSMAROPS_FINDINGS_WINDOW_SELFTEST"}
 
 
@@ -400,7 +406,7 @@ def r2(args):
         shutil.copyfile(os.path.join(home, state), before)
         slug = "r2-" + label.replace(" ", "-").replace("--", "")
         if kind == "ask":
-            windows = WINDOWS_OPENED.get(label, ())
+            windows = R2_WINDOWS.get(label, ())
             ok, why = j.drive("r2-ask.steps", lang, [binary] + argv, home, slug, yes=yes, windows=windows)
             j.check(f"{label}: asks in the person's language and goes on", ok, why)
             j.window_checks(home, os.path.join(j.out, slug + ".txt"), label, windows)
