@@ -25,6 +25,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shutil
 import stat
 import subprocess
@@ -361,6 +362,10 @@ SELFTEST_HOOK = {"connect": "ROSMAROPS_CONNECT_WINDOW_SELFTEST", "findings": "RO
 #          finishes with 0;
 #   abort: without a terminal, stops with 2 and a red report;
 #   exit0: finishes with 0 without asking.
+# With the MSIX package and a candidate that is a newer released version, the
+# update is a Microsoft Store update (store_update): «ask» and «abort» rows
+# instead finish with 0 without asking, and the state records the change as
+# accepted by the Store.
 R2_ROWS = [
     ("no arguments", [], "ask"),
     ("run", ["run"], "ask"),
@@ -373,6 +378,28 @@ R2_ROWS = [
     ("connect --help", ["connect", "--help"], "exit0"),
     ("--version", ["--version"], "exit0"),
 ]
+
+
+def semver_core(v):
+    """The numeric core of a strict X.Y.Z[-pre] version, or None."""
+    core, _, pre = v.partition("-")
+    parts = core.split(".")
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return None, pre
+    return tuple(int(p) for p in parts), pre
+
+
+def store_update(msix, version, prev_version):
+    """Whether RosmarOps takes the candidate's MSIX package for a Microsoft
+    Store update of the previous version, and so accepts it without asking
+    (invariant 8, winpkg.Accepts): RosmarOps's own package identity, which
+    every MSIX leg installs; a package version equal to the binary's, which
+    the test package has only when the version has no prerelease part (a
+    pull request's candidate is X.Y.Z-journeys.N, its package X.Y.Z.0); and a
+    version greater than the state's engine_version."""
+    cand, pre = semver_core(version)
+    prev, _ = semver_core(prev_version or "")
+    return bool(msix) and cand is not None and pre == "" and prev is not None and cand > prev
 
 
 def r2(args):
@@ -399,13 +426,40 @@ def r2(args):
     base = home + ".base"
     shutil.copytree(home, base, symlinks=True)
     state = os.path.join(".rosmarops", "state.json")
+    with open(os.path.join(home, state), encoding="utf-8") as f:
+        prev_version = json.load(f).get("engine_version", "")
+    store = store_update(args.msix_cand, args.version, prev_version)
+    print(f"  R2: {prev_version} → {args.version}, " + ("a Store update: no command asks" if store else "every command asks"))
+    with open(os.path.join(CATALOG, lang + ".json"), encoding="utf-8") as f:
+        # The fixed start of the update question, to check it never shows.
+        changed = re.split(r"\{[a-z_]+\}", json.load(f).get("console.binary_changed", ""))[0].strip()
     for label, argv, kind in R2_ROWS:
+        if store and kind in ("ask", "abort"):
+            kind = "store"
         remove_tree(home)
         shutil.copytree(base, home, symlinks=True)
         before = os.path.join(j.work, "state-before.json")
         shutil.copyfile(os.path.join(home, state), before)
         slug = "r2-" + label.replace(" ", "-").replace("--", "")
-        if kind == "ask":
+        if kind == "store":
+            windows = R2_WINDOWS.get(label, ())
+            if "--unattended" in argv:
+                code = j.plain([binary] + argv, home, lang, slug)
+                ok, why = code == 0 and not red_report(home), f"exit {code}" + (", a red report" if red_report(home) else "")
+            else:
+                ok, why = j.drive("r2-store.steps", lang, [binary] + argv, home, slug, windows=windows)
+                j.window_checks(home, os.path.join(j.out, slug + ".txt"), label, windows)
+            said = open(os.path.join(j.out, slug + ".txt"), encoding="utf-8", errors="replace").read()
+            if ok and changed and changed in said:
+                ok, why = False, "the console shows the update question"
+            j.check(f"{label}: a Store update, finishes with 0 without asking", ok, why)
+            via = ""
+            if os.path.exists(os.path.join(home, state)):
+                with open(os.path.join(home, state), encoding="utf-8") as f:
+                    via = json.load(f).get("integrity", {}).get("binary_accepted_via", "")
+            j.check(f"{label}: the state records the update as accepted by the Store", via == "store",
+                    f"binary_accepted_via {via!r}")
+        elif kind == "ask":
             windows = R2_WINDOWS.get(label, ())
             ok, why = j.drive("r2-ask.steps", lang, [binary] + argv, home, slug, yes=yes, windows=windows)
             j.check(f"{label}: asks in the person's language and goes on", ok, why)
@@ -443,8 +497,9 @@ def r2(args):
             rep = j.review_checks(home, lang, os.path.join(j.out, slug + ".txt"), "r2 " + label)
             if rep:
                 j.keep_report(rep, "after-update", lang, os.path.join(j.out, slug + ".txt"))
-            j.captures.append({"kind": "question", "path": os.path.join(j.out, slug + ".txt"), "step": "r2-question",
-                               "lang": lang, "until": "console.binary_confirm"})
+            if not store:  # a Store update asks no question to picture
+                j.captures.append({"kind": "question", "path": os.path.join(j.out, slug + ".txt"), "step": "r2-question",
+                                   "lang": lang, "until": "console.binary_confirm"})
     return j.finish()
 
 
