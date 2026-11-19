@@ -146,6 +146,16 @@ class Journey:
         p = subprocess.run(cmd, env=self.env(home, lang), cwd=home, capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         why = (p.stderr or p.stdout).strip().splitlines()
+        if p.returncode != 0:
+            # The last screen, so the run's log shows what it was waiting for.
+            try:
+                with open(console, encoding="utf-8", errors="replace") as f:
+                    tail = [ln for ln in f.read().splitlines() if ln.strip()][-12:]
+            except OSError:
+                tail = []
+            print(f"  {label}: the console's last lines:")
+            for ln in tail:
+                print("    | " + ln)
         return p.returncode == 0, (why[0] if why else "")
 
     def plain(self, argv, home, lang, label):
