@@ -199,6 +199,10 @@ class Journey:
             shown = any("window self-test: shown" in ln and f"window={w}" in ln for ln in lines)
             self.check(f"{label}: the {w} window opened (its self-test)", shown,
                        "" if shown else "no «window self-test: shown» line for it in the run's log")
+            if not shown:
+                print(f"  {label}: the run log's window lines:")
+                for ln in [ln for ln in lines if "window" in ln][-12:]:
+                    print("    | " + ln)
 
     def reports_dir(self, home):
         for d in (os.path.join(home, "RosmarOps"), os.path.join(home, ".rosmarops", "reports")):

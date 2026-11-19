@@ -32,7 +32,8 @@ func TestConnectSelfTestShownLogged(t *testing.T) {
 	}
 }
 
-// The findings window's hook logs its own name; a real answer logs nothing.
+// The findings window's hook logs its own name; under the hook, any other
+// first line is logged as it came, never as «shown».
 func TestFindingsSelfTestShownLogged(t *testing.T) {
 	log := captureLog(t)
 	t.Setenv(findingsSelfTestEnv, "1")
@@ -42,8 +43,8 @@ func TestFindingsSelfTestShownLogged(t *testing.T) {
 	}
 	log.Reset()
 	noteSelfTestShown("save\n", "findings", findingsSelfTestEnv)
-	if log.Len() != 0 {
-		t.Fatalf("an answer is not a self-test line, got:\n%s", log)
+	if strings.Contains(log.String(), "window self-test: shown") || !strings.Contains(log.String(), `line="save\n"`) {
+		t.Fatalf("an answer is not «shown», and is logged as it came; got:\n%s", log)
 	}
 }
 

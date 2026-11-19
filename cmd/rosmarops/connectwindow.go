@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,9 +122,16 @@ const (
 // so a journey test can prove the real window opened. Without the hook it does
 // nothing.
 func noteSelfTestShown(line, window, env string) {
-	if os.Getenv(env) != "" && strings.TrimRight(line, "\r\n") == "SHOWN" {
-		slog.Info("window self-test: shown", "window", window)
+	if os.Getenv(env) == "" {
+		return
 	}
+	if strings.TrimRight(line, "\r\n") == "SHOWN" {
+		slog.Info("window self-test: shown", "window", window)
+		return
+	}
+	// Under the hook, a first line that is not SHOWN is logged as it came, so
+	// a failed journey shows what the window wrote instead.
+	slog.Info("window self-test: first line is not SHOWN", "window", window, "line", strconv.Quote(line))
 }
 
 // waitWindowExit waits for a window's process once RosmarOps is done with it
