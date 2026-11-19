@@ -14,19 +14,24 @@ import (
 // cli-config.json is found where Cursor's CLI looks for it: CURSOR_CONFIG_DIR,
 // then XDG_CONFIG_HOME/cursor, then ~/.cursor; a relative value is ignored.
 func TestCursorCLIConfigDir(t *testing.T) {
-	home := "/home/ana"
+	// Absolute paths on every system (a path from / is not absolute on
+	// Windows).
+	root := t.TempDir()
+	home := filepath.Join(root, "home", "ana")
+	conf := filepath.Join(home, ".config")
+	opt := filepath.Join(root, "opt", "cur")
 	for name, c := range map[string]struct {
 		env  map[string]string
 		want string
 	}{
-		"none":              {nil, "/home/ana/.cursor"},
-		"xdg":               {map[string]string{"XDG_CONFIG_HOME": "/home/ana/.config"}, "/home/ana/.config/cursor"},
-		"cursor wins":       {map[string]string{"XDG_CONFIG_HOME": "/home/ana/.config", "CURSOR_CONFIG_DIR": "/opt/cur"}, "/opt/cur"},
-		"relative ignored":  {map[string]string{"XDG_CONFIG_HOME": "conf", "CURSOR_CONFIG_DIR": "cur"}, "/home/ana/.cursor"},
-		"relative xdg only": {map[string]string{"XDG_CONFIG_HOME": "conf"}, "/home/ana/.cursor"},
+		"none":              {nil, filepath.Join(home, ".cursor")},
+		"xdg":               {map[string]string{"XDG_CONFIG_HOME": conf}, filepath.Join(conf, "cursor")},
+		"cursor wins":       {map[string]string{"XDG_CONFIG_HOME": conf, "CURSOR_CONFIG_DIR": opt}, opt},
+		"relative ignored":  {map[string]string{"XDG_CONFIG_HOME": "conf", "CURSOR_CONFIG_DIR": "cur"}, filepath.Join(home, ".cursor")},
+		"relative xdg only": {map[string]string{"XDG_CONFIG_HOME": "conf"}, filepath.Join(home, ".cursor")},
 	} {
 		got := windows.CursorCLIConfigDir(home, func(k string) string { return c.env[k] })
-		if got != filepath.FromSlash(c.want) {
+		if got != c.want {
 			t.Errorf("%s: %q, want %q", name, got, c.want)
 		}
 	}

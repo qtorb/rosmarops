@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -231,7 +232,12 @@ func TestSaveStateCreatesItsFolder(t *testing.T) {
 	if err := state.SaveState(p, st); err != nil {
 		t.Fatal(err)
 	}
-	if info, err := os.Stat(filepath.Dir(p)); err != nil || info.Mode().Perm() != 0o700 {
-		t.Errorf("folder: %v %v", info, err)
+	info, err := os.Stat(filepath.Dir(p))
+	if err != nil || !info.IsDir() {
+		t.Fatalf("folder: %v", err)
+	}
+	// Windows keeps no Unix mode: there the folder's access is its ACL.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
+		t.Errorf("folder mode %v, want 0700", info.Mode().Perm())
 	}
 }
