@@ -42,6 +42,7 @@ permissions: {}
 
 env:
   GOTOOLCHAIN: local
+  PYTHONUTF8: "1"
   # Checks expected to fail for a known reason, with the fix's reference (a
   # comma-separated list of pieces of check names): a failure there is
   # reported as «expected red» and does not fail the journey, and a pass says

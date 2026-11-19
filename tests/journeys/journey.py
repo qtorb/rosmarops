@@ -394,6 +394,9 @@ def r3(args):
 
 
 def main():
+    # The Windows console's code page cannot print the check marks.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("journey", choices=["r1", "r2", "r3"])
     ap.add_argument("--bin", required=True, help="the candidate binary")
