@@ -202,6 +202,9 @@ func summaryOf(cat catalog.Catalog, e problems.Entry) string {
 	p := map[string]string{}
 	if e.Agent != "" {
 		p["agent"] = problems.AgentName(e.Agent)
+	} else if e.Code == problems.ConfigUnreadable {
+		// Which agent it was is not known: the summary without {agent}.
+		return cat.Text("problems.summary.config_unreadable.no_agent", nil)
 	}
 	return cat.Text("problems.summary."+string(e.Code), p)
 }

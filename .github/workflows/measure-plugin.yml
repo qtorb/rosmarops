@@ -129,7 +129,8 @@ jobs:
           # with allowed-tools, so Claude Code's permission check sees only
           # «sh ./c3-probe.sh». The script tries what the sandbox of P2 blocks:
           # a write in the home folder, a read of ~/.ssh, and a read of the
-          # reports folder (~/.rosmarops/reports), which /rosmarops needs.
+          # reports folder (~/.rosmarops/reports; ~/RosmarOps on Linux), which
+          # /rosmarops needs.
           probe="$RUNNER_TEMP/probe"
           mkdir -p "$probe/.claude-plugin" "$probe/skills/probe"
           echo '{"name":"probe","version":"0.0.1"}' > "$probe/.claude-plugin/plugin.json"
@@ -143,16 +144,19 @@ jobs:
           MD
           for mode in p2 control; do
             H="$RUNNER_TEMP/c3-$mode"; P="$H/project"
-            mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh" "$H/.rosmarops/reports"
+            REP="$H/.rosmarops/reports"; [ "$RUNNER_OS" = Linux ] && REP="$H/RosmarOps"
+            mkdir -p "$P/.claude" "$H/.claude" "$H/.ssh" "$REP"
             echo secret-c3 > "$H/.ssh/c3-secret"
-            echo report-c3 > "$H/.rosmarops/reports/c3-report.txt"
+            echo report-c3 > "$REP/c3-report.txt"
             cat > "$P/c3-probe.sh" <<'SH'
           {
             echo RAN
             cat ./c3-probe.sh > /dev/null && echo READ-PROJECT
             touch "$HOME/c3-outside-write" && echo WROTE-HOME
             cat "$HOME/.ssh/c3-secret" > /dev/null && echo READ-SSH
-            cat "$HOME/.rosmarops/reports/c3-report.txt" > /dev/null && echo READ-REPORTS
+            for r in "$HOME/.rosmarops/reports" "$HOME/RosmarOps"; do
+              [ -e "$r/c3-report.txt" ] && cat "$r/c3-report.txt" > /dev/null && echo READ-REPORTS
+            done
           } > ./c3-result.txt 2>&1
           cat ./c3-result.txt
           SH
@@ -188,7 +192,8 @@ jobs:
           # must take the hookSpecificOutput (no key: it never reaches the
           # model).
           H="$RUNNER_TEMP/c4home"; P="$H/project"; mkdir -p "$P"
-          go run ./tests/manual/statusline-seed -data "$H/.rosmarops/reports/data"
+          REP="$H/.rosmarops/reports"; [ "$RUNNER_OS" = Linux ] && REP="$H/RosmarOps"
+          go run ./tests/manual/statusline-seed -data "$REP/data"
           export HOME="$H" USERPROFILE="$H" PATH="$(dirname "$RBIN"):$PATH"
           {
             echo "## command -v rosmarops"; command -v rosmarops

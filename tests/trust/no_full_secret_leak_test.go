@@ -640,7 +640,7 @@ func TestNoCommittedSecretInRunOutputs(t *testing.T) {
 	s := newSandbox(t)
 	s.runAll(t, nil)
 	dir := filepath.Join(s.home, ".rosmarops")
-	graphRaw, err := os.ReadFile(filepath.Join(dir, "reports", report.DataSubdir, "graph.v2.json"))
+	graphRaw, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(s.home), report.DataSubdir, "graph.v2.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,7 +763,7 @@ func TestNoKitSecretInOutputs(t *testing.T) {
 			t.Fatalf("%s: %v\n%s", step[0], err, out)
 		}
 	}
-	reports := filepath.Join(s.home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(s.home))
 	data := filepath.Join(reports, report.DataSubdir)
 	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
 		t.Fatalf("run did not complete: %v", err)
@@ -801,7 +801,7 @@ func TestNoKitSecretInOutputs(t *testing.T) {
 	if err != nil || !strings.Contains(out, "New phrase set.") {
 		t.Fatalf("new-phrase: %v\n%s", err, out)
 	}
-	newFile := filepath.Join(second, ".rosmarops", "reports", filepath.Base(file))
+	newFile := filepath.Join(report.DefaultReportDirIn(second), filepath.Base(file))
 	third := filepath.Join(s.root, "home3")
 	s.initHome(t, third)
 	answers := []string{kitPhrase, strings.ToLower(code)}

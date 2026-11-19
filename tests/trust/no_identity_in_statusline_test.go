@@ -23,7 +23,7 @@ import (
 func TestNoIdentityInStatusline(t *testing.T) {
 	s := newSandbox(t)
 	s.runAll(t, nil)
-	raw, err := os.ReadFile(filepath.Join(s.home, ".rosmarops", "reports", report.DataSubdir, agenthooks.StatuslineFile))
+	raw, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(s.home), report.DataSubdir, agenthooks.StatuslineFile))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -56,7 +56,7 @@ func TestUsagePackageCarriesNoSecrets(t *testing.T) {
 	cmd.Env = append(os.Environ(), "HOME="+home, "USERPROFILE="+home, "HTTPS_PROXY=http://127.0.0.1:1", "HTTP_PROXY=http://127.0.0.1:1")
 	_, _ = cmd.CombinedOutput()
 
-	data := report.DataDir(filepath.Join(home, ".rosmarops", "reports"))
+	data := report.DataDir(filepath.Join(report.DefaultReportDirIn(home)))
 	raw, err := os.ReadFile(filepath.Join(data, usage.LastFileName))
 	if err != nil {
 		t.Fatalf("no %s: %v", usage.LastFileName, err)

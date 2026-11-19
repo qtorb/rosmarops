@@ -61,7 +61,7 @@ func TestIntegrityAnswerOutsideScanBudget(t *testing.T) {
 	// A configuration accepted by init and a binary reference that is not
 	// this binary's: the run asks whether you installed this version.
 	dir := filepath.Join(home, ".rosmarops")
-	reports := filepath.Join(dir, "reports")
+	reports := report.DefaultReportDirIn(home)
 	cfgPath, stPath := filepath.Join(dir, "config.json"), filepath.Join(dir, "state.json")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)

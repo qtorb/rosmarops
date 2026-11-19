@@ -115,13 +115,12 @@ func runRun(inv cli.Invocation) error {
 		// a notification and the run_failed exit code. Never returns.
 		abortRun(abortOptions{lang: inv.Flags["lang"], unattended: true}, err)
 	}
-	// BV-184 point 3: from an interactive terminal (never a scheduled review),
-	// offer to dismiss findings after the review when at least one is new.
+	// From an interactive terminal (never a scheduled review), when at least
+	// one finding is new, run says where findings are dismissed or accepted
+	// instead of asking: the question itself is `rosmarops findings`.
 	if err == nil && !unattended && runCanAsk() {
 		if cfgPath, e := config.ResolveConfigPath(); e == nil {
-			if stPath, e := state.StatePath(); e == nil {
-				offerDismissAfterReport(inv.Flags["lang"], cfgPath, stPath, true, time.Now())
-			}
+			findingsHintAfterReport(os.Stdout, inv.Flags["lang"], cfgPath)
 		}
 		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
 		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
@@ -184,6 +183,15 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// after its ownership check. The person's config.json, when it exists,
 	// stays the configuration in use; without it, a trusted company
 	// configuration is, in memory only.
+	// On Linux the reports move once from ~/.rosmarops/reports to
+	// ~/RosmarOps, before anything is written to the new default folder.
+	if moveCat, catErr := catalog.Load(lang); catErr == nil {
+		out := io.Writer(os.Stdout)
+		if unattended {
+			out = io.Discard
+		}
+		moveOldReports(out, moveCat)
+	}
 	defaultDirEarly, err := report.DefaultReportDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve report dir: %w", err)

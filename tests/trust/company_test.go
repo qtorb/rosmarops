@@ -139,7 +139,7 @@ func (s *sandbox) initPerson(t *testing.T) {
 	}
 }
 
-func (s *sandbox) dataDir() string { return filepath.Join(s.home, ".rosmarops", "reports", "data") }
+func (s *sandbox) dataDir() string { return filepath.Join(report.DefaultReportDirIn(s.home), "data") }
 
 func (s *sandbox) summaryPath() string { return filepath.Join(s.dataDir(), report.SummaryFileName) }
 
@@ -728,22 +728,24 @@ func TestSummaryAfterAbortExitCode(t *testing.T) {
 }
 
 // T9: with the company folder seeded, a managed review writes nothing outside
-// ~/.rosmarops, changes nothing in the company folder (contents, permissions,
-// new files), and the summary is only in the reports data folder.
+// ~/.rosmarops and the reports folder, changes nothing in the company folder
+// (contents, permissions, new files), and the summary is only in the reports
+// data folder.
 func TestNoWritesOutOfScopeCompany(t *testing.T) {
 	s := newCompanySandbox(t, "0.16.0", companyJSON(true))
 	allowed := filepath.Join(s.home, ".rosmarops")
+	reports := report.DefaultReportDirIn(s.home)
 	before := snapshot(t, s.root)
 	s.review(t, s.binary)
 	s.review(t, s.binary)
 	after := snapshot(t, s.root)
 	for _, change := range changedPaths(before, after) {
 		_, path, _ := strings.Cut(change, ": ")
-		if !pathUnder(path, allowed) {
-			t.Errorf("changed outside %s: %s", allowed, change)
+		if !pathUnder(path, allowed) && !pathUnder(path, reports) {
+			t.Errorf("changed outside %s and %s: %s", allowed, reports, change)
 		}
 	}
-	err := filepath.WalkDir(allowed, func(p string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(s.home, func(p string, d os.DirEntry, err error) error {
 		if err == nil && d.Name() == report.SummaryFileName && filepath.Dir(p) != s.dataDir() {
 			t.Errorf("a summary outside the reports data folder: %s", p)
 		}

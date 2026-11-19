@@ -70,7 +70,7 @@ func TestOneAskPerSession(t *testing.T) {
 	if err := state.SaveState(stPath, st); err != nil {
 		t.Fatal(err)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	dataDir := report.DataDir(reports)
 	seedNotebook(t, dataDir) // unsent problems exist, so a prompt would be shown
 
@@ -123,7 +123,7 @@ func TestBV211dWindowAAfterUnshownWindowB(t *testing.T) {
 	if err := state.SaveState(stPath, st); err != nil {
 		t.Fatal(err)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	dataDir := report.DataDir(reports)
 
 	calls := 0

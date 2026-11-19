@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // runInPTY runs the binary with args with a terminal as its standard input and
@@ -89,7 +90,7 @@ func TestDeclaredAnswersOnlyInState(t *testing.T) {
 	s.runAll(t, nil)
 	rosmarops := filepath.Join(s.home, ".rosmarops")
 	state := filepath.Join(rosmarops, "state.json")
-	reports := filepath.Join(rosmarops, "reports")
+	reports := report.DefaultReportDirIn(s.home)
 
 	before := snapshot(t, s.root)
 	// Cursor: C1 Auto-review (with Sandbox), C3 Workspace, C4 yes (the
@@ -103,8 +104,8 @@ func TestDeclaredAnswersOnlyInState(t *testing.T) {
 	}
 	for _, change := range changedPaths(before, after) {
 		_, path, _ := strings.Cut(change, ": ")
-		if !pathUnder(path, rosmarops) {
-			t.Errorf("answering wrote outside ~/.rosmarops: %s", change)
+		if !pathUnder(path, rosmarops) && !pathUnder(path, reports) {
+			t.Errorf("answering wrote outside ~/.rosmarops and the reports folder: %s", change)
 		}
 	}
 	raw, err := os.ReadFile(state)
@@ -249,9 +250,14 @@ func TestGrokBotNoSettingsTextLeaks(t *testing.T) {
 	cmd := exec.Command(s.binary, "run", "--unattended")
 	cmd.Dir, cmd.Env = s.work, s.env
 	_, _ = cmd.CombinedOutput()
-	rosmarops := filepath.Join(s.home, ".rosmarops")
 	found := false
-	_ = filepath.Walk(rosmarops, func(p string, info os.FileInfo, err error) error {
+	walk := func(root string, fn filepath.WalkFunc) {
+		_ = filepath.Walk(root, fn)
+		if reports := report.DefaultReportDirIn(s.home); !pathUnder(reports, root) {
+			_ = filepath.Walk(reports, fn)
+		}
+	}
+	walk(filepath.Join(s.home, ".rosmarops"), func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

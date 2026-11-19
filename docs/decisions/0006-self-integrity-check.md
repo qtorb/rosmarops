@@ -4,6 +4,7 @@ Date: 2026-05-21
 Amended: 2026-10-26
 Amended: 2026-11-12
 Amended: 2026-11-18 (the administrator fingerprint list built)
+Amended: 2026-11-19 (every command asks like run)
 
 ## Context
 
@@ -19,6 +20,7 @@ RosmarOps is trusted to report on other programs. If its own binary or its confi
 - Neither the list nor the Store ever accepts a version older than `state.engine_version`, or the same version with another fingerprint. With the company configuration in use and no configuration of the person's, a lost or missing state is a first run only if the binary passes the list or the Store check.
 - With the company configuration in use, `config_sha256` fingerprints `company.json` and `config_source` is `company`: a change to it is recorded and reported, never an abort.
 - An accepted change records the new references and how it was accepted (`binary_accepted_via`: `baseline`, `console`, `admin_list` or `store`). The report says so.
+- Every command that checks integrity (`status`, `findings`, `problems ask`, `usage`, `kit`, `connect`, `disconnect`, `allow`, `schedule`) uses the same check as `run`: in a console it asks and, if the person confirms, records the change and goes on; without one it stops in red. `init`, `baseline`, `--help` and `--version` do not check. The texts of a stop come from the catalog, in the system's language, and none sends the person to `baseline`: accepting a new version is the question every command asks.
 - `session-check` and `statusline` compare like every command, but never ask, write or abort, and never accept through the list. On a mismatch they print one line saying RosmarOps changed and that running it confirms the change.
 
 ## Consequences

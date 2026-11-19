@@ -29,7 +29,7 @@ type problemsSendResult struct {
 // optional and may be empty). A seam so tests are deterministic and a platform
 // can fill it in without changing the caller. The value is only the OS version,
 // never anything that identifies the person or the machine.
-var osVersionFn = func() string { return "" }
+var osVersionFn = osVersion
 
 // submitProblems builds a problems.v1 report from the unsent notebook lines (at
 // most 20), validates it, and sends it to app.rosmarops.com — but only when the

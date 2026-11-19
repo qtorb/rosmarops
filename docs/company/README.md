@@ -24,7 +24,8 @@ and check what it left: owners and permissions, the two files, the hash in
 scheduled task. Then, as a person with no `config.json` of their own (a new
 `fakeuser` on Linux; the runner's user, or a fresh profile folder, on Windows),
 they run `rosmarops run --unattended` and check that the summary
-`~/.rosmarops/reports/data/rosmarops-summary.json` is one JSON line with
+`rosmarops-summary.json` in the reports data folder (`~/RosmarOps/data/` on
+Linux, `~/.rosmarops/reports/data/` on Windows) is one JSON line with
 `config_source` `company`, `run` `complete` and `binary` `first_run`, that no
 `config.json` was created and that the company files did not change. Linux
 runs a second review and checks `binary` `unchanged`; Windows runs the

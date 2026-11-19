@@ -11,6 +11,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/cli"
+	"github.com/qtorb/rosmarops/internal/company"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/hash"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -79,95 +80,61 @@ func newRootCmd() *cli.Command {
 	}
 }
 
-// integrityCheck is the Before of every command but init and baseline. It
-// runs before the command's Run and validates that neither the binary nor the
-// config has been modified since the last `rosmarops baseline`.
+// integrityCheck is the Before of every command but init, baseline and run
+// (run checks its own integrity, with its flags). It checks the state, the
+// binary and the configuration in use against the references in the state,
+// with the same check as run: in a console the person is asked and, if they
+// confirm, the new references are recorded and the command goes on; without
+// a console nobody can confirm, so the command stops with a red report and
+// exit code 2 (invariant 8). Before gets no flags, so its texts are in the
+// system's language.
 //
-// Skip conditions (command does NOT check integrity):
-//   - "init": state may not exist yet on first run.
-//   - "baseline": this command IS the mechanism that sets the baseline.
-//
-// Baseline-pending condition (zeroHash in state):
-//   - If either hash field is zeroHash, the baseline hasn't been set yet.
-//     This is not a mismatch — it means `rosmarops baseline` hasn't run.
-//     A slog.Warn is emitted but the command proceeds normally.
-//
-// Mismatch condition:
-//   - Computed hash ≠ stored hash (and stored hash ≠ zeroHash) → abort.
-//   - Writes a minimal RED report and exits with code 2.
+// A missing or unreadable state, or one with no reference recorded yet, is
+// not checked here, as before: the command itself handles it.
 func integrityCheck(path []string) error {
-	// run checks its own integrity, with the person's answer when there is
-	// a console (decision 2026-10-26, integridad y revisión semanal, J1–J3).
 	if path[0] == "init" || path[0] == "baseline" || path[0] == "run" {
 		return nil
 	}
-
 	stPath, err := state.StatePath()
 	if err != nil {
-		// Can't resolve state path: non-fatal for the integrity check.
-		// The command itself will handle a missing state.
 		slog.Warn("integrity check: could not resolve state path", "err", err)
 		return nil
 	}
-
 	st, err := state.LoadState(stPath)
 	if err != nil {
-		// State unreadable or missing: skip integrity check.
-		// This handles the case where the user hasn't run rosmarops init yet.
 		slog.Warn("integrity check: state unavailable, skipping", "err", err)
 		return nil
 	}
-
-	// Check binary hash.
-	if st.Integrity.VigilBinarySHA256 == zeroHash || st.Integrity.VigilBinarySHA256 == "" {
-		slog.Warn("integrity: binary baseline not set — run 'rosmarops baseline' to establish it")
-	} else {
-		selfHash, err := hash.Self()
-		if err != nil {
-			slog.Error("integrity: could not hash binary", "err", err)
-			abortWithIntegrityFailure("binary_hash_changed",
-				"Could not verify binary integrity: "+err.Error(),
-				"Run 'rosmarops baseline' after verifying the binary is trustworthy.", abortOptions{lang: catalog.DefaultLang})
-		}
-		if selfHash != st.Integrity.VigilBinarySHA256 {
-			slog.Error("integrity: binary hash mismatch",
-				"stored", st.Integrity.VigilBinarySHA256[:16]+"…",
-				"computed", selfHash[:16]+"…")
-			abortWithIntegrityFailure("binary_hash_changed",
-				"RosmarOps binary hash does not match the last baseline.",
-				"If you updated RosmarOps intentionally, run 'rosmarops baseline'. "+
-					"If not, do not run RosmarOps again — treat as potential compromise.", abortOptions{lang: catalog.DefaultLang})
-		}
+	if isZeroHash(st.Integrity.VigilBinarySHA256) || isZeroHash(st.Integrity.ConfigSHA256) {
+		slog.Warn("integrity check: no reference recorded yet")
+		return nil
 	}
-
-	if st.Integrity.ConfigSHA256 == zeroHash || st.Integrity.ConfigSHA256 == "" {
-		slog.Warn("integrity: config baseline not set — run 'rosmarops baseline' to establish it")
-	} else {
-		// Import config package only for path resolution, not for the full Load.
-		// We hash the raw file bytes — schema validity is irrelevant here.
-		//
-		// Avoid importing internal/config to keep the startup path narrow.
-		// Instead, use the same path-resolution logic inline.
-		cfgPath, cfgErr := resolveCfgPath()
-		if cfgErr != nil {
-			slog.Warn("integrity: could not resolve config path", "err", cfgErr)
-		} else {
-			cfgHash, hashErr := hash.File(cfgPath)
-			if hashErr != nil {
-				slog.Warn("integrity: could not hash config", "path", cfgPath, "err", hashErr)
-			} else if cfgHash != st.Integrity.ConfigSHA256 {
-				slog.Error("integrity: config hash mismatch",
-					"stored", st.Integrity.ConfigSHA256[:16]+"…",
-					"computed", cfgHash[:16]+"…")
-				abortWithIntegrityFailure("config_hash_changed",
-					"Config file hash does not match the last baseline.",
-					"If you edited rosmarops.config.json intentionally, run 'rosmarops baseline'. "+
-						"If not, inspect the file for unexpected changes.", abortOptions{lang: catalog.DefaultLang, configRejected: true})
-			}
-		}
+	cfgPath, err := resolveCfgPath()
+	if err != nil {
+		slog.Warn("integrity check: could not resolve config path", "err", err)
+		return nil
 	}
-
-	return nil
+	defaultDir, err := report.DefaultReportDir()
+	if err != nil {
+		return fmt.Errorf("resolve report dir: %w", err)
+	}
+	lang := systemLang()
+	cat, err := catalog.Load(lang)
+	if err != nil {
+		return fmt.Errorf("message catalog: %w", err)
+	}
+	moveOldReports(os.Stdout, cat)
+	// The company configuration decides which file is the configuration in
+	// use, as in run; this command never writes the company summary.
+	home, _ := os.UserHomeDir()
+	comp := &companyRun{loaded: company.LoadConfig(companyDir()), source: configSourceUser, binary: binaryUnchanged, noSummary: true}
+	_, cfgPath, _ = resolveRunConfig(cfgPath, home, comp)
+	_, err = integrityRun{
+		ask: asker{in: os.Stdin, out: os.Stdout, terminal: runCanAsk(), cat: cat}, st: &st, stPath: stPath,
+		cfgPath: cfgPath, reportDir: defaultDir, lang: lang, selfHash: hash.Self, abort: abortIntegrity,
+		store: realStoreCheck, adminList: adminListed, company: comp,
+	}.check()
+	return err
 }
 
 // abortOptions are what an integrity abort's report needs beyond the
@@ -180,21 +147,35 @@ type abortOptions struct {
 	configRejected bool
 	stateLost      bool
 	unattended     bool
-	window         bool // the double-click window (U5): open the red report and wait for Enter
+	window         bool   // the double-click window (U5): open the red report and wait for Enter
+	detail         string // the technical detail of integrity.abort.unverifiable ({error})
 }
 
 // abortWithIntegrityFailure writes a minimal RED report (Markdown, JSON and
 // a red report.html), logs the finding, shows a scheduled review's
-// notification or opens the report, and exits with code 2. This function never returns.
-func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
+// notification or opens the report, and exits with code 2. text is the
+// catalog key of the abort's why and action (abortBinary…): the Markdown
+// stays in English, the console in the person's language. This function
+// never returns.
+func abortWithIntegrityFailure(category, text string, o abortOptions) {
 	ui.failed() // BV-151: the window and taskbar show the run could not finish
+	cat, catErr := catalog.Load(o.lang)
+	if catErr != nil {
+		cat, _ = catalog.Load(catalog.DefaultLang)
+	}
+	en, enErr := catalog.Load(catalog.DefaultLang)
+	if enErr != nil {
+		en = cat
+	}
+	p := map[string]string{"error": o.detail}
+	why, action := cat.Text(text+".why", p), cat.Text(text+".action", p)
 	f := finding.Finding{
 		ID:              category + ":" + truncatedTimeID(),
 		Severity:        finding.SeverityRed,
 		Category:        category,
-		Title:           why,
-		WhyItMatters:    why,
-		SuggestedAction: action,
+		Title:           en.Text(text+".why", p),
+		WhyItMatters:    en.Text(text+".why", p),
+		SuggestedAction: en.Text(text+".action", p),
 		Confidence:      "high",
 		FirstSeen:       time.Now().UTC().Format(time.RFC3339),
 		IsNewSinceLast:  true,
@@ -203,9 +184,7 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 	if o.stateLost {
 		// The Markdown is English (BV-45); the v1 category stays
 		// binary_hash_changed, its list being closed.
-		if en, err := catalog.Load(catalog.DefaultLang); err == nil {
-			f.Title = en.Text("html.integrity.state_lost", nil)
-		}
+		f.Title = en.Text("html.integrity.state_lost", nil)
 	}
 	r := report.Build(version, []finding.Finding{f}, nil, 0, 0, 0, 0, nil)
 
@@ -218,10 +197,6 @@ func abortWithIntegrityFailure(category, why, action string, o abortOptions) {
 			slog.Error("integrity abort: could not write report", "err", err)
 		} else {
 			fmt.Fprintln(os.Stderr, "INTEGRITY FAILURE — see report:", mdPath)
-			cat, catErr := catalog.Load(o.lang)
-			if catErr != nil {
-				cat, _ = catalog.Load(catalog.DefaultLang)
-			}
 			// The red page in every language and in report.html (U7).
 			base := strings.TrimSuffix(filepath.Base(mdPath), ".md")
 			pages := map[string]string{}

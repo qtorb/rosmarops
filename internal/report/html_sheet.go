@@ -243,13 +243,18 @@ func (c htmlCtx) renderSheet() {
 		}
 		c.w(`<div class="res-main"><div class="res-num"><b class="nt %s big">%d</b><small>/100</small></div><div><div class="res-lab">%s</div><div class="clsline">%s%s%s</div></div></div>`,
 			bandLetter(m.Band), *m.Value, label, cls(letter, ""), phrase, prov)
-		c.w(`<div class="res-ref"><div class="res-k">%s</div><div>`, c.t("sheet.reference", nil))
-		if m.FactoryValue != nil {
-			c.w(`%s`, strings.Replace(c.t("sheet.reference.value", map[string]string{"n": "\x00"}), "\x00", "<b>"+strconv.Itoa(*m.FactoryValue)+"</b>", 1))
-		} else {
-			c.w(`—`)
+		// Both at 0, the score is at its floor: the reference cannot show what
+		// the settings change, so neither it nor the comparison is shown.
+		if !scoreSaturated(m) {
+			c.w(`<div class="res-ref"><div class="res-k">%s</div><div>`, c.t("sheet.reference", nil))
+			if m.FactoryValue != nil {
+				c.w(`%s`, strings.Replace(c.t("sheet.reference.value", map[string]string{"n": "\x00"}), "\x00", "<b>"+strconv.Itoa(*m.FactoryValue)+"</b>", 1))
+			} else {
+				c.w(`—`)
+			}
+			c.w(`</div></div>`)
 		}
-		c.w(`</div></div><div class="res-int"><div class="res-k">%s</div><div>%s</div></div>`, c.t("sheet.reading", nil), c.reading(m, letter))
+		c.w(`<div class="res-int"><div class="res-k">%s</div><div>%s</div></div>`, c.t("sheet.reading", nil), c.reading(m, letter))
 	} else {
 		reason := index.ReasonNotApplicable
 		switch {
@@ -273,6 +278,15 @@ func (c htmlCtx) renderSheet() {
 		count = c.t("sheet.findings.count.one", nil)
 	default:
 		count = c.t("sheet.findings.count", map[string]string{"n": strconv.Itoa(len(rows))})
+	}
+	// A project that ran out of time kept only what it had found: the total
+	// is a lower bound, and says how many projects did not finish.
+	if k := timedOutProjects(v); k > 0 {
+		key := "findings.count.at_least"
+		if k == 1 {
+			key = "findings.count.at_least.one_project"
+		}
+		count = c.t(key, map[string]string{"n": strconv.Itoa(len(rows)), "k": strconv.Itoa(k)})
 	}
 	if count != "" {
 		count = ` <em>` + count + `</em>`
@@ -327,6 +341,24 @@ func osName(os string) string {
 	return os
 }
 
+// timedOutProjects is how many repositories ran out of their time
+// (scan_timeout) in this review.
+func timedOutProjects(v V2) int {
+	n := 0
+	for _, g := range v.Legacy.Groups {
+		if g.Category == "scan_timeout" {
+			n += g.Count
+		}
+	}
+	return n
+}
+
+// scoreSaturated: the score and its factory reference are both 0, so comparing
+// them says nothing about the person's settings.
+func scoreSaturated(m index.MachineScore) bool {
+	return m.Value != nil && m.FactoryValue != nil && *m.Value == 0 && *m.FactoryValue == 0
+}
+
 // reading is «Reading» (L1 to L7, BV-236 §7): who sets the score, what the
 // person's settings do against the factory score, why class and score
 // differ when they do, and the agent with a worse class.
@@ -334,7 +366,7 @@ func (c htmlCtx) reading(m index.MachineScore, letter index.Class) string {
 	var out []string
 	name := c.agentName(m.AgentID)
 	out = append(out, c.t("sheet.reading.L1", map[string]string{"agent": name}))
-	if m.FactoryValue != nil {
+	if m.FactoryValue != nil && !scoreSaturated(m) {
 		d := *m.Value - *m.FactoryValue
 		switch {
 		case d < 0:

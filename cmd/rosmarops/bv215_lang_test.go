@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // TestBV215SystemLangLogsToRunLog: the double click points slog at the run log
@@ -52,7 +53,7 @@ func TestBV215SystemLangLogsToRunLog(t *testing.T) {
 	if strings.Contains(console.String(), probe) {
 		t.Errorf("systemLang logged to the console before the run log was set:\n%s", console.String())
 	}
-	log, err := os.ReadFile(filepath.Join(home, ".rosmarops", "reports", "data", RunLogName))
+	log, err := os.ReadFile(filepath.Join(report.DefaultReportDirIn(home), "data", RunLogName))
 	if err != nil {
 		t.Fatalf("run log: %v", err)
 	}

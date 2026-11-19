@@ -14,8 +14,8 @@ The person-facing description is in [README.md](README.md). The promises the cod
 
 `rosmarops run` and a double click both end in `runWith` in `cmd/rosmarops/cmd_run.go`. Its steps, in order:
 
-1. Load the configuration (`internal/config`) and the state (`internal/state`). On a computer a company manages, the company configuration (`internal/company`) is read first; it is the configuration in use only when the person has none of their own. A missing state is replaced by a default one with a fresh salt, and the run says it cannot be compared.
-2. Check integrity: the binary and the configuration against the references in the state. The person confirms a change in the console, a Microsoft Store update is accepted on its own, and anything else stops the run with a red report (`cmd/rosmarops/integrity.go`, `storeaccept.go`).
+1. On Linux, move `~/.rosmarops/reports/` to `~/RosmarOps/` once, when the person's configuration sets no `report_directory` and only the old folder exists (`cmd/rosmarops/reportsmove.go`, `report.MoveOldReports`). Then load the configuration (`internal/config`) and the state (`internal/state`). On a computer a company manages, the company configuration (`internal/company`) is read first; it is the configuration in use only when the person has none of their own. A missing state is replaced by a default one with a fresh salt, and the run says it cannot be compared.
+2. Check integrity: the binary and the configuration against the references in the state. The person confirms a change in the console, a Microsoft Store update is accepted on its own, and anything else stops the run with a red report (`cmd/rosmarops/integrity.go`, `storeaccept.go`). The other commands (`status`, `findings`, `kit`, `connect` and the rest) run the same check before they start (`integrityCheck` in `cmd/rosmarops/main.go`), in the system's language.
 3. Only now use the configured reports directory, and mark the review as in progress in the problem notebook (`internal/problems`).
 4. Find the projects (`internal/scan/projects`) and compute the global time limit from their number (`scan.GlobalTimeoutFor`).
 5. Run the scan steps one after another under that limit (`scan.Run`): `vscode`, `mcp`, `credentials`, `graph`, `shellprofile`, `scheduledtasks`, `avexclusions`, `globals`, `repos`. A step that panics or runs out of time is recorded as a scan error. The others still run.
@@ -23,7 +23,7 @@ The person-facing description is in [README.md](README.md). The promises the cod
 7. Build the reports: the v1 report (`report.Build`) and the v2 report (`report.BuildV2`). The v2 report runs the rules (`internal/rules`), the score (`internal/index`), the exposure class (`internal/exposure`) and the memory of the previous run (`internal/memory`).
 8. If this computer is connected to its space, seal the results package (`internal/results`) and send it (`internal/spacenet`).
 9. Write the report files, the score history, the findings memory and the status line, then save the state.
-10. Print the summary and open the report.
+10. Print the summary and open the report. With someone at a console and at least one new finding, one line says that `rosmarops findings` dismisses or accepts findings; `run` itself never asks.
 11. After the report, the problem-report step, then the usage statistics step (`cmd/rosmarops/cmd_usage.go`): with someone at a console and no answer yet, ask once; with usage statistics on, build this review's `usage.v1` summary (`internal/usage`) and send it once (`internal/spacenet`). Neither step changes the report or the exit code.
 
 ```mermaid
@@ -168,7 +168,7 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 - `~/.rosmarops/state.json`: the state, written atomically.
 - `~/.rosmarops/config.json`: created once by `init`, and rewritten only when the person dismisses or accepts findings.
 - `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS, Linux): the kit key.
-- The reports directory, `~/.rosmarops/reports/` unless the configuration sets another:
+- The reports directory, `~/.rosmarops/reports/` (`~/RosmarOps/` on Linux) unless the configuration sets another:
   - `report.html` and `report.<lang>.html`: the visual report, one page per language;
   - `data/`: everything else. That is `report.md`, `report.json`, `report.v2.json`, the export for your AI, `graph.v2.json`, `index-history.json`, `findings-memory.json`, `config.accepted.json`, the run logs, `rosmarops-sends.log`, `rosmarops-problems.jsonl`, `rosmarops-usage-last.json` (the last usage summary sent or tried), `rosmarops-run.inprogress`, `statusline.txt`, the Claude Code session snapshots in `data/session/`, the sealed `rosmarops-results-*.locked.json` packages, and, on a computer a company manages with the summary on, `rosmarops-summary.json`;
   - `rosmarops-kit-<id>.json`: the exported kit file, when the person creates one.

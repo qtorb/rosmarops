@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/qtorb/rosmarops/internal/report"
 )
 
 // BV-52: the launcher's first run with no projects folder (empty answer, or
@@ -43,7 +45,7 @@ func TestInitAndRunWithoutRepos(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run: exit %d\n%s%s", code, out, errOut)
 	}
-	reports := filepath.Join(home, ".rosmarops", "reports")
+	reports := filepath.Join(report.DefaultReportDirIn(home))
 	if _, err := os.Stat(filepath.Join(reports, "report.html")); err != nil {
 		t.Errorf("no report.html: %v", err)
 	}
