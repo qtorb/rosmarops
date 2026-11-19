@@ -1266,7 +1266,7 @@ func HTMLKeys() []string {
 		"html.doc_title", "html.header", "html.header_sent", "html.status.green", "html.status.yellow", "html.status.red", "html.list.and",
 		"html.index.of", "html.index.name", "html.index.perfect", "html.index.unavailable",
 		"html.index.reason.coverage", "html.index.reason.not_applicable", "html.index.reason.agents_not_evaluated",
-		"html.card.button", "html.card.counts", "html.card.method",
+		"html.card.button", "html.card.counts", "html.card.counts.one", "html.card.method",
 		"html.none",
 		"html.meta.projects.one", "html.meta.projects.other", // BV-158: the step-1 projects/limit line
 		"html.limit.one", "html.limit.other", "html.limit.reached",
@@ -1353,7 +1353,7 @@ func HTMLKeys() []string {
 	keys = append(keys, moreKeys()...)
 	// v3 §15 (BV-63)
 	keys = append(keys, "html.gain.if_gone", "html.gain.agent.if_gone", "html.fix.none", "html.step.1.counts.multi",
-		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.same_as_today")
+		"html.headline.cred_in_git.one", "html.ov.data.ignore_env.also", "html.ov.cell.changes", "ai.no_secrets", "ai.counts.total", "ai.counts.total.one", "ai.same_as_today")
 	// v3 §11 (BV-61)
 	keys = append(keys, overviewKeys()...)
 	// BV-121: the agents_overview services list (§11).

@@ -47,12 +47,12 @@ func RenderAIExport(v V2, cat catalog.Catalog, home string) string {
 		if a.Value == nil {
 			continue
 		}
-		counts := cat.Text("html.card.counts", map[string]string{"red": strconv.Itoa(a.Red), "yellow": strconv.Itoa(a.Yellow)})
+		counts := cat.Text(cat.One("html.card.counts", a.Red), map[string]string{"red": strconv.Itoa(a.Red), "yellow": strconv.Itoa(a.Yellow)})
 		fmt.Fprintf(&head, "%s · %s · %d/100 (%s) · %s\n\n", cat.Text("html.index.name", nil), a.Agent, *a.Value, cat.Text("band."+a.Band, nil), counts)
 	}
 	if len(v.Index.Scope.Evaluated) > 1 { // the step 1 counts, across agents (v3 §15.9)
 		red, yellow := RowCounts(v)
-		fmt.Fprintf(&head, "%s\n\n", cat.Text("ai.counts.total", map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
+		fmt.Fprintf(&head, "%s\n\n", cat.Text(cat.One("ai.counts.total", red), map[string]string{"red": strconv.Itoa(red), "yellow": strconv.Itoa(yellow)}))
 	}
 	today := false // «If you do only one thing today» is written
 	for _, f := range v.Findings {

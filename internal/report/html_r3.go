@@ -353,7 +353,7 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 					rest += len(c.issueRows(r))
 				}
 				c.w(`<tr class="r3-more"><td></td><td colspan="4"><a href="#p-%d">%s</a></td></tr>`, r3Shown+1,
-					c.t("html.r3.more", map[string]string{"groups": c.r3Count("html.r3.groups", len(iss)-r3Shown), "findings": c.r3Count("html.r3.findings", rest)}))
+					c.t(c.cat.One("html.r3.more", len(iss)-r3Shown), map[string]string{"groups": c.r3Count("html.r3.groups", len(iss)-r3Shown), "findings": c.r3Count("html.r3.findings", rest)}))
 				break
 			}
 			n := i + 1
@@ -486,7 +486,7 @@ func r3Keys() []string {
 		"html.r3.group.cred.detail", "html.r3.group.cred.git", "html.r3.group.cred.git.one",
 		"html.r3.group.config", "html.r3.group.config.detail",
 		"html.r3.fix.rotate", "html.r3.fix.rotate_tpl", "html.r3.fix.tpl_all", "html.r3.fix.tpl_some", "html.r3.fix.steps",
-		"html.r3.more", "html.r3.tpl.body", "html.r3.tpl.fixes", "html.r3.tpl.fixes_none", "html.r3.tpl.button", "html.r3.tpl.note",
+		"html.r3.more", "html.r3.more.one", "html.r3.tpl.body", "html.r3.tpl.fixes", "html.r3.tpl.fixes_none", "html.r3.tpl.button", "html.r3.tpl.note",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
 		"report.dismissed.note", "html.today.incomplete",
 	}
