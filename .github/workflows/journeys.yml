@@ -1,130 +1,336 @@
-# journeys: the journey tests (CTO-74). This version holds only the second
-# probe of point 0, Linux only, run by hand: whether ubuntu-24.04 with the
-# Firefox snap tells a file under a hidden folder of the home from the same
-# file in a visible folder.
-#   - The machine's confinement: snap debug confinement, AppArmor, and the
-#     snap's home connection.
-#   - A real open of each file inside the snap (one byte read), not test -r:
-#     access() checks the file's permissions, AppArmor decides at the open.
-#   - A headless screenshot of each, 60 s each, as a complement.
-# The windows-latest MSIX probe passed in the first run and is not repeated.
-# Each check writes one line to the job summary; the job fails if the open
-# check does not tell the two files apart.
+# journeys: the journey tests (CTO-74, fase 1). What a person lives with a
+# candidate RosmarOps, on the machines people have, before it is published:
+#   R1  the first time: no arguments, in Spanish and in English;
+#   R2  an update from the last published version: every command a person uses,
+#       one by one, on a computer the previous version set up;
+#   R3  a computer with about 60 projects (Linux): two reviews in a row give the
+#       same findings, rules and score.
+# Machines: ubuntu-24.04 with Firefox as a snap (the reports must open in it),
+# windows-latest and macos-latest. On Windows each journey also runs on the
+# MSIX test package of the candidate, installed with Add-AppxPackage.
+# Every check is one line of the job summary (tests/journeys/journey.py) and
+# every journey leaves its console and report pictures as an artifact, with a
+# manifest (tests/journeys/capture.py).
+#
+# Triggers:
+#   - workflow_call from release.yml with the candidate's binaries (an artifact
+#     of the same run) and its version: the journeys test those exact bytes;
+#   - pull_request and workflow_dispatch: the candidate is built here from
+#     the commit, with release.yml's recipe, as <next patch>-journeys.<run>.
+# The previous version is rebuilt from its tag with that tag's recipe and Go,
+# and must reproduce the SHA256SUMS.txt of its release byte for byte; the
+# published binaries are never downloaded (they would add to the public
+# download counter). No secret and no network beyond GitHub: GITHUB_TOKEN reads
+# the public release list.
 name: journeys
 
 on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: "Artifact with the candidate's rosmarops.exe, rosmarops-linux-amd64 and rosmarops-macos-apple-silicon"
+        required: true
+        type: string
+      version:
+        description: "The candidate's version, without v"
+        required: true
+        type: string
   workflow_dispatch:
-  # Temporary, for the probe only: a workflow can be dispatched only once it is
-  # on the default branch, so until then a push of this file to its own branch
-  # runs it. Removed before the journeys themselves are added.
-  push:
-    branches: [bv2-263-recorridos]
-    paths: [".github/workflows/journeys.yml"]
+  pull_request:
 
 permissions: {}
 
+env:
+  GOTOOLCHAIN: local
+  # Checks expected to fail until the fixes of the Linux feedback on 0.15.0
+  # (qtorb/rosmarops#141) are on master: a failure there is reported as
+  # «expected red» and does not fail the journey; a pass says it can leave the
+  # list. Empty this list once #141 is merged.
+  JOURNEY_EXPECTED_RED: "Firefox (snap) opens the report,run: asks,usage: asks,status: asks,findings: asks,problems ask: asks,run --unattended: its console,ends without asking about each finding"
+  JOURNEY_EXPECTED_RED_WHY: "fixed in qtorb/rosmarops#141"
+
 jobs:
-  probe-snap:
+  candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: inputs.artifact == ''
+        with:
+          go-version: "1.27.4"
+          cache: false
+      - name: The candidate's version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIVEN: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "$GIVEN" ]; then v="$GIVEN"; else
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+            IFS=. read -r a b c <<< "${latest#v}"
+            v="$a.$b.$((c + 1))-journeys.$GITHUB_RUN_NUMBER"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "candidate: $v" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: inputs.artifact != ''
+        with:
+          name: ${{ inputs.artifact }}
+          path: given
+      - name: The candidate's binaries
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          GIVEN: ${{ inputs.artifact }}
+        run: |
+          set -euo pipefail
+          mkdir -p cand
+          if [ -n "$GIVEN" ]; then
+            for f in rosmarops.exe rosmarops-linux-amd64 rosmarops-macos-apple-silicon; do
+              cp "$(find given -name "$f" -type f | head -1)" "cand/$f"
+            done
+          else
+            # release.yml's recipe: CGO off, -trimpath, the version in
+            # main.version, the Windows icon and version resource.
+            GOOS=linux GOARCH=amd64 go run ./tools/winres -version "${VERSION%%-*}"
+            CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=$VERSION" -o cand/rosmarops.exe ./cmd/rosmarops
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-X main.version=$VERSION" -o cand/rosmarops-linux-amd64 ./cmd/rosmarops
+            CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-X main.version=$VERSION" -o cand/rosmarops-macos-apple-silicon ./cmd/rosmarops
+          fi
+          echo "$VERSION" > cand/VERSION
+          (cd cand && sha256sum rosmarops.exe rosmarops-linux-amd64 rosmarops-macos-apple-silicon)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: journeys-candidate
+          path: cand/
+          if-no-files-found: error
+          retention-days: 3
+
+  previous:
+    # The last published version, rebuilt from its tag with the Go its own
+    # release.yml pinned, checked byte for byte against its SHA256SUMS.txt.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The last published version
+        run: |
+          set -euo pipefail
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "previous: $tag" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          path: src
+          persist-credentials: false
+      - name: The Go of that tag's release.yml
+        run: |
+          set -euo pipefail
+          vers=$(grep -oE 'go-version:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+"' src/.github/workflows/release.yml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u)
+          [ "$(printf '%s\n' "$vers" | grep -c .)" -eq 1 ] || { echo "the tag's release.yml pins more than one Go: $vers"; exit 1; }
+          echo "GOVERSION=$vers" >> "$GITHUB_ENV"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "${{ env.GOVERSION }}"
+          cache: false
+      - name: Rebuild and compare with the release's SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          v="${TAG#v}"
+          mkdir -p prev
+          GOOS=linux GOARCH=amd64 go run ./tools/winres -version "$v" -ico src/assets/windows/rosmarops.ico -out src/cmd/rosmarops/rsrc_windows_amd64.syso
+          ( cd src
+            CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-X main.version=$v" -o ../prev/rosmarops.exe ./cmd/rosmarops
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-X main.version=$v" -o ../prev/rosmarops-linux-amd64 ./cmd/rosmarops
+            CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-X main.version=$v" -o ../prev/rosmarops-macos-apple-silicon ./cmd/rosmarops )
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS.txt --dir "$RUNNER_TEMP"
+          bad=0
+          for f in rosmarops.exe rosmarops-linux-amd64 rosmarops-macos-apple-silicon; do
+            built=$(sha256sum "prev/$f" | cut -d' ' -f1)
+            released=$(grep -E "[0-9a-fA-F]{64}[[:space:]]+\*?$f\$" "$RUNNER_TEMP/SHA256SUMS.txt" | grep -oE '^[0-9a-fA-F]{64}' || true)
+            echo "$f built=$built released=${released:-none}" | tee -a "$GITHUB_STEP_SUMMARY"
+            [ "$built" = "$released" ] || bad=1
+          done
+          if [ $bad -ne 0 ]; then echo "the previous version does not reproduce: R2 would test other bytes" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: journeys-previous
+          path: prev/
+          if-no-files-found: error
+          retention-days: 3
+
+  journey:
+    needs: [candidate, previous]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+        journey: [r1, r2]
+        install: [file]
+        include:
+          - os: ubuntu-24.04
+            journey: r3
+            install: file
+          # Windows also through the MSIX test package (installed with
+          # Add-AppxPackage, run through its alias), the probe having shown
+          # windows-latest installs it.
+          - os: windows-latest
+            journey: r1
+            install: msix
+          - os: windows-latest
+            journey: r2
+            install: msix
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.4"
+          cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: journeys-candidate
+          path: cand
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: matrix.journey == 'r2'
+        with:
+          name: journeys-previous
+          path: prev
+      - name: The journey's tools and folders
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tools"
+          go build -o "$RUNNER_TEMP/tools/makehome$EXE" ./tests/journeys/makehome
+          go build -o "$RUNNER_TEMP/tools/check$EXE" ./tests/journeys/check
+          if [ "$RUNNER_OS" = Windows ]; then go build -o "$RUNNER_TEMP/tools/conpty.exe" ./tests/journeys/drive/conpty; fi
+          case "$RUNNER_OS" in
+            Linux)   bin=cand/rosmarops-linux-amd64; prev=prev/rosmarops-linux-amd64
+                     # Inside the real home and not hidden: the Firefox snap reads only there.
+                     base="$HOME/journey" ;;
+            macOS)   bin=cand/rosmarops-macos-apple-silicon; prev=prev/rosmarops-macos-apple-silicon; base="$RUNNER_TEMP/journey" ;;
+            Windows) bin=cand/rosmarops.exe; prev=prev/rosmarops.exe; base="$RUNNER_TEMP/journey" ;;
+          esac
+          chmod +x "$bin" 2>/dev/null || true
+          [ -f "$prev" ] && chmod +x "$prev" 2>/dev/null || true
+          mkdir -p "$base/work" "$base/out" "$base/captures"
+          { echo "JOURNEY_BIN=$bin"; echo "JOURNEY_PREV=$prev"; echo "JOURNEY_WORK=$base/work"
+            echo "JOURNEY_OUT=$base/out"; echo "JOURNEY_CAPTURES=$base/captures"
+            echo "JOURNEY_VERSION=$(cat cand/VERSION)"; } >> "$GITHUB_ENV"
+        env:
+          EXE: ${{ runner.os == 'Windows' && '.exe' || '' }}
+      - name: The MSIX test packages (Windows, msix)
+        if: matrix.install == 'msix'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $v = (Get-Content cand/VERSION -Raw).Trim() -replace '-.*$', ''
+          ./.github/scripts/pack-test-msix.ps1 -Exe cand/rosmarops.exe -Version $v -Out "$env:RUNNER_TEMP\msix-cand"
+          $extra = "--msix-cand `"$env:RUNNER_TEMP\msix-cand`""
+          if ('${{ matrix.journey }}' -eq 'r2') {
+            $pv = (& prev/rosmarops.exe --version).Split(' ')[-1]
+            ./.github/scripts/pack-test-msix.ps1 -Exe prev/rosmarops.exe -Version $pv -Out "$env:RUNNER_TEMP\msix-prev"
+            $extra += " --msix-prev `"$env:RUNNER_TEMP\msix-prev`""
+          }
+          "JOURNEY_MSIX=$extra" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Firefox as a snap (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          timeout 900 sudo snap install firefox
+          snap list firefox
+          echo "JOURNEY_FIREFOX=snap run firefox" >> "$GITHUB_ENV"
+      - name: Firefox (Windows, macOS)
+        if: runner.os != 'Linux'
+        run: |
+          case "$RUNNER_OS" in
+            macOS)   f="/Applications/Firefox.app/Contents/MacOS/firefox" ;;
+            Windows) f="C:/Program Files/Mozilla Firefox/firefox.exe" ;;
+          esac
+          if [ -x "$f" ] || [ -f "$f" ]; then echo "JOURNEY_FIREFOX=\"$f\"" >> "$GITHUB_ENV"; else echo "::warning::no Firefox at $f: no pictures"; fi
+      - name: ${{ matrix.journey }}
+        id: journey
+        run: |
+          py=python3; [ "$RUNNER_OS" = Windows ] && py=python
+          args=(--bin "$JOURNEY_BIN" --version "$JOURNEY_VERSION" --tools "$RUNNER_TEMP/tools" --out "$JOURNEY_OUT")
+          [ "${{ matrix.journey }}" = r2 ] && args+=(--prev "$JOURNEY_PREV")
+          if [ -n "${JOURNEY_MSIX:-}" ]; then eval "args+=($JOURNEY_MSIX)"; fi
+          echo "### ${{ matrix.journey }} · ${{ matrix.os }} · ${{ matrix.install }} · $JOURNEY_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          "$py" tests/journeys/journey.py "${{ matrix.journey }}" "${args[@]}"
+      - name: Pictures and their manifest
+        if: always() && matrix.journey != 'r3' && env.JOURNEY_FIREFOX != ''
+        run: |
+          py=python3; [ "$RUNNER_OS" = Windows ] && py=python
+          [ -f "$JOURNEY_OUT/results.json" ] && "$py" tests/journeys/capture.py --results "$JOURNEY_OUT/results.json" --dest "$JOURNEY_CAPTURES" --firefox "$JOURNEY_FIREFOX" || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: journey-${{ matrix.journey }}-${{ matrix.os }}-${{ matrix.install }}
+          path: |
+            ${{ env.JOURNEY_OUT }}
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && matrix.journey != 'r3'
+        with:
+          name: captures-${{ matrix.journey }}-${{ matrix.os }}-${{ matrix.install }}
+          path: ${{ env.JOURNEY_CAPTURES }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  captures:
+    # One artifact with every picture and one manifest.json, for the website
+    # (imported by a later task; nothing is uploaded anywhere from here).
+    needs: [journey]
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - name: snapd and the Firefox snap
-        id: snap
-        shell: bash
-        run: |
-          set -u
-          ok() { echo "- ✅ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
-          ko() { echo "- ❌ $1" | tee -a "$GITHUB_STEP_SUMMARY"; echo "gate=fail" >> "$GITHUB_OUTPUT"; }
-          echo "### ubuntu-24.04 · snap" >> "$GITHUB_STEP_SUMMARY"
-          if snap version; then ok "snapd answers (\`snap version\`)"; else ko "snapd does not answer"; exit 0; fi
-          if timeout 900 sudo snap install firefox; then ok "\`snap install firefox\` finished"; else ko "\`snap install firefox\` did not finish"; exit 0; fi
-          if snap list firefox; then ok "\`snap list firefox\` lists the snap"; else ko "\`snap list firefox\` does not list it"; fi
-          echo "firefox on PATH: $(command -v firefox || echo none) -> $(readlink -f "$(command -v firefox)" 2>/dev/null || true)"
-
-      - name: Confinement of this machine
-        shell: bash
-        run: |
-          set +e
-          line() { echo "- ℹ️ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
-          c=$(snap debug confinement 2>&1); line "\`snap debug confinement\`: $c"
-          if command -v aa-status >/dev/null; then
-            sudo aa-status --enabled; line "\`aa-status --enabled\`: exit $?"
-          fi
-          line "\`/sys/module/apparmor/parameters/enabled\`: $(cat /sys/module/apparmor/parameters/enabled 2>&1)"
-          h=$(snap connections firefox 2>&1 | grep home); line "\`snap connections firefox | grep home\`: ${h:-none}"
-          true
-
-      - name: Open check inside the snap, with its control
-        shell: bash
-        run: |
-          set +e
-          ok() { echo "- ✅ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
-          ko() { echo "- ❌ $1" | tee -a "$GITHUB_STEP_SUMMARY"; echo fail > "$RUNNER_TEMP/gate"; }
-          hidden="$HOME/.rosmarops/reports/probe.html"
-          control="$HOME/RosmarOpsControl/probe.html"
-          mkdir -p "$(dirname "$hidden")" "$(dirname "$control")"
-          printf '<!doctype html><title>probe</title><h1>RosmarOps probe</h1>\n' > "$hidden"
-          cp "$hidden" "$control"
-          # A real open (read one byte), not test -r: access() checks only the
-          # file's permissions, while AppArmor decides at the open.
-          open_in_snap() { snap run --shell firefox -c "head -c1 '$1' >/dev/null" 2>&1; }
-          out=$(open_in_snap "$control"); rc=$?
-          if [ $rc -eq 0 ]; then
-            ok "control: \`~/RosmarOpsControl/probe.html\` opens inside the snap"
-          else
-            ko "control: \`~/RosmarOpsControl/probe.html\` does NOT open inside the snap (exit $rc: $out); the machine is not valid"
-          fi
-          out=$(open_in_snap "$hidden"); rc=$?
-          if [ $rc -eq 0 ]; then
-            ko "hidden: \`~/.rosmarops/reports/probe.html\` opens inside the snap (expected not to)"
-          else
-            ok "hidden: \`~/.rosmarops/reports/probe.html\` does not open inside the snap, as expected (exit $rc: $out)"
-          fi
-          sudo journalctl -k --since "-2min" 2>/dev/null | grep -i 'apparmor="DENIED"' | tail -5 || true
-          true
-
-      - name: Headless screenshots (60 s each; complement, never fails the job)
-        shell: bash
-        run: |
-          set +e
-          line() { echo "- ℹ️ $1" | tee -a "$GITHUB_STEP_SUMMARY"; }
-          mkdir -p "$RUNNER_TEMP/shots"
-          shot() {
-            out="$HOME/RosmarOpsControl/$1.png"
-            rm -f "$out"
-            timeout 60 snap run firefox --headless --screenshot "$out" "file://$2" > "$RUNNER_TEMP/$1.log" 2>&1
-            rc=$?
-            if [ -s "$out" ]; then
-              cp "$out" "$RUNNER_TEMP/shots/"
-              line "screenshot of the $1 file: taken ($(stat -c %s "$out") bytes, exit $rc)"
-            elif [ $rc -eq 124 ]; then
-              line "screenshot of the $1 file: no screenshot (60 s timeout)"
-            else
-              line "screenshot of the $1 file: no screenshot (exit $rc)"
-            fi
-            pkill -f 'firefox.*--headless' 2>/dev/null
-            tail -5 "$RUNNER_TEMP/$1.log"
-          }
-          shot control "$HOME/RosmarOpsControl/probe.html"
-          shot hidden "$HOME/.rosmarops/reports/probe.html"
-          true
-
-      - name: Upload the screenshots
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: probe-snap-screenshots
-          path: ${{ runner.temp }}/shots/
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Result
-        if: always()
-        shell: bash
+          pattern: captures-*
+          path: all
+          merge-multiple: true
+      - name: manifest.json
         run: |
-          if [ "${{ steps.snap.outputs.gate }}" = fail ] || [ -e "$RUNNER_TEMP/gate" ]; then
-            echo "a check failed"; exit 1
-          fi
-
+          set -euo pipefail
+          mkdir -p all
+          python3 - <<'PY'
+          import glob, json, os
+          items = []
+          for m in sorted(glob.glob("all/manifest-*.json")):
+              items += json.load(open(m, encoding="utf-8"))
+              os.remove(m)
+          json.dump(items, open("all/manifest.json", "w", encoding="utf-8"), indent=1, ensure_ascii=False)
+          ok = sum(1 for i in items if i["status"] == "ok")
+          print(f"{len(items)} pictures and texts, {ok} of a journey that passed")
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: journeys-captures
+          path: all/
+          if-no-files-found: warn
+          retention-days: 30

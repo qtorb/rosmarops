@@ -1,0 +1,15 @@
+# R2, a command after the update: it says RosmarOps changed and asks; the
+# person installed it, so they confirm (the answer is in JOURNEY_YES's place:
+# s in Spanish, y in English). It must then finish without another unplanned
+# question.
+expect console.binary_changed timeout 120s
+expect console.binary_confirm timeout 60s
+send @YES@\r
+if-asked connect.console.prompt send \r
+if-asked findings.console.prompt.accept send \r
+# The questions about settings that live inside an app (Cursor, Grok Bot):
+# Enter is «I don't know», the least controlled case.
+if-asked decl.unknown send \r
+if-asked usage.ask.prompt send n\r
+if-asked console.press_enter send \r
+expect-exit 0 timeout 600s

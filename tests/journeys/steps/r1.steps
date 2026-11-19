@@ -1,0 +1,11 @@
+# R1, the first time: RosmarOps with no arguments, as a double click. The
+# questions a first review may ask, answered as a person who only wants the
+# report. Any other question fails the journey (the 30 s rule).
+if-asked connect.console.prompt send \r
+if-asked findings.console.prompt.accept send \r
+# The questions about settings that live inside an app (Cursor, Grok Bot):
+# Enter is «I don't know», the least controlled case.
+if-asked decl.unknown send \r
+if-asked usage.ask.prompt send n\r
+if-asked console.press_enter send \r
+expect-exit 0 timeout 600s
