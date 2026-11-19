@@ -32,6 +32,7 @@ var (
 const (
 	attributePseudoConsole     = 0x00020016 // PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE
 	extendedStartupInfoPresent = 0x00080000
+	startfUseStdHandles        = 0x00000100 // STARTF_USESTDHANDLES
 	waitObject0                = 0
 )
 
@@ -93,6 +94,12 @@ func start(argv []string, cols, rows int) (*session, error) {
 	var si startupInfoEx
 	si.Cb = uint32(unsafe.Sizeof(si))
 	si.attributeList = &s.attributes[0]
+	// With null standard handles flagged as given, the program gets the
+	// pseudoconsole's. Without the flag it inherits this driver's own, which
+	// are the pipes of whoever runs the driver: its output would bypass the
+	// pseudoconsole and it would see no terminal (GetConsoleMode fails on a
+	// pipe), so it would never ask.
+	si.Flags = startfUseStdHandles
 	quoted := make([]string, len(argv))
 	for i, a := range argv {
 		quoted[i] = syscall.EscapeArg(a)
