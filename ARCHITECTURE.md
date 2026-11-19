@@ -32,7 +32,7 @@ On Windows a double click asks through RosmarOps's own windows after the report 
 - when RosmarOps is done with a window it closes the window's input, and the window closes too. The connect window now does this like the findings window. RosmarOps only closes the input after the window was answered or to end it, so a person never sees a window close under them;
 - a window process that has not ended 10 seconds after its input is closed (`windowExitLimit`) is ended, and the run log says so.
 
-With a window's self-test hook set (`ROSMAROPS_CONNECT_WINDOW_SELFTEST`, `ROSMAROPS_FINDINGS_WINDOW_SELFTEST`), which a person never sets, the real window opens and answers itself, and RosmarOps writes `window self-test: shown` with the window's name to the run's log. The journey tests on Windows use this (see [docs/how-to/journeys.md](docs/how-to/journeys.md)).
+With a window's self-test hook set (`ROSMAROPS_CONNECT_WINDOW_SELFTEST`, `ROSMAROPS_FINDINGS_WINDOW_SELFTEST`), which a person never sets, the real window opens and answers itself, and RosmarOps writes `window self-test: shown` with the window's name to the run's log. The journey tests on Windows use this (see [docs/how-to/journeys.md](docs/how-to/journeys.md) and [ADR 0021](docs/decisions/0021-journey-tests-before-publishing.md)).
 
 ```mermaid
 flowchart TD
@@ -187,7 +187,7 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 
 - `tests/trust`: the invariants, mechanically (network, writes, secrets, integrity, and that what reaches the console comes from the catalog).
 - `tests/integration`: the real binary on fixture computers.
-- `tests/journeys` and `.github/workflows/journeys.yml`: the journey tests R1-R3, a candidate driven as a person would through a pseudo-terminal (ConPTY on Windows) on ubuntu-24.04 with Firefox as a snap, windows-latest (also through the MSIX test package) and macos-latest, with test computers built by `tests/journeys/makehome`. `release.yml` runs them between `build` and `publish`, on the same bytes; they block the publication once `JOURNEYS_GATE` is `on`. See [docs/how-to/journeys.md](docs/how-to/journeys.md).
+- `tests/journeys` and `.github/workflows/journeys.yml`: the journey tests R1-R3, a candidate driven as a person would through a pseudo-terminal (ConPTY on Windows) on ubuntu-24.04 with Firefox as a snap, windows-latest (also through the MSIX test package) and macos-latest, with test computers built by `tests/journeys/makehome`. `release.yml` runs them between `build` and `publish`, on the same bytes; they block the publication once `JOURNEYS_GATE` is `on`. See [docs/how-to/journeys.md](docs/how-to/journeys.md) and [ADR 0021](docs/decisions/0021-journey-tests-before-publishing.md).
 
 ## Known oddities
 

@@ -1,6 +1,6 @@
 # Journey tests
 
-The journey tests run a candidate RosmarOps the way a person does, on the machines people have, before it is published: `.github/workflows/journeys.yml`. They catch what unit tests cannot see: a question nobody planned for, a text left in English, a report a browser cannot open, a version that stops instead of asking. The decision is [ADR 0020](../decisions/0020-journey-tests-before-publishing.md).
+The journey tests run a candidate RosmarOps the way a person does, on the machines people have, before it is published: `.github/workflows/journeys.yml`. They catch what unit tests cannot see: a question nobody planned for, a text left in English, a report a browser cannot open, a version that stops instead of asking. The decision is [ADR 0021](../decisions/0021-journey-tests-before-publishing.md).
 
 ## What runs
 
