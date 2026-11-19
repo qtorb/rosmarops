@@ -26,6 +26,14 @@ The person-facing description is in [README.md](README.md). The promises the cod
 10. Print the summary and open the report. With someone at a console and at least one new finding, one line says that `rosmarops findings` dismisses or accepts findings; `run` itself never asks.
 11. After the report, the problem-report step, then the usage statistics step (`cmd/rosmarops/cmd_usage.go`): with someone at a console and no answer yet, ask once; with usage statistics on, build this review's `usage.v1` summary (`internal/usage`) and send it once (`internal/spacenet`). Neither step changes the report or the exit code.
 
+On Windows a double click asks through RosmarOps's own windows after the report (connect, findings, problems), each a PowerShell WinForms process that talks to RosmarOps over its standard streams (`cmd/rosmarops/windowscripts.go`). No window can hold the run without a limit (`cmd/rosmarops/connectwindow.go`):
+- a window nobody answers closes as «Not now»: the connect window after 10 minutes (`connectAnswerLimit`), the findings and problems windows after 15;
+- once «Save to my space» is pressed, the connect window closes 21 minutes later at most (`connectPressedLimit`: the connection's own 11 minutes plus 10 to press OK on the result), and the connection's result stands;
+- when RosmarOps is done with a window it closes the window's input, and the window closes too. The connect window now does this like the findings window. RosmarOps only closes the input after the window was answered or to end it, so a person never sees a window close under them;
+- a window process that has not ended 10 seconds after its input is closed (`windowExitLimit`) is ended, and the run log says so.
+
+With a window's self-test hook set (`ROSMAROPS_CONNECT_WINDOW_SELFTEST`, `ROSMAROPS_FINDINGS_WINDOW_SELFTEST`), which a person never sets, the real window opens and answers itself, and RosmarOps writes `window self-test: shown` with the window's name to the run's log. The journey tests on Windows use this (see [docs/how-to/journeys.md](docs/how-to/journeys.md)).
+
 ```mermaid
 flowchart TD
     A[config + state] --> B{integrity check}

@@ -126,9 +126,11 @@ class Journey:
         return os.path.join(self.args.tools, name + EXE)
 
     # --- running ------------------------------------------------------------
-    def drive(self, steps, lang, argv, home, label, yes=None):
+    def drive(self, steps, lang, argv, home, label, yes=None, windows=()):
         """Run argv in a terminal through the steps; the console is kept as
-        label.txt. Returns (ok, why)."""
+        label.txt. windows names the RosmarOps windows this command opens on
+        Windows: their self-test hooks are set, so each real window opens and
+        answers itself (a journey cannot click). Returns (ok, why)."""
         if yes is not None:
             with open(os.path.join(STEPS, steps), encoding="utf-8") as f:
                 text = f.read().replace("@YES@", yes)
@@ -143,7 +145,11 @@ class Journey:
         else:
             cmd = [sys.executable, os.path.join(ROOT, "tests", "journeys", "drive", "drive.py"), "--steps", steps,
                    "--catalog", CATALOG, "--lang", lang, "--text", console, "--"] + argv
-        p = subprocess.run(cmd, env=self.env(home, lang), cwd=home, capture_output=True, text=True,
+        env = self.env(home, lang)
+        if SYSTEM == "windows":
+            for w in windows:
+                env[SELFTEST_HOOK[w]] = "1"
+        p = subprocess.run(cmd, env=env, cwd=home, capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         why = (p.stderr or p.stdout).strip().splitlines()
         if p.returncode != 0:
@@ -174,6 +180,26 @@ class Journey:
         return p.returncode, "; ".join(lines[:5])
 
     # --- what a review left -------------------------------------------------
+    def window_checks(self, home, console, label, windows):
+        """Windows: each window the command opened logged its self-test
+        «shown» line, in the run's log (last-run-log.txt) or, for a command
+        without a run log, on the console with its other log lines."""
+        if SYSTEM != "windows":
+            return
+        texts = []
+        rep = self.reports_dir(home)
+        for f in ([os.path.join(rep, "last-run-log.txt")] if rep else []) + [console]:
+            try:
+                with open(f, encoding="utf-8", errors="replace") as fh:
+                    texts.append(fh.read())
+            except OSError:
+                pass
+        lines = "\n".join(texts).splitlines()
+        for w in windows:
+            shown = any("window self-test: shown" in ln and f"window={w}" in ln for ln in lines)
+            self.check(f"{label}: the {w} window opened (its self-test)", shown,
+                       "" if shown else "no «window self-test: shown» line for it in the run's log")
+
     def reports_dir(self, home):
         for d in (os.path.join(home, "RosmarOps"), os.path.join(home, ".rosmarops", "reports")):
             if os.path.exists(os.path.join(d, "report.html")):
@@ -287,8 +313,9 @@ def r1(args):
         home = j.make_home(label)
         if not args.msix_cand:
             binary = j.install(home, args.bin)
-        ok, why = j.drive("r1.steps", lang, [binary], home, label)
+        ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=WINDOWS_OPENED["no arguments"])
         j.check(f"{label}: no arguments ends without an unplanned question", ok, why)
+        j.window_checks(home, os.path.join(j.out, label + ".txt"), label, WINDOWS_OPENED["no arguments"])
         rep = j.review_checks(home, lang, os.path.join(j.out, label + ".txt"), label)
         if SYSTEM == "linux":
             j.snap_gate(label)
@@ -304,6 +331,15 @@ def r1(args):
             if rep:
                 j.keep_report(rep, "run-lang-es", "es", os.path.join(j.out, label + ".txt"))
     return j.finish()
+
+
+# The RosmarOps windows a command opens on Windows, and each window's self-test
+# hook. A journey cannot click a window, so on Windows the hook is set: the real
+# window opens and answers itself («Not now», nothing saved), and the window's
+# «shown» line in the run's log proves it opened. A person's click is not
+# tested here.
+WINDOWS_OPENED = {"no arguments": ("connect", "findings"), "findings": ("findings",)}
+SELFTEST_HOOK = {"connect": "ROSMAROPS_CONNECT_WINDOW_SELFTEST", "findings": "ROSMAROPS_FINDINGS_WINDOW_SELFTEST"}
 
 
 # R2's commands after the update: (label, argv, kind, how to judge it).
@@ -356,8 +392,10 @@ def r2(args):
         shutil.copyfile(os.path.join(home, state), before)
         slug = "r2-" + label.replace(" ", "-").replace("--", "")
         if kind == "ask":
-            ok, why = j.drive("r2-ask.steps", lang, [binary] + argv, home, slug, yes=yes)
+            windows = WINDOWS_OPENED.get(label, ())
+            ok, why = j.drive("r2-ask.steps", lang, [binary] + argv, home, slug, yes=yes, windows=windows)
             j.check(f"{label}: asks in the person's language and goes on", ok, why)
+            j.window_checks(home, os.path.join(j.out, slug + ".txt"), label, windows)
         elif kind == "abort":
             code = j.plain([binary] + argv, home, lang, slug)
             red = red_report(home)

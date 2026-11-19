@@ -59,6 +59,12 @@ func connectWindowInput(c connectWindowConfig) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// windowExitLimit: once RosmarOps has closed a window's input, how long the
+// window's process has to end before RosmarOps ends it (waitWindowExit). Every
+// window here ends on its own well within it; the limit is only there so a
+// window that does not can never hold the run.
+const windowExitLimit = 10 * time.Second
+
 // connectOffer shows the connect window on a Windows double click and runs the
 // protocol if the person agrees (BV-137 point 5; BV-158 part 4). Any failure to
 // show the window is logged and ignored (connectNotOffered): the run goes on,
@@ -116,8 +122,8 @@ func connectOffer(paths spacePaths, cat catalog.Catalog) connectResult {
 	go func() {
 		done <- driveConnectWindow(stdout, stdin, cat, func() { once.Do(func() { close(pressed) }) }, run)
 	}()
-	result := awaitConnectWindow(done, pressed, 10*time.Minute, time.After, func() { _ = cmd.Process.Kill() })
+	result := awaitConnectWindow(done, pressed, connectAnswerLimit, time.After, func() { _ = cmd.Process.Kill() })
 	_ = stdin.Close()
-	_ = cmd.Wait()
+	waitWindowExit(cmd, "connect", windowExitLimit)
 	return result
 }

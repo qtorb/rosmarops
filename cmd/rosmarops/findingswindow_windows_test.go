@@ -343,3 +343,16 @@ func TestBV236WindowConfig(t *testing.T) {
 		}
 	}
 }
+
+// With the findings window's self-test hook set, the driver logs the window's
+// SHOWN line with its name and treats it as not saved.
+func TestDismissDriverSelfTestShown(t *testing.T) {
+	log := captureLog(t)
+	t.Setenv(findingsSelfTestEnv, "1")
+	if _, saved := driveDismissWindow(strings.NewReader("SHOWN\r\nCARDS=7\r\n")); saved {
+		t.Fatal("a self-test window is not a save")
+	}
+	if !strings.Contains(log.String(), "window self-test: shown") || !strings.Contains(log.String(), "window=findings") {
+		t.Fatalf("log has no self-test line for the findings window:\n%s", log)
+	}
+}

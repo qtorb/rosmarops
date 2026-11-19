@@ -1091,7 +1091,9 @@ $timer.Add_Tick({
   }
   $line = $null
   while ($script:q.TryDequeue([ref]$line)) {
-    if ($line -eq $script:eof) { $timer.Stop(); return }
+    # Input ended: RosmarOps is done with the window (it only closes the input
+    # after the window was answered, or to end it), so the window closes too.
+    if ($line -eq $script:eof) { $timer.Stop(); $form.Close(); return }
     Handle-Line $line
   }
 })

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -92,6 +94,53 @@ func connectOfferDue(declinedAt string, now time.Time) bool {
 	return now.Sub(t) >= 7*24*time.Hour
 }
 
+// How long RosmarOps waits for its windows. No window may hold the run without
+// a limit: a window that does not answer, or does not end, is closed and the
+// run goes on. windowExitLimit, the time a window has to end once its input is
+// closed, is with the Windows windows.
+const (
+	// connectAnswerLimit: before «Save to my space» is pressed, a connect window
+	// nobody answers closes as «Not now».
+	connectAnswerLimit = 10 * time.Minute
+	// connectPressedLimit: once pressed, the connection's own 11 minutes plus
+	// 10 for the person to press OK on the result. Past it the window is
+	// closed and the connection's result stands.
+	connectPressedLimit = 21 * time.Minute
+)
+
+// The windows' self-test hooks. A person never sets them: with one set, the
+// window answers itself (the journey tests on Windows use them), and the
+// window's first line is SHOWN instead of an answer.
+const (
+	connectSelfTestEnv  = "ROSMAROPS_CONNECT_WINDOW_SELFTEST"
+	findingsSelfTestEnv = "ROSMAROPS_FINDINGS_WINDOW_SELFTEST"
+)
+
+// noteSelfTestShown logs, only under the window's self-test hook, that the
+// window painted (its SHOWN line). It goes to the run's log and nowhere else,
+// so a journey test can prove the real window opened. Without the hook it does
+// nothing.
+func noteSelfTestShown(line, window, env string) {
+	if os.Getenv(env) != "" && strings.TrimRight(line, "\r\n") == "SHOWN" {
+		slog.Info("window self-test: shown", "window", window)
+	}
+}
+
+// waitWindowExit waits for a window's process once RosmarOps is done with it
+// and has closed its input. A window that has not ended within limit is ended,
+// logged, and the run goes on.
+func waitWindowExit(cmd *exec.Cmd, window string, limit time.Duration) {
+	exited := make(chan struct{})
+	go func() { _ = cmd.Wait(); close(exited) }()
+	select {
+	case <-exited:
+	case <-time.After(limit):
+		slog.Info("window did not close; ending it", "window", window, "after", limit.String())
+		_ = cmd.Process.Kill()
+		<-exited
+	}
+}
+
 // driveConnectWindow drives the window over its streams. It reads the first
 // line the window writes: "connect" starts the protocol, anything else (or a
 // closed stream) means the person declined. On "connect" it calls pressed (the
@@ -104,6 +153,7 @@ func connectOfferDue(declinedAt string, now time.Time) bool {
 func driveConnectWindow(out io.Reader, in io.Writer, cat catalog.Catalog, pressed func(), run func(onNumber func(int), onOpen func(string, string) error) error) connectResult {
 	r := bufio.NewReader(out)
 	first, _ := r.ReadString('\n')
+	noteSelfTestShown(first, "connect", connectSelfTestEnv)
 	if strings.TrimRight(first, "\r\n") != "connect" {
 		return connectDeclined
 	}
@@ -158,16 +208,25 @@ func connectWaitLine(cat catalog.Catalog, u, code string) string {
 // answerWithin closes as «Not now» (kill closes it, so done then delivers).
 // Once pressed, that limit no longer applies: the 10 minutes are the
 // connection's own (spacenet's poll deadline and the request's life), which
-// start at the press, and done is awaited. after is time.After in production.
+// start at the press. Past connectPressedLimit from the press (the connection
+// plus time to press OK on its result) the window is closed and the
+// connection's result stands. after is time.After in production.
 func awaitConnectWindow(done <-chan connectResult, pressed <-chan struct{}, answerWithin time.Duration, after func(time.Duration) <-chan time.Time, kill func()) connectResult {
 	timeout := after(answerWithin)
+	wasPressed := false
 	for {
 		select {
 		case r := <-done:
 			return r
 		case <-pressed:
-			pressed, timeout = nil, nil
+			pressed, timeout = nil, after(connectPressedLimit)
+			wasPressed = true
 		case <-timeout:
+			if wasPressed {
+				slog.Info("connect window: no OK on the result; closing it and continuing", "after", connectPressedLimit.String())
+				kill()
+				return <-done
+			}
 			slog.Info("connect window: no answer in 10 minutes; closing as «Not now» and continuing")
 			kill()
 			<-done

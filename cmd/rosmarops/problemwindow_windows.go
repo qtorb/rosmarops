@@ -153,7 +153,7 @@ func askProblem(a problemAsk) (problemAnswer, bool) {
 		<-done
 	}
 	_ = stdin.Close()
-	_ = cmd.Wait()
+	waitWindowExit(cmd, "problems", windowExitLimit)
 	return out.ans, out.asked
 }
 
@@ -213,7 +213,7 @@ func runProblemBox(cfg problemBoxConfig) bool {
 		<-done
 	}
 	_ = stdin.Close()
-	_ = cmd.Wait()
+	waitWindowExit(cmd, "problem box", windowExitLimit)
 	return choice == "secondary"
 }
 

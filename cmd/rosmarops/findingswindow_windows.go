@@ -141,6 +141,7 @@ func dismissWindowInput(c dismissWindowConfig) string {
 func driveDismissWindow(out io.Reader) (findingChoice, bool) {
 	r := bufio.NewReader(out)
 	first, _ := r.ReadString('\n')
+	noteSelfTestShown(first, "findings", findingsSelfTestEnv)
 	if strings.TrimRight(first, "\r\n") != "save" {
 		return findingChoice{}, false
 	}
@@ -203,6 +204,6 @@ func showDismiss(cards []report.FindingCard, cat catalog.Catalog) (findingChoice
 		<-done
 	}
 	_ = stdin.Close()
-	_ = cmd.Wait()
+	waitWindowExit(cmd, "findings", windowExitLimit)
 	return out.ids, out.saved
 }
