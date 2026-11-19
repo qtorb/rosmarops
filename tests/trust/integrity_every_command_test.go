@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -59,6 +60,12 @@ func changeBinaryReference(t *testing.T, s *sandbox) string {
 // with one it asks like run and, confirmed, records the new reference and
 // goes on. Nothing it prints mentions baseline or leaves a placeholder.
 func TestIntegrityEveryCommand(t *testing.T) {
+	// The system's language comes from the locale only on Linux (macOS reads
+	// its display language, Windows its UI language), and the terminal half
+	// needs a pseudo-terminal: Linux only.
+	if runtime.GOOS != "linux" {
+		t.Skip("the locale sets the language, and a pseudo-terminal exists, on Linux")
+	}
 	s := newSandbox(t)
 	s.runAll(t, nil)
 	exe, err := os.ReadFile(s.binary)
