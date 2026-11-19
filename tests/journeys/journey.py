@@ -26,6 +26,7 @@ import json
 import os
 import platform
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,7 @@ class Journey:
         self.expected = [s.strip() for s in os.environ.get("JOURNEY_EXPECTED_RED", "").split(",") if s.strip()]
         self.why = os.environ.get("JOURNEY_EXPECTED_RED_WHY", "")
         self.captures = []  # what capture.py draws: [{"kind", "path", "step", "lang"}]
+        self.installed = []  # program paths outside the test home that may appear (the MSIX alias)
         self.work = tempfile.mkdtemp(prefix=f"journey-{name}-", dir=os.environ.get("JOURNEY_WORK"))
         self.stub = os.path.join(self.work, "stub")
         os.makedirs(self.stub)
@@ -98,6 +100,16 @@ class Journey:
                         os.path.join(ROOT, "testdata", "sample-home"), "-medium", str(medium), "-large", "0"],
                        check=True, stdout=subprocess.DEVNULL)
         return home
+
+    def install(self, home, src):
+        """The program as a person keeps it: downloaded into their own
+        Downloads folder. The report names this path (the Claude Code hook
+        command), so it must be inside the test home, never the checkout."""
+        binary = os.path.join(home, "Downloads", "rosmarops" + EXE)
+        os.makedirs(os.path.dirname(binary), exist_ok=True)
+        shutil.copyfile(src, binary)
+        os.chmod(binary, 0o755)
+        return binary
 
     def env(self, home, lang):
         e = {k: v for k, v in os.environ.items() if not k.startswith(("XDG_", "LC_", "JOURNEY_EXPECTED"))}
@@ -177,7 +189,8 @@ class Journey:
             self.check(f"{label}: version {self.args.version} in the report", code == 0, why)
         forbid = [p for p in (os.path.expanduser("~"), os.environ.get("GITHUB_WORKSPACE"),
                               os.environ.get("RUNNER_TEMP"), os.environ.get("RUNNER_TOOL_CACHE")) if p]
-        code, why = self.run_check("leaks", "-home", home, "-forbid", ",".join(forbid), console,
+        allow = [os.path.dirname(b) for b in self.installed]
+        code, why = self.run_check("leaks", "-home", home, "-allow", ",".join(allow), "-forbid", ",".join(forbid), console,
                                    os.path.join(rep, "report.es.html"), os.path.join(rep, "report.en.html"))
         self.check(f"{label}: no runner path or machine name", code == 0, why)
         return rep
@@ -209,6 +222,18 @@ class Journey:
                 shutil.copyfile(src, dst)
                 self.captures.append({"kind": "report", "path": dst, "step": step, "lang": l})
         self.captures.append({"kind": "console", "path": console, "step": step, "lang": lang})
+
+
+def remove_tree(path):
+    """shutil.rmtree that also deletes read-only files: on Windows git's
+    object files are read-only and a plain delete is refused."""
+    def again(func, p, _):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=again)
+    else:
+        shutil.rmtree(path, onerror=again)
 
 
 def install_msix(folder):
@@ -244,12 +269,15 @@ def red_report(home):
 def r1(args):
     j = Journey(args, "R1 MSIX" if args.msix_cand else "R1")
     if args.msix_cand:
-        args.bin = install_msix(args.msix_cand)
+        binary = install_msix(args.msix_cand)
+        j.installed.append(binary)
     legs = ["es", "en"] if LOCALE_LANG else ["en"]
     for lang in legs:
         label = f"r1-{lang}"
         home = j.make_home(label)
-        ok, why = j.drive("r1.steps", lang, [args.bin], home, label)
+        if not args.msix_cand:
+            binary = j.install(home, args.bin)
+        ok, why = j.drive("r1.steps", lang, [binary], home, label)
         j.check(f"{label}: no arguments ends without an unplanned question", ok, why)
         rep = j.review_checks(home, lang, os.path.join(j.out, label + ".txt"), label)
         if SYSTEM == "linux":
@@ -260,7 +288,7 @@ def r1(args):
             # The Spanish leg: on these systems the language does not follow
             # the locale, so it is asked for.
             label = "r1-es"
-            ok, why = j.drive("r1-run.steps", "es", [args.bin, "run", "--lang", "es"], home, label)
+            ok, why = j.drive("r1-run.steps", "es", [binary, "run", "--lang", "es"], home, label)
             j.check(f"{label}: run --lang es ends without an unplanned question", ok, why)
             rep = j.review_checks(home, "es", os.path.join(j.out, label + ".txt"), label)
             if rep:
@@ -294,27 +322,25 @@ def r2(args):
     home = j.make_home("r2")
     if args.msix_prev:
         binary = install_msix(args.msix_prev)
+        j.installed.append(binary)
     else:
-        binary = os.path.join(j.work, "bin", "rosmarops" + EXE)
-        os.makedirs(os.path.dirname(binary))
-        shutil.copyfile(args.prev, binary)
-        os.chmod(binary, 0o755)
+        binary = j.install(home, args.prev)
     # The previous version, installed and used: state, history and config.
     prev_ok = (j.plain([binary, "init", "--repos-under", os.path.join(home, "projects")], home, lang, "r2-prev-init") == 0
                and j.plain([binary, "run", "--lang", lang], home, lang, "r2-prev-run") in (0, 1)
                and j.plain([binary, "run", "--unattended"], home, lang, "r2-prev-unattended") in (0, 1))
     if not j.check("the previous version installed and ran", prev_ok):
         return j.finish()
+    if args.msix_cand:
+        install_msix(args.msix_cand)  # the update, as the package installs it, same alias
+    else:
+        j.install(home, args.bin)  # the candidate, in the same path
+    # Each command starts from this copy: the update done, nothing run yet.
     base = home + ".base"
     shutil.copytree(home, base, symlinks=True)
-    if args.msix_cand:
-        args.bin = install_msix(args.msix_cand)  # the update, as the package installs it
-    else:
-        shutil.copyfile(args.bin, binary)  # the candidate, in the same path
-        os.chmod(binary, 0o755)
     state = os.path.join(".rosmarops", "state.json")
     for label, argv, kind in R2_ROWS:
-        shutil.rmtree(home)
+        remove_tree(home)
         shutil.copytree(base, home, symlinks=True)
         before = os.path.join(j.work, "state-before.json")
         shutil.copyfile(os.path.join(home, state), before)
@@ -365,13 +391,14 @@ def r3(args):
     lang = "es" if LOCALE_LANG else "en"
     for attempt in (1, 2):
         home = j.make_home(f"r3-{attempt}", medium=args.medium)
-        code = j.plain([args.bin, "init", "--repos-under", os.path.join(home, "projects")], home, lang, f"r3-{attempt}-init")
+        binary = j.install(home, args.bin)
+        code = j.plain([binary, "init", "--repos-under", os.path.join(home, "projects")], home, lang, f"r3-{attempt}-init")
         if not j.check(f"attempt {attempt}: init", code == 0, f"exit {code}"):
             return j.finish()
         reports = []
         for n in (1, 2):
             label = f"r3-{attempt}-run{n}"
-            ok, why = j.drive("r3-run.steps", lang, [args.bin, "run"], home, label)
+            ok, why = j.drive("r3-run.steps", lang, [binary, "run"], home, label)
             j.check(f"attempt {attempt}, run {n}: ends without asking about each finding", ok, why)
             rep = j.reports_dir(home)
             if not rep:

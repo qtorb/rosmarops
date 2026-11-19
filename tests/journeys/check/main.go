@@ -4,7 +4,9 @@
 //
 //	check text     -catalog DIR -lang es FILE...      a. no {param} left; b. with es, no English sentence
 //	check version  -want X.Y.Z -version-output FILE -v2 report.v2.json -html report.es.html
-//	check leaks    -home DIR -forbid PATH[,PATH] FILE...   no runner path outside the test home, no host name
+//	check leaks    -home DIR [-allow PATH[,PATH]] -forbid PATH[,PATH] FILE...
+//	                                                   no runner path outside the test home and the
+//	                                                   installed program, no host name
 //	check salt     STATE_BEFORE STATE_AFTER           the same local_salt
 //	check same     REPORT_V2_A REPORT_V2_B            the same findings, rules and score (exit 3: a repository timed out)
 //	check timeouts REPORT_V2                          exit 3 if a repository or the review ran out of time
@@ -214,10 +216,13 @@ func checkVersion(args []string) ([]string, error) {
 }
 
 // checkLeaks: no forbidden path (the runner's own folders) outside the test
-// home, and not this machine's name.
+// home, and not this machine's name. The report names where the program
+// itself lives (the Claude Code hook command), so the installed program's
+// path is allowed too: a person sees their own install path there.
 func checkLeaks(args []string) ([]string, error) {
 	fs := flag.NewFlagSet("leaks", flag.ExitOnError)
 	home := fs.String("home", "", "the test home, which may appear")
+	allow := fs.String("allow", "", "comma-separated paths that may appear too (the installed program)")
 	forbid := fs.String("forbid", "", "comma-separated paths that must not appear outside the test home")
 	_ = fs.Parse(args)
 	host, _ := os.Hostname()
@@ -234,8 +239,11 @@ func checkLeaks(args []string) ([]string, error) {
 			return nil, err
 		}
 		s := string(b)
-		for _, h := range []string{*home, strings.ReplaceAll(*home, `\`, "/"), strings.ReplaceAll(*home, `\`, `\\`)} {
-			if h != "" {
+		for _, a := range append(strings.Split(*allow, ","), *home) {
+			if a = strings.TrimSpace(a); a == "" {
+				continue
+			}
+			for _, h := range []string{a, strings.ReplaceAll(a, `\`, "/"), strings.ReplaceAll(a, `\`, `\\`)} {
 				s = strings.ReplaceAll(s, h, "<home>")
 			}
 		}

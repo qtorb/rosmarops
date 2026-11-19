@@ -10,7 +10,7 @@ The journey tests run a candidate RosmarOps the way a person does, on the machin
 | R2 | the same | Updates from the last published version, then uses `rosmarops` with no arguments, `run`, `run --unattended`, `usage`, `status`, `findings`, `problems ask`, `baseline`, `connect --help` and `--version` | Each command asks in the person's language and goes on, or (without a terminal) stops with a red report in their language; `local_salt` never changes, so the computer stays the same one in the space. |
 | R3 | ubuntu-24.04 | Reviews a computer with 60 projects twice in a row | Both reviews give the same findings, rules and score, and neither ends asking about each finding. |
 
-On every journey the fixed checks run: no `{param}` left in the console or the report, no English sentence of the catalog in a Spanish run, the binary's version in `--version`, in `report.v2.json` and in the page, and no runner path or machine name in the output.
+On every journey the fixed checks run: no `{param}` left in the console or the report, no English sentence of the catalog in a Spanish run, the binary's version in `--version`, in `report.v2.json` and in the page, and no runner path or machine name in the output. The program runs from the test home's `Downloads` folder, as a person keeps a downloaded binary, because the report names where the program lives (the Claude Code hook command); with the MSIX package, its alias is the one path outside the test home that may appear.
 
 Only on Linux does the locale choose RosmarOps's language. On Windows and macOS the language follows the system's display language, which is English on the runners: there the Spanish leg of R1 is `rosmarops run --lang es`, and R2 runs in English.
 
