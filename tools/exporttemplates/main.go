@@ -21,7 +21,7 @@ import (
 )
 
 // skill is the Claude Code skill of the templates repository, literal
-// (BV-266 §2, signed with GTM-190 on 20-11).
+// (BV-266 §2, signed with GTM-190 on 20-11; steps 2 and 5 as the advisor set them on 20-11).
 //
 //go:embed SKILL.md
 var skill string
