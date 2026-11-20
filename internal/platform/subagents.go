@@ -25,6 +25,8 @@ type ClaudeSubagent struct {
 	Scope           string // SubagentUser or SubagentProject
 	Status          MCPSourceStatus
 	Reason          string
+	// Name is the header's name, as written; empty when there is none.
+	Name string
 	// ToolsDeclared is false when the header has no tools field: the
 	// subagent then inherits every tool of the conversation.
 	ToolsDeclared bool

@@ -46,7 +46,7 @@ func TestReadClaudeSubagents(t *testing.T) {
 		t.Fatalf("subagents %v, want the six .md files (the .txt does not count, the repository once)", got)
 	}
 	a := got["all-tools.md"]
-	if a.Status != platform.MCPSourceRead || a.ToolsDeclared || a.PermissionMode != "bypassPermissions" || a.HookCommands != 1 ||
+	if a.Status != platform.MCPSourceRead || a.Name != "all-tools" || a.ToolsDeclared || a.PermissionMode != "bypassPermissions" || a.HookCommands != 1 ||
 		strings.Join(a.InlineMCPServers, ",") != "playwright" || a.Scope != platform.SubagentUser || a.Repo != "" {
 		t.Errorf("all-tools: %+v", a)
 	}

@@ -35,7 +35,7 @@ Signed by Albert on 2026-11-20 at 07:20 (BV-268). It is an addition inside `grap
   - **What `auto_yes` covers:** it answers Claude Code's and Gemini CLI's prompts, not Codex's.
 - **Orca:**
   - **Presence:** its `userData` folder (`Orca`) or `~/.orca`.
-  - **Approvals:** each `launches` edge is inferred from its factory default, with the assumption `orchestrator_settings_not_read`.
+  - **Approvals:** each `launches` edge is inferred from its factory default, with the assumption `orchestrator_settings_not_read`. Its text says the finding assumes Orca's factory setting, because Orca keeps the person's choice in its database.
   - **Hooks:** its hooks in Claude Code's, Gemini CLI's, Codex's or Cursor's configuration are `writes_config_of` edges.
   - **Never opened:** `profile-state.db` and the files of `~/.orca`.
 - **Claude Code's subagents:** `<claude config folder>/agents/*.md` and each repository's `.claude/agents/*.md`. Only the header is read, up to the line that closes it. Of it RosmarOps keeps:
@@ -54,6 +54,7 @@ Signed by Albert on 2026-11-20 at 07:20 (BV-268). It is an addition inside `grap
 ## Consequences
 
 - A computer with Paseo or Claude Squad shows which agents they run without asking, from their own files. A computer with Orca shows it from its default, saying it is the default.
-- The subagents are read, but no finding uses them yet. Their texts, and the one of `orchestrator_settings_not_read`, wait for the owner.
-- Claude Squad's acceptance of Claude's «new MCP server» prompt, which CTO-76 reported, is no longer in its code (removed in `a4ab698`, 2026-03-28). It is not reported.
+- **Claude Squad and new MCP servers: not reported** (confirmed by the owner on 2026-11-20). CTO-76 reported that Claude Squad answers Claude's «new MCP server» prompt on its own, even with `auto_yes` off. The function that did it, `CheckAndHandleTrustPrompt`, is still in its code, but nothing calls it since `a4ab698` (2026-03-28), in v1.0.20 and in later commits alike.
+- **Pending, outside this change:** Orca answers Claude's folder-trust question for its own worktrees (`hasTrustDialogAccepted: true` in `~/.claude.json`, on by default; `claude-folder-trust-file.ts:78-99` at v1.4.266). It needs its own brief and text.
+- **The sources are release tags.** CTO-76 cites commits that are not releases (Paseo `b3d860c`, Orca `f20eec9a`) or are one commit after one (Claude Squad `070eb93`). The knowledge base cites the release tags instead; the files it relies on are the same in both.
 - Paradev and Dev Containers (CTO-76 §7, priority 2) fit the same model and are not in this change.

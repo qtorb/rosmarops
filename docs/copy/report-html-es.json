@@ -1088,6 +1088,7 @@
   "html.headline.orchestrator_open_signup": "Cualquiera que llegue a {orchestrator} puede crearse una cuenta.",
   "findings.when.orchestrator_open_signup": "Si nadie más que tú puede llegar a él.",
   "unknown.orchestrator_agent_configured": "Supone que en {agent} tienes creado un agente que lo usa. {agent} guarda sus agentes en su base de datos, que RosmarOps no abre, así que no puede comprobarlo.",
+  "unknown.orchestrator_settings_not_read": "Supone que {agent} lanza los agentes con su ajuste de fábrica, que les da acceso completo. {agent} guarda lo que elijas en su base de datos, que RosmarOps no abre.",
   "html.fix.orchestrator_vulnerable_version": "Actualiza {orchestrator} a la {fixed} o posterior.",
   "html.fix.orchestrator_network_listen": "En el config.json de {orchestrator}, haz que escuche solo en este ordenador (bind: loopback)."
 }

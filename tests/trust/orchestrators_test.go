@@ -173,6 +173,10 @@ func TestOrchestratorSecretsNeverReachOutputs(t *testing.T) {
 		outputs["ai "+lang] = report.RenderAIExport(v, cat, home)
 	}
 	outputs["log"] = logBuf.String()
+	if !strings.Contains(outputs["html en"], "Assumes Orca launches agents with its factory setting") ||
+		!strings.Contains(outputs["html es"], "Supone que Orca lanza los agentes con su ajuste de fábrica") {
+		t.Error("the Orca finding does not show unknown.orchestrator_settings_not_read with {agent} = Orca")
+	}
 	for name, out := range outputs {
 		for k, val := range orchSecrets {
 			if strings.Contains(out, val) || strings.Contains(out, val[4:len(val)-4]) {

@@ -15,10 +15,10 @@ import (
 	"github.com/qtorb/rosmarops/internal/yamlsubset"
 )
 
-// subagentHeaderKeys are the only header fields read: those that give a
-// subagent tools or permissions (CTO-76 §5). Every other field, the
+// subagentHeaderKeys are the only header fields read: its name, and those
+// that give a subagent tools or permissions (CTO-76 §5). Every other field, the
 // description and the prompt below the header are not parsed.
-var subagentHeaderKeys = []string{"tools", "permissionMode", "hooks", "mcpServers"}
+var subagentHeaderKeys = []string{"name", "tools", "permissionMode", "hooks", "mcpServers"}
 
 // errNoHeader is a subagent file that does not start with a YAML header.
 var errNoHeader = errors.New("no YAML header")
@@ -97,6 +97,9 @@ func readSubagentHeader(s *platform.ClaudeSubagent) error {
 		if sc, isScalar := t.(yamlsubset.Scalar); !isScalar || !sc.IsNull() {
 			s.ToolsDeclared = true
 		}
+	}
+	if n, ok := m["name"].(yamlsubset.Scalar); ok {
+		s.Name = strings.TrimSpace(n.Text)
 	}
 	if pm, ok := m["permissionMode"].(yamlsubset.Scalar); ok {
 		s.PermissionMode = strings.TrimSpace(pm.Text)
