@@ -4,7 +4,11 @@
   "source_commit": "575ef12",
   "fixed_version": {
     "version": "2026.416.0",
-    "advisories": ["CVE-2026-41679", "GHSA-68qg-g8mg-6pr7", "GHSA-x8hx-rhr2-9rf7"],
+    "advisories": [
+      "CVE-2026-41679",
+      "GHSA-68qg-g8mg-6pr7",
+      "GHSA-x8hx-rhr2-9rf7"
+    ],
     "source_url": "https://github.com/paperclipai/paperclip/security/advisories/GHSA-68qg-g8mg-6pr7",
     "verified": "2026-11-19"
   },
@@ -118,6 +122,18 @@
       "value": "127.0.0.1",
       "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L50-L56",
       "verified": "2026-11-19"
+    },
+    {
+      "id": "bind_values",
+      "value": "loopback|lan|tailnet|custom",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/constants.ts#L19",
+      "verified": "2026-11-20"
+    },
+    {
+      "id": "local_trusted_requires_bind",
+      "value": "loopback",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/network-bind.ts#L45-L46",
+      "verified": "2026-11-20"
     },
     {
       "id": "port",

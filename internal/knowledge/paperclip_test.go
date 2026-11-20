@@ -22,6 +22,14 @@ func TestPaperclipLoadsStrictly(t *testing.T) {
 	if d, ok := b.Default("telemetry_enabled"); !ok || d.Value != "true" {
 		t.Errorf("telemetry default: %+v %v (CTO-76 §4)", d, ok)
 	}
+	// The step of orchestrator_network_listen says «bind: loopback»: that key
+	// and value are Paperclip's (constants.ts, config-schema.ts, network-bind.ts @ 575ef12).
+	if d, ok := b.Default("bind_values"); !ok || d.Value != "loopback|lan|tailnet|custom" {
+		t.Errorf("bind values: %+v %v", d, ok)
+	}
+	if d, ok := b.Default("local_trusted_requires_bind"); !ok || d.Value != "loopback" {
+		t.Errorf("local_trusted bind: %+v %v", d, ok)
+	}
 	if got := b.Ref("claude-local"); got != "kb:paperclip/claude-local@"+PaperclipVersion {
 		t.Errorf("ref %q", got)
 	}
