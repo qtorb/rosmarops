@@ -489,7 +489,7 @@
     "edgeLaunches": {
       "type": "object",
       "additionalProperties": false,
-      "description": "orchestrator agent to an installed agent it can start (CTO-75 §5): how it treats that agent's approvals and whether the agent gets the orchestrator's environment. Inferred from the orchestrator's product defaults (kb:<product>/<adapter>@<version>): which agents it has configured is not readable at rest.",
+      "description": "orchestrator agent to an installed agent it can start (CTO-75 §5, CTO-76): how it treats that agent's approvals and whether the agent gets the orchestrator's environment. Observed with basis configured when the launched agent's mode is read at rest from one of the orchestrator's own files (source: that file); otherwise inferred from the orchestrator's product defaults (basis product_default, source kb:<product>/<adapter>@<version>).",
       "required": ["id", "type", "from", "to", "source", "certainty", "approval_override", "env_passthrough", "basis", "derived_from", "assumptions"],
       "properties": {
         "id": { "$ref": "#/definitions/id" },
@@ -497,13 +497,16 @@
         "from": { "$ref": "#/definitions/id" },
         "to": { "$ref": "#/definitions/id" },
         "source": { "$ref": "#/definitions/sourceRef" },
-        "certainty": { "const": "inferred" },
+        "certainty": { "enum": ["observed", "inferred"] },
         "approval_override": { "enum": ["skips_all", "keeps_agent_settings", "unknown"] },
         "env_passthrough": { "type": "boolean" },
         "basis": { "enum": ["product_default", "configured"] },
         "derived_from": { "$ref": "#/definitions/derivedFrom" },
         "assumptions": { "$ref": "#/definitions/assumptions" }
-      }
+      },
+      "if": { "properties": { "certainty": { "const": "observed" } }, "required": ["certainty"] },
+      "then": { "properties": { "basis": { "const": "configured" } } },
+      "else": { "properties": { "basis": { "const": "product_default" } } }
     },
 
     "edgeSendsTo": {

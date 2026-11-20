@@ -640,3 +640,41 @@ func TestDifferential_NotificationUnavailable(t *testing.T) {
 		}
 	}
 }
+
+// BV-268 (CTO-76): a launches edge is observed with basis configured when the
+// launched agent's mode is read from the orchestrator's own file, and
+// inferred with basis product_default otherwise. Own validator and oracle
+// agree on every pairing.
+func TestDifferential_LaunchesCertaintyAndBasis(t *testing.T) {
+	p := compileAll(t)["graph.v2"]
+	raw, err := os.ReadFile(filepath.Join("testdata", "valid", "graph.v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		certainty, basis, source string
+		want                     bool
+	}{
+		{"observed", "configured", "/home/u/.paseo/agents/p/a.json", true},
+		{"inferred", "product_default", "kb:orca/claude@2026-11-20", true},
+		{"observed", "product_default", "/home/u/.paseo/agents/p/a.json", false},
+		{"inferred", "configured", "kb:orca/claude@2026-11-20", false},
+		{"potential", "configured", "/home/u/.paseo/agents/p/a.json", false},
+	} {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		edges, _ := doc["edges"].([]any)
+		doc["edges"] = append(edges, map[string]any{
+			"id": "edge_launches_fixture", "type": "launches", "from": "agent_orch_fixture", "to": "agent_client_fixture",
+			"source": c.source, "certainty": c.certainty, "approval_override": "skips_all", "env_passthrough": true,
+			"basis": c.basis, "derived_from": []any{"agent_orch_fixture"}, "assumptions": []any{},
+		})
+		b, _ := json.Marshal(doc)
+		own, oracle, _ := verdicts(t, p, b)
+		if own != c.want || oracle != c.want {
+			t.Errorf("%s/%s: own %v, oracle %v, want %v", c.certainty, c.basis, own, oracle, c.want)
+		}
+	}
+}
