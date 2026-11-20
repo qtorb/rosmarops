@@ -50,6 +50,8 @@ expect-exit 0                        timeout 600s
 - `if-asked` answers a question each time it appears, from that line on: for a question one system asks and another does not.
 - `expect-exit` waits for the exit code. A process that writes nothing for 30 seconds while it is awaited fails with «waiting for an answer the journey did not expect»: that is how an unplanned question is caught.
 
+**Usage statistics stay off.** Every journey answers no to the usage question (`if-asked usage.ask.prompt send n\r`). At the end of each journey, `journey.py` checks every test computer it made: `state.json` must not record usage statistics on, and no `rosmarops-usage-last.json` may have been built («<home>: usage statistics stay off»). `scripts/e2e/run.ps1` checks the same on its test computer. `tests/trust/usage_off_in_tests_test.go` fails if a steps file answers anything but no, or if a workflow or script runs `usage on` or `usage team`. Otherwise a test run would be counted as a person's.
+
 ## When a beta tester finds a failure
 
 1. Reproduce it on a test computer: `go run ./tests/journeys/makehome -home /tmp/jh -manifest /tmp/jh.json -medium 0 -large 0`, then run RosmarOps with `HOME=/tmp/jh` (and `USERPROFILE`, `APPDATA`, `LOCALAPPDATA` on Windows).

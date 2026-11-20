@@ -53,6 +53,7 @@ class Journey:
         self.why = os.environ.get("JOURNEY_EXPECTED_RED_WHY", "")
         self.captures = []  # what capture.py draws: [{"kind", "path", "step", "lang"}]
         self.installed = []  # program paths outside the test home that may appear (the MSIX alias)
+        self.homes = []  # every test computer made, for the usage check at the end
         self.work = tempfile.mkdtemp(prefix=f"journey-{name}-", dir=os.environ.get("JOURNEY_WORK"))
         self.stub = os.path.join(self.work, "stub")
         os.makedirs(self.stub)
@@ -88,14 +89,34 @@ class Journey:
         return any(r["status"] == "fail" for r in self.results)
 
     def finish(self):
+        for home in self.homes:
+            self.usage_checks(home)
         with open(os.path.join(self.out, "results.json"), "w", encoding="utf-8") as f:
             json.dump({"journey": self.name, "system": SYSTEM, "version": self.args.version,
                        "passed": not self.failed(), "results": self.results, "captures": self.captures}, f, indent=1)
         return 1 if self.failed() else 0
 
+    def usage_checks(self, home):
+        """No journey may turn usage statistics on in its test computer
+        (BV-271): its runs would be counted as people's. The state must not
+        record them on, and no usage package may have been built."""
+        label = os.path.basename(home)
+        enabled = False
+        try:
+            with open(os.path.join(home, ".rosmarops", "state.json"), encoding="utf-8") as f:
+                enabled = bool((json.load(f).get("usage") or {}).get("enabled"))
+        except (OSError, ValueError):
+            pass
+        package = [os.path.join(d, "data", "rosmarops-usage-last.json")
+                   for d in (os.path.join(home, "RosmarOps"), os.path.join(home, ".rosmarops", "reports"))]
+        built = [p for p in package if os.path.exists(p)]
+        self.check(f"{label}: usage statistics stay off", not enabled and not built,
+                   "state.json records them on" if enabled else (f"a usage package was built: {built[0]}" if built else ""))
+
     # --- the test computer --------------------------------------------------
     def make_home(self, label, medium=0, paperclip=False):
         home = os.path.join(self.work, label)
+        self.homes.append(home)
         manifest = os.path.join(self.work, label + "-manifest.json")
         cmd = [self.tool("makehome"), "-home", home, "-manifest", manifest, "-fixture",
                os.path.join(ROOT, "testdata", "sample-home"), "-medium", str(medium), "-large", "0"]

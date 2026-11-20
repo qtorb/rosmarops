@@ -834,6 +834,8 @@
   "usage.state.off": "Usage statistics: off. To turn them on: rosmarops usage on",
   "usage.state.undecided": "Usage statistics: off until you answer. RosmarOps will ask at the end of the next scan from a terminal.",
   "usage.help": "Turn usage statistics on or off, or show whether they are on.",
+  "console.usage_team_on": "This installation is now marked as RosmarOps team. Its usage statistics will be counted apart.",
+  "console.usage_team_off": "This installation is no longer marked as RosmarOps team.",
   "html.r3.title": "RosmarOps report",
   "html.r3.sub": "What your AI agents can do without asking you on this computer, and what to change.",
   "html.r3.meta": "{date} · {os} · {agents} · {projects} · RosmarOps {version}",

@@ -137,6 +137,8 @@ var staticKeys = []string{
 	"problems.terminal.send", "problems.autosent.body", "problems.autosent.body.one", "problems.ok", "problems.ask_again", "problems.ask.done",
 	// The usage statistics question, printed by the run (cmd/rosmarops).
 	"usage.ask.title", "usage.ask.body", "usage.ask.never", "usage.ask.off", "usage.ask.prompt",
+	// BV-271: the team mark (rosmarops usage team on|off)
+	"console.usage_team_on", "console.usage_team_off",
 }
 
 // mcpExternalKeys are the catalog codes of mcp_external_action (BV-117/

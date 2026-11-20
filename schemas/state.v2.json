@@ -42,6 +42,10 @@
       "format": "date-time",
       "description": "When the person last declined («Not now») the connect offer at the end of a double-click review (BV-158, decision A). The offer is not shown again until 7 days after it. Optional."
     },
+    "usage_team": {
+      "type": "boolean",
+      "description": "This installation is the RosmarOps team's (BV-271, `rosmarops usage team on`): while true, the usage.v1 packages it sends carry the channel `internal` instead of the real one. It changes nothing else, and never the person's answer about usage statistics. Optional."
+    },
     "usage": {
       "type": "object",
       "additionalProperties": false,

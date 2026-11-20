@@ -69,6 +69,9 @@ func runUsage(inv cli.Invocation) error {
 	if err != nil {
 		return fmt.Errorf("load state: %w", err)
 	}
+	if len(inv.Args) > 0 && inv.Args[0] == "team" {
+		return runUsageTeam(inv.Args[1:], stPath, st, cat)
+	}
 	if len(inv.Args) > 1 {
 		return fmt.Errorf("usage: one argument at most: on or off")
 	}
@@ -86,6 +89,28 @@ func runUsage(inv cli.Invocation) error {
 		}
 	}
 	fmt.Println(cat.Text(usageStateKey(st.Usage), nil))
+	return nil
+}
+
+// runUsageTeam is `rosmarops usage team on|off`: it marks this installation
+// as the RosmarOps team's, or no longer, so its usage packages carry the
+// channel "internal" and the team's own runs are counted apart. It never
+// changes the person's answer about usage statistics: with them off or
+// unanswered, nothing is sent either way. It is for the team, so the general
+// help does not mention it.
+func runUsageTeam(args []string, stPath string, st state.State, cat catalog.Catalog) error {
+	if len(args) != 1 || (args[0] != "on" && args[0] != "off") {
+		return fmt.Errorf("usage team: one argument: on or off")
+	}
+	st.UsageTeam = args[0] == "on"
+	if err := state.SaveState(stPath, st); err != nil {
+		return fmt.Errorf("save state: %w", err)
+	}
+	key := "console.usage_team_off"
+	if st.UsageTeam {
+		key = "console.usage_team_on"
+	}
+	fmt.Println(cat.Text(key, nil))
 	return nil
 }
 
@@ -192,6 +217,7 @@ func afterReportUsage(reportDir, lang string, canAskNow bool) {
 	}
 	in := *lastUsageInput
 	in.InstallID, in.Now = st.Usage.InstallID, usageNow()
+	in.Channel = sendChannel(st, in.Channel)
 	sendUsage(context.Background(), consent, report.DataDir(reportDir), in)
 }
 
@@ -294,6 +320,15 @@ func usageChannel(exe string) string {
 		return usage.ChannelHomebrew
 	}
 	return usage.ChannelOther
+}
+
+// sendChannel is the channel a package carries: "internal" on an
+// installation marked as the RosmarOps team's, the real one otherwise.
+func sendChannel(st state.State, real string) string {
+	if st.UsageTeam {
+		return usage.ChannelInternal
+	}
+	return real
 }
 
 // ownPluginEnabled reports RosmarOps's own Claude Code plugin enabled in the
