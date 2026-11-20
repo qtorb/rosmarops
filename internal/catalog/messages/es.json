@@ -1077,5 +1077,14 @@
   "html.r3.how": "Cómo se calcula la nota ›",
   "html.r3.assumptions": "Supuestos del análisis ›",
   "html.r3.footer": "Generado en tu ordenador. Solo lectura: no ha cambiado nada.",
-  "html.r3.method": "Metodología {method}"
+  "html.r3.method": "Metodología {method}",
+  "html.headline.orchestrator_skips_approvals": "{orchestrator} puede poner a trabajar a {agent} sin preguntarte.",
+  "findings.when.orchestrator_skips_approvals": "Si no usas {orchestrator} con este agente.",
+  "html.headline.orchestrator_vulnerable_version": "Tu {orchestrator} {version} tiene un fallo de seguridad grave conocido. Se corrige en la {fixed}.",
+  "html.headline.orchestrator_vulnerable_version.npm_cache": "Hay un {orchestrator} {version} en la caché de npm con un fallo de seguridad grave conocido. Se corrige en la {fixed}.",
+  "findings.when.orchestrator_vulnerable_version": "Si ya no usas {orchestrator} o lo has actualizado de otra forma.",
+  "html.headline.orchestrator_network_listen": "{orchestrator} escucha fuera de este ordenador: otros equipos pueden llegar a él.",
+  "findings.when.orchestrator_network_listen": "Si solo llegan a él equipos tuyos de confianza.",
+  "html.headline.orchestrator_open_signup": "Cualquiera que llegue a {orchestrator} puede crearse una cuenta.",
+  "findings.when.orchestrator_open_signup": "Si nadie más que tú puede llegar a él."
 }

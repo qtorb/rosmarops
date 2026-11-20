@@ -1230,5 +1230,14 @@
   "html.r3.how": "How the score is worked out ›",
   "html.r3.assumptions": "Analysis assumptions ›",
   "html.r3.footer": "Generated on your computer. Read only: nothing was changed.",
-  "html.r3.method": "Methodology {method}"
+  "html.r3.method": "Methodology {method}",
+  "html.headline.orchestrator_skips_approvals": "{orchestrator} can put {agent} to work without asking you.",
+  "html.headline.orchestrator_vulnerable_version": "Your {orchestrator} {version} has a known serious security flaw. It is fixed in {fixed}.",
+  "html.headline.orchestrator_vulnerable_version.npm_cache": "There is an {orchestrator} {version} in the npm cache with a known serious security flaw. It is fixed in {fixed}.",
+  "html.headline.orchestrator_network_listen": "{orchestrator} listens beyond this computer: other devices can reach it.",
+  "html.headline.orchestrator_open_signup": "Anyone who reaches {orchestrator} can create an account.",
+  "findings.when.orchestrator_skips_approvals": "If you don't use {orchestrator} with this agent.",
+  "findings.when.orchestrator_vulnerable_version": "If you no longer use {orchestrator} or have updated it another way.",
+  "findings.when.orchestrator_network_listen": "If only devices you trust can reach it.",
+  "findings.when.orchestrator_open_signup": "If no one but you can reach it."
 }

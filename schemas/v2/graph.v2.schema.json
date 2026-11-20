@@ -106,7 +106,7 @@
       "properties": {
         "id": { "$ref": "#/definitions/id" },
         "kind": { "const": "agent" },
-        "type": { "enum": ["ai_client", "mcp_server", "extension", "bot"] },
+        "type": { "enum": ["ai_client", "mcp_server", "extension", "bot", "orchestrator"], "description": "orchestrator: a local program that starts other agents (e.g. Paperclip); its launches edges say which and how." },
         "name": {
           "type": "string",
           "description": "Human-readable name for display (e.g. the MCP server’s key, like ‘postgres’). Not an identifier; the id is the identifier."
@@ -194,8 +194,8 @@
       "$comment": "Natural key for deterministic id: fingerprint",
       "type": "object",
       "additionalProperties": false,
-      "description": "A secret's metadata only. There is deliberately no field for the secret value.",
-      "required": ["id", "kind", "type", "service", "fingerprint", "locations", "discovered_at"],
+      "description": "A secret's metadata only. There is deliberately no field for the secret value. A credential is identified by its value (fingerprint) or, with identified_by path, by where it is without its value ever being read (path_fingerprint, file_owner, file_mode).",
+      "required": ["id", "kind", "type", "service", "locations", "discovered_at"],
       "properties": {
         "id": { "$ref": "#/definitions/id" },
         "kind": { "const": "credential" },
@@ -211,7 +211,37 @@
           "items": { "$ref": "#/definitions/sourceRef" },
           "description": "Readable files on disk that hold the secret. Empty only for a secret found solely in git history, which then has at least one committed_in edge (checked when the graph is validated)."
         },
-        "discovered_at": { "$ref": "#/definitions/dateTime" }
+        "discovered_at": { "$ref": "#/definitions/dateTime" },
+        "identified_by": {
+          "enum": ["value", "path"],
+          "description": "How the credential is identified. Absent means value. path: a file or a configuration key known to hold a secret by where it is (its product's knowledge base), whose content is never read."
+        },
+        "path_fingerprint": {
+          "type": "string",
+          "description": "identified_by path only: stable hash of the normalized path (file, or file#<JSON Pointer> for a configuration key), salted with the machine-local salt. Never of the content: it does not change when the file's content changes."
+        },
+        "file_owner": {
+          "enum": ["current_user", "other_user", "unknown"],
+          "description": "identified_by path only: who owns the file, relative to the user RosmarOps runs as."
+        },
+        "file_mode": {
+          "type": "string",
+          "pattern": "^0[0-7]{3}$",
+          "description": "identified_by path only, where the system has Unix permissions: the file's permission bits in octal."
+        }
+      },
+      "if": {
+        "properties": { "identified_by": { "const": "path" } },
+        "required": ["identified_by"]
+      },
+      "then": { "required": ["path_fingerprint", "file_owner"], "not": { "required": ["fingerprint"] } },
+      "else": {
+        "required": ["fingerprint"],
+        "allOf": [
+          { "not": { "required": ["path_fingerprint"] } },
+          { "not": { "required": ["file_owner"] } },
+          { "not": { "required": ["file_mode"] } }
+        ]
       }
     },
 
@@ -268,7 +298,8 @@
         { "$ref": "#/definitions/edgeReadsEnv" },
         { "$ref": "#/definitions/edgeCommittedIn" },
         { "$ref": "#/definitions/edgeSendsTo" },
-        { "$ref": "#/definitions/edgeWakes" }
+        { "$ref": "#/definitions/edgeWakes" },
+        { "$ref": "#/definitions/edgeLaunches" }
       ]
     },
 
@@ -446,7 +477,32 @@
         "from": { "$ref": "#/definitions/id" },
         "to": { "$ref": "#/definitions/id" },
         "source": { "$ref": "#/definitions/sourceRef" },
-        "certainty": { "const": "observed" }
+        "certainty": { "$ref": "#/definitions/certainty" }
+      },
+      "if": {
+        "properties": { "certainty": { "const": "inferred" } },
+        "required": ["certainty"]
+      },
+      "then": { "properties": { "source": { "pattern": "^kb:" } } }
+    },
+
+    "edgeLaunches": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "orchestrator agent to an installed agent it can start (CTO-75 §5): how it treats that agent's approvals and whether the agent gets the orchestrator's environment. Inferred from the orchestrator's product defaults (kb:<product>/<adapter>@<version>): which agents it has configured is not readable at rest.",
+      "required": ["id", "type", "from", "to", "source", "certainty", "approval_override", "env_passthrough", "basis", "derived_from", "assumptions"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "type": { "const": "launches" },
+        "from": { "$ref": "#/definitions/id" },
+        "to": { "$ref": "#/definitions/id" },
+        "source": { "$ref": "#/definitions/sourceRef" },
+        "certainty": { "const": "inferred" },
+        "approval_override": { "enum": ["skips_all", "keeps_agent_settings", "unknown"] },
+        "env_passthrough": { "type": "boolean" },
+        "basis": { "enum": ["product_default", "configured"] },
+        "derived_from": { "$ref": "#/definitions/derivedFrom" },
+        "assumptions": { "$ref": "#/definitions/assumptions" }
       }
     },
 

@@ -115,6 +115,8 @@ var staticKeys = []string{
 	"findings.when.project_hook_runs_repo_script", "findings.when.package_known_malicious",
 	"findings.when.own_task_changed", "findings.when.config_key_case_conflict",
 	"findings.when.default",
+	"findings.when.orchestrator_skips_approvals", "findings.when.orchestrator_vulnerable_version",
+	"findings.when.orchestrator_network_listen", "findings.when.orchestrator_open_signup",
 	"report.dismissed.title", "report.dismissed.note",
 	// BV-210: the problem-send window/terminal texts (§3) and the two report
 	// lines (§2). The window keys are emitted by cmd/rosmarops, listed here so
@@ -220,6 +222,11 @@ func CatalogKeys() []string {
 		if r == rules.RuleActsWithoutYou {
 			// BV-251: the title and its detail lines.
 			keys = append(keys, ActsKeys()...)
+			continue
+		}
+		if IsOrchestratorRule(r) {
+			// BV-264: one signed sentence, its html.headline key (HTMLKeys),
+			// and its «when» line (staticKeys); no finding.* texts.
 			continue
 		}
 		keys = append(keys, "finding."+r+".title", "finding."+r+".what")
@@ -480,6 +487,17 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			for _, l := range ActsDetail(cat, f) {
 				w("%s\n\n", l)
 			}
+			for _, a := range f.Evidence.Assumptions {
+				if !sharedAssumption[a] {
+					w("- %s\n", t("unknown."+a, p))
+				}
+			}
+			w("\n")
+			continue
+		}
+		if IsOrchestratorRule(f.Rule) { // BV-264: one signed sentence, no generic what/why
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), OrchestratorTitle(cat, f))
+			w("%s\n\n", strings.Join([]string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}, " · "))
 			for _, a := range f.Evidence.Assumptions {
 				if !sharedAssumption[a] {
 					w("- %s\n", t("unknown."+a, p))

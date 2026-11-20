@@ -17,6 +17,9 @@ const (
 	AgentAIClient  = "ai_client"
 	AgentMCPServer = "mcp_server"
 	AgentExtension = "extension" // an agent extension of an editor (extensions.go)
+	// AgentOrchestrator is a local program that starts other agents
+	// (Paperclip, CTO-75); its launches edges say which and how.
+	AgentOrchestrator = "orchestrator"
 )
 
 // clientDisplayNames maps a client product to the name shown in reports.
@@ -38,7 +41,8 @@ var clientDisplayNames = map[string]string{
 	agentdirs.CopilotJetBrains: "GitHub Copilot (JetBrains)",
 	agentdirs.Hermes:           "Hermes Agent",
 	agentdirs.ClaudeDesktop:    "Claude Desktop",
-	agentdirs.N8N:              "n8n", // BV-175: detected by its user folder
+	agentdirs.N8N:              "n8n",       // BV-175: detected by its user folder
+	"paperclip":                "Paperclip", // BV-264: orchestrator, not an ai_client
 }
 
 // clientDisplayName returns the display name for a client product, never

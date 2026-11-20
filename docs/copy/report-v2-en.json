@@ -345,5 +345,9 @@
   "statusline.yellow.other": "{count} yellow",
   "statusline.stale": "last check {days} days ago",
   "statusline.aborted": "RosmarOps · the last check did not finish",
-  "statusline.integrity_changed": "RosmarOps changed · run it to confirm"
+  "statusline.integrity_changed": "RosmarOps changed · run it to confirm",
+  "findings.when.orchestrator_skips_approvals": "If you don't use {orchestrator} with this agent.",
+  "findings.when.orchestrator_vulnerable_version": "If you no longer use {orchestrator} or have updated it another way.",
+  "findings.when.orchestrator_network_listen": "If only devices you trust can reach it.",
+  "findings.when.orchestrator_open_signup": "If no one but you can reach it."
 }
