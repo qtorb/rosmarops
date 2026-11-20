@@ -50,7 +50,16 @@
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "cap_f5",
+      "id": "agent_f5",
+      "kind": "agent",
+      "type": "orchestrator",
+      "name": "Fixture orchestrator",
+      "platform": "claude-code",
+      "config_path": "/cfg",
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cap_g6",
       "kind": "capability",
       "type": "execute_shell",
       "basis": "product_default",
@@ -61,7 +70,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_g6",
+      "id": "cap_h7",
       "kind": "capability",
       "type": "read_files",
       "basis": "product_default",
@@ -72,7 +81,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_h7",
+      "id": "cap_i8",
       "kind": "capability",
       "type": "write_files",
       "basis": "product_default",
@@ -83,7 +92,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_i8",
+      "id": "cap_j9",
       "kind": "capability",
       "type": "network",
       "basis": "product_default",
@@ -94,7 +103,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_j9",
+      "id": "cap_k10",
       "kind": "capability",
       "type": "invoke_mcp_tool",
       "basis": "product_default",
@@ -105,7 +114,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_k10",
+      "id": "cap_l11",
       "kind": "capability",
       "type": "permission_mode",
       "basis": "product_default",
@@ -116,7 +125,7 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cap_l11",
+      "id": "cap_m12",
       "kind": "capability",
       "type": "operate_app",
       "basis": "product_default",
@@ -127,20 +136,9 @@
       "source": "kb:claude-code/x@1"
     },
     {
-      "id": "cred_m12",
-      "kind": "credential",
-      "type": "api_key",
-      "service": "fixture",
-      "fingerprint": "fp12",
-      "locations": [
-        "/secrets:1"
-      ],
-      "discovered_at": "2026-11-09T12:00:00Z"
-    },
-    {
       "id": "cred_n13",
       "kind": "credential",
-      "type": "db_credential",
+      "type": "api_key",
       "service": "fixture",
       "fingerprint": "fp13",
       "locations": [
@@ -151,7 +149,7 @@
     {
       "id": "cred_o14",
       "kind": "credential",
-      "type": "oauth_token",
+      "type": "db_credential",
       "service": "fixture",
       "fingerprint": "fp14",
       "locations": [
@@ -162,7 +160,7 @@
     {
       "id": "cred_p15",
       "kind": "credential",
-      "type": "webhook_secret",
+      "type": "oauth_token",
       "service": "fixture",
       "fingerprint": "fp15",
       "locations": [
@@ -173,7 +171,7 @@
     {
       "id": "cred_q16",
       "kind": "credential",
-      "type": "ssh_key",
+      "type": "webhook_secret",
       "service": "fixture",
       "fingerprint": "fp16",
       "locations": [
@@ -184,7 +182,7 @@
     {
       "id": "cred_r17",
       "kind": "credential",
-      "type": "private_key",
+      "type": "ssh_key",
       "service": "fixture",
       "fingerprint": "fp17",
       "locations": [
@@ -195,7 +193,7 @@
     {
       "id": "cred_s18",
       "kind": "credential",
-      "type": "generic_secret",
+      "type": "private_key",
       "service": "fixture",
       "fingerprint": "fp18",
       "locations": [
@@ -204,28 +202,53 @@
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_t19",
+      "id": "cred_t19",
+      "kind": "credential",
+      "type": "generic_secret",
+      "service": "fixture",
+      "fingerprint": "fp19",
+      "locations": [
+        "/secrets:1"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z"
+    },
+    {
+      "id": "cred_u20",
+      "kind": "credential",
+      "type": "generic_secret",
+      "service": "fixture",
+      "locations": [
+        "/home/fixture/.paperclip/instances/default/secrets/master.key"
+      ],
+      "discovered_at": "2026-11-09T12:00:00Z",
+      "identified_by": "path",
+      "path_fingerprint": "hmac-sha256:path20",
+      "file_owner": "current_user",
+      "file_mode": "0600"
+    },
+    {
+      "id": "res_v21",
       "kind": "resource",
       "type": "file",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_u20",
+      "id": "res_w22",
       "kind": "resource",
       "type": "database",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_v21",
+      "id": "res_x23",
       "kind": "resource",
       "type": "external_service",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_w22",
+      "id": "res_y24",
       "kind": "resource",
       "type": "agent_config",
       "path": "/res",
@@ -233,7 +256,7 @@
       "configures": "agent_b1"
     },
     {
-      "id": "res_x23",
+      "id": "res_z25",
       "kind": "resource",
       "type": "agent_instructions",
       "path": "/res",
@@ -241,7 +264,7 @@
       "configures": "agent_b1"
     },
     {
-      "id": "res_y24",
+      "id": "res_a26",
       "kind": "resource",
       "type": "agent_executable",
       "path": "/res",
@@ -249,28 +272,28 @@
       "configures": "agent_b1"
     },
     {
-      "id": "res_z25",
+      "id": "res_b27",
       "kind": "resource",
       "type": "git_repository",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_a26",
+      "id": "res_c28",
       "kind": "resource",
       "type": "inbound_channel",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_b27",
+      "id": "res_d29",
       "kind": "resource",
       "type": "agent_schedule",
       "path": "/res",
       "discovered_at": "2026-11-09T12:00:00Z"
     },
     {
-      "id": "res_c28",
+      "id": "res_e30",
       "kind": "resource",
       "type": "agent_memory",
       "path": "/res",

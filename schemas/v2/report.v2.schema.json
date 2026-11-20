@@ -366,7 +366,11 @@
             "n8n_mcp_bridge",
             "n8n_key_with_data",
             "computer_use_app_allowed",
-            "acts_without_you"
+            "acts_without_you",
+            "orchestrator_skips_approvals",
+            "orchestrator_vulnerable_version",
+            "orchestrator_network_listen",
+            "orchestrator_open_signup"
           ]
         },
         "rule_version": {

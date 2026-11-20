@@ -1,0 +1,163 @@
+{
+  "product": "paperclip",
+  "version": "2026-11-20",
+  "source_commit": "575ef12",
+  "fixed_version": {
+    "version": "2026.416.0",
+    "advisories": [
+      "CVE-2026-41679",
+      "GHSA-68qg-g8mg-6pr7",
+      "GHSA-x8hx-rhr2-9rf7"
+    ],
+    "source_url": "https://github.com/paperclipai/paperclip/security/advisories/GHSA-68qg-g8mg-6pr7",
+    "verified": "2026-11-19"
+  },
+  "adapters": [
+    {
+      "id": "claude-local",
+      "agent": "claude-code",
+      "approval_override": "skips_all",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/claude-local/src/server/execute.ts#L449",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "codex-local",
+      "agent": "codex",
+      "approval_override": "unknown",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/codex-local/src/index.ts#L20",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "cursor-local",
+      "agent": "cursor",
+      "approval_override": "skips_all",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/cursor-local/src/server/execute.ts#L348",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "gemini-local",
+      "agent": "gemini-cli",
+      "approval_override": "skips_all",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/gemini-local/src/server/execute.ts#L535",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "grok-local",
+      "agent": "grok-build",
+      "approval_override": "skips_all",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/grok-local/src/server/execute.ts#L278",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "hermes",
+      "agent": "hermes",
+      "approval_override": "skips_all",
+      "env_passthrough": true,
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/hermes/src/server/execute.ts#L10-L19",
+      "verified": "2026-11-19"
+    }
+  ],
+  "skills_written": [
+    {
+      "agent": "cursor",
+      "path": ".cursor/skills",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/cursor-local/src/server/skills.ts#L30",
+      "verified": "2026-11-19"
+    },
+    {
+      "agent": "gemini-cli",
+      "path": ".gemini/skills",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/gemini-local/src/server/skills.ts#L30",
+      "verified": "2026-11-19"
+    },
+    {
+      "agent": "pi",
+      "path": ".pi/agent/skills",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/adapters/pi-local/src/server/execute.ts#L103-L116",
+      "verified": "2026-11-19"
+    }
+  ],
+  "path_secrets": [
+    {
+      "id": "master_key",
+      "file": "secrets/master.key",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/server/src/secrets/local-encrypted-provider.ts#L29",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "agent_jwt_secret",
+      "file": ".env",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/cli/src/config/env.ts#L8",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "llm_api_key",
+      "file": "config.json",
+      "pointer": "/llm/apiKey",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L20",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "database_connection_string",
+      "file": "config.json",
+      "pointer": "/database/connectionString",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L23-L41",
+      "verified": "2026-11-19"
+    }
+  ],
+  "defaults": [
+    {
+      "id": "deployment_mode",
+      "value": "local_trusted",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L49",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "host",
+      "value": "127.0.0.1",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L50-L56",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "bind_values",
+      "value": "loopback|lan|tailnet|custom",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/constants.ts#L19",
+      "verified": "2026-11-20"
+    },
+    {
+      "id": "local_trusted_requires_bind",
+      "value": "loopback",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/network-bind.ts#L45-L46",
+      "verified": "2026-11-20"
+    },
+    {
+      "id": "port",
+      "value": "3100",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L50-L56",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "sign_up_disabled",
+      "value": "false",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/packages/shared/src/config-schema.ts#L62",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "heartbeat_scheduler",
+      "value": "on",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/server/src/config.ts#L442-L443",
+      "verified": "2026-11-19"
+    },
+    {
+      "id": "telemetry_enabled",
+      "value": "true",
+      "source_url": "https://github.com/paperclipai/paperclip/blob/575ef12/README.md#telemetry",
+      "verified": "2026-11-20"
+    }
+  ]
+}

@@ -52,6 +52,7 @@ var AllRules = []string{
 	RuleOwnInstructionsWritable, RuleOwnConfigWritable, RulePackageKnownMalicious,
 	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
 	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed, RuleActsWithoutYou,
+	RuleOrchestratorSkipsApprovals, RuleOrchestratorVulnerableVersion, RuleOrchestratorNetworkListen, RuleOrchestratorOpenSignup,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -131,13 +132,17 @@ var AllAssumptions = []string{
 	graph.AssumeStartupFileRunsLater, AssumeAutoWithoutSandboxUnknown,
 	AssumeLaunchStateUnknown, AssumeSandboxAutoAllowByVersion,
 	AssumeWSLWindowsDriveReadable,
+	AssumeOrchestratorAgentConfigured,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
 // cannot confirm at rest: one is enough for confidence medium (§1, E4). The
 // others (base and partial-way) leave confidence high.
 var premiseAssumptions = map[string]bool{
-	AssumeLaunchStateUnknown:          true, // BV-251: whether the wake source runs is not seen
+	AssumeLaunchStateUnknown: true, // BV-251: whether the wake source runs is not seen
+	// BV-264: which agents an orchestrator has configured is only in its
+	// database.
+	AssumeOrchestratorAgentConfigured: true,
 	graph.AssumeAutoClassifierPermits: true,
 	graph.AssumeAutoModeAvailable:     true,
 	graph.AssumeUIModeChoiceUnknown:   true,
@@ -281,6 +286,11 @@ type Input struct {
 	// unrecognized value treated as local) to scope its read/write/shell
 	// rows. Optional.
 	Hermes platform.HermesScan
+
+	// Paperclip is the Paperclip orchestrator scan (BV-264, CTO-75): the
+	// orchestrator rules read its version, listen address and sign-up setting
+	// from it. Optional.
+	Paperclip platform.PaperclipScan
 
 	// Codex is the OpenAI Codex scan (BV-140): the overview reads each agent's
 	// layers from it to know when its commands rest on rules it does not parse
@@ -537,6 +547,9 @@ func Evaluate(in Input) Result {
 		res = evaluate(in, env)
 	}
 	finishAlwaysOn(in, &res)
+	// BV-264: the orchestrator rules read the graph's launches edges and the
+	// Paperclip scan; no other rule depends on them.
+	res.Findings = append(res.Findings, orchestratorFindings(in)...)
 	return res
 }
 
@@ -1614,7 +1627,7 @@ func credFinding(in Input, nodes map[string]graph.Node, a *agentView, cred graph
 		legs = append(legs, a.egress)
 	}
 	f := Finding{
-		ID: findingID(rule, a.node.ID, cred.Fingerprint), Rule: rule, RuleVersion: RuleVersion,
+		ID: findingID(rule, a.node.ID, cred.Identity()), Rule: rule, RuleVersion: RuleVersion,
 		Severity: sev, Radius: radius, class: class, credType: cred.Type, credID: cred.ID, legs: legs,
 		Params: Params{Agent: a.node.Name, Service: cred.Service, Scope: scope, Class: class, Count: len(cred.Locations)},
 	}

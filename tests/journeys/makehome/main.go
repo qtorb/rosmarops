@@ -61,6 +61,10 @@ const base = 1577836800
 type options struct {
 	home, fixture, manifest                                             string
 	medium, large, mediumCommits, mediumFiles, largeCommits, largeFiles int
+	// paperclip adds a fake Paperclip orchestrator (BV-264): one instance in
+	// its default mode, its secrets next to its database, installed at a
+	// version before the fix of its known flaws.
+	paperclip bool
 }
 
 func main() {
@@ -74,6 +78,7 @@ func main() {
 	flag.IntVar(&o.mediumFiles, "medium-files", 200, "files per medium repository")
 	flag.IntVar(&o.largeCommits, "large-commits", 3000, "commits per large repository")
 	flag.IntVar(&o.largeFiles, "large-files", 2000, "files per large repository")
+	flag.BoolVar(&o.paperclip, "paperclip", false, "add a fake Paperclip orchestrator")
 	flag.Parse()
 	if err := run(o); err != nil {
 		fmt.Fprintln(os.Stderr, "makehome:", err)
@@ -104,6 +109,11 @@ func run(o options) error {
 	}
 	if err := addPinnedMCP(filepath.Join(o.home, ".cursor", "mcp.json")); err != nil {
 		return err
+	}
+	if o.paperclip {
+		if err := addPaperclip(o.home); err != nil {
+			return err
+		}
 	}
 	projects := filepath.Join(o.home, "projects")
 	for _, name := range []string{"shop-api", "landing-page"} {
@@ -343,4 +353,29 @@ func countRepos(projects string) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// addPaperclip writes a fake Paperclip under <home>/.paperclip: config.json in
+// its default mode (local_trusted, loopback, sign-up open), secrets/master.key
+// next to db/, the agent JWT secret in .env, and cli/install.json at
+// 2026.415.0, the version before 2026.416.0 fixed CVE-2026-41679. The secret
+// values are fake and fixed; RosmarOps must never read them.
+func addPaperclip(home string) error {
+	inst := filepath.Join(home, ".paperclip", "instances", "default")
+	files := map[string]string{
+		filepath.Join(inst, "config.json"):                       `{"$meta":{"version":1},"server":{"deploymentMode":"local_trusted","exposure":"private","bind":"loopback","host":"127.0.0.1","port":3100},"database":{"mode":"embedded-postgres"}}` + "\n",
+		filepath.Join(inst, "secrets", "master.key"):             "FAKEpaperclipMASTERkeyFORjourneysONLY0000\n",
+		filepath.Join(inst, ".env"):                              "PAPERCLIP_AGENT_JWT_SECRET=FAKEpaperclipJWTsecretFORjourneysONLY0000\n",
+		filepath.Join(inst, "db", "PG_VERSION"):                  "16\n",
+		filepath.Join(home, ".paperclip", "cli", "install.json"): `{"version":"2026.415.0","source":"install.sh","channel":"stable"}` + "\n",
+	}
+	for path, content := range files {
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
 }

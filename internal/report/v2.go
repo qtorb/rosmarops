@@ -465,6 +465,10 @@ type V2Input struct {
 	// overview reads each agent's terminal.backend from it. Optional.
 	Hermes platform.HermesScan
 
+	// Paperclip is the Paperclip orchestrator scan (BV-264): its version,
+	// listen address and sign-up setting are what four rules read. Optional.
+	Paperclip platform.PaperclipScan
+
 	// Codex is the OpenAI Codex scan the graph was built from (BV-140): the
 	// overview reads each agent's layers for its assumptions. Optional.
 	Codex platform.CodexScan
@@ -901,6 +905,12 @@ var MemoryUntracked = map[string]bool{
 	// BV-251: acts_without_you is re-derived each run from the wake sources
 	// and the overview; it is not in the memory schema's rule enum.
 	rules.RuleActsWithoutYou: true,
+	// BV-264: the orchestrator rules are re-derived each run from Paperclip's
+	// files at rest; they are not in the memory schema's rule enum.
+	rules.RuleOrchestratorSkipsApprovals:    true,
+	rules.RuleOrchestratorVulnerableVersion: true,
+	rules.RuleOrchestratorNetworkListen:     true,
+	rules.RuleOrchestratorOpenSignup:        true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

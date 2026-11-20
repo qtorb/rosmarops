@@ -39,6 +39,31 @@ const (
 	EdgeCommittedIn     = "committed_in"
 	EdgeSendsTo         = "sends_to" // mcp_server → external_service (BV-91, E1)
 	EdgeWakes           = "wakes"    // inbound_channel / agent_schedule → agent (CTO-53 §5.2, BV-251)
+	// EdgeLaunches: an orchestrator starts an installed agent, with the
+	// orchestrator's say over its approvals and environment (CTO-75 §5).
+	EdgeLaunches = "launches"
+)
+
+// Ways a credential is identified: by its value (the default, fingerprint)
+// or by where it is, its content never read (path_fingerprint).
+const (
+	IdentifiedByValue = "value"
+	IdentifiedByPath  = "path"
+)
+
+// The owner of a path-identified credential's file, relative to the user the
+// review runs as.
+const (
+	OwnerCurrentUser = "current_user"
+	OwnerOtherUser   = "other_user"
+	OwnerUnknown     = "unknown"
+)
+
+// How a launches edge treats the launched agent's approvals.
+const (
+	ApprovalSkipsAll           = "skips_all"
+	ApprovalKeepsAgentSettings = "keeps_agent_settings"
+	ApprovalOverrideUnknown    = "unknown"
 )
 
 // Resource types referenced by the integrity rules.
@@ -131,6 +156,13 @@ type Node struct {
 	Service     string   `json:"service"`
 	Fingerprint string   `json:"fingerprint"`
 	Locations   []string `json:"locations"`
+	// A credential identified by where it is (IdentifiedByPath) has no
+	// Fingerprint: PathFingerprint hashes its normalized location instead,
+	// and FileOwner and FileMode are its file's, from metadata.
+	IdentifiedBy    string `json:"identified_by"`
+	PathFingerprint string `json:"path_fingerprint"`
+	FileOwner       string `json:"file_owner"`
+	FileMode        string `json:"file_mode"`
 
 	// resource
 	Path       string `json:"path"`
@@ -259,6 +291,12 @@ type Edge struct {
 	// committed_in
 	Presence  string `json:"presence"`
 	HasRemote bool   `json:"has_remote"`
+
+	// launches: how the orchestrator treats the launched agent's approvals,
+	// whether the agent gets its environment, and where that comes from.
+	ApprovalOverride string `json:"approval_override"`
+	EnvPassthrough   bool   `json:"env_passthrough"`
+	Basis            string `json:"basis"`
 }
 
 // endpoint is the set of nodes allowed at one end of an edge: a node kind and,
@@ -317,6 +355,19 @@ var edgeEndpoints = map[string]struct{ from, to []endpoint }{
 		from: []endpoint{{kind: KindResource, types: []string{ResourceInboundChannel, ResourceAgentSchedule}}},
 		to:   []endpoint{{kind: KindAgent}},
 	},
+	EdgeLaunches: {
+		from: []endpoint{{kind: KindAgent, types: []string{AgentOrchestrator}}},
+		to:   []endpoint{{kind: KindAgent}},
+	},
+}
+
+// Identity is what identifies a credential across runs: its value's
+// fingerprint, or, for one identified by its path, its path's.
+func (n Node) Identity() string {
+	if n.IdentifiedBy == IdentifiedByPath {
+		return n.PathFingerprint
+	}
+	return n.Fingerprint
 }
 
 // compiledSchema is the parsed graph schema, initialized once on first use.

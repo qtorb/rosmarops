@@ -58,7 +58,7 @@ func FindingCards(v V2, cat catalog.Catalog, home string) []FindingCard {
 		fc := FindingCard{
 			ID: f.ID, Severity: f.Severity, Group: group,
 			Title: c.titleText(f), WhatItMeans: c.impactText(f),
-			WhenApplies: cat.Text(whenKey, nil), Agent: f.Params.Agent,
+			WhenApplies: cat.Text(whenKey, whenParams(f)), Agent: f.Params.Agent,
 		}
 		if f.Memory != nil {
 			if f.Memory.Verdict == memory.VerdictNew {

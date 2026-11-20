@@ -175,6 +175,9 @@ func svHeadline(c htmlCtx) string {
 		if f.Rule == rules.RulePackageKnownMalicious {
 			return c.cat.Text("finding.package_known_malicious.title", malParams(f))
 		}
+		if IsOrchestratorRule(f.Rule) { // BV-264: its params are not {agent} alone
+			return OrchestratorTitle(c.cat, f)
+		}
 		key := "html.headline." + f.Rule
 		if f.Rule == rules.RuleCredInGit && c.countRule(rules.RuleCredInGit) == 1 {
 			key = "html.headline.cred_in_git.one"

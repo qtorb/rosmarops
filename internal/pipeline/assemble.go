@@ -59,6 +59,8 @@ type Input struct {
 	// AlwaysOn is what can wake an agent without the person and the memory
 	// it writes (BV-251, CTO-62 §1, §4).
 	AlwaysOn platform.AlwaysOnScan
+	// Paperclip is the Paperclip orchestrator at rest (BV-264, CTO-75).
+	Paperclip platform.PaperclipScan
 
 	// Crosses.
 	Matcher    *intel.Matcher
@@ -161,6 +163,15 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 	// ai_clients now present (after the credentials: a Hermes bot token in
 	// its .env is a channel, CTO-53 §1.1 option C).
 	frag = graph.AddAlwaysOn(frag, in.Hermes, ClaudeChannelPolicy(in.AlwaysOn, in.Settings), in.Now)
+	// BV-264: Paperclip, last: its launches and writes_config_of edges point
+	// at the agents and skills now present.
+	if len(in.Paperclip.Instances) > 0 {
+		kb, err := knowledge.LoadPaperclip()
+		if err != nil {
+			return graph.Fragment{}, graph.PermissionStats{}, err
+		}
+		frag = graph.AddPaperclip(frag, in.Paperclip, kb, in.Home, in.Salt, in.Now)
+	}
 	return frag, stats, nil
 }
 

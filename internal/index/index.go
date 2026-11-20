@@ -165,6 +165,16 @@ func GroupOf(rule string) string {
 		return GroupPackage
 	case rules.RuleActsWithoutYou:
 		return GroupAlwaysOn
+	// BV-264: the orchestrator rules go in the existing groups (a new group
+	// would change the report and space-view schemas): overriding an agent's
+	// approvals is its configuration; a flawed version is a package; listening
+	// beyond the computer and open sign-up let others give it orders.
+	case rules.RuleOrchestratorSkipsApprovals:
+		return GroupAgentConfig
+	case rules.RuleOrchestratorVulnerableVersion:
+		return GroupPackage
+	case rules.RuleOrchestratorNetworkListen, rules.RuleOrchestratorOpenSignup:
+		return GroupAlwaysOn
 	}
 	return ""
 }

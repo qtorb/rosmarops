@@ -59,6 +59,21 @@ func (n Node) MarshalJSON() ([]byte, error) {
 			n.Approval, n.TargetScope, n.AppliesIn, n.Source, n.Rule,
 		})
 	case KindCredential:
+		if n.IdentifiedBy == IdentifiedByPath {
+			// Known by where it is: no value was read, so no fingerprint.
+			return json.Marshal(struct {
+				ID              string   `json:"id"`
+				Kind            string   `json:"kind"`
+				Type            string   `json:"type"`
+				Service         string   `json:"service"`
+				Locations       []string `json:"locations"`
+				DiscoveredAt    string   `json:"discovered_at"`
+				IdentifiedBy    string   `json:"identified_by"`
+				PathFingerprint string   `json:"path_fingerprint"`
+				FileOwner       string   `json:"file_owner"`
+				FileMode        string   `json:"file_mode,omitempty"`
+			}{n.ID, n.Kind, n.Type, n.Service, nonNil(n.Locations), n.DiscoveredAt, n.IdentifiedBy, n.PathFingerprint, n.FileOwner, n.FileMode})
+		}
 		return json.Marshal(struct {
 			ID           string   `json:"id"`
 			Kind         string   `json:"kind"`
@@ -166,6 +181,20 @@ func (e Edge) MarshalJSON() ([]byte, error) {
 			Source    string `json:"source"`
 			Certainty string `json:"certainty"`
 		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty})
+	case EdgeLaunches:
+		return json.Marshal(struct {
+			ID               string   `json:"id"`
+			Type             string   `json:"type"`
+			From             string   `json:"from"`
+			To               string   `json:"to"`
+			Source           string   `json:"source"`
+			Certainty        string   `json:"certainty"`
+			ApprovalOverride string   `json:"approval_override"`
+			EnvPassthrough   bool     `json:"env_passthrough"`
+			Basis            string   `json:"basis"`
+			DerivedFrom      []string `json:"derived_from"`
+			Assumptions      []string `json:"assumptions"`
+		}{e.ID, e.Type, e.From, e.To, e.Source, e.Certainty, e.ApprovalOverride, e.EnvPassthrough, e.Basis, nonNil(e.DerivedFrom), nonNil(e.Assumptions)})
 	case EdgeAuthenticatesTo:
 		return json.Marshal(struct {
 			ID            string `json:"id"`

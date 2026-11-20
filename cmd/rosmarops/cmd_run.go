@@ -476,6 +476,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 		mcpScan         platform.MCPScan
 		mcpErr          error
 		hermesScan      platform.HermesScan      // BV-111: config.yaml drives Hermes's caps
+		paperclipScan   platform.PaperclipScan   // BV-264: the Paperclip orchestrator at rest
 		codexScan       platform.CodexScan       // BV-140: TOML layers drive Codex's caps
 		grokScan        platform.GrokScan        // BV-140: TOML layers drive Grok's caps
 		copilotScan     platform.CopilotScan     // BV-140: VS Code settings drive Copilot's caps
@@ -553,6 +554,11 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			scanned.Sources = append(scanned.Sources, hermes.Sources...)
 			scanned.Servers = append(scanned.Servers, hermes.Servers...)
 			hermesScan = hermes // BV-111: kept for the graph step (approvals.mode, terminal.backend)
+			// BV-264: the Paperclip orchestrator at rest; its config.json and
+			// install.json are sources like any agent's.
+			paperclip, paperclipErr := plat.ListPaperclip(ctx, repoList)
+			scanned.Sources = append(scanned.Sources, paperclip.Sources...)
+			paperclipScan = paperclip
 			// OpenAI Codex's config layers (BV-140, CTO-16): its in-force MCP
 			// servers join every agent's, so the shared pipeline builds their
 			// nodes, loads edges and credentials; the scan is kept for the graph
@@ -583,7 +589,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			// drives its caps; its MCP servers already joined above as client cline.
 			cline, clineErr := plat.ListCline(ctx, repoList)
 			clineScan = cline
-			listErr = errors.Join(listErr, hermesErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr, clineErr)
+			listErr = errors.Join(listErr, hermesErr, paperclipErr, codexErr, grokErr, copilotErr, antigravityErr, geminiErr, clineErr)
 			// Only the servers a client loads (A4); no reference: new and
 			// modified servers are the v2 memory's, or retired.
 			mcpResult := mcp.ScanMCPServers(scanned.Servers, cfg.AllowList.MCPServers, homeDir,
@@ -710,7 +716,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 					// gives at the end of the review (a pass in memory; the
 					// graph file is rewritten in the reports directory).
 					regraph = func(s state.State) bool {
-						g, graphSHA, _, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, s, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan)
+						g, graphSHA, _, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, s, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan, paperclipScan)
 						if graphErr != nil {
 							slog.Warn("graph: rebuild with the answers failed", "err", graphErr)
 							return false
@@ -718,7 +724,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 						built, builtSHA, builtFactory, builtProfiles = g, graphSHA, factoryGraph.factory, factoryGraph.profiles
 						return true
 					}
-					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan)
+					g, graphSHA, graphPath, factoryGraph, graphErr := writeGraph(mcpScan, listErr, settingsScan, cursorScan, hermesScan, codexScan, grokScan, copilotScan, antigravityScan, geminiScan, clineScan, instructions, skillScan, credFiles, vscodeExts, repoGraph, repoList, homeDir, st, report.DataDir(reportDir), start, intelMatcher, pkgObs, n8nResult.Folder, n8nResult.KeyAndData(), grokBotScan, alwaysOnScan, paperclipScan)
 					if graphErr == nil {
 						built, builtSHA, builtSettings, builtFactory, builtProfiles = g, graphSHA, &settingsScan, factoryGraph.factory, factoryGraph.profiles
 					}
@@ -983,7 +989,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			AllowHits: allowHits,
 			Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
 			FactoryGraph: builtFactory, Profiles: builtProfiles,
-			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
+			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Paperclip: paperclipScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
 			IntegrityNotChecked: integrityNotChecked,
 			StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
 			AdminListOld: comp.adminOld, AdminListNew: comp.adminNew,
@@ -1290,6 +1296,7 @@ func writeGraph(
 	n8nKeyData bool,
 	grokBot platform.GrokBotScan,
 	alwaysOn platform.AlwaysOnScan,
+	paperclip platform.PaperclipScan,
 ) (*graph.Graph, string, string, passGraphs, error) {
 	fail := func(err error) (*graph.Graph, string, string, passGraphs, error) {
 		if rmErr := graph.RemoveStale(dir); rmErr != nil {
@@ -1312,6 +1319,7 @@ func writeGraph(
 		Settings:     settings,
 		Cursor:       cursor,
 		Hermes:       hermes,
+		Paperclip:    paperclip,
 		Codex:        codex,
 		Grok:         grok,
 		Copilot:      copilot,

@@ -707,6 +707,8 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 		c.w(`%s`, c.n8nSteps(f)) // BV-175: the steps
 	} else if a, ok := rules.BestAction(f, c.v.Findings); ok {
 		c.renderFix(f, a, "html.fix.title")
+	} else if key := orchestratorFixKey(f); key != "" {
+		c.w(`<p>%s</p>`, html.EscapeString(c.cat.Text(key, orchestratorParams(f)))) // BV-264: its one step
 	} else {
 		c.w(`<p>%s</p>`, c.t("html.fix.none", p)) // v3 §15.3
 	}
@@ -1141,6 +1143,9 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 	if f.Rule == rules.RuleActsWithoutYou { // BV-251
 		return c.cat.Text("finding.acts_without_you.title", nil)
 	}
+	if IsOrchestratorRule(f.Rule) { // BV-264: one signed sentence
+		return OrchestratorTitle(c.cat, f)
+	}
 	p := c.params(f)
 	if f.Rule == rules.RuleCredReadAndSend || f.Rule == rules.RuleCredReadable {
 		return c.cat.Text("html.f.cred.title", p)
@@ -1225,7 +1230,7 @@ func (c htmlCtx) impactText(f rules.Finding) string {
 	if f.Rule == rules.RuleN8NMCPBridge || f.Rule == rules.RuleN8NKeyWithData { // BV-175
 		return c.cat.Text("finding."+f.Rule+".what", c.params(f))
 	}
-	if f.Rule == rules.RuleComputerUseAppAllowed { // BV-193: the one signed sentence is the title; no separate impact
+	if f.Rule == rules.RuleComputerUseAppAllowed || IsOrchestratorRule(f.Rule) { // BV-193, BV-264: the one signed sentence is the title; no separate impact
 		return ""
 	}
 	if f.Rule == rules.RuleActsWithoutYou { // BV-251: the detail line(s)
@@ -1394,6 +1399,9 @@ func HTMLKeys() []string {
 	for _, a := range rules.AllActions {
 		keys = append(keys, "html.action."+a+".title")
 	}
+	// BV-264: a vulnerable version found in npm's cache has its own sentence.
+	keys = append(keys, "html.headline.orchestrator_vulnerable_version.npm_cache")
+	keys = append(keys, orchestratorFixKeys...)
 	// BV-111: the isolated-backend action also has a «how» line in the HTML.
 	keys = append(keys, "html.action.hermes_isolated_backend.how")
 	for _, g := range glossTerms {

@@ -214,7 +214,7 @@ func everyNodeTypeNodes(seen string) []graph.Node {
 		return prefix + "_" + string(rune('a'+id%26)) + itoaPad(id)
 	}
 	var aiClientID string
-	agentTypes := []string{"ai_client", "mcp_server", "extension", "bot"}
+	agentTypes := []string{"ai_client", "mcp_server", "extension", "bot", "orchestrator"}
 	for _, ty := range agentTypes {
 		aid := nid("agent")
 		if ty == "ai_client" {
@@ -240,6 +240,13 @@ func everyNodeTypeNodes(seen string) []graph.Node {
 			Service: "fixture", Fingerprint: "fp" + itoaPad(id), Locations: []string{"/secrets:1"}, DiscoveredAt: seen,
 		})
 	}
+	// A credential known by where it is (BV-264): no fingerprint, its path's.
+	out = append(out, graph.Node{
+		ID: nid("cred"), Kind: graph.KindCredential, Type: "generic_secret", Service: "fixture",
+		Locations: []string{"/home/fixture/.paperclip/instances/default/secrets/master.key"}, DiscoveredAt: seen,
+		IdentifiedBy: graph.IdentifiedByPath, PathFingerprint: "hmac-sha256:path" + itoaPad(id),
+		FileOwner: graph.OwnerCurrentUser, FileMode: "0600",
+	})
 	resTypes := []string{
 		"file", "database", "external_service", "agent_config", "agent_instructions", "agent_executable", "git_repository",
 		"inbound_channel", "agent_schedule", "agent_memory",

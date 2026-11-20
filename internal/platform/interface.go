@@ -689,6 +689,14 @@ type Platform interface {
 	// protected instruction files and its MCP servers.
 	ListHermes(ctx context.Context) (HermesScan, error)
 
+	// ListPaperclip reads the Paperclip orchestrator at rest (CTO-75): every
+	// instance's config.json, its cli/install.json, a Paperclip service unit,
+	// the paperclipai versions in npm's cache, and the .paperclip.yaml
+	// manifests at the root of repoRoots. Its database, data, secrets, .env,
+	// run logs and MCP configs are never opened: of those, only whether they
+	// exist, their permissions and their owner.
+	ListPaperclip(ctx context.Context, repoRoots []string) (PaperclipScan, error)
+
 	// ListCodex reads OpenAI Codex's TOML config layers (BV-140, CTO-16 §2):
 	// the user config, the profiles, each repository's .codex/config.toml (in
 	// force only when the user config trusts it) and the system requirements.
@@ -827,6 +835,85 @@ type CursorFile struct {
 	// 2026-10-27, blindaje, B5): neither the agent nor RosmarOps reads them,
 	// and each one is a config_key_case_conflict finding.
 	KeyConflicts []string
+}
+
+// PaperclipScan is what ListPaperclip read (CTO-75 §1). Sources are the
+// files read or failed, for coverage. Base is the Paperclip home
+// (PAPERCLIP_HOME or ~/.paperclip); empty when there is none.
+type PaperclipScan struct {
+	Base      string
+	Instances []PaperclipInstance
+	// Installed is cli/install.json's version, when Paperclip was installed
+	// with its installer; InstallPath is that file.
+	Installed   string
+	InstallPath string
+	// NPMCache are the paperclipai versions found in npm's cache (npx), each
+	// with its package.json: versions found, not necessarily installed.
+	NPMCache []PaperclipPackage
+	// Service is a Paperclip systemd or launchd unit, when there is one.
+	Service   *PaperclipService
+	Manifests []PaperclipManifest
+	Sources   []MCPSource
+}
+
+// PaperclipInstance is one instances/<id>/ folder.
+type PaperclipInstance struct {
+	ID, Dir, ConfigPath string
+	ConfigStatus        MCPSourceStatus
+	Reason              string
+	// From config.json; empty when the key is absent (the product default
+	// applies). SignUpDisabled and Telemetry are nil when absent.
+	DeploymentMode, Exposure, Bind, Host, DatabaseMode string
+	Port                                               int
+	SignUpDisabled                                     *bool
+	Telemetry                                          *bool
+	// Whether llm.apiKey and database.connectionString hold a value. Only
+	// that: the value is never kept, logged or hashed.
+	LLMAPIKeySet, ConnectionStringSet bool
+	// Files are the instance's protected files and folders, from their
+	// metadata only (never opened).
+	Files []PaperclipFile
+}
+
+// Roles of a PaperclipFile.
+const (
+	PaperclipMasterKey = "master_key" // secrets/master.key
+	PaperclipEnv       = "env"        // .env (the agent JWT secret)
+	PaperclipDB        = "db"         // db/ (its embedded Postgres)
+	PaperclipData      = "data"       // data/ (backups)
+	PaperclipRunLogs   = "run_logs"   // data/run-logs/
+	PaperclipConfig    = "config"     // config.json, for its owner and mode
+)
+
+// PaperclipFile is a protected file or folder of an instance, seen with
+// lstat: whether it exists, its permission bits and its owner.
+type PaperclipFile struct {
+	Role, Path string
+	Exists     bool
+	// Mode is the permission bits in octal ("0600"), empty where the system
+	// has no Unix permissions; Owner is current_user, other_user or unknown.
+	Mode, Owner string
+}
+
+// PaperclipPackage is a paperclipai package.json found in npm's cache.
+type PaperclipPackage struct {
+	Version, Path string
+}
+
+// PaperclipService is a Paperclip service unit and the PAPERCLIP_* variables
+// it sets that change what config.json says (names from CTO-75 §1).
+type PaperclipService struct {
+	Path string
+	Env  map[string]string
+}
+
+// PaperclipManifest is a .paperclip.yaml (schema paperclip/v1) at a
+// repository's root: how many of its agents run an arbitrary command (type
+// process, or no type, which Paperclip imports as process).
+type PaperclipManifest struct {
+	Path, Repo    string
+	ProcessAgents int
+	UntypedAgents int
 }
 
 // HermesScan is what ListHermes read (N2a, BV-97). Hermes stays detected and
