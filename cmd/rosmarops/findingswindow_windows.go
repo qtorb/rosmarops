@@ -170,6 +170,13 @@ func showDismiss(cards []report.FindingCard, cat catalog.Catalog) (findingChoice
 		recordWindowFailure()
 		return findingChoice{}, false
 	}
+	// Under the self-test hook only, the window's error output goes to the
+	// run's log when it ends; otherwise it stays discarded.
+	errOut := selfTestStderr(findingsSelfTestEnv)
+	if errOut != nil {
+		cmd.Stderr = errOut
+	}
+	defer logSelfTestStderr(errOut, "findings")
 	if err := cmd.Start(); err != nil {
 		slog.Info("dismiss window not shown", "err", err)
 		recordWindowFailure()
