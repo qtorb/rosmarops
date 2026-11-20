@@ -1028,6 +1028,8 @@
   "usage.state.off": "Estadísticas de uso: apagadas. Para activarlas: rosmarops usage on",
   "usage.state.undecided": "Estadísticas de uso: apagadas hasta que respondas. RosmarOps lo preguntará al final de la próxima revisión desde una terminal.",
   "usage.help": "Activa o apaga las estadísticas de uso, o muestra si están activadas.",
+  "console.usage_team_on": "Esta instalación queda marcada como del equipo de RosmarOps. Sus estadísticas de uso se contarán aparte.",
+  "console.usage_team_off": "Esta instalación ya no está marcada como del equipo de RosmarOps.",
   "html.r3.title": "Informe RosmarOps",
   "html.r3.sub": "Qué pueden hacer tus agentes de IA sin preguntarte en este ordenador, y qué cambiar.",
   "html.r3.meta": "{date} · {os} · {agents} · {projects} · RosmarOps {version}",

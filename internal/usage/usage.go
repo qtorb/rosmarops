@@ -43,6 +43,10 @@ const (
 	ChannelStore    = "store"
 	ChannelHomebrew = "homebrew"
 	ChannelOther    = "other"
+	// ChannelInternal replaces the real channel on an installation marked as
+	// the RosmarOps team's (`rosmarops usage team on`), so the team's own
+	// runs are counted apart.
+	ChannelInternal = "internal"
 )
 
 // Payload is one usage.v1 package, field for field.
@@ -89,7 +93,7 @@ var (
 	versionPattern   = regexp.MustCompile(`^[0-9A-Za-z.+-]{1,40}$`)
 	osValues         = map[string]bool{"windows": true, "darwin": true, "linux": true}
 	archValues       = map[string]bool{"amd64": true, "arm64": true}
-	channelValues    = map[string]bool{ChannelStore: true, ChannelHomebrew: true, ChannelOther: true}
+	channelValues    = map[string]bool{ChannelStore: true, ChannelHomebrew: true, ChannelOther: true, ChannelInternal: true}
 	classValues      = map[string]bool{"A": true, "B": true, "C": true, "D": true}
 	statusValues     = map[string]bool{"green": true, "yellow": true, "red": true}
 )

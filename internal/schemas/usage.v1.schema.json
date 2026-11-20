@@ -12,7 +12,7 @@
     "version": { "type": "string", "pattern": "^[0-9A-Za-z.+-]{1,40}$" },
     "os": { "enum": ["windows", "darwin", "linux"] },
     "arch": { "enum": ["amd64", "arm64"] },
-    "channel": { "enum": ["store", "homebrew", "other"] },
+    "channel": { "enum": ["store", "homebrew", "other", "internal"] },
     "agents": { "type": "array", "maxItems": 40, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9-]{1,40}$" } },
     "score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
     "class": { "enum": ["A", "B", "C", "D", "E", null] },

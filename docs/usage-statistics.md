@@ -17,7 +17,8 @@ After each check, while usage statistics are on, one summary in the format
 - `version`: the RosmarOps version;
 - `os` and `arch`: `windows`, `darwin` or `linux`, and `amd64` or `arm64`;
 - `channel`: how you installed it: `store` (Microsoft Store), `homebrew`, or
-  `other`;
+  `other`; or `internal` on an installation the RosmarOps team marked as its
+  own, so its checks are counted apart from people's;
 - `agents`: the AI agents found, evaluated or only detected, as product ids
   from a fixed list (for example `claude-code`, `cursor`, `claude-desktop`);
 - `score` and `class`: the computer's score (0-100) and class (A-D), or

@@ -57,6 +57,13 @@ type State struct {
 	// they answer. Optional in state.v2.
 	Usage *Usage `json:"usage,omitempty"`
 
+	// UsageTeam marks this installation as the RosmarOps team's (BV-271): its
+	// usage packages carry the channel "internal", so the team's own runs are
+	// counted apart. It is kept apart from Usage so that marking an
+	// installation never answers the usage question for the person. Optional
+	// in state.v2.
+	UsageTeam bool `json:"usage_team,omitempty"`
+
 	Integrity Integrity `json:"integrity"`
 	Baselines Baselines `json:"baselines"`
 }
