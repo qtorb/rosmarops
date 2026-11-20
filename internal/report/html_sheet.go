@@ -553,7 +553,7 @@ func (c htmlCtx) renderRows(id string) {
 // block of CTO-50 §1 for P0 and P1, the literal command for P3.
 func (c htmlCtx) copyText(id string) string {
 	if id == profiles.P3 {
-		return profiles.Block(id)
+		return profiles.Placeholder(profiles.Block(id), c.cat.Lang())
 	}
 	return c.cat.Text("cc.T1", nil) + "\n\n" + profiles.Block(id)
 }

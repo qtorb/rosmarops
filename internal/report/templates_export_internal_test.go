@@ -136,3 +136,45 @@ func TestExportTemplates_NothingFromTheComputer(t *testing.T) {
 		}
 	}
 }
+
+// The launch commands' task placeholder follows the report's language:
+// «<task>» in English (as cc.S6 and gp.grok.P3.step.2 say), «<tarea>» in
+// Spanish; no English text the report copies, nor the export, has «<tarea>».
+func TestTaskPlaceholderByLanguage(t *testing.T) {
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := htmlCtx{v: V2{OS: "darwin"}, cat: cat}
+		texts := []string{c.copyText(profiles.P3)}
+		for _, g := range c.guided() {
+			for _, p := range g.profiles {
+				texts = append(texts, c.guidedText(g, p))
+			}
+		}
+		want, not := "<task>", "<tarea>"
+		if lang == "es" {
+			want, not = not, want
+		}
+		seen := false
+		for _, s := range texts {
+			if strings.Contains(s, not) {
+				t.Errorf("%s: a text the report copies has %s: %q", lang, not, s)
+			}
+			seen = seen || strings.Contains(s, want)
+		}
+		if !seen {
+			t.Errorf("%s: no launch command with %s", lang, want)
+		}
+	}
+	files, err := ExportTemplates("0.16.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if strings.Contains(f.Content, "<tarea>") {
+			t.Errorf("%s: the English export has <tarea>", f.Path)
+		}
+	}
+}

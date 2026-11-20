@@ -436,7 +436,7 @@ func (c htmlCtx) guidedText(g guidedAgent, p guidedProfile) string {
 		return ""
 	}
 	if p.cmd {
-		return block
+		return profiles.Placeholder(block, c.cat.Lang())
 	}
 	return c.cat.Text(p.sentence, nil) + "\n\n" + block
 }

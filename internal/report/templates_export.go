@@ -111,8 +111,12 @@ func ExportTemplates(version string) ([]TemplateFile, error) {
 			return nil, fmt.Errorf("export templates: no folder for %s %s", t.agent, t.id)
 		}
 		dir := "templates/" + t.agent + "/" + use + "/"
+		block := t.block
+		if t.file == "command.txt" {
+			block = profiles.Placeholder(block, cat.Lang())
+		}
 		out = append(out,
-			TemplateFile{Path: dir + t.file, Content: t.block + "\n"},
+			TemplateFile{Path: dir + t.file, Content: block + "\n"},
 			TemplateFile{Path: dir + "README.md", Content: templateReadme(cat, t, version)})
 	}
 	return out, nil

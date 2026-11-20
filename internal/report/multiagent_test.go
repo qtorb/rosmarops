@@ -154,7 +154,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // at BV-251 with the agent's «Who can give it orders» line in the agents
 // window (checked: the one added block), at BV-260 with the first screen in
 // three blocks (signed design of 18-11) in place of the sheet and of «What
-// to do first» / «What remains», and each problem's steps below it;
+// to do first» / «What remains», and each problem's steps below it, at
+// BV-266 with «<task>» in the English launch command (checked: the two
+// lines of P3's command);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

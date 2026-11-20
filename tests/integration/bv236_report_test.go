@@ -147,7 +147,7 @@ func TestBV236ProfileViewWithoutJS(t *testing.T) {
 		for id, want := range map[string]string{
 			profiles.P0: cat.Text("cc.T1", nil) + "\n\n" + profiles.Block(profiles.P0),
 			profiles.P1: cat.Text("cc.T1", nil) + "\n\n" + profiles.Block(profiles.P1),
-			profiles.P3: profiles.Block(profiles.P3),
+			profiles.P3: profiles.Placeholder(profiles.Block(profiles.P3), lang),
 		} {
 			if !strings.Contains(page, `<pre class="ptext" id="pc-`+id+`" tabindex="-1">`+esc(want)+`</pre>`) {
 				t.Errorf("%s: %s copies something else", lang, id)

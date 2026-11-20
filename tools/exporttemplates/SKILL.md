@@ -1,6 +1,6 @@
 ---
 name: rosmarops-templates
-description: Apply a RosmarOps permission template to this project so the agent asks before it acts. Use when the person asks to make Claude Code read-only, stop it fetching the web, or run it in its sandbox.
+description: Apply a RosmarOps permission template to your Claude Code user settings so the agent asks before it acts. Use when the person asks to make Claude Code read-only, stop it fetching the web, or run it in its sandbox.
 ---
 
 # RosmarOps templates
