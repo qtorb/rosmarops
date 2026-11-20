@@ -1086,5 +1086,7 @@
   "html.headline.orchestrator_network_listen": "{orchestrator} escucha fuera de este ordenador: otros equipos pueden llegar a él.",
   "findings.when.orchestrator_network_listen": "Si solo llegan a él equipos tuyos de confianza.",
   "html.headline.orchestrator_open_signup": "Cualquiera que llegue a {orchestrator} puede crearse una cuenta.",
-  "findings.when.orchestrator_open_signup": "Si nadie más que tú puede llegar a él."
+  "findings.when.orchestrator_open_signup": "Si nadie más que tú puede llegar a él.",
+  "unknown.orchestrator_agent_configured": "Supone que en {agent} tienes creado un agente que lo usa. {agent} guarda sus agentes en su base de datos, que RosmarOps no abre, así que no puede comprobarlo.",
+  "html.fix.orchestrator_vulnerable_version": "Actualiza {orchestrator} a la {fixed} o posterior."
 }

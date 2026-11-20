@@ -888,5 +888,6 @@
   "html.headline.orchestrator_vulnerable_version": "Your {orchestrator} {version} has a known serious security flaw. It is fixed in {fixed}.",
   "html.headline.orchestrator_vulnerable_version.npm_cache": "There is an {orchestrator} {version} in the npm cache with a known serious security flaw. It is fixed in {fixed}.",
   "html.headline.orchestrator_network_listen": "{orchestrator} listens beyond this computer: other devices can reach it.",
-  "html.headline.orchestrator_open_signup": "Anyone who reaches {orchestrator} can create an account."
+  "html.headline.orchestrator_open_signup": "Anyone who reaches {orchestrator} can create an account.",
+  "html.fix.orchestrator_vulnerable_version": "Update {orchestrator} to {fixed} or later."
 }

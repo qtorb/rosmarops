@@ -349,5 +349,6 @@
   "findings.when.orchestrator_skips_approvals": "If you don't use {orchestrator} with this agent.",
   "findings.when.orchestrator_vulnerable_version": "If you no longer use {orchestrator} or have updated it another way.",
   "findings.when.orchestrator_network_listen": "If only devices you trust can reach it.",
-  "findings.when.orchestrator_open_signup": "If no one but you can reach it."
+  "findings.when.orchestrator_open_signup": "If no one but you can reach it.",
+  "unknown.orchestrator_agent_configured": "Assumes you have set up in {agent} an agent that uses it. {agent} keeps its agents in its database, which RosmarOps does not open, so it can't check."
 }

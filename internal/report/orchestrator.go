@@ -48,6 +48,21 @@ func OrchestratorTitle(cat catalog.Catalog, f rules.Finding) string {
 	return cat.Text(orchestratorKey(f), orchestratorParams(f))
 }
 
+// orchestratorFixKeys are the orchestrator rules that have a step of their
+// own (html.fix.<rule>), filled like their sentence. The others keep the
+// generic html.fix.none line.
+var orchestratorFixKeys = []string{"html.fix." + rules.RuleOrchestratorVulnerableVersion}
+
+// orchestratorFixKey is the finding's own step, "" when it has none.
+func orchestratorFixKey(f rules.Finding) string {
+	for _, k := range orchestratorFixKeys {
+		if k == "html.fix."+f.Rule {
+			return k
+		}
+	}
+	return ""
+}
+
 // whenParams are the parameters of a finding's «when it does not apply» line:
 // the orchestrator rules' own, nil for every other rule (unchanged).
 func whenParams(f rules.Finding) map[string]string {
