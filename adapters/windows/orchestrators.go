@@ -157,6 +157,9 @@ func ReadPaseo(home string, env agentdirs.Env) *platform.PaseoScan {
 	p := &platform.PaseoScan{Home: base, ConfigPath: filepath.Join(base, "config.json")}
 	var cfg paseoConfig
 	p.ConfigStatus, p.Reason = readSmallJSON(p.ConfigPath, &cfg)
+	if info, err := os.Lstat(p.ConfigPath); err == nil {
+		p.ConfigMode, p.ConfigOwner = fileModeOwner(info)
+	}
 	if p.ConfigStatus == platform.MCPSourceRead {
 		p.Listen = strings.TrimSpace(cfg.Daemon.Listen)
 		for ptr, set := range map[string]filled{

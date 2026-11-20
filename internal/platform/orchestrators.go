@@ -23,8 +23,11 @@ type PaseoScan struct {
 	// 127.0.0.1:6767 applies).
 	Listen string
 	// APIKeys are the JSON pointers of config.json's apiKey fields that hold
-	// a value. Only the pointer: the value is never kept.
-	APIKeys []string
+	// a value. Only the pointer: the value is never kept. ConfigMode and
+	// ConfigOwner are config.json's permission bits and owner (as
+	// PaperclipFile's).
+	APIKeys                 []string
+	ConfigMode, ConfigOwner string
 	// Agents are agents/<project>/<id>.json; Schedules schedules/<id>.json.
 	Agents    []PaseoAgent
 	Schedules []PaseoSchedule
