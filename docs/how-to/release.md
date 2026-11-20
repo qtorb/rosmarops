@@ -28,24 +28,26 @@ Either way works:
   git push origin vX.Y.Z
   ```
 
-- **Run workflow:** in GitHub Actions, open `release`, choose «Run workflow» on `master`, and enter the tag (`vX.Y.Z`). The `tag` job checks that it runs on `master`, that the tag has the form `vX.Y.Z` or `vX.Y.Z-prerelease`, that the tag does not exist yet, that `docs/release-notes/vX.Y.Z.md` exists, and that `ci.yml` is green on the commit. Then it creates the annotated tag.
+- **Run workflow:** in GitHub Actions, open `release`, choose «Run workflow» on `master`, and enter the tag (`vX.Y.Z`). The `tag` job checks that it runs on `master`, that the tag has the form `vX.Y.Z` or `vX.Y.Z-prerelease`, that the tag does not exist yet, that `docs/release-notes/vX.Y.Z.md` exists, and that `ci.yml` is green on the commit. It does not create the tag yet: `publish` creates the annotated tag on that same `master` commit, after `verify`, `build` and `journeys` have passed. A run that stops before `publish` (a failed check, a failed build, the journeys gate) leaves no tag, so you can fix the cause and start «Run workflow» again with the same version.
 
 ## 3. What `release.yml` does
 
 | Job | Runs on | What it does |
 |---|---|---|
-| `tag` | manual runs only | The checks above, then creates the tag. |
+| `tag` | manual runs only | The checks above. It does not create the tag. |
 | `verify` | Linux | The same checks as CI: `go vet` and `staticcheck` for Linux, Windows and macOS, `gofumpt`, the release flags, `go test -count=1 ./...`. |
 | `build` | Linux | Builds `rosmarops.exe` (with the icon and version resource from `go run ./tools/winres -version X.Y.Z`), runs `govulncheck` on it, builds `rosmarops-macos-apple-silicon`, `rosmarops-macos-intel`, `rosmarops-linux-amd64` and `rosmarops-linux-arm64`, runs the network trust tests, writes `SHA256SUMS.txt`, and keeps them as the artifact `release-candidate`. |
 | `journeys` | Linux, Windows, macOS | The journey tests (`journeys.yml`) on exactly those binaries: see [journeys](journeys.md). They block `publish` only when the repository variable `JOURNEYS_GATE` is `on`. |
-| `publish` | Linux | Checks every file against `build`'s `SHA256SUMS.txt`, creates the build provenance attestation and the GitHub release. |
+| `publish` | Linux | On a manual run, first creates and pushes the annotated tag on the run's `master` commit (and stops if it already exists). Then checks every file against `build`'s `SHA256SUMS.txt`, creates the build provenance attestation and the GitHub release. |
 | `sample-report` | Windows | Checks the released `rosmarops.exe` by its SHA-256, makes the sample report with `scripts/sample-report/generate.ps1`, and adds `sample-report.en.html` and `sample-report.es.html` to the release. |
 | `factory-scores` | Linux | Runs `TestR2FactoryScores`, `TestExposurePotential` and `TestProfileScores` in `tests/trust` with their output variables set, and adds `factory-scores.json`, `exposure-potential.json` and `profile-scores.json` to the release. |
 | `e2e-realistic` | Windows | Runs the released `rosmarops.exe` on a test computer with 48 projects (`scripts/e2e/make-home.ps1`, `scripts/e2e/run.ps1`). A failure turns the whole run red. |
 
+Until `publish`, every job checks out the run's own commit (`github.sha`): on a manual run, the `master` commit the run started on; on a tag push, the tagged commit. The version comes from the tag's name, never from the tag itself, so nothing before `publish` needs the tag to exist.
+
 Every executable is built with `CGO_ENABLED=0`, `-trimpath` and `-ldflags="-X main.version=X.Y.Z"`. `SHA256SUMS.txt` covers only the executables, not the JSON files or the sample report.
 
-If a job after `publish` fails, the GitHub release already exists. Fix the cause and re-run the failed job within a day (the jobs after `publish` take `rosmarops.exe` from an Actions artifact kept for one day). Do not delete and re-create the tag. If `journeys` fails with the gate on, nothing is published: fix the cause, then re-run the failed jobs of the run.
+If a job after `publish` fails, the GitHub release already exists. Fix the cause and re-run the failed job within a day (the jobs after `publish` take `rosmarops.exe` from an Actions artifact kept for one day). Do not delete and re-create the tag. If `journeys` fails with the gate on, nothing is published and, on a manual run, no tag exists: fix the cause, then re-run the failed jobs of the run, or start «Run workflow» again with the same version from the new `master`. On a tag push the tag is yours: delete it by hand before you push it again.
 
 ## 4. Microsoft Store (MSIX)
 
