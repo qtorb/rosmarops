@@ -28,3 +28,4 @@ The invariants these decisions set are listed in [CLAUDE.md](../../CLAUDE.md) an
 | 0020 | [The report in three blocks](0020-report-in-three-blocks.md): result, findings grouped by problem at draw time, and the template; Supabase database URLs by host. | 2026-11-18 |
 | 0021 | [Journey tests before publishing](0021-journey-tests-before-publishing.md): R1-R3 on the candidate's bytes on three machines, between build and publish; the gate turns on with JOURNEYS_GATE. | 2026-11-19 |
 | 0022 | [Orchestrators and credentials known by their path](0022-orchestrators-and-credentials-by-path.md): Paperclip as an orchestrator with launches edges, four rules, and secrets identified by where they are, never opened. | 2026-11-20 |
+| 0023 | [Paseo, Claude Squad, Orca and Claude Code's subagents, read at rest](0023-orchestrators-read-at-rest.md): launches observed when the mode is in the orchestrator's own file; Orca inferred from its default; subagent headers only. | 2026-11-20 |
