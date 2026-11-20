@@ -19,8 +19,11 @@
 #
 # Third-party actions are pinned by commit SHA (the tag in the comment).
 # The release is created with the GitHub CLI that the runner ships with.
-# BV-127: it can also be started by hand (Run workflow) with a tag; the
-# workflow creates the tag on master after its checks.
+# BV-127: it can also be started by hand (Run workflow) with a tag. The «tag»
+# job only checks the request; the tag is created on that master commit at
+# the start of «publish», after verify, build and the journeys, so a run
+# stopped before publish leaves no tag behind. Until then every job checks out
+# the run's commit (github.sha), which is the tagged commit on a tag push.
 #
 # Building and publishing are two jobs with the journey tests between them
 # (journeys.yml): «build» makes the binaries and SHA256SUMS.txt; «journeys»
@@ -47,19 +50,19 @@ permissions: {}
 jobs:
   tag:
     # Manual «Run workflow» only (BV-127): a tag push skips this job. It checks
-    # the request and creates the tag on master. A tag pushed with GITHUB_TOKEN
-    # does not start another workflow run, so there is no double publish.
-    # actions: read lets check e read ci.yml's runs; without it the API 403s.
+    # the request; it does not create the tag («publish» does, so a run that
+    # stops before it leaves no tag). actions: read lets check e read ci.yml's
+    # runs; without it the API 403s.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: true
-      - name: Check the request and create the tag on master
+          persist-credentials: false
+      - name: Check the request
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
@@ -86,11 +89,8 @@ jobs:
           if [ "${green:-0}" -lt 1 ]; then
             echo "The checks workflow (ci.yml) is not green on ${SHA}"; exit 1
           fi
-          # all checks passed: create and push the annotated tag with GITHUB_TOKEN
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" "$SHA" -m "RosmarOps $TAG"
-          git push origin "refs/tags/$TAG"
+          # all checks passed; publish creates the tag on ${SHA} once the
+          # build and the journeys have passed
 
   verify:
     needs: [tag]
@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ env.TAG }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.4"
@@ -150,7 +150,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ env.TAG }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.4"
@@ -245,8 +245,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-          ref: ${{ env.TAG }}
+          persist-credentials: ${{ github.event_name == 'workflow_dispatch' }}
+          ref: ${{ github.sha }}
+      - name: Create the tag on the master commit (Run workflow only)
+        # Only now, after verify, build and the journeys: a run stopped before
+        # publish leaves no tag. A tag pushed with GITHUB_TOKEN does not start
+        # another workflow run, so there is no double publish. On a tag push
+        # the tag already exists and this step is skipped.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "refs/tags/$TAG"; then
+            echo "Tag $TAG already exists"; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "RosmarOps $TAG"
+          git push origin "refs/tags/$TAG"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-candidate
