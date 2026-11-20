@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/qtorb/rosmarops/internal/platform"
 )
@@ -113,8 +114,23 @@ const p3Command = `claude -p "<tarea>" \
   --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
   --settings '{"disableAllHooks": true, "permissions": {"allow": ["Bash(npm run lint)", "Bash(npm run test *)", "Bash(git status)", "Bash(git diff)"], "deny": ["WebFetch", "WebSearch"]}}'`
 
+// taskPlaceholder is the launch commands' placeholder for the task, as their
+// literal text writes it; Placeholder gives it in the report's language.
+const taskPlaceholder = "<tarea>"
+
+// Placeholder is a launch command (P3) in lang. The command is CTO-50's; its
+// task placeholder is text for the person, so it follows their language, as
+// the steps around it do (cc.S6, gp.grok.P3.step.2): «<tarea>» in Spanish,
+// «<task>» in every other language. Nothing substitutes it: the person does.
+func Placeholder(command, lang string) string {
+	if lang == "es" {
+		return command
+	}
+	return strings.ReplaceAll(command, taskPlaceholder, "<task>")
+}
+
 // Block is the text of a profile as the report copies it: the JSON block of
-// P0 or P1, or P3's command.
+// P0 or P1, or P3's command (with its Spanish placeholder: see Placeholder).
 func Block(id string) string {
 	switch id {
 	case P0:

@@ -17,7 +17,8 @@ import (
 // TestBV238GuidedCopies: Cursor P0/P1 copy T2 and the literal sandbox.json;
 // Grok Build P0/P1 copy T3 and a single ~/.grok/config.toml (no
 // requirements.toml, Albert 15-11), with deny = ["WebSearch"] after rules and
-// P1 on the "workspace" profile; Grok Build P3 copies the literal command.
+// P1 on the "workspace" profile; Grok Build P3 copies the literal command,
+// its task placeholder in the page's language (<task> in English).
 func TestBV238GuidedCopies(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		_, page, cat := bv236Page(t, lang)
@@ -26,11 +27,16 @@ func TestBV238GuidedCopies(t *testing.T) {
 			"gv-cursor-P1":     cat.Text("gp.cursor.T2", nil) + "\n\n" + `{ "readBoundary": "workspace" }`,
 			"gv-grok-build-P0": cat.Text("gp.grok.T3", nil) + "\n\n" + profiles.GuidedBlock(profiles.GuidedGrok, profiles.P0),
 			"gv-grok-build-P1": cat.Text("gp.grok.T3", nil) + "\n\n" + profiles.GuidedBlock(profiles.GuidedGrok, profiles.P1),
-			"gv-grok-build-P3": `grok -p "<tarea>" --permission-mode dontAsk --sandbox strict --deny "WebFetch"`,
+			"gv-grok-build-P3": `grok -p "` + map[string]string{"en": "<task>", "es": "<tarea>"}[lang] + `" --permission-mode dontAsk --sandbox strict --deny "WebFetch"`,
 		} {
 			if !strings.Contains(page, `<pre class="ptext" id="`+pid+`" tabindex="-1">`+esc(want)+`</pre>`) {
 				t.Errorf("%s: %s copies something else", lang, pid)
 			}
+		}
+		// The task placeholder is text for the person: the English page has
+		// none in Spanish.
+		if lang == "en" && strings.Contains(page, "&lt;tarea&gt;") {
+			t.Error("en: the page has <tarea>")
 		}
 		// Grok Bot has only steps on screen: no text to copy.
 		if strings.Contains(page, `id="gv-grok-bot-`) {
