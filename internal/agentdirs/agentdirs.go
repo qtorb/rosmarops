@@ -408,3 +408,11 @@ func Products(present []Present) map[string]bool {
 	}
 	return out
 }
+
+// OrcaUserData is the Orca desktop app's Electron userData folder, named
+// after its product name "Orca" (stablyai/orca v1.4.266,
+// config/electron-builder.config.cjs:269): %APPDATA%\Orca, ~/Library/
+// Application Support/Orca, or $XDG_CONFIG_HOME/Orca (CTO-76 §1).
+func (l Layout) OrcaUserData(home string, env Env) string {
+	return filepath.Join(l.configBase(home, env), "Orca")
+}
