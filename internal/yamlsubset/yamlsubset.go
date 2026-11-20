@@ -113,6 +113,19 @@ func Parse(raw []byte) (any, error) {
 // A top-level section is a column-0 "key:" line and every line indented beneath
 // it, up to the next column-0 line.
 func ParseKeys(raw []byte, required ...string) (any, error) {
+	return parseKeys(raw, false, required)
+}
+
+// ParseKeysWithMapItems is ParseKeys that also reads block sequences whose
+// items are mappings ("- key: value" and the item's further keys beneath
+// it), as Claude Code's subagent headers write hooks and mcpServers
+// (CTO-76 §5). Opt-in, so the readers already built on ParseKeys keep their
+// exact behaviour.
+func ParseKeysWithMapItems(raw []byte, required ...string) (any, error) {
+	return parseKeys(raw, true, required)
+}
+
+func parseKeys(raw []byte, mapItems bool, required []string) (any, error) {
 	lines, err := prepare(raw)
 	if err != nil {
 		return nil, err
@@ -143,7 +156,7 @@ func ParseKeys(raw []byte, required ...string) (any, error) {
 			// we do not read: skip the whole section, whatever it contains.
 			continue
 		}
-		sp := &parser{lines: section}
+		sp := &parser{lines: section, mapItems: mapItems}
 		v, err := sp.mapping(0, 1)
 		if err != nil {
 			return nil, err
@@ -207,6 +220,9 @@ func prepare(raw []byte) ([]line, error) {
 type parser struct {
 	lines []line
 	i     int
+	// mapItems lets a block sequence item be a mapping
+	// (ParseKeysWithMapItems).
+	mapItems bool
 }
 
 // block reads the mapping or sequence whose lines start at indent.
@@ -215,7 +231,7 @@ func (p *parser) block(indent, depth int) (any, error) {
 		return nil, fmt.Errorf("line %d: more than %d levels", p.lines[p.i].n, MaxDepth)
 	}
 	if isSeqItem(p.lines[p.i].text) {
-		return p.sequence(indent)
+		return p.sequence(indent, depth)
 	}
 	return p.mapping(indent, depth)
 }
@@ -260,7 +276,7 @@ func (p *parser) mapping(indent, depth int) (Map, error) {
 			m[key] = v
 		case p.i < len(p.lines) && p.lines[p.i].indent == indent && isSeqItem(p.lines[p.i].text):
 			// key:\n- item, the sequence at the key's own indentation.
-			v, err := p.sequence(indent)
+			v, err := p.sequence(indent, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -272,8 +288,12 @@ func (p *parser) mapping(indent, depth int) (Map, error) {
 	return m, nil
 }
 
-// sequence reads "- item" lines of scalars or flow sequences.
-func (p *parser) sequence(indent int) (Seq, error) {
+// sequence reads "- item" lines of scalars or flow sequences, and, with
+// mapItems, of mappings.
+func (p *parser) sequence(indent, depth int) (Seq, error) {
+	if depth > MaxDepth {
+		return nil, fmt.Errorf("line %d: more than %d levels", p.lines[p.i].n, MaxDepth)
+	}
 	s := Seq{}
 	for p.i < len(p.lines) {
 		l := p.lines[p.i]
@@ -288,7 +308,19 @@ func (p *parser) sequence(indent int) (Seq, error) {
 			return nil, fmt.Errorf("line %d: only scalars are read in a block sequence", l.n)
 		}
 		if _, _, err := splitKey(item); err == nil {
-			return nil, fmt.Errorf("line %d: only scalars are read in a block sequence", l.n)
+			if !p.mapItems {
+				return nil, fmt.Errorf("line %d: only scalars are read in a block sequence", l.n)
+			}
+			// "- key: value": the item is a mapping whose keys sit at the
+			// column of its first key.
+			col := l.indent + len(l.text) - len(item)
+			p.lines[p.i] = line{l.n, col, item}
+			m, err := p.mapping(col, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			s = append(s, m)
+			continue
 		}
 		v, err := inlineValue(item)
 		if err != nil {

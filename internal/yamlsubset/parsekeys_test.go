@@ -121,3 +121,38 @@ func TestParseKeys_EmptyAndComments(t *testing.T) {
 		}
 	}
 }
+
+// BV-268: ParseKeysWithMapItems reads sequences of mappings, the shape of a
+// Claude Code subagent's hooks; ParseKeys keeps refusing them.
+func TestParseKeysWithMapItems(t *testing.T) {
+	const doc = "hooks:\n  PreToolUse:\n    - matcher: Bash\n      hooks:\n        - type: command\n          command: ./x.sh\n    - matcher: Edit\nmcpServers:\n  - github\n  - local:\n      command: node\nother: {a: 1}\n"
+	if _, err := ParseKeys([]byte(doc), "hooks"); err == nil {
+		t.Fatal("ParseKeys read a sequence of mappings")
+	}
+	v, err := ParseKeysWithMapItems([]byte(doc), "hooks", "mcpServers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := v.(Map)
+	items := m["hooks"].(Map)["PreToolUse"].(Seq)
+	if len(items) != 2 || items[1].(Map)["matcher"].(Scalar).Text != "Edit" {
+		t.Fatalf("items %#v", items)
+	}
+	inner := items[0].(Map)["hooks"].(Seq)[0].(Map)
+	if inner["type"].(Scalar).Text != "command" || inner["command"].(Scalar).Text != "./x.sh" {
+		t.Errorf("inner hook %#v", inner)
+	}
+	srv := m["mcpServers"].(Seq)
+	if srv[0].(Scalar).Text != "github" || srv[1].(Map)["local"].(Map)["command"].(Scalar).Text != "node" {
+		t.Errorf("mcpServers %#v", srv)
+	}
+	for name, bad := range map[string]string{
+		"misaligned key":  "hooks:\n  - a: 1\n     b: 2\n",
+		"flow map inside": "hooks:\n  - a: {b: 1}\n",
+		"anchor inside":   "hooks:\n  - a: &x 1\n",
+	} {
+		if _, err := ParseKeysWithMapItems([]byte(bad), "hooks"); err == nil {
+			t.Errorf("%s: parsed", name)
+		}
+	}
+}
