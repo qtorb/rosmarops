@@ -39,6 +39,11 @@ const (
 // database. A premise: one is enough for confidence medium.
 const AssumeOrchestratorAgentConfigured = graph.AssumeOrchestratorAgentConfigured
 
+// AssumeOrchestratorSettingsNotRead is the graph's assumption of a launches
+// edge from an orchestrator's factory default (Orca, BV-268): the person may
+// have changed the setting, which lives in its database. A premise.
+const AssumeOrchestratorSettingsNotRead = graph.AssumeOrchestratorSettingsNotRead
+
 // Where an orchestrator_vulnerable_version finding's version was found.
 const (
 	VersionInstalled = "installed"
@@ -47,13 +52,6 @@ const (
 
 // orchestratorFindings are the four rules' findings, sorted by id.
 func orchestratorFindings(in Input) []Finding {
-	if len(in.Paperclip.Instances) == 0 {
-		return nil
-	}
-	kb, err := knowledge.LoadPaperclip()
-	if err != nil {
-		return nil
-	}
 	nodes := map[string]graph.Node{}
 	for _, n := range in.Graph.Nodes {
 		nodes[n.ID] = n
@@ -73,18 +71,30 @@ func orchestratorFindings(in Input) []Finding {
 		default:
 			continue
 		}
+		// An observed edge (BV-268) is read from one of the orchestrator's
+		// own files: that file is where the finding is.
+		loc := orch.ConfigPath
+		if e.Certainty == graph.CertaintyObserved && e.Source != "" && !strings.HasPrefix(e.Source, "kb:") {
+			loc = e.Source
+		}
 		f := Finding{
 			ID: findingID(RuleOrchestratorSkipsApprovals, orch.ID, agent.ID), Rule: RuleOrchestratorSkipsApprovals, RuleVersion: RuleVersion,
 			Severity: sev,
 			Params:   Params{Agent: orch.Name, TargetAgent: agent.Name, Count: 1},
 			Evidence: Evidence{
-				Nodes: []string{orch.ID, agent.ID}, Edges: []string{e.ID}, Locations: []string{orch.ConfigPath},
+				Nodes: []string{orch.ID, agent.ID}, Edges: []string{e.ID}, Locations: []string{loc},
 				Assumptions: append([]string{}, e.Assumptions...),
 			},
-			Group: group(in, []string{orch.ConfigPath}), Actions: []Action{},
+			Group: group(in, []string{loc}), Actions: []Action{},
 		}
 		f.Confidence = confidence(f.Evidence.Assumptions)
 		out = append(out, f)
+	}
+	out = append(out, paseoListenFindings(in, nodes)...)
+	kb, err := knowledge.LoadPaperclip()
+	if err != nil || len(in.Paperclip.Instances) == 0 {
+		sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+		return out
 	}
 	for _, inst := range in.Paperclip.Instances {
 		orch, ok := nodes[graph.PaperclipAgentID(inst.Dir)]
@@ -219,4 +229,58 @@ func loopbackHost(host string) bool {
 		}
 	}
 	return true
+}
+
+// PaseoListen is Params.Scope of Paseo's orchestrator_network_listen: its
+// step names daemon.listen, not Paperclip's bind.
+const PaseoListen = "paseo"
+
+// paseoListenFindings: Paseo's daemon.listen beyond this computer (CTO-76
+// §1; default 127.0.0.1:6767, persisted-config.ts:385 at v0.16.2) is
+// orchestrator_network_listen, yellow: Paseo has no open sign-up. PASEO_LISTEN
+// or a command-line flag can override it, which leaves no trace on disk, so
+// it carries launch_flags_not_readable.
+func paseoListenFindings(in Input, nodes map[string]graph.Node) []Finding {
+	p := in.Orchestrators.Paseo
+	if p == nil || p.ConfigStatus != platform.MCPSourceRead || !paseoListensOnNetwork(p.Listen) {
+		return nil
+	}
+	orch, ok := nodes[graph.OrchestratorAgentID(knowledge.PaseoProduct, p.Home)]
+	if !ok {
+		return nil
+	}
+	assume := []string{AssumeLaunchFlagsNotReadable}
+	locs := []string{p.ConfigPath}
+	return []Finding{{
+		ID: findingID(RuleOrchestratorNetworkListen, orch.ID), Rule: RuleOrchestratorNetworkListen, RuleVersion: RuleVersion,
+		Severity: SeverityYellow, Confidence: confidence(assume),
+		Params:   Params{Agent: orch.Name, Scope: PaseoListen, Count: 1},
+		Evidence: Evidence{Nodes: []string{orch.ID}, Edges: []string{}, Locations: locs, Assumptions: assume},
+		Group:    group(in, locs), Actions: []Action{},
+	}}
+}
+
+// paseoListensOnNetwork reads daemon.listen as Paseo does (parseListenString,
+// bootstrap.ts:53-91 at v0.16.2): a pipe or socket path, or a bare port
+// (127.0.0.1), stays on this computer; host:port listens beyond it unless the
+// host is a loopback one. Empty is the default, 127.0.0.1:6767.
+func paseoListensOnNetwork(listen string) bool {
+	l := strings.TrimSpace(listen)
+	switch {
+	case l == "", strings.HasPrefix(l, `\\.\pipe\`), strings.HasPrefix(l, "pipe://"), strings.HasPrefix(l, "unix://"),
+		strings.HasPrefix(l, "/"), strings.HasPrefix(l, "~"):
+		return false
+	}
+	if strings.Trim(l, "0123456789") == "" {
+		return false
+	}
+	i := strings.LastIndex(l, ":")
+	if i < 0 {
+		return false // not a listen string Paseo accepts
+	}
+	host := l[:i]
+	if host == "" {
+		return false // ":6767" is 127.0.0.1
+	}
+	return !loopbackHost(host)
 }

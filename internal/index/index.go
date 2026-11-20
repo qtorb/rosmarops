@@ -19,8 +19,10 @@ import (
 // as agents present, not evaluated (decision 2026-10-26, agentes y MCP
 // nuevos, A3), with the weights of version 2. Version 4 adds
 // mcp_external_action (AP-10, BV-117/BV-121). The weights of versions 1 to 3
-// are kept for the double calculation of I7.
-const Version = 5
+// are kept for the double calculation of I7. Version 5 adds
+// computer_use_app_allowed (BV-193). Version 6 adds the four subagent rules
+// (BV-268, Albert 20-11), weight 0 before it.
+const Version = 6
 
 // K is the constant of the formula (I3).
 const K = 80.0
@@ -175,6 +177,9 @@ func GroupOf(rule string) string {
 		return GroupPackage
 	case rules.RuleOrchestratorNetworkListen, rules.RuleOrchestratorOpenSignup:
 		return GroupAlwaysOn
+	// BV-268: a Claude Code subagent's header is Claude Code's configuration.
+	case rules.RuleSubagentAllTools, rules.RuleSubagentPermissiveMode, rules.RuleSubagentHookCommand, rules.RuleSubagentInlineMCP:
+		return GroupAgentConfig
 	}
 	return ""
 }
@@ -304,6 +309,22 @@ func weightOf(f rules.Finding) float64 { return weightIn(Version, f) }
 // peso»): money 20 red / 6 asking; infrastructure and database 15; every
 // other class 8; ×1.5 when it reaches every project (radius any_project).
 func weightIn(version int, f rules.Finding) float64 {
+	// Version 6 adds the subagent rules (BV-268, Albert 20-11): a permissive
+	// mode 15, a hook command or inline MCP servers 10, every tool 0 (shown,
+	// not counted); weight 0 before it.
+	switch f.Rule {
+	case rules.RuleSubagentPermissiveMode, rules.RuleSubagentHookCommand, rules.RuleSubagentInlineMCP, rules.RuleSubagentAllTools:
+		if version < 6 {
+			return 0
+		}
+		switch f.Rule {
+		case rules.RuleSubagentPermissiveMode:
+			return 15
+		case rules.RuleSubagentAllTools:
+			return 0
+		}
+		return 10
+	}
 	// Version 5 adds computer_use_app_allowed (BV-193, CTO-22 Computer Use §6):
 	// 15 for a terminal/interpreter app or default_app_access allow (red), 6 for
 	// any other app (yellow); weight 0 before it.

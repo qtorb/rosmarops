@@ -6,7 +6,9 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Agent.** A program that can act on the computer: an AI client such as Claude Code or Cursor (`ai_client`), an MCP server it loads (`mcp_server`), an editor extension (`extension`) or a chat bot (`bot`). A node of kind `agent` in the graph.
 
-**Orchestrator.** A program that starts other agents and gives them their work, such as Paperclip. It often skips their approvals and can wake them without anyone in front. In the graph it is an `agent` of type `orchestrator`, with a `launches` edge to each installed agent it supports.
+**Orchestrator.** A program that starts other agents and gives them their work, such as Paperclip, Paseo, Claude Squad or Orca. It often skips their approvals and can wake them without anyone in front. In the graph it is an `agent` of type `orchestrator`, with a `launches` edge to each installed agent it supports. When the orchestrator writes in its own files the mode in which it starts each agent, the edge is observed; otherwise it is inferred from its defaults.
+
+**Subagent.** A helper agent of Claude Code, defined in a Markdown file in `~/.claude/agents/` or a project's `.claude/agents/`. RosmarOps reads only its header: which tools it may use, its permission mode, its hooks and the MCP servers it defines. One in the user's folder runs in every project without the folder-trust question.
 
 **Capability.** Something an agent can do: run shell commands, read files, write files, use the network, call an MCP tool, run in a permission mode, or operate an app. Each capability has an approval (`allow`, `ask`, `deny` or `unknown`) and a basis: set in a file (`configured`), the product's default (`product_default`), or answered by the person (`declared`).
 

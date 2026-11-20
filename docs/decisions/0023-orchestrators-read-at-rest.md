@@ -1,0 +1,78 @@
+# 0023. Paseo, Claude Squad, Orca and Claude Code's subagents, read at rest
+
+Date: 2026-11-20
+
+## Context
+
+ADR 0022 added the `orchestrator` agent type and the `launches` edge for Paperclip. CTO-76 read four more orchestrators and Claude Code's subagents:
+
+- **Paseo** and **Claude Squad** keep, in plain JSON files, the mode in which they start each agent. For them RosmarOps can read whether an agent's approvals are skipped. With Paperclip it could only infer that.
+- **Orca** keeps that setting in its SQLite database, which RosmarOps does not open. Its factory default, `full-access`, starts Claude Code, Codex, Gemini CLI, Cursor, GitHub Copilot and Grok Build skipping their approvals. Orca also writes hooks into those agents' configuration.
+- **Claude Code's subagents** are Markdown files with a YAML header. The header can give them every tool, a permissive mode, hooks and their own MCP servers.
+
+`launches` could only be inferred. That was right for Paperclip, but it would understate what Paseo and Claude Squad show in their own files.
+
+## Decision
+
+Signed by Albert on 2026-11-20 at 07:20 (BV-268). It is an addition inside `graph.v2`, version 2.
+
+- **`launches` can be observed.** It is observed with `basis: configured` when the launched agent's mode is read at rest from one of the orchestrator's own files. Its source is then that file. Otherwise it is inferred with `basis: product_default`, as in ADR 0022. The schema accepts no other pairing.
+- **The knowledge base** `internal/knowledge/orchestrators.json` covers Paseo v0.16.2, Claude Squad v1.0.20 and Orca v1.4.266. For each it holds:
+  - which agents it starts;
+  - in which of its modes it skips their approvals;
+  - whether they get its environment;
+  - Paseo's OpenAI keys, known by where they are.
+
+  Every fact cites the release tag and the date it was checked.
+- **Paseo** (`PASEO_HOME` or `~/.paseo`):
+  - **What it reads:** `config.json` (`daemon.listen`, and which `apiKey` fields hold a value), each agent's provider and effective mode, each schedule's status and the mode of the agent it starts, and the projects' roots.
+  - **Approvals:** these modes skip them: Claude's `bypassPermissions`, Codex's `full-access` and Copilot's `allow-all`.
+  - **Schedules:** an active schedule wakes Paseo.
+  - **Keys:** its OpenAI keys are credentials identified by their path.
+  - **Never opened:** `daemon-keypair.json`, `local-credential` and `push-tokens.json`. The value of `launchEnv` is never kept.
+- **Claude Squad** (`~/.claude-squad`):
+  - **What it reads:** `auto_yes`, the default program and the profiles' programs. Of `state.json`, only each session's program and `auto_yes`, never `diff_stats`. It also sees whether `daemon.pid` exists.
+  - **What `auto_yes` covers:** it answers Claude Code's and Gemini CLI's prompts, not Codex's.
+- **Orca:**
+  - **Presence:** its `userData` folder (`Orca`) or `~/.orca`.
+  - **Approvals:** each `launches` edge is inferred from its factory default, with the assumption `orchestrator_settings_not_read`. Its text says the finding assumes Orca's factory setting, because Orca keeps the person's choice in its database.
+  - **Hooks:** its hooks in Claude Code's, Gemini CLI's, Codex's or Cursor's configuration are `writes_config_of` edges.
+  - **Never opened:** `profile-state.db` and the files of `~/.orca`.
+- **Claude Code's subagents:** `<claude config folder>/agents/*.md` and each repository's `.claude/agents/*.md`. Only the header is read, up to the line that closes it. Of it RosmarOps keeps:
+  - whether `tools` is written;
+  - `permissionMode`;
+  - how many hooks are of type `command`;
+  - the names of the MCP servers defined inline.
+
+  The body is never read.
+- **The rules.** `orchestrator_skips_approvals` now reads the `launches` edges of every orchestrator:
+  - an observed edge is high confidence, and its finding points at the file that set the mode;
+  - Orca's is medium confidence, because its assumption is a premise.
+
+  `cred_readable`, `acts_without_you` and `foreign_agent_config_writable` apply as for any agent.
+- **Paseo listening beyond the computer.** `orchestrator_network_listen` applies to Paseo when `daemon.listen` is a `host:port` whose host is not a loopback one. It is yellow: Paseo has no open sign-up. It carries `launch_flags_not_readable`, because `PASEO_LISTEN` or a command-line flag can override the file. Its step names `daemon.listen` and its default, `127.0.0.1:6767`. A bare `127.0.0.1` would not do: Paseo refuses a host without a port (`bootstrap.ts:53-91` at v0.16.2).
+- **Four subagent rules** (`report.v2`, signed 2026-11-20). Each is one signed sentence, on the Claude Code agent, in the `agent_config` group:
+
+  | Rule | Severity | Weight |
+  |---|---|---|
+  | `subagent_permissive_mode` | red with `bypassPermissions` or `dontAsk`, yellow with `acceptEdits` or `auto` | 15 |
+  | `subagent_hook_command` | yellow | 10 |
+  | `subagent_inline_mcp` | yellow | 10 |
+  | `subagent_all_tools` | yellow | 0: shown, not counted |
+
+  The weights enter in index version 6; before it they weigh 0, as each earlier version did with its new rules. When the file is in the user's folder, the sentence gets a second line: it runs in every project without the folder-trust question. The step is the generic one, `html.fix.none`.
+- **Their parameters reuse the report's fields** (option a, as BV-264 did), so there is no schema change:
+  - `target_agent` is the subagent's name: the header's `name`, or else the file name without `.md`, cut to 60 characters as session-check does;
+  - `scope` is the mode;
+  - `resource_type: user` marks a subagent in the user's folder.
+
+  Like the orchestrator rules, they are drawn again on every review and are not kept in the findings memory.
+
+## Consequences
+
+- A computer with Paseo or Claude Squad shows which agents they run without asking, from their own files. A computer with Orca shows it from its default, saying it is the default.
+- **Claude Squad and new MCP servers: not reported** (confirmed by the owner on 2026-11-20). CTO-76 reported that Claude Squad answers Claude's «new MCP server» prompt on its own, even with `auto_yes` off. The function that did it, `CheckAndHandleTrustPrompt`, is still in its code, but nothing calls it since `a4ab698` (2026-03-28), in v1.0.20 and in later commits alike.
+- **Pending, outside this change:** Orca answers Claude's folder-trust question for its own worktrees (`hasTrustDialogAccepted: true` in `~/.claude.json`, on by default; `claude-folder-trust-file.ts:78-99` at v1.4.266). It needs its own brief and text.
+- **The sources are release tags.** CTO-76 cites commits that are not releases (Paseo `b3d860c`, Orca `f20eec9a`) or are one commit after one (Claude Squad `070eb93`). The knowledge base cites the release tags instead; the files it relies on are the same in both.
+- A computer whose Claude Code has subagents shows what they can do without asking. A permissive mode, a hook command or inline MCP servers lower Claude Code's score; a subagent that lists no tools is shown and does not lower it.
+- Paradev and Dev Containers (CTO-76 §7, priority 2) fit the same model and are not in this change.

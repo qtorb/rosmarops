@@ -1,0 +1,183 @@
+{
+  "version": "2026-11-20",
+  "products": [
+    {
+      "product": "paseo",
+      "release": "v0.16.2",
+      "source_commit": "2ee30f416",
+      "launches": [
+        {
+          "id": "claude",
+          "agent": "claude-code",
+          "skips_modes": [
+            "bypassPermissions"
+          ],
+          "env_passthrough": true,
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/protocol/src/provider-manifest.ts#L68-L72",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "codex",
+          "agent": "codex",
+          "skips_modes": [
+            "full-access"
+          ],
+          "env_passthrough": true,
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/server/src/server/agent/providers/codex-app-server-agent.ts#L364-L367",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "copilot",
+          "agent": "github-copilot",
+          "skips_modes": [
+            "allow-all"
+          ],
+          "env_passthrough": true,
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/protocol/src/provider-manifest.ts#L119-L124",
+          "verified": "2026-11-20"
+        }
+      ],
+      "path_secrets": [
+        {
+          "id": "openai_api_key",
+          "file": "config.json",
+          "pointer": "/features/dictation/stt/apiKey",
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/server/src/server/persisted-config.ts#L94-L96",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "openai_api_key_voice_stt",
+          "file": "config.json",
+          "pointer": "/features/voiceMode/stt/apiKey",
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/server/src/server/persisted-config.ts#L94-L96",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "openai_api_key_voice_tts",
+          "file": "config.json",
+          "pointer": "/features/voiceMode/tts/apiKey",
+          "source_url": "https://github.com/getpaseo/paseo/blob/v0.16.2/packages/server/src/server/persisted-config.ts#L94-L96",
+          "verified": "2026-11-20"
+        }
+      ],
+      "defaults": []
+    },
+    {
+      "product": "claude-squad",
+      "release": "v1.0.20",
+      "source_commit": "ce1ffb439",
+      "launches": [
+        {
+          "id": "claude",
+          "agent": "claude-code",
+          "skips_modes": [
+            "auto_yes"
+          ],
+          "env_passthrough": true,
+          "source_url": "https://github.com/smtg-ai/claude-squad/blob/v1.0.20/session/tmux/tmux.go#L253-L255",
+          "verified": "2026-11-20",
+          "program_match": "exact"
+        },
+        {
+          "id": "gemini",
+          "agent": "gemini-cli",
+          "skips_modes": [
+            "auto_yes"
+          ],
+          "env_passthrough": true,
+          "source_url": "https://github.com/smtg-ai/claude-squad/blob/v1.0.20/session/tmux/tmux.go#L258-L259",
+          "verified": "2026-11-20",
+          "program_match": "prefix"
+        },
+        {
+          "id": "codex",
+          "agent": "codex",
+          "skips_modes": [],
+          "env_passthrough": true,
+          "source_url": "https://github.com/smtg-ai/claude-squad/blob/v1.0.20/session/tmux/tmux.go#L102",
+          "verified": "2026-11-20",
+          "program_match": "prefix"
+        }
+      ],
+      "path_secrets": [],
+      "defaults": [
+        {
+          "id": "auto_yes_gate",
+          "value": "auto_yes",
+          "source_url": "https://github.com/smtg-ai/claude-squad/blob/v1.0.20/session/instance.go#L357-L362",
+          "verified": "2026-11-20"
+        }
+      ]
+    },
+    {
+      "product": "orca",
+      "release": "v1.4.266",
+      "source_commit": "903c91e80f",
+      "launches": [
+        {
+          "id": "claude",
+          "agent": "claude-code",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L13",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "codex",
+          "agent": "codex",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L17",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "gemini",
+          "agent": "gemini-cli",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L20",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "cursor",
+          "agent": "cursor",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L30",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "copilot",
+          "agent": "github-copilot",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L40",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "grok",
+          "agent": "grok-build",
+          "default_override": "skips_all",
+          "env_passthrough": true,
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/agent-launch/permissions/tui-agent-permissions.ts#L41",
+          "verified": "2026-11-20"
+        }
+      ],
+      "defaults": [
+        {
+          "id": "agent_permission_default",
+          "value": "full-access",
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/shared/settings/default-global-settings.ts#L268",
+          "verified": "2026-11-20"
+        },
+        {
+          "id": "env_passthrough",
+          "value": "true",
+          "source_url": "https://github.com/stablyai/orca/blob/v1.4.266/src/main/runtime/terminal/launch/terminal-create.ts#L107",
+          "verified": "2026-11-20"
+        }
+      ],
+      "path_secrets": []
+    }
+  ]
+}

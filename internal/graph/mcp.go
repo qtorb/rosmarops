@@ -41,8 +41,11 @@ var clientDisplayNames = map[string]string{
 	agentdirs.CopilotJetBrains: "GitHub Copilot (JetBrains)",
 	agentdirs.Hermes:           "Hermes Agent",
 	agentdirs.ClaudeDesktop:    "Claude Desktop",
-	agentdirs.N8N:              "n8n",       // BV-175: detected by its user folder
-	"paperclip":                "Paperclip", // BV-264: orchestrator, not an ai_client
+	agentdirs.N8N:              "n8n",          // BV-175: detected by its user folder
+	"paperclip":                "Paperclip",    // BV-264: orchestrator, not an ai_client
+	"paseo":                    "Paseo",        // BV-268: orchestrator
+	"claude-squad":             "Claude Squad", // BV-268: orchestrator
+	"orca":                     "Orca",         // BV-268: orchestrator
 }
 
 // clientDisplayName returns the display name for a client product, never

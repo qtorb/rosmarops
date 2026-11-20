@@ -17,7 +17,7 @@ func evaluate(in V2Input, g graph.Graph, fams map[string]string) rules.Result {
 		Committed: committedOf(in.V1.Findings), Rotated: in.Rotated, Fixtures: in.Fixtures,
 		Dismissed: in.Dismissed, Accepted: in.Accepted,
 		ConfigFile: in.ConfigFile, Now: in.GeneratedAt, ClaudeSettings: in.ClaudeSettings, Home: in.Home,
-		Hermes: in.Hermes, Paperclip: in.Paperclip, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Antigravity: in.Antigravity,
+		Hermes: in.Hermes, Paperclip: in.Paperclip, Orchestrators: in.Orchestrators, Codex: in.Codex, Grok: in.Grok, Cline: in.Cline, Antigravity: in.Antigravity,
 		Declared: in.Declared, GrokBot: in.GrokBot, Cursor: in.Cursor, DeclaredAt: in.DeclaredAt,
 		WSL: in.Environment != nil && in.Environment.Kind == hostenv.KindWSL,
 	})

@@ -150,3 +150,49 @@ func TestLoopbackHost(t *testing.T) {
 		}
 	}
 }
+
+// BV-268: the approvals rule reads every orchestrator's launches edges, with
+// or without a Paperclip. An observed edge is high confidence and its
+// finding points at the file that set the mode; Orca's factory default is a
+// premise.
+func TestOrchestratorSkipsApprovalsWithoutPaperclip(t *testing.T) {
+	paseo := graph.OrchestratorAgentID("paseo", "/home/u/.paseo")
+	orca := graph.OrchestratorAgentID("orca", "/home/u/.config/Orca")
+	g := graph.Graph{
+		Nodes: []graph.Node{
+			{ID: paseo, Kind: graph.KindAgent, Type: graph.AgentOrchestrator, Name: "Paseo", Platform: "paseo", ConfigPath: "/home/u/.paseo"},
+			{ID: orca, Kind: graph.KindAgent, Type: graph.AgentOrchestrator, Name: "Orca", Platform: "orca", ConfigPath: "/home/u/.config/Orca"},
+			{ID: "agent_client_claude", Kind: graph.KindAgent, Type: graph.AgentAIClient, Name: "Claude Code"},
+		},
+		Edges: []graph.Edge{
+			{
+				ID: "edge_launches_paseo", Type: graph.EdgeLaunches, From: paseo, To: "agent_client_claude", Source: "/home/u/.paseo/agents/p/a.json",
+				Certainty: graph.CertaintyObserved, ApprovalOverride: graph.ApprovalSkipsAll, Basis: "configured",
+			},
+			{
+				ID: "edge_launches_orca", Type: graph.EdgeLaunches, From: orca, To: "agent_client_claude", Source: "kb:orca/claude@2026-11-20",
+				Certainty: graph.CertaintyInferred, ApprovalOverride: graph.ApprovalSkipsAll, Basis: "product_default",
+				Assumptions: []string{AssumeOrchestratorSettingsNotRead},
+			},
+		},
+	}
+	fs := orchestratorFindings(Input{Graph: g})
+	if len(fs) != 2 {
+		t.Fatalf("findings %+v", fs)
+	}
+	for _, f := range fs {
+		if f.Rule != RuleOrchestratorSkipsApprovals || f.Severity != SeverityRed {
+			t.Errorf("%+v", f)
+		}
+		switch f.Params.Agent {
+		case "Paseo":
+			if f.Confidence != ConfidenceHigh || f.Evidence.Locations[0] != "/home/u/.paseo/agents/p/a.json" {
+				t.Errorf("Paseo: confidence %s, locations %v", f.Confidence, f.Evidence.Locations)
+			}
+		case "Orca":
+			if f.Confidence != ConfidenceMedium || f.Evidence.Locations[0] != "/home/u/.config/Orca" {
+				t.Errorf("Orca: confidence %s, locations %v", f.Confidence, f.Evidence.Locations)
+			}
+		}
+	}
+}
