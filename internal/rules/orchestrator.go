@@ -39,6 +39,11 @@ const (
 // database. A premise: one is enough for confidence medium.
 const AssumeOrchestratorAgentConfigured = graph.AssumeOrchestratorAgentConfigured
 
+// AssumeOrchestratorSettingsNotRead is the graph's assumption of a launches
+// edge from an orchestrator's factory default (Orca, BV-268): the person may
+// have changed the setting, which lives in its database. A premise.
+const AssumeOrchestratorSettingsNotRead = graph.AssumeOrchestratorSettingsNotRead
+
 // Where an orchestrator_vulnerable_version finding's version was found.
 const (
 	VersionInstalled = "installed"
@@ -47,13 +52,6 @@ const (
 
 // orchestratorFindings are the four rules' findings, sorted by id.
 func orchestratorFindings(in Input) []Finding {
-	if len(in.Paperclip.Instances) == 0 {
-		return nil
-	}
-	kb, err := knowledge.LoadPaperclip()
-	if err != nil {
-		return nil
-	}
 	nodes := map[string]graph.Node{}
 	for _, n := range in.Graph.Nodes {
 		nodes[n.ID] = n
@@ -73,18 +71,29 @@ func orchestratorFindings(in Input) []Finding {
 		default:
 			continue
 		}
+		// An observed edge (BV-268) is read from one of the orchestrator's
+		// own files: that file is where the finding is.
+		loc := orch.ConfigPath
+		if e.Certainty == graph.CertaintyObserved && e.Source != "" && !strings.HasPrefix(e.Source, "kb:") {
+			loc = e.Source
+		}
 		f := Finding{
 			ID: findingID(RuleOrchestratorSkipsApprovals, orch.ID, agent.ID), Rule: RuleOrchestratorSkipsApprovals, RuleVersion: RuleVersion,
 			Severity: sev,
 			Params:   Params{Agent: orch.Name, TargetAgent: agent.Name, Count: 1},
 			Evidence: Evidence{
-				Nodes: []string{orch.ID, agent.ID}, Edges: []string{e.ID}, Locations: []string{orch.ConfigPath},
+				Nodes: []string{orch.ID, agent.ID}, Edges: []string{e.ID}, Locations: []string{loc},
 				Assumptions: append([]string{}, e.Assumptions...),
 			},
-			Group: group(in, []string{orch.ConfigPath}), Actions: []Action{},
+			Group: group(in, []string{loc}), Actions: []Action{},
 		}
 		f.Confidence = confidence(f.Evidence.Assumptions)
 		out = append(out, f)
+	}
+	kb, err := knowledge.LoadPaperclip()
+	if err != nil || len(in.Paperclip.Instances) == 0 {
+		sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+		return out
 	}
 	for _, inst := range in.Paperclip.Instances {
 		orch, ok := nodes[graph.PaperclipAgentID(inst.Dir)]

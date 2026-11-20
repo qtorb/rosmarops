@@ -133,6 +133,7 @@ var AllAssumptions = []string{
 	AssumeLaunchStateUnknown, AssumeSandboxAutoAllowByVersion,
 	AssumeWSLWindowsDriveReadable,
 	AssumeOrchestratorAgentConfigured,
+	AssumeOrchestratorSettingsNotRead,
 }
 
 // premiseAssumptions say the way depends on a model or a mode RosmarOps
@@ -143,6 +144,7 @@ var premiseAssumptions = map[string]bool{
 	// BV-264: which agents an orchestrator has configured is only in its
 	// database.
 	AssumeOrchestratorAgentConfigured: true,
+	AssumeOrchestratorSettingsNotRead: true,
 	graph.AssumeAutoClassifierPermits: true,
 	graph.AssumeAutoModeAvailable:     true,
 	graph.AssumeUIModeChoiceUnknown:   true,

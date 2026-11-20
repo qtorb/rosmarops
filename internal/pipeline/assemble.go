@@ -61,6 +61,9 @@ type Input struct {
 	AlwaysOn platform.AlwaysOnScan
 	// Paperclip is the Paperclip orchestrator at rest (BV-264, CTO-75).
 	Paperclip platform.PaperclipScan
+	// Orchestrators are Paseo, Claude Squad, Orca and Claude Code's
+	// subagents at rest (BV-268, CTO-76).
+	Orchestrators platform.OrchestratorScan
 
 	// Crosses.
 	Matcher    *intel.Matcher
@@ -171,6 +174,14 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 			return graph.Fragment{}, graph.PermissionStats{}, err
 		}
 		frag = graph.AddPaperclip(frag, in.Paperclip, kb, in.Home, in.Salt, in.Now)
+	}
+	// BV-268: the other orchestrators, last for the same reason.
+	if o := in.Orchestrators; o.Paseo != nil || o.ClaudeSquad != nil || o.Orca != nil {
+		kb, err := knowledge.LoadOrchestrators()
+		if err != nil {
+			return graph.Fragment{}, graph.PermissionStats{}, err
+		}
+		frag = graph.AddOrchestrators(frag, o, kb, in.Salt, in.Now)
 	}
 	return frag, stats, nil
 }

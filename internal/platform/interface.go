@@ -697,6 +697,13 @@ type Platform interface {
 	// exist, their permissions and their owner.
 	ListPaperclip(ctx context.Context, repoRoots []string) (PaperclipScan, error)
 
+	// ListOrchestrators reads, at rest, the orchestrators of CTO-76 (Paseo,
+	// Claude Squad, Orca) and the headers of Claude Code's subagents in the
+	// user's folder and in repoRoots (BV-268). Paseo's key files, Orca's
+	// database and the files of ~/.orca are never opened; a subagent's body
+	// is never read.
+	ListOrchestrators(ctx context.Context, repoRoots []string) (OrchestratorScan, error)
+
 	// ListCodex reads OpenAI Codex's TOML config layers (BV-140, CTO-16 §2):
 	// the user config, the profiles, each repository's .codex/config.toml (in
 	// force only when the user config trusts it) and the system requirements.
