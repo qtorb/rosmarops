@@ -94,13 +94,42 @@ class Journey:
         return 1 if self.failed() else 0
 
     # --- the test computer --------------------------------------------------
-    def make_home(self, label, medium=0):
+    def make_home(self, label, medium=0, paperclip=False):
         home = os.path.join(self.work, label)
         manifest = os.path.join(self.work, label + "-manifest.json")
-        subprocess.run([self.tool("makehome"), "-home", home, "-manifest", manifest, "-fixture",
-                        os.path.join(ROOT, "testdata", "sample-home"), "-medium", str(medium), "-large", "0"],
-                       check=True, stdout=subprocess.DEVNULL)
+        cmd = [self.tool("makehome"), "-home", home, "-manifest", manifest, "-fixture",
+               os.path.join(ROOT, "testdata", "sample-home"), "-medium", str(medium), "-large", "0"]
+        if paperclip:
+            cmd.append("-paperclip")
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
         return home
+
+    def paperclip_checks(self, rep, label):
+        """R1's fake Paperclip (makehome -paperclip): the report has its
+        orchestrator findings, its secrets are credentials known by their
+        path, and none of its fake secret values is in any output."""
+        if rep is None:
+            return
+        try:
+            with open(os.path.join(rep, "data", "report.v2.json"), encoding="utf-8") as f:
+                found = {x.get("rule") for x in json.load(f).get("findings", [])}
+        except (OSError, ValueError) as e:
+            self.check(f"{label}: Paperclip findings", False, f"report.v2.json not read: {e}")
+            return
+        for rule in ("orchestrator_skips_approvals", "orchestrator_vulnerable_version"):
+            self.check(f"{label}: Paperclip: {rule}", rule in found, "" if rule in found else f"rules found: {sorted(found)}")
+        leaked = []
+        for root, _, files in os.walk(rep):
+            for name in files:
+                try:
+                    with open(os.path.join(root, name), encoding="utf-8", errors="replace") as f:
+                        text = f.read()
+                except OSError:
+                    continue
+                for value in PAPERCLIP_FAKE_SECRETS:
+                    if value in text:
+                        leaked.append(name)
+        self.check(f"{label}: Paperclip: no secret value in the reports", not leaked, ", ".join(sorted(set(leaked))))
 
     def install(self, home, src):
         """The program as a person keeps it: downloaded into their own
@@ -319,13 +348,14 @@ def r1(args):
     legs = ["es", "en"] if LOCALE_LANG else ["en"]
     for lang in legs:
         label = f"r1-{lang}"
-        home = j.make_home(label)
+        home = j.make_home(label, paperclip=True)
         if not args.msix_cand:
             binary = j.install(home, args.bin)
         ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=R1_WINDOWS)
         j.check(f"{label}: no arguments ends without an unplanned question", ok, why)
         j.window_checks(home, os.path.join(j.out, label + ".txt"), label, R1_WINDOWS)
         rep = j.review_checks(home, lang, os.path.join(j.out, label + ".txt"), label)
+        j.paperclip_checks(rep, label)
         if SYSTEM == "linux":
             j.snap_gate(label)
         if rep:
@@ -347,6 +377,10 @@ def r1(args):
 # window opens and answers itself («Not now», nothing saved), and the window's
 # «shown» line in the run's log proves it opened. A person's click is not
 # tested here.
+# The fake secret values of makehome -paperclip (BV-264): they must never be
+# read, so never in any output.
+PAPERCLIP_FAKE_SECRETS = ("FAKEpaperclipMASTERkeyFORjourneysONLY0000", "FAKEpaperclipJWTsecretFORjourneysONLY0000")
+
 # R1, the first review: every finding is new, so after the report the double
 # click offers to connect and then the findings window.
 R1_WINDOWS = ("connect", "findings")

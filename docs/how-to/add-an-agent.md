@@ -121,6 +121,18 @@ Add the agent, with a realistic configuration, to the machines the cross-agent t
 
 The factory score of a new agent is a published figure. The owner signs it before you pin it in `r2Cases`.
 
+## An orchestrator
+
+A program that starts other agents (Paperclip, ADR 0022) is not an `ai_client`. It is an `agent` of type `orchestrator`:
+
+1. **Its knowledge base:** a JSON of its own in `internal/knowledge/` (as `paperclip.json`), with a source URL at a pinned commit and a date for every fact. Record which agents it starts and whether it skips their approvals, which of its files hold secrets, and its defaults.
+2. **Its reader** in `adapters/windows/`: only the configuration that says how it is exposed. Its database, secret stores and logs are never opened. Use `os.Lstat` for their existence, permissions and owner, and add their reader functions to the never-opens check of `tests/trust/paperclip_test.go`.
+3. **Its graph builder,** merged last in `pipeline.fragment`:
+   - a `launches` edge to each installed agent it supports, inferred, with `orchestrator_agent_configured`;
+   - its secrets as credentials with `identified_by: path` (`graph.PathFingerprint`);
+   - its port as an `inbound_channel`.
+4. **The rules** in `internal/rules/orchestrator.go` read the `launches` edges and its scan.
+
 ## Tests that must pass
 
 Run what CI runs (`.github/workflows/ci.yml`):

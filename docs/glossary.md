@@ -6,9 +6,11 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Agent.** A program that can act on the computer: an AI client such as Claude Code or Cursor (`ai_client`), an MCP server it loads (`mcp_server`), an editor extension (`extension`) or a chat bot (`bot`). A node of kind `agent` in the graph.
 
+**Orchestrator.** A program that starts other agents and gives them their work, such as Paperclip. It often skips their approvals and can wake them without anyone in front. In the graph it is an `agent` of type `orchestrator`, with a `launches` edge to each installed agent it supports.
+
 **Capability.** Something an agent can do: run shell commands, read files, write files, use the network, call an MCP tool, run in a permission mode, or operate an app. Each capability has an approval (`allow`, `ask`, `deny` or `unknown`) and a basis: set in a file (`configured`), the product's default (`product_default`), or answered by the person (`declared`).
 
-**Credential.** A secret an agent can reach, such as an API key, a token or a private key. The graph keeps only its metadata and a salted fingerprint, never the value.
+**Credential.** A secret an agent can reach, such as an API key, a token or a private key. The graph keeps only its metadata and a salted fingerprint, never the value. A credential identified by its path is known by where it is, without its content ever being read.
 
 **Resource.** Something an agent can reach or change: a file, a database, an external service, another agent's configuration, instructions or executable, a git repository, an inbound channel, a schedule, or an agent's memory.
 
