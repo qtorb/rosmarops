@@ -351,5 +351,9 @@
   "findings.when.orchestrator_network_listen": "If only devices you trust can reach it.",
   "findings.when.orchestrator_open_signup": "If no one but you can reach it.",
   "unknown.orchestrator_agent_configured": "Assumes you have set up in {agent} an agent that uses it. {agent} keeps its agents in its database, which RosmarOps does not open, so it can't check.",
-  "unknown.orchestrator_settings_not_read": "Assumes {agent} launches agents with its factory setting, which gives them full access. {agent} keeps your choice in its database, which RosmarOps does not open."
+  "unknown.orchestrator_settings_not_read": "Assumes {agent} launches agents with its factory setting, which gives them full access. {agent} keeps your choice in its database, which RosmarOps does not open.",
+  "findings.when.subagent_all_tools": "If you wrote this subagent or trust whoever did.",
+  "findings.when.subagent_permissive_mode": "If you wrote this subagent or trust whoever did.",
+  "findings.when.subagent_hook_command": "If you wrote this subagent or trust whoever did.",
+  "findings.when.subagent_inline_mcp": "If you wrote this subagent or trust whoever did."
 }

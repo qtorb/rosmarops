@@ -53,6 +53,7 @@ var AllRules = []string{
 	RuleProjectHookRunsRepoScript, RuleMCPExternalAction,
 	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed, RuleActsWithoutYou,
 	RuleOrchestratorSkipsApprovals, RuleOrchestratorVulnerableVersion, RuleOrchestratorNetworkListen, RuleOrchestratorOpenSignup,
+	RuleSubagentAllTools, RuleSubagentPermissiveMode, RuleSubagentHookCommand, RuleSubagentInlineMCP,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -293,6 +294,10 @@ type Input struct {
 	// orchestrator rules read its version, listen address and sign-up setting
 	// from it. Optional.
 	Paperclip platform.PaperclipScan
+	// Orchestrators are Paseo, Claude Squad, Orca and Claude Code's
+	// subagents at rest (BV-268): Paseo's listen address and the subagents'
+	// headers, which the graph does not carry.
+	Orchestrators platform.OrchestratorScan
 
 	// Codex is the OpenAI Codex scan (BV-140): the overview reads each agent's
 	// layers from it to know when its commands rest on rules it does not parse
@@ -552,6 +557,7 @@ func Evaluate(in Input) Result {
 	// BV-264: the orchestrator rules read the graph's launches edges and the
 	// Paperclip scan; no other rule depends on them.
 	res.Findings = append(res.Findings, orchestratorFindings(in)...)
+	res.Findings = append(res.Findings, subagentFindings(in)...) // BV-268
 	return res
 }
 

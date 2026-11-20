@@ -370,7 +370,11 @@
             "orchestrator_skips_approvals",
             "orchestrator_vulnerable_version",
             "orchestrator_network_listen",
-            "orchestrator_open_signup"
+            "orchestrator_open_signup",
+            "subagent_all_tools",
+            "subagent_permissive_mode",
+            "subagent_hook_command",
+            "subagent_inline_mcp"
           ]
         },
         "rule_version": {

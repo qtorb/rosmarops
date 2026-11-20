@@ -71,7 +71,7 @@ func orchHome(t *testing.T) string {
 	put(".claude.json", `{"mcpServers": {}}`)
 	put(".claude/settings.json", `{"permissions": {"allow": ["Bash"]},"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\"${HOME-}/.orca/agent-hooks/claude-hook.sh\""}]}]}}`)
 	put(".claude/agents/helper.md", "---\nname: helper\npermissionMode: bypassPermissions\n---\nUse "+orchSecrets["subagent body"]+" and "+orchSecrets["subagent body token"]+"\n")
-	put(".paseo/config.json", `{"version":1,"daemon":{"listen":"127.0.0.1:6767"},"features":{"dictation":{"stt":{"provider":"openai","apiKey":"`+orchSecrets["paseo apiKey"]+`"}}}}`)
+	put(".paseo/config.json", `{"version":1,"daemon":{"listen":"0.0.0.0:6767"},"features":{"dictation":{"stt":{"provider":"openai","apiKey":"`+orchSecrets["paseo apiKey"]+`"}}}}`)
 	put(".paseo/agents/home-oc-repo/a1.json", `{"id":"a1","provider":"claude","cwd":"/home/oc/repo","lastModeId":"bypassPermissions","launchEnv":{"GITHUB_TOKEN":"`+orchSecrets["paseo launchEnv"]+`"}}`)
 	put(".paseo/schedules/s1.json", `{"id":"s1","prompt":"x","cadence":{"type":"cron","expression":"0 9 * * *"},"target":{"type":"new-agent","config":{"provider":"claude","modeId":"bypassPermissions"}},"status":"active"}`)
 	put(".paseo/daemon-keypair.json", `{"secretKey":"`+orchSecrets["paseo keypair"]+`"}`)
@@ -119,6 +119,7 @@ func orchRun(t *testing.T, home string) (graph.Graph, []byte, report.V2, platfor
 	v, _ := report.BuildV2(report.V2Input{
 		Graph: &res.Graph, GraphSHA256: strings.Repeat("0", 64), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
 		V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: now, ClaudeSettings: &settings, Home: home, Salt: salt,
+		Orchestrators: orch,
 	})
 	return res.Graph, res.Encoded, v, orch
 }
@@ -173,6 +174,23 @@ func TestOrchestratorSecretsNeverReachOutputs(t *testing.T) {
 		outputs["ai "+lang] = report.RenderAIExport(v, cat, home)
 	}
 	outputs["log"] = logBuf.String()
+	for lang, want := range map[string][]string{
+		"en": {
+			"The subagent helper is set to work without asking you (bypassPermissions). It is in your user folder, so it runs in every project without the folder-trust question.",
+			"The subagent helper can use every tool Claude Code has, because it doesn&#39;t list which ones.",
+			"In Paseo&#39;s config.json, set daemon.listen back to 127.0.0.1:6767.",
+		},
+		"es": {
+			"El subagente helper está configurado para trabajar sin preguntarte (bypassPermissions). Está en tu carpeta de usuario, así que funciona en todos los proyectos sin la pregunta de confianza de la carpeta.",
+			"En el config.json de Paseo, vuelve a poner daemon.listen en 127.0.0.1:6767.",
+		},
+	} {
+		for _, w := range want {
+			if !strings.Contains(outputs["html "+lang], w) {
+				t.Errorf("html %s lacks %q", lang, w)
+			}
+		}
+	}
 	if !strings.Contains(outputs["html en"], "Assumes Orca launches agents with its factory setting") ||
 		!strings.Contains(outputs["html es"], "Supone que Orca lanza los agentes con su ajuste de fábrica") {
 		t.Error("the Orca finding does not show unknown.orchestrator_settings_not_read with {agent} = Orca")

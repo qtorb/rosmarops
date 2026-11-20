@@ -50,6 +50,23 @@ Signed by Albert on 2026-11-20 at 07:20 (BV-268). It is an addition inside `grap
   - Orca's is medium confidence, because its assumption is a premise.
 
   `cred_readable`, `acts_without_you` and `foreign_agent_config_writable` apply as for any agent.
+- **Paseo listening beyond the computer.** `orchestrator_network_listen` applies to Paseo when `daemon.listen` is a `host:port` whose host is not a loopback one. It is yellow: Paseo has no open sign-up. It carries `launch_flags_not_readable`, because `PASEO_LISTEN` or a command-line flag can override the file. Its step names `daemon.listen` and its default, `127.0.0.1:6767`. A bare `127.0.0.1` would not do: Paseo refuses a host without a port (`bootstrap.ts:53-91` at v0.16.2).
+- **Four subagent rules** (`report.v2`, signed 2026-11-20). Each is one signed sentence, on the Claude Code agent, in the `agent_config` group:
+
+  | Rule | Severity | Weight |
+  |---|---|---|
+  | `subagent_permissive_mode` | red with `bypassPermissions` or `dontAsk`, yellow with `acceptEdits` or `auto` | 15 |
+  | `subagent_hook_command` | yellow | 10 |
+  | `subagent_inline_mcp` | yellow | 10 |
+  | `subagent_all_tools` | yellow | 0: shown, not counted |
+
+  The weights enter in index version 6; before it they weigh 0, as each earlier version did with its new rules. When the file is in the user's folder, the sentence gets a second line: it runs in every project without the folder-trust question. The step is the generic one, `html.fix.none`.
+- **Their parameters reuse the report's fields** (option a, as BV-264 did), so there is no schema change:
+  - `target_agent` is the subagent's name: the header's `name`, or else the file name without `.md`, cut to 60 characters as session-check does;
+  - `scope` is the mode;
+  - `resource_type: user` marks a subagent in the user's folder.
+
+  Like the orchestrator rules, they are drawn again on every review and are not kept in the findings memory.
 
 ## Consequences
 
@@ -57,4 +74,5 @@ Signed by Albert on 2026-11-20 at 07:20 (BV-268). It is an addition inside `grap
 - **Claude Squad and new MCP servers: not reported** (confirmed by the owner on 2026-11-20). CTO-76 reported that Claude Squad answers Claude's «new MCP server» prompt on its own, even with `auto_yes` off. The function that did it, `CheckAndHandleTrustPrompt`, is still in its code, but nothing calls it since `a4ab698` (2026-03-28), in v1.0.20 and in later commits alike.
 - **Pending, outside this change:** Orca answers Claude's folder-trust question for its own worktrees (`hasTrustDialogAccepted: true` in `~/.claude.json`, on by default; `claude-folder-trust-file.ts:78-99` at v1.4.266). It needs its own brief and text.
 - **The sources are release tags.** CTO-76 cites commits that are not releases (Paseo `b3d860c`, Orca `f20eec9a`) or are one commit after one (Claude Squad `070eb93`). The knowledge base cites the release tags instead; the files it relies on are the same in both.
+- A computer whose Claude Code has subagents shows what they can do without asking. A permissive mode, a hook command or inline MCP servers lower Claude Code's score; a subagent that lists no tools is shown and does not lower it.
 - Paradev and Dev Containers (CTO-76 §7, priority 2) fit the same model and are not in this change.

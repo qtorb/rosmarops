@@ -468,6 +468,9 @@ type V2Input struct {
 	// Paperclip is the Paperclip orchestrator scan (BV-264): its version,
 	// listen address and sign-up setting are what four rules read. Optional.
 	Paperclip platform.PaperclipScan
+	// Orchestrators are Paseo, Claude Squad, Orca and Claude Code's
+	// subagents at rest (BV-268).
+	Orchestrators platform.OrchestratorScan
 
 	// Codex is the OpenAI Codex scan the graph was built from (BV-140): the
 	// overview reads each agent's layers for its assumptions. Optional.
@@ -911,6 +914,12 @@ var MemoryUntracked = map[string]bool{
 	rules.RuleOrchestratorVulnerableVersion: true,
 	rules.RuleOrchestratorNetworkListen:     true,
 	rules.RuleOrchestratorOpenSignup:        true,
+	// BV-268: the subagent rules are re-derived each run from the headers;
+	// they are not in the memory schema's rule enum.
+	rules.RuleSubagentAllTools:       true,
+	rules.RuleSubagentPermissiveMode: true,
+	rules.RuleSubagentHookCommand:    true,
+	rules.RuleSubagentInlineMCP:      true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

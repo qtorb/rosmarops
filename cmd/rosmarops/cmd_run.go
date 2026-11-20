@@ -994,7 +994,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			AllowHits: allowHits,
 			Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
 			FactoryGraph: builtFactory, Profiles: builtProfiles,
-			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Paperclip: paperclipScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
+			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Paperclip: paperclipScan, Orchestrators: orchScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
 			IntegrityNotChecked: integrityNotChecked,
 			StoreUpdateOld:      storeUpd.Old, StoreUpdateNew: storeUpd.New,
 			AdminListOld: comp.adminOld, AdminListNew: comp.adminNew,

@@ -117,6 +117,8 @@ var staticKeys = []string{
 	"findings.when.default",
 	"findings.when.orchestrator_skips_approvals", "findings.when.orchestrator_vulnerable_version",
 	"findings.when.orchestrator_network_listen", "findings.when.orchestrator_open_signup",
+	"findings.when.subagent_all_tools", "findings.when.subagent_permissive_mode",
+	"findings.when.subagent_hook_command", "findings.when.subagent_inline_mcp",
 	"report.dismissed.title", "report.dismissed.note",
 	// BV-210: the problem-send window/terminal texts (§3) and the two report
 	// lines (§2). The window keys are emitted by cmd/rosmarops, listed here so
@@ -224,7 +226,7 @@ func CatalogKeys() []string {
 			keys = append(keys, ActsKeys()...)
 			continue
 		}
-		if IsOrchestratorRule(r) {
+		if IsSentenceRule(r) {
 			// BV-264: one signed sentence, its html.headline key (HTMLKeys),
 			// and its «when» line (staticKeys); no finding.* texts.
 			continue
@@ -495,7 +497,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			w("\n")
 			continue
 		}
-		if IsOrchestratorRule(f.Rule) { // BV-264: one signed sentence, no generic what/why
+		if IsSentenceRule(f.Rule) { // BV-264, BV-268: one signed sentence, no generic what/why
 			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), OrchestratorTitle(cat, f))
 			w("%s\n\n", strings.Join([]string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}, " · "))
 			for _, a := range f.Evidence.Assumptions {

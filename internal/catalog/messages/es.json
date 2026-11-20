@@ -1090,5 +1090,15 @@
   "unknown.orchestrator_agent_configured": "Supone que en {agent} tienes creado un agente que lo usa. {agent} guarda sus agentes en su base de datos, que RosmarOps no abre, así que no puede comprobarlo.",
   "unknown.orchestrator_settings_not_read": "Supone que {agent} lanza los agentes con su ajuste de fábrica, que les da acceso completo. {agent} guarda lo que elijas en su base de datos, que RosmarOps no abre.",
   "html.fix.orchestrator_vulnerable_version": "Actualiza {orchestrator} a la {fixed} o posterior.",
-  "html.fix.orchestrator_network_listen": "En el config.json de {orchestrator}, haz que escuche solo en este ordenador (bind: loopback)."
+  "html.fix.orchestrator_network_listen": "En el config.json de {orchestrator}, haz que escuche solo en este ordenador (bind: loopback).",
+  "html.headline.subagent_all_tools": "El subagente {subagent} puede usar todas las herramientas de {agent}, porque no dice cuáles.",
+  "html.headline.subagent_permissive_mode": "El subagente {subagent} está configurado para trabajar sin preguntarte ({mode}).",
+  "html.headline.subagent_hook_command": "El subagente {subagent} ejecuta un comando propio cuando actúa.",
+  "html.headline.subagent_inline_mcp": "El subagente {subagent} se conecta a servidores MCP definidos en su propio fichero.",
+  "html.subagent.user_folder": "Está en tu carpeta de usuario, así que funciona en todos los proyectos sin la pregunta de confianza de la carpeta.",
+  "html.fix.orchestrator_network_listen.paseo": "En el config.json de {orchestrator}, vuelve a poner daemon.listen en 127.0.0.1:6767.",
+  "findings.when.subagent_all_tools": "Si este subagente lo escribiste tú o confías en quien lo hizo.",
+  "findings.when.subagent_permissive_mode": "Si este subagente lo escribiste tú o confías en quien lo hizo.",
+  "findings.when.subagent_hook_command": "Si este subagente lo escribiste tú o confías en quien lo hizo.",
+  "findings.when.subagent_inline_mcp": "Si este subagente lo escribiste tú o confías en quien lo hizo."
 }

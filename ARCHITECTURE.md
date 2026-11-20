@@ -90,13 +90,13 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/firstrun`: finds the projects of a first use, or asks for the folder.
 - `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)).
 - `internal/hostenv`: tells whether the review runs in a container, WSL, a virtual machine or Windows Sandbox.
-- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML and YAML the agents use.
+- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML and YAML the agents use. `yamlsubset.ParseKeysWithMapItems` also reads lists of mappings, for Claude Code's subagent headers.
 
 ### Engine
 
 - `internal/pipeline`: assembles the v2 graph, the one way `rosmarops run` and the tests build it.
 - `internal/graph`: the graph types, the per-agent graph builders, inference, crosses, and validation against the schema.
-- `internal/rules`: turns the graph into v2 findings with their actions, and picks the one thing to do today.
+- `internal/rules`: turns the graph into v2 findings with their actions, and picks the one thing to do today. A few rules also read a scan the graph does not carry: the orchestrator rules (Paperclip's files, Paseo's `daemon.listen`) and the four subagent rules (the headers of Claude Code's subagents, ADR 0023).
 - `internal/index`: the posture score, its bands and the score history.
 - `internal/exposure`: the six exposure axes and the class A-D.
 - `internal/knowledge`: documented product behaviour, dated and sourced, plus the MCP server catalog.

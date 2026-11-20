@@ -890,5 +890,11 @@
   "html.headline.orchestrator_network_listen": "{orchestrator} listens beyond this computer: other devices can reach it.",
   "html.headline.orchestrator_open_signup": "Anyone who reaches {orchestrator} can create an account.",
   "html.fix.orchestrator_vulnerable_version": "Update {orchestrator} to {fixed} or later.",
-  "html.fix.orchestrator_network_listen": "In {orchestrator}'s config.json, set it to listen only on this computer (bind: loopback)."
+  "html.fix.orchestrator_network_listen": "In {orchestrator}'s config.json, set it to listen only on this computer (bind: loopback).",
+  "html.headline.subagent_all_tools": "The subagent {subagent} can use every tool {agent} has, because it doesn't list which ones.",
+  "html.headline.subagent_permissive_mode": "The subagent {subagent} is set to work without asking you ({mode}).",
+  "html.headline.subagent_hook_command": "The subagent {subagent} runs a command of its own when it acts.",
+  "html.headline.subagent_inline_mcp": "The subagent {subagent} connects to MCP servers defined inside its own file.",
+  "html.subagent.user_folder": "It is in your user folder, so it runs in every project without the folder-trust question.",
+  "html.fix.orchestrator_network_listen.paseo": "In {orchestrator}'s config.json, set daemon.listen back to 127.0.0.1:6767."
 }

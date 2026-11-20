@@ -220,3 +220,28 @@ func TestSeries(t *testing.T) {
 		t.Errorf("scope cut: %v", got)
 	}
 }
+
+// BV-268 (Albert 20-11): the subagent rules weigh from index version 6 on,
+// 0 before it; every tool is shown and weighs 0.
+func TestSubagentWeights(t *testing.T) {
+	for _, c := range []struct {
+		rule string
+		want float64
+	}{
+		{rules.RuleSubagentPermissiveMode, 15},
+		{rules.RuleSubagentHookCommand, 10},
+		{rules.RuleSubagentInlineMCP, 10},
+		{rules.RuleSubagentAllTools, 0},
+	} {
+		f := rules.Finding{Rule: c.rule, Severity: rules.SeverityYellow}
+		if got := weightIn(6, f); got != c.want {
+			t.Errorf("%s weighs %v in version 6, want %v", c.rule, got, c.want)
+		}
+		if got := weightIn(5, f); got != 0 {
+			t.Errorf("%s weighs %v in version 5, want 0", c.rule, got)
+		}
+		if GroupOf(c.rule) != GroupAgentConfig {
+			t.Errorf("%s group %q", c.rule, GroupOf(c.rule))
+		}
+	}
+}
