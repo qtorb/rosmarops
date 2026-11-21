@@ -15,21 +15,28 @@ type tplScans struct {
 	cursor platform.CursorScan
 }
 
-// tplInUse is the template agent already uses (its id, P0–P2), or "": Claude
-// Code, Grok Build and Cursor, by the agent's product name.
-func (c htmlCtx) tplInUse(agent string) string {
+// tplInUse are the templates agent may be using: one id for Claude Code and
+// Grok Build; for Cursor both «Read only» and «Local development», which leave
+// the same file and cannot be told apart; none when no template is in use.
+func (c htmlCtx) tplInUse(agent string) []string {
 	s := c.v.tplScans
+	id := ""
 	switch agent {
 	case graph.ClientDisplayName(knowledge.ClaudeCodeProduct):
 		if s.claude != nil {
-			return profiles.InUse(*s.claude, c.v.OS)
+			id = profiles.InUse(*s.claude, c.v.OS)
 		}
 	case graph.ClientDisplayName(knowledge.GrokBuildProduct):
-		return profiles.GrokInUse(s.grok, c.v.OS)
+		id = profiles.GrokInUse(s.grok, c.v.OS)
 	case graph.ClientDisplayName(knowledge.CursorProduct):
-		return profiles.CursorInUse(s.cursor)
+		if profiles.CursorInUse(s.cursor) {
+			return []string{profiles.P0, profiles.P1}
+		}
 	}
-	return ""
+	if id == "" {
+		return nil
+	}
+	return []string{id}
 }
 
 // tplNoLine is the first «Doesn't do» row of agent's template id, already in
@@ -59,10 +66,14 @@ func (c htmlCtx) tplNoLine(agent, id string) string {
 // … template in …», then the next stricter one for this system with its first
 // «Doesn't do» row, or that it is the strictest. "" when none is in use.
 func (c htmlCtx) tplInUseLine(agent string) string {
-	id := c.tplInUse(agent)
-	if id == "" {
+	ids := c.tplInUse(agent)
+	switch len(ids) {
+	case 0:
 		return ""
+	case 2: // Cursor: either of its two templates, so no next one and no «strictest»
+		return c.t("html.r3.tpl.in_use", map[string]string{"template": c.cat.Text("html.r3.tpl.cursor_either", nil), "agent": agent})
 	}
+	id := ids[0]
 	line := c.t("html.r3.tpl.in_use", map[string]string{"template": c.cat.Text("cc.name."+id, nil), "agent": agent})
 	if next := profiles.Next(id, c.v.OS); next != "" && c.offers(agent, next) {
 		return line + " " + c.t("html.r3.tpl.next", map[string]string{
@@ -96,10 +107,13 @@ func (c htmlCtx) offers(agent, id string) bool {
 	return false
 }
 
-// inUsePill is the green «In use» pill of a template card, or "".
+// inUsePill is the green «In use» pill of a template card, or "": on both
+// Cursor cards when one of its templates is in use.
 func (c htmlCtx) inUsePill(agent, id string) string {
-	if c.tplInUse(agent) != id {
-		return ""
+	for _, x := range c.tplInUse(agent) {
+		if x == id {
+			return ` <span class="r3-pill green">` + c.t("html.tpl.in_use_pill", nil) + `</span>`
+		}
 	}
-	return ` <span class="r3-pill green">` + c.t("html.tpl.in_use_pill", nil) + `</span>`
+	return ""
 }

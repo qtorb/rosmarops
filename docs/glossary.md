@@ -54,7 +54,7 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 The engine measures P0, P1 and P2 by applying them to this computer's settings. See [the decision](decisions/0012-factory-scores-and-sandbox-templates.md).
 
-**Template in use.** A template whose every setting is already in the person's user settings: for Claude Code its allow, ask and deny entries, its single values and its sandbox keys; for Grok Build its `config.toml` keys and values; for Cursor `readBoundary: "workspace"`. Entries of the person's own do not change it. When several match, the strictest is the one in use. The report says so in block 3, names the next stricter one for the same use on this system (never «Sandboxed development» on Windows), and marks the card «In use».
+**Template in use.** A template whose every setting is already in the person's user settings: for Claude Code its allow, ask and deny entries, its single values and its sandbox keys; for Grok Build its `config.toml` keys and values; for Cursor `readBoundary: "workspace"`, which both of its templates leave, so the report says «Read only or Local development». Entries of the person's own do not change it. When several match, the strictest is the one in use. The report says so in block 3, names the next stricter one for the same use on this system (never «Sandboxed development» on Windows), and marks the card «In use».
 
 **Declared answer.** The person's answer to a question about a setting RosmarOps cannot read on disk, for Cursor and Grok Bot. Until there is an answer, the least controlled case is assumed. See [the decision](decisions/0017-declared-answers.md).
 

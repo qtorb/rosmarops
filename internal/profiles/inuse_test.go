@@ -113,11 +113,11 @@ func TestGrokInUse(t *testing.T) {
 
 func TestCursorInUse(t *testing.T) {
 	s := platform.CursorScan{Files: []platform.CursorFile{{Kind: platform.CursorSandbox, Scope: platform.CursorScopeUser, Status: platform.MCPSourceRead, ReadBoundary: "workspace"}}}
-	if got := CursorInUse(s); got != P0 {
-		t.Errorf("readBoundary workspace: %q, want P0", got)
+	if !CursorInUse(s) {
+		t.Error("readBoundary workspace: not in use")
 	}
 	s.Files[0].ReadBoundary = ""
-	if got := CursorInUse(s); got != "" {
-		t.Errorf("no readBoundary: %q", got)
+	if CursorInUse(s) {
+		t.Error("no readBoundary: in use")
 	}
 }

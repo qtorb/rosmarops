@@ -11,7 +11,8 @@ import (
 // single value and each sandbox key. Entries of their own do not stop it. When
 // several match, the strictest wins: «Read only», then «Sandboxed
 // development», then «Local development». Only what RosmarOps already reads is
-// compared, from the files it already reads.
+// compared, from the files it already reads. Cursor's two templates cannot be
+// told apart (CursorInUse).
 
 // strictness is the order in which a match wins: the strictest first.
 var strictness = []string{P0, P2, P1}
@@ -147,15 +148,16 @@ func grokRules(have, want []platform.GrokRule) bool {
 	return true
 }
 
-// CursorInUse is the Cursor template ~/.cursor/sandbox.json already holds, or
-// "": both of Cursor's templates set readBoundary to "workspace", and the rest
-// of each is in the app, where RosmarOps does not read; the strictest of the
-// two that match is «Read only».
-func CursorInUse(s platform.CursorScan) string {
+// CursorInUse reports that ~/.cursor/sandbox.json holds one of Cursor's
+// templates. Both «Read only» and «Local development» leave the same file,
+// readBoundary set to "workspace", and the rest of each is in the app, which
+// RosmarOps does not read: it cannot tell which of the two was applied, so it
+// never names one (advisor, 21-11).
+func CursorInUse(s platform.CursorScan) bool {
 	for _, f := range s.Files {
 		if f.Kind == platform.CursorSandbox && f.Scope == platform.CursorScopeUser && f.Status == platform.MCPSourceRead && f.ReadBoundary == "workspace" {
-			return P0
+			return true
 		}
 	}
-	return ""
+	return false
 }

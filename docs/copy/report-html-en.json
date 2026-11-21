@@ -884,6 +884,7 @@
   "html.r3.tpl.in_use": "You already use the «{template}» template in {agent}.",
   "html.r3.tpl.next": "The next one is «{next}»: {next_line}",
   "html.r3.tpl.top": "It is the strictest one for your use.",
+  "html.r3.tpl.cursor_either": "Read only or Local development",
   "html.tpl.in_use_pill": "In use",
   "html.r3.more.one": "The other problem ({findings}) ›",
   "html.r3.tpl.body": "Choose a template: you answer one question («What do you use your agents for?») and we give you a text to paste into your agent. It shows you the change before saving it.",

@@ -493,7 +493,7 @@ func r3Keys() []string {
 		"html.r3.fix.rotate", "html.r3.fix.rotate_tpl", "html.r3.fix.tpl_all", "html.r3.fix.tpl_some", "html.r3.fix.steps",
 		"html.r3.done.title", "html.r3.done.count", "html.r3.done.count.one", "html.r3.done.score", "html.r3.done.more", "html.memory.evolution",
 		"html.r3.more", "html.r3.more.one", "html.r3.tpl.body", "html.r3.tpl.fixes", "html.r3.tpl.fixes_none", "html.r3.tpl.button", "html.r3.tpl.note",
-		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.tpl.in_use_pill",
+		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.r3.tpl.cursor_either", "html.tpl.in_use_pill",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
 		"report.dismissed.note", "html.today.incomplete",
 	}

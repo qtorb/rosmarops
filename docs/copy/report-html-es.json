@@ -1079,6 +1079,7 @@
   "html.r3.tpl.in_use": "Ya usas la plantilla «{template}» en {agent}.",
   "html.r3.tpl.next": "La siguiente es «{next}»: {next_line}",
   "html.r3.tpl.top": "Es la más estricta para tu uso.",
+  "html.r3.tpl.cursor_either": "Solo lectura o Desarrollo local",
   "html.tpl.in_use_pill": "En uso",
   "html.r3.more.one": "El otro problema ({findings}) ›",
   "html.r3.tpl.body": "Elige una plantilla: contestas una pregunta («¿Para qué usas tus agentes?») y te damos un texto para pegar en tu agente. Te enseña el cambio antes de guardarlo.",

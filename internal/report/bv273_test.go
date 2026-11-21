@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/memory"
 	"github.com/qtorb/rosmarops/internal/platform"
@@ -174,6 +175,57 @@ func TestRenderHTML_TemplateInUse(t *testing.T) {
 	for _, lang := range []string{"en", "es"} {
 		if page := renderHTML(t, lang, v); strings.Contains(page, `r3-pill green`) && strings.Contains(page, `<span class="r3-pill green">`) {
 			t.Errorf("%s: a pill with no template in use", lang)
+		}
+	}
+}
+
+// Advisor, 21-11: Cursor's two templates leave the same sandbox.json, so the
+// program cannot tell which was applied. Block 3 names both, with no next one
+// and no «strictest»; both Cursor cards carry the «In use» pill.
+func TestRenderHTML_CursorTemplateEither(t *testing.T) {
+	salt := []byte("0123456789abcdef0123456789abcdef")
+	cursor := platform.CursorScan{ConfigDir: "/h/.cursor", Exists: true, Files: []platform.CursorFile{{
+		Path: "/h/.cursor/sandbox.json", Kind: platform.CursorSandbox, Scope: platform.CursorScopeUser,
+		Status: platform.MCPSourceRead, ReadBoundary: "workspace",
+	}}}
+	f, _, err := graph.FromScansWithCodex(platform.MCPScan{}, platform.ClaudeSettingsScan{}, cursor, platform.CredentialFileScan{}, graph.Repos{}, platform.HermesScan{}, platform.CodexScan{}, salt, v2Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := graph.Infer(graph.Build(f, graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(salt)}, v2Now), nil, "/h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bases, err := knowledge.All()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := report.BuildV2(report.V2Input{
+		Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Base: bases[knowledge.ClaudeCodeProduct], Bases: bases,
+		V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: v2Now, Home: "/h", Cursor: cursor,
+	})
+	v.OS = "linux"
+	for _, lang := range []string{"en", "es"} {
+		cat, _ := catalog.Load(lang)
+		page := renderHTML(t, lang, v)
+		want := `<p class="r3-tpl-fixes">` + htmlEscape(cat.Text("html.r3.tpl.in_use", map[string]string{
+			"template": cat.Text("html.r3.tpl.cursor_either", nil), "agent": "Cursor",
+		})) + `</p>`
+		if !strings.Contains(page, want) {
+			t.Errorf("%s: block 3 is not %q", lang, want)
+		}
+		pill := ` <span class="r3-pill green">` + htmlEscape(cat.Text("html.tpl.in_use_pill", nil)) + `</span></h4>`
+		for _, id := range []string{profiles.P0, profiles.P1} {
+			if !strings.Contains(page, `<h4>`+htmlEscape(cat.Text("cc.name."+id, nil))+pill) {
+				t.Errorf("%s: Cursor's %s card has no «In use» pill", lang, id)
+			}
+		}
+	}
+	// The advisor's text, literal.
+	for lang, text := range map[string]string{"en": "Read only or Local development", "es": "Solo lectura o Desarrollo local"} {
+		cat, _ := catalog.Load(lang)
+		if got := cat.Text("html.r3.tpl.cursor_either", nil); got != text {
+			t.Errorf("%s: html.r3.tpl.cursor_either is %q", lang, got)
 		}
 	}
 }

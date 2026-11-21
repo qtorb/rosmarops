@@ -22,5 +22,5 @@ Built in version 0.18.0 (BV-273). Until now, an open finding missing from a revi
 
 - Versions 1 to 3 of the memory are still read; v4 is written.
 - A repository that does not finish holds back only its own findings, which stay open until a review checks it in full.
-- Cursor's two templates set the same file key, `readBoundary`, and the rest is in the app, which RosmarOps does not read. When that key is set, the strictest of the two, «Read only», is the one in use.
+- Cursor's two templates leave the same `sandbox.json` (`readBoundary: "workspace"`), and the rest of each is in the app, which RosmarOps does not read, so it cannot tell which was applied (advisor, 21-11). Block 3 then says «Read only or Local development» (`html.r3.tpl.cursor_either`), with no next template and no «strictest», and both Cursor cards carry «In use».
 - `index_version` does not change.
