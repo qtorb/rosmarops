@@ -25,7 +25,8 @@ func workflowText(t *testing.T, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return string(raw)
+	// Windows checkouts may have CRLF line endings.
+	return strings.ReplaceAll(string(raw), "\r\n", "\n")
 }
 
 func TestReleaseBuildTagsLocallyBeforeBuilding(t *testing.T) {
