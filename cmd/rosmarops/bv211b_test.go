@@ -59,6 +59,24 @@ func TestBV211bCommandLineSmall(t *testing.T) {
 	}
 }
 
+// No window script sets [Console]::InputEncoding: on Windows PowerShell that
+// replaces [Console]::In and drops what the bootstrap's reader had already
+// buffered after the script, so the window reads a cut base64 line (the
+// findings window's intermittent «Invalid length for a Base-64 char array»).
+func TestWindowScriptsKeepTheBootstrapInput(t *testing.T) {
+	scripts := map[string]string{
+		"dismissWindowScript": dismissWindowScript,
+		"connectWindowScript": connectWindowScript,
+		"problemWindowScript": problemWindowScript,
+		"problemBoxScript":    problemBoxScript,
+	}
+	for name, sc := range scripts {
+		if strings.Contains(sc, "InputEncoding") {
+			t.Errorf("%s sets [Console]::InputEncoding, which drops the input the bootstrap already read", name)
+		}
+	}
+}
+
 // TestBV211bScriptsAsciiNoSentinel is CTO-34 §3(d): the four window scripts are
 // ASCII only and none contains the end-of-script sentinel.
 func TestBV211bScriptsAsciiNoSentinel(t *testing.T) {

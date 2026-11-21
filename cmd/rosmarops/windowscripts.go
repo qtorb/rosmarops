@@ -15,10 +15,15 @@ package main
 // owner-drawn shapes exactly as painted; the window is TopMost and clamped to the
 // working area so it is never occluded or off-screen. Non-ASCII text arrives as
 // base64 UTF-8 JSON; the only separator literal is built from a char code.
+// The script never sets [Console]::InputEncoding: on Windows PowerShell that
+// replaces [Console]::In, and whatever the bootstrap's reader had already
+// buffered past the script (part or all of the base64 line) is lost, so the
+// window failed now and then with «Invalid length for a Base-64 char array».
+// The line is ASCII, so the input's encoding does not matter.
 const dismissWindowScript = `$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-try { [Console]::InputEncoding = [System.Text.Encoding]::UTF8; [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 $cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadLine().Trim())) | ConvertFrom-Json
 try {
   Add-Type -Namespace RO -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value);'
