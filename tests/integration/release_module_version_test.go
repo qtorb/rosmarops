@@ -61,6 +61,15 @@ func TestMsixBuildsAsTheReleaseSawIt(t *testing.T) {
 	}
 }
 
+func TestJourneysPreviousBuildsAsTheReleaseSawIt(t *testing.T) {
+	wf := workflowText(t, "journeys.yml")
+	drop := strings.Index(wf, `git -C src tag -d "$TAG"`)
+	repro := strings.Index(wf, "Rebuild and compare with the release's SHA256SUMS.txt")
+	if drop < 0 || repro < 0 || drop > repro {
+		t.Fatalf("journeys.yml previous must decide on the tag before it rebuilds (tag -d at %d, rebuild at %d)", drop, repro)
+	}
+}
+
 // What both steps rely on: with no tag Go stamps a pseudo-version, with a
 // tag on the commit it stamps the tag.
 func TestGoStampsTheModuleVersionFromTags(t *testing.T) {
