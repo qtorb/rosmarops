@@ -90,6 +90,22 @@ jobs:
           go-version: "${{ env.GOVERSION }}"
           cache: false
 
+      - name: Build the tag as the release saw it
+        # The main module's version is stamped from the checkout's tags. A
+        # release built before its tag existed (v0.17.0: release.yml then
+        # created the tag only in publish) carries a pseudo-version instead of
+        # vX.Y.Z. To reproduce its bytes, src/ is built without the tag, as the
+        # release was. The comparison below stays exact.
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern rosmarops.exe --dir "$RUNNER_TEMP/released"
+          mod=$(go version -m "$RUNNER_TEMP/released/rosmarops.exe" | awk '$1 == "mod" { print $3; exit }')
+          echo "released rosmarops.exe module version: ${mod:-none}"
+          if [ "$mod" != "v$VERSION" ]; then
+            git -C src tag -d "v$VERSION"
+            echo "it was built before its tag existed: building src/ without the tag"
+          fi
+
       - name: Reproducible build — x64 matches the released rosmarops.exe
         # Built from the released tag's source, on ubuntu, with release.yml's
         # exact recipe, so the bytes equal the published rosmarops.exe. The

@@ -43,7 +43,7 @@ Either way works:
 | `factory-scores` | Linux | Runs `TestR2FactoryScores`, `TestExposurePotential` and `TestProfileScores` in `tests/trust` with their output variables set, and adds `factory-scores.json`, `exposure-potential.json` and `profile-scores.json` to the release. |
 | `e2e-realistic` | Windows | Runs the released `rosmarops.exe` on a test computer with 48 projects (`scripts/e2e/make-home.ps1`, `scripts/e2e/run.ps1`). A failure turns the whole run red. |
 
-Until `publish`, every job checks out the run's own commit (`github.sha`): on a manual run, the `master` commit the run started on; on a tag push, the tagged commit. The version comes from the tag's name, never from the tag itself, so nothing before `publish` needs the tag to exist.
+Until `publish`, every job checks out the run's own commit (`github.sha`): on a manual run, the `master` commit the run started on; on a tag push, the tagged commit. The version comes from the tag's name, never from the tag itself, so nothing before `publish` needs the tag to exist. One thing does read the checkout's tags: Go stamps the main module's version into the binary from them (`go version -m rosmarops.exe`, line `mod`). So on a manual run `build` first creates the tag locally, never pushed, and the binaries carry `vX.Y.Z` as a build of the tag would. v0.17.0 was built without it and carries a pseudo-version (`v0.0.0-20261120161256-3e9d09c6fb3b`).
 
 Every executable is built with `CGO_ENABLED=0`, `-trimpath` and `-ldflags="-X main.version=X.Y.Z"`. `SHA256SUMS.txt` covers only the executables, not the JSON files or the sample report.
 
@@ -54,7 +54,7 @@ If a job after `publish` fails, the GitHub release already exists. Fix the cause
 `.github/workflows/msix.yml` builds the Store packages. It never touches the GitHub release or winget, and it uploads nothing to Partner Center.
 
 1. In GitHub Actions, open `msix`, choose «Run workflow» on `master`, and enter the version **without** the `v` (`X.Y.Z`). The tag `vX.Y.Z` must exist.
-2. The `build` job checks out the tag, reads the Go version from the tag's own `release.yml`, and builds the x64 exe. It must be byte for byte the released `rosmarops.exe` (checked against `SHA256SUMS.txt`); a mismatch fails the run. It also builds the arm64 exe.
+2. The `build` job checks out the tag, reads the Go version from the tag's own `release.yml`, and builds the x64 exe. It must be byte for byte the released `rosmarops.exe` (checked against `SHA256SUMS.txt`); a mismatch fails the run. It also builds the arm64 exe. If the released exe's module version is not `vX.Y.Z`, as with v0.17.0, which was built before its tag existed, it removes the tag from its checkout first, so the build sees what the release saw.
 3. The `package` job fills `packaging/msix/AppxManifest.xml` with the package version `X.Y.Z.0` and the architecture, validates it, and packs it with the Windows SDK's MakeAppx.
 4. The run's artifact `rosmarops-msix-X.Y.Z` holds, per architecture (x64 and arm64):
    - `rosmarops-X.Y.Z-<arch>.msix`: unsigned, for the Store;
