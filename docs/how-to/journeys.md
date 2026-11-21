@@ -78,4 +78,6 @@ Each manifest entry has the system, journey, step, language, width, candidate ve
 
 ## The gate
 
+The `previous` job rebuilds the last published version from its tag and checks its bytes against that release's `SHA256SUMS.txt`, so R2 updates from exactly what people have. If that release was built before its tag existed (v0.17.0), its module version is a pseudo-version, and the job builds the tag's source without the tag, as the release was built (see [release](release.md)).
+
 `release.yml` runs `build`, then `journeys` on exactly those binaries, then `publish`, which checks every file against `build`'s `SHA256SUMS.txt`. The journeys block the publication only when the repository variable `JOURNEYS_GATE` is `on` (Settings > Secrets and variables > Actions > Variables). Until the owner sets it, they run and are reported, and `publish` goes on.

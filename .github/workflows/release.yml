@@ -151,6 +151,16 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
+      - name: The tag, locally, so the module version is the release's
+        # On a manual run the tag is only created in publish, so it does not
+        # exist yet. Go stamps the main module's version from the checkout's
+        # tags, and with none it stamps a pseudo-version
+        # (v0.0.0-<time>-<commit>). A build of the tag would stamp vX.Y.Z, so
+        # the published exe would differ from msix.yml's rebuild of the tag
+        # (v0.17.0). A local tag on this commit, never pushed (the checkout has
+        # no credentials), gives the same stamp as a build of the tag.
+        if: github.event_name == 'workflow_dispatch'
+        run: git tag "$TAG"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.4"
