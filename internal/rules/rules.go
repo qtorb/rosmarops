@@ -1863,6 +1863,26 @@ func familyOf(in Input, member string) string {
 	return best
 }
 
+// FindingRepos are the deepest of roots that hold one of the finding's
+// files (its evidence locations), canonical and sorted (BV-273): the
+// repositories whose complete check can show it was fixed. Empty for a
+// finding outside every repository.
+func FindingRepos(f Finding, roots []string) []string {
+	var out []string
+	for _, loc := range f.Evidence.Locations {
+		file, best := memberFile(loc), ""
+		for _, r := range roots {
+			if graph.Within(r, file) && len(r) > len(best) {
+				best = r
+			}
+		}
+		if best != "" {
+			out = append(out, graph.CanonicalPath(best))
+		}
+	}
+	return sortedUnique(out)
+}
+
 // memberFile is the file of a location: before "#", without a final ":line".
 func memberFile(loc string) string {
 	if f, ok := graph.FileOfResource(loc); ok && strings.Contains(loc, "#") {

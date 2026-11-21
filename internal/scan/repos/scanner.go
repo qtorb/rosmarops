@@ -110,6 +110,11 @@ type ScanConfig struct {
 	// tracked files across all repositories were not opened because they are
 	// images, documents or other binary files (BV-186).
 	OnBinarySkipped func(total int)
+	// OnCompleted, when set, is called once at the end with the repositories
+	// whose check finished (BV-273): not timed out, not interrupted by the
+	// global limit, and with every git analysis run. Only these can show
+	// that a finding was fixed.
+	OnCompleted func(roots []string)
 }
 
 // perRepoTimeout is the per-repo deadline ScanAllRepos applies. Always
@@ -255,6 +260,7 @@ func ScanAllRepos(
 	}
 	scanned, timedOut, interrupted, notScanned := 0, 0, 0, 0
 	binarySkipped := 0
+	var completed []string
 	for i, root := range repoRoots {
 		r := results[i]
 		binarySkipped += r.filesSkippedBinary
@@ -288,6 +294,9 @@ func ScanAllRepos(
 		case repoCompleted:
 			scanned++
 			newBaselines = append(newBaselines, r.baseline)
+			if r.err == nil && len(r.failedChecks) == 0 {
+				completed = append(completed, root)
+			}
 		case repoInterrupted:
 			// Interrupted by the global deadline: reported by the caller.
 			interrupted++
@@ -314,6 +323,9 @@ func ScanAllRepos(
 	}
 	if cfg.OnBinarySkipped != nil {
 		cfg.OnBinarySkipped(binarySkipped)
+	}
+	if cfg.OnCompleted != nil {
+		cfg.OnCompleted(completed)
 	}
 	return allFindings, newBaselines, scanErrors
 }

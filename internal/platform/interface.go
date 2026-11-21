@@ -402,6 +402,11 @@ type ClaudeSandbox struct {
 	// ("." is the project in a project's settings), allowWrite adds where a
 	// sandboxed command writes besides the project.
 	AllowRead, AllowWrite []string
+	// StrictAllowlist is sandbox.network.strictAllowlist and CredentialFiles
+	// sandbox.credentials.files as "<path>:<mode>" (BV-273): read only to
+	// recognise the «Sandboxed development» template in use.
+	StrictAllowlist, StrictAllowlistSet bool
+	CredentialFiles                     []string
 }
 
 // InstructionScan lists the instruction files agents load (decision

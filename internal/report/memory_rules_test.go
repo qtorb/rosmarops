@@ -16,7 +16,7 @@ import (
 // run (BV-107 wrote a rule the memory schema rejects, and the run stopped
 // before saving its state).
 func TestMemoryCoversEveryRule(t *testing.T) {
-	raw, ok := map[int][]byte{3: schemas.FindingsMemoryV3Schema}[memory.SchemaVersion]
+	raw, ok := map[int][]byte{3: schemas.FindingsMemoryV3Schema, 4: schemas.FindingsMemoryV4Schema}[memory.SchemaVersion]
 	if !ok {
 		t.Fatalf("findings memory schema v%d: not mapped in this test", memory.SchemaVersion)
 	}

@@ -151,12 +151,19 @@ type sandboxBlock struct {
 	AllowUnsandboxedCommands *bool `json:"allowUnsandboxedCommands"`
 	AutoAllowBashIfSandboxed *bool `json:"autoAllowBashIfSandboxed"`
 	Network                  struct {
-		AllowedDomains []string `json:"allowedDomains"`
+		AllowedDomains  []string `json:"allowedDomains"`
+		StrictAllowlist *bool    `json:"strictAllowlist"`
 	} `json:"network"`
 	Filesystem struct {
 		DenyRead  []string `json:"denyRead"`
 		AllowRead []string `json:"allowRead"`
 	} `json:"filesystem"`
+	Credentials struct {
+		Files []struct {
+			Path string `json:"path"`
+			Mode string `json:"mode"`
+		} `json:"files"`
+	} `json:"credentials"`
 }
 
 func (b sandboxBlock) sandbox() platform.ClaudeSandbox {
@@ -174,6 +181,12 @@ func (b sandboxBlock) sandbox() platform.ClaudeSandbox {
 		s.AutoAllowBash, s.AutoAllowBashSet = *b.AutoAllowBashIfSandboxed, true
 	}
 	s.AllowedDomains, s.DenyRead, s.AllowRead = b.Network.AllowedDomains, b.Filesystem.DenyRead, b.Filesystem.AllowRead
+	if b.Network.StrictAllowlist != nil {
+		s.StrictAllowlist, s.StrictAllowlistSet = *b.Network.StrictAllowlist, true
+	}
+	for _, cf := range b.Credentials.Files {
+		s.CredentialFiles = append(s.CredentialFiles, cf.Path+":"+cf.Mode)
+	}
 	return s
 }
 

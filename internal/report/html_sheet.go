@@ -403,7 +403,7 @@ func (c htmlCtx) renderProfileViews() {
 		c.w(`<div class="prow"><span class="ag">%s</span><span class="now">%s%s</span>`, html.EscapeString(o.Agent), cls(now, ""), ntOf(val, band))
 		if o.Product == knowledge.ClaudeCodeProduct && a != nil {
 			for _, id := range c.ccIDs() {
-				c.w(`<div class="chg" data-p="%s"%s><span class="c1">%s`, id, hide(id == def.profile), c.t("cc.name."+id, nil))
+				c.w(`<div class="chg" data-p="%s"%s><span class="c1">%s%s`, id, hide(id == def.profile), c.t("cc.name."+id, nil), c.inUsePill(o.Agent, id))
 				if p, ok := claudeProfile(a, id); ok {
 					c.w(` · %s<span class="arrow">→</span>%s</span><span class="c2">%s</span></div>`, cls(now, ""), cls(p.Letter, ""),
 						c.t("pc.score", map[string]string{"a": scoreText(val), "b": strconv.Itoa(p.Value)}))
@@ -478,7 +478,7 @@ func (c htmlCtx) renderProfileViews() {
 		if id == def.profile {
 			checked = " checked"
 		}
-		c.w(`<label class="card"><input type="radio" name="cprofile" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s</h4></div><div class="chg">`, id, checked, c.t("cc.name."+id, nil))
+		c.w(`<label class="card"><input type="radio" name="cprofile" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s%s</h4></div><div class="chg">`, id, checked, c.t("cc.name."+id, nil), c.inUsePill(cc.Agent, id))
 		if p, ok := claudeProfile(cc, id); ok {
 			c.w(`<span class="c1">%s %s<span class="arrow">→</span>%s</span><span class="c2">%s</span>`, c.t("pc.class", nil), cls(cc.Letter, ""), cls(p.Letter, ""),
 				c.t("pc.score", map[string]string{"a": scoreText(cc.Value), "b": strconv.Itoa(p.Value)}))

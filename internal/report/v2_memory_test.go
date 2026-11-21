@@ -27,10 +27,30 @@ func memoryRun(t *testing.T, g *graph.Graph, prev memory.File, at time.Time, ver
 	}
 	v, _ := report.BuildV2(report.V2Input{
 		Graph: g, GraphSHA256: strings.Repeat("ab", 32), Base: base, RepoRoots: []string{"/src/a", "/src/b"},
-		Families: [][]string{{"/src/a"}, {"/src/b"}}, V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil),
+		ReposCompleted: []string{"/src/a", "/src/b"}, // both repositories finished their check
+		Families:       [][]string{{"/src/a"}, {"/src/b"}}, V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil),
 		GeneratedAt: at, Salt: []byte("memory-salt"), Memory: prev,
 	})
 	return v
+}
+
+// asV3 is m as a v3 memory would hold it (BV-273): no repositories per entry
+// and no list of complete ones, so a gone finding is no longer observed, never
+// resolved.
+func asV3(m memory.File) memory.File {
+	m.SchemaVersion = 3
+	if m.LastChecked != nil {
+		lc := *m.LastChecked
+		lc.ReposComplete = nil
+		m.LastChecked = &lc
+	}
+	entries := make([]memory.Entry, len(m.Entries))
+	for i, e := range m.Entries {
+		e.Repos = nil
+		entries[i] = e
+	}
+	m.Entries = entries
+	return m
 }
 
 // memorySection is the Memory section of md, empty when it is not there.
@@ -63,7 +83,8 @@ func TestRenderV2Markdown_Memory(t *testing.T) {
 		{Path: "/src/a/web/.env.local", Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
 	}, nil)
 	run1 := memoryRun(t, &first, memory.File{}, v2Now, "")
-	run2 := memoryRun(t, &second, run1.NextMemory(), v2Now.Add(24*time.Hour), "")
+	// A memory from before BV-273: what is gone is no longer observed.
+	run2 := memoryRun(t, &second, asV3(run1.NextMemory()), v2Now.Add(24*time.Hour), "")
 	if len(run2.Memory.Moved) != 1 || len(run2.Memory.NoLongerObserved) == 0 {
 		t.Fatalf("memory %+v", run2.Memory)
 	}

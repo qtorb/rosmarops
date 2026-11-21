@@ -11,7 +11,10 @@ import (
 var salt = []byte("0123456789abcdef0123456789abcdef")
 
 func run(day string) Run {
-	return Run{Date: day, Report: "report-" + day + "__RED__1R-0Y", RulesVersion: "1", KnowledgeVersion: "k", Agents: []string{"Claude Code"}, Repos: 10, Complete: true}
+	return Run{
+		Date: day, Report: "report-" + day + "__RED__1R-0Y", RulesVersion: "1", KnowledgeVersion: "k", Agents: []string{"Claude Code"}, Repos: 10, Complete: true,
+		Present: []string{"agent_client_x"},
+	}
 }
 
 func fnd(id string, creds ...string) Finding {
@@ -29,8 +32,10 @@ func TestVerdicts(t *testing.T) {
 		t.Fatalf("second run: %+v", v)
 	}
 	m, _, root = Update(m, run("2026-10-15"), []Finding{fnd("f_b")}, salt)
-	if root.Counts[VerdictNoLongerObserved] != 1 || len(root.NoLongerObserved) != 1 ||
-		root.NoLongerObserved[0] != (Gone{Rule: "cred_read_and_send", Severity: "red", OpenSince: "2026-10-01", LastReport: "report-2026-10-08__RED__1R-0Y"}) {
+	// BV-273: its agent is still here and it is in no repository, so it is
+	// resolved, not only no longer observed.
+	if root.Counts[VerdictNoLongerObserved] != 0 || len(root.NoLongerObserved) != 0 || len(root.Resolved) != 1 ||
+		root.Resolved[0] != (Gone{Rule: "cred_read_and_send", Severity: "red", OpenSince: "2026-10-01", LastReport: "report-2026-10-08__RED__1R-0Y", Mid: ref(salt, "f_a")}) {
 		t.Fatalf("third run: %+v", root)
 	}
 	_, v, root = Update(m, run("2026-10-22"), []Finding{fnd("f_a"), fnd("f_b")}, salt)
@@ -74,12 +79,13 @@ func TestNotChecked(t *testing.T) {
 }
 
 // §1.3: a gone and a new of one rule, one agent and a credential in common
-// are one moved line, not in the no-longer-observed list.
+// are one moved line, not in the no-longer-observed list, and never resolved
+// (BV-273): the other gone one is.
 func TestMoved(t *testing.T) {
 	base, _, _ := Update(File{}, run("2026-10-01"), []Finding{fnd("f_old", "cred_1", "cred_2"), fnd("f_other", "cred_9")}, salt)
 	_, _, root := Update(base, run("2026-10-08"), []Finding{fnd("f_new", "cred_2", "cred_3")}, salt)
-	if len(root.Moved) != 1 || root.Moved[0].FindingID != "f_new" || root.Moved[0].OpenSince != "2026-10-01" || len(root.NoLongerObserved) != 1 {
-		t.Errorf("moved %+v, gone %+v", root.Moved, root.NoLongerObserved)
+	if len(root.Moved) != 1 || root.Moved[0].FindingID != "f_new" || root.Moved[0].OpenSince != "2026-10-01" || len(root.NoLongerObserved) != 0 || len(root.Resolved) != 1 {
+		t.Errorf("moved %+v, gone %+v, resolved %+v", root.Moved, root.NoLongerObserved, root.Resolved)
 	}
 }
 

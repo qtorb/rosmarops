@@ -51,13 +51,21 @@ type settingsFile struct {
 		// AutoAllowBashIfSandboxed (BV-249 §3.1, CTO-59 §1): true when absent.
 		AutoAllowBashIfSandboxed *bool `json:"autoAllowBashIfSandboxed"`
 		Network                  struct {
-			AllowedDomains []string `json:"allowedDomains"`
+			AllowedDomains  []string `json:"allowedDomains"`
+			StrictAllowlist *bool    `json:"strictAllowlist"`
 		} `json:"network"`
 		Filesystem struct {
 			DenyRead   []string `json:"denyRead"`
 			AllowRead  []string `json:"allowRead"`
 			AllowWrite []string `json:"allowWrite"`
 		} `json:"filesystem"`
+		// Credentials (BV-273): read only to recognise a template in use.
+		Credentials struct {
+			Files []struct {
+				Path string `json:"path"`
+				Mode string `json:"mode"`
+			} `json:"files"`
+		} `json:"credentials"`
 	} `json:"sandbox"`
 
 	EnabledMcpjsonServers      []string `json:"enabledMcpjsonServers"`
@@ -298,6 +306,12 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	}
 	if sb.AutoAllowBashIfSandboxed != nil {
 		f.Permissions.Sandbox.AutoAllowBash, f.Permissions.Sandbox.AutoAllowBashSet = *sb.AutoAllowBashIfSandboxed, true
+	}
+	if sb.Network.StrictAllowlist != nil {
+		f.Permissions.Sandbox.StrictAllowlist, f.Permissions.Sandbox.StrictAllowlistSet = *sb.Network.StrictAllowlist, true
+	}
+	for _, cf := range sb.Credentials.Files {
+		f.Permissions.Sandbox.CredentialFiles = append(f.Permissions.Sandbox.CredentialFiles, cf.Path+":"+cf.Mode)
 	}
 	if sb.Enabled != nil {
 		f.Permissions.Sandbox.Enabled, f.Permissions.Sandbox.EnabledSet = *sb.Enabled, true

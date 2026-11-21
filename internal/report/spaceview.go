@@ -796,9 +796,11 @@ func svCredKey(cat catalog.Catalog, n graph.Node, scope string) string {
 
 // svChanges is what changed against the previous run: each finding the memory
 // marks "new", with the finding's own title as its text; and one "fixed"
-// element per finding no longer observed this run, with the parameterless
-// catalog line space.change_fixed (BV-128b). A gone finding keeps no title
-// params in the memory, so its text names no finding; finding_id is null.
+// element per finding resolved this run (BV-273: gone from a place checked in
+// full; a finding only no longer observed is not said to be fixed), with the
+// parameterless catalog line space.change_fixed (BV-128b). A gone finding
+// keeps no title params in the memory, so its text names no finding;
+// finding_id is null.
 func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 	out := []SVChange{}
 	for _, f := range v.Findings {
@@ -816,7 +818,7 @@ func svChanges(v V2, ctxs map[string]htmlCtx) []SVChange {
 		}
 		out = append(out, SVChange{Kind: "new", FindingID: &id, Text: text})
 	}
-	for range v.Memory.NoLongerObserved {
+	for range v.Memory.Resolved {
 		text := map[string]string{}
 		for lang, c := range ctxs {
 			text[lang] = c.cat.Text("space.change_fixed", nil)

@@ -12,7 +12,9 @@ import (
 	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/finding"
 	"github.com/qtorb/rosmarops/internal/firstrun"
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/report"
+	"github.com/qtorb/rosmarops/internal/rules"
 	"github.com/qtorb/rosmarops/internal/scan/projects"
 	"github.com/qtorb/rosmarops/internal/state"
 )
@@ -195,4 +197,63 @@ func projectsCoverage(res projects.Result, previous []string, home string) *repo
 	}
 	pc.New, pc.Gone = projects.Diff(res, previous)
 	return pc
+}
+
+// searchCompleteRepos keeps, of the repositories whose check finished, those
+// whose root the project search walked to the end (BV-273): a finding can be
+// fixed only where the whole place was looked at. A repository the person
+// listed is under no search root and always counts. When the search stopped
+// early, the roots it did not finish are known from the paths it recorded;
+// if it recorded fewer paths than it left, every root counts as unfinished.
+func searchCompleteRepos(completed []string, res projects.Result) []string {
+	if res.Complete() {
+		return completed
+	}
+	listed := map[string]bool{}
+	for _, it := range res.Items {
+		if it.Source == projects.SourceListed {
+			listed[graph.CanonicalPath(it.Path)] = true
+		}
+	}
+	rootOf := func(p string) string {
+		cp, best := graph.CanonicalPath(p), ""
+		for _, r := range res.Roots {
+			cr := strings.TrimSuffix(graph.CanonicalPath(r), "/")
+			if (cp == cr || strings.HasPrefix(cp, cr+"/")) && len(cr) > len(best) {
+				best = cr
+			}
+		}
+		return best
+	}
+	unfinished, all := map[string]bool{}, false
+	for _, n := range res.Skipped {
+		if n.Reason != projects.ReasonIncomplete {
+			continue
+		}
+		if n.Count > len(n.Paths) {
+			all = true
+		}
+		for _, p := range n.Paths {
+			unfinished[rootOf(p)] = true
+		}
+	}
+	var out []string
+	for _, r := range completed {
+		root := rootOf(r)
+		if listed[graph.CanonicalPath(r)] || root == "" || !all && !unfinished[root] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// previousFindings are the previous run's findings, read from its
+// report.v2.json before this run writes its own (BV-273): the titles of the
+// findings fixed since. A missing or unreadable file gives none.
+func previousFindings(reportDir string) []rules.Finding {
+	prev, err := report.ReadV2(report.DataDir(reportDir), nil, 0)
+	if err != nil {
+		return nil
+	}
+	return append(append([]rules.Finding{}, prev.Findings...), prev.Dismissed...)
 }

@@ -89,22 +89,39 @@ func TestBuildSpaceView_FixedChange(t *testing.T) {
 	run := func(g graph.Graph, at time.Time, mem memory.File) report.V2 {
 		v, _ := report.BuildV2(report.V2Input{
 			Graph: &g, GraphSHA256: strings.Repeat("0", 64), Base: base,
-			RepoRoots: []string{"/src/a", "/src/b"}, Families: [][]string{{"/src/a"}, {"/src/b"}},
-			V1: report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: at,
+			RepoRoots: []string{"/src/a", "/src/b"}, ReposCompleted: []string{"/src/a", "/src/b"},
+			Families: [][]string{{"/src/a"}, {"/src/b"}},
+			V1:       report.Build("t", nil, nil, 0, 0, 0, 0, nil), GeneratedAt: at,
 			Memory: mem, Salt: salt, PriorRuns: mem.Runs > 0,
 		})
 		return v
 	}
 	// Run 1 has the service_role credential (a finding); run 2 has no
-	// credential, so the finding is no longer observed.
+	// credential and both repositories finished, so the finding is resolved.
 	v1 := run(v2Graph(t), time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC), memory.File{})
 	if len(v1.Findings) == 0 {
 		t.Fatal("run 1 has no finding — test would be vacuous")
 	}
 	g2 := v2GraphWith(t, nil, []string{"/src/a/CLAUDE.md"})
 	v2 := run(g2, time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC), v1.NextMemory())
-	if len(v2.Memory.NoLongerObserved) == 0 {
-		t.Fatal("no finding went no-longer-observed — test would be vacuous")
+	if len(v2.Memory.Resolved) == 0 {
+		t.Fatal("no finding was resolved — test would be vacuous")
+	}
+	// BV-273: from a memory that cannot tell (v3), the same finding is only no
+	// longer observed, and the space never says it was fixed.
+	old := run(g2, time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC), asV3(v1.NextMemory()))
+	if len(old.Memory.NoLongerObserved) == 0 || len(old.Memory.Resolved) != 0 {
+		t.Fatalf("v3 memory: %+v", old.Memory)
+	}
+	old.OS = "windows"
+	if osv, err := report.BuildSpaceView(old, &g2, "/h", "0.6.0"); err != nil {
+		t.Fatal(err)
+	} else {
+		for _, ch := range osv.Changes {
+			if ch.Kind == "fixed" {
+				t.Errorf("a no-longer-observed finding is said to be fixed: %+v", ch)
+			}
+		}
 	}
 	v2.OS = "windows"
 	sv, err := report.BuildSpaceView(v2, &g2, "/h", "0.6.0")

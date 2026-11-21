@@ -29,6 +29,12 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Rule.** The code that turns a pattern in the graph into v2 findings, such as `cred_read_and_send` or `cred_in_git`. Rules live in `internal/rules`.
 
+**Fixed (resolved).** A finding that was open and is gone from a place this review checked in full: each repository it was in finished its check (no time-out, inside the global limit, its root's project search finished), and its agent is still installed with its settings read. Only these count as «You fixed …» in the report and as fixed in the space. See [the decision](decisions/0025-fixed-only-where-checked.md).
+
+**Not checked.** A finding that was open and is not in this review because its place was not checked in full: a repository that timed out, was deleted or was not reached, or an agent that is no longer installed. It stays open: it is never counted as fixed.
+
+**No longer observed.** A finding that was open and is not in this review, where RosmarOps cannot tell whether its place was checked in full: it was recorded by a version before 0.18. It does not mean fixed.
+
 ## Scores
 
 **Posture score.** A score out of 100 for each evaluated agent. Higher is better. It is computed from the agent's v2 findings and their weights. See [the decision](decisions/0010-posture-score.md).
@@ -47,6 +53,8 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 - P3, unattended, which is a launch command.
 
 The engine measures P0, P1 and P2 by applying them to this computer's settings. See [the decision](decisions/0012-factory-scores-and-sandbox-templates.md).
+
+**Template in use.** A template whose every setting is already in the person's user settings: for Claude Code its allow, ask and deny entries, its single values and its sandbox keys; for Grok Build its `config.toml` keys and values; for Cursor `readBoundary: "workspace"`. Entries of the person's own do not change it. When several match, the strictest is the one in use. The report says so in block 3, names the next stricter one for the same use on this system (never «Sandboxed development» on Windows), and marks the card «In use».
 
 **Declared answer.** The person's answer to a question about a setting RosmarOps cannot read on disk, for Cursor and Grok Bot. Until there is an answer, the least controlled case is assumed. See [the decision](decisions/0017-declared-answers.md).
 

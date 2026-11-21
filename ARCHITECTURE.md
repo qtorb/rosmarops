@@ -105,7 +105,8 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/profiles`: the Claude Code sandbox templates P0-P3 and their measured scores.
 - `internal/agents`: the registry of scored products and their configuration sources.
 - `internal/intel`: the embedded threat-data snapshot and the local cross against what was read.
-- `internal/memory`: the findings memory between runs.
+- `internal/memory`: the findings memory between runs (`findings-memory.json`, v4). Each entry keeps salted references to its finding, agent, credentials and repositories, and the last checked run keeps the salted references of the repositories whose check finished (`repos_complete`). A finding that is gone is `resolved` only where this run checked its place in full, `not_checked` (still open) where it did not, and `no_longer_observed` where a v3 memory cannot tell ([ADR 0025](docs/decisions/0025-fixed-only-where-checked.md)). The repository scanner reports the repositories that finished (`ScanConfig.OnCompleted`), and `rosmarops run` keeps those whose root the project search finished.
+- `internal/profiles`: the templates, and which one the person already uses (`InUse`, `GrokInUse`, `CursorInUse`), read from the settings the graph is built from.
 
 ### Output
 
