@@ -373,6 +373,24 @@ jobs:
           if sudo test -e /home/fakeuser/.rosmarops/config.json; then echo "config.json was created"; exit 1; fi
           sha256sum -c "$RUNNER_TEMP/etc-before.sha256"
 
+  e2e-scripts-windows:
+    # The e2e run's own helpers (scripts/e2e), tested under StrictMode with
+    # PowerShell 7 and Windows PowerShell 5.1, so a check that only runs after
+    # publishing (release.yml's e2e-realistic) cannot fail on a state shape.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: usage-off.ps1 with PowerShell 7
+        shell: pwsh
+        run: ./tests/e2e/usage-off.tests.ps1
+      - name: usage-off.ps1 with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests/e2e/usage-off.tests.ps1
+
   company-scripts-windows:
     runs-on: windows-latest
     permissions:

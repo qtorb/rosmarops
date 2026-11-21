@@ -289,12 +289,10 @@ Check 'run --unattended wrote a report' $wrote
 # --- Usage statistics stay off (BV-271) --------------------------------------
 # This test computer's runs must never count as a person's: the state must not
 # record usage statistics on, and no usage package may have been built.
-$usageOn = $false
-$statePath = Join-Path $HomeDir '.rosmarops\state.json'
-if (Test-Path $statePath) {
-    $st = Get-Content -Raw $statePath | ConvertFrom-Json
-    $usageOn = [bool]($st.usage -and $st.usage.enabled)
-}
+# A state where the question was never answered has no `usage` at all: that
+# counts as off (usage-off.ps1 reads it safely under StrictMode).
+. (Join-Path $PSScriptRoot 'usage-off.ps1')
+$usageOn = Test-UsageOn (Join-Path $HomeDir '.rosmarops\state.json')
 $usagePkg = Join-Path $reports 'data\rosmarops-usage-last.json'
 Check 'usage statistics stay off' ((-not $usageOn) -and -not (Test-Path $usagePkg)) $(if ($usageOn) { 'state.json records them on' } elseif (Test-Path $usagePkg) { 'a usage package was built' } else { '' })
 
