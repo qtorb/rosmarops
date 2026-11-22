@@ -140,7 +140,7 @@ The contract is [schemas/v2/graph.v2.schema.json](schemas/v2/graph.v2.schema.jso
 Node kinds:
 
 - `agent`: `ai_client`, `mcp_server`, `extension`, `bot`, `orchestrator` (a program that starts other agents, such as Paperclip, Paseo, Claude Squad or Orca).
-- `capability`: `execute_shell`, `read_files`, `write_files`, `network`, `invoke_mcp_tool`, `permission_mode`, `operate_app`.
+- `capability`: `execute_shell`, `read_files`, `write_files`, `network`, `invoke_mcp_tool`, `permission_mode`, `operate_app`. A configured capability carries its rule; a product-default one carries none, except when its source is the knowledge base (`kb:`), as OpenCode's factory terminal read (ADR 0028).
 - `credential`: `api_key`, `db_credential`, `oauth_token`, `webhook_secret`, `ssh_key`, `private_key`, `generic_secret`. A credential node has no field for the secret value. Most are identified by their value's salted fingerprint. A credential with `identified_by: path` is known by where it is, and its content is never read: it has a fingerprint of its normalized path (`path_fingerprint`, which does not change when the content changes) and its file's owner and permissions. Paperclip's `secrets/master.key`, `.env`, `llm.apiKey` and `database.connectionString` are of this kind. In an MCP server's `env` and `headers`, a value with no known prefix is also a credential when its variable's name says so (`TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `PASSWD`; ADR 0026).
 - `resource`: `file`, `database`, `external_service`, `agent_config`, `agent_instructions`, `agent_executable`, `git_repository`, `inbound_channel`, `agent_schedule`, `agent_memory`.
 

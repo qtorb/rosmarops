@@ -38,8 +38,8 @@ func TestFromOpenCode(t *testing.T) {
 	}
 
 	// Factory: OpenCode allows everything but reading outside the project;
-	// Kilo Code asks before commands. The terminal read is not emitted for a
-	// factory default (its rule is allowed only on a configured capability).
+	// Kilo Code asks before commands. Commands that run without asking give
+	// the terminal read, from the factory default too (BV-276).
 	fresh := platform.OpenCodeScan{Product: "opencode", Present: true, ConfigDir: "/h/.config/opencode"}
 	f := FromOpenCode(fresh, oc, now)
 	encode(f)
@@ -47,6 +47,7 @@ func TestFromOpenCode(t *testing.T) {
 	for key, want := range map[string]string{
 		"read_files|workspace|user": ApprovalAllow, "read_files|*|user": ApprovalAsk, "write_files|workspace|user": ApprovalAllow,
 		"execute_shell|*|user": ApprovalAllow, "network|any_destination|user": ApprovalAllow, "invoke_mcp_tool|*|user": ApprovalAllow,
+		"read_files|machine|user": ApprovalAllow,
 	} {
 		if n, ok := c[key]; !ok || n.Approval != want || n.Basis != BasisProductDefault || n.Source == "" {
 			t.Errorf("opencode factory %s: %+v", key, n)
@@ -56,8 +57,11 @@ func TestFromOpenCode(t *testing.T) {
 	if kf["execute_shell|*|user"].Approval != ApprovalAsk {
 		t.Errorf("kilo factory bash %+v", kf["execute_shell|*|user"])
 	}
-	if _, ok := c["read_files|machine|user"]; ok {
-		t.Error("no terminal read from a factory default")
+	if n := c["read_files|machine|user"]; !IsTerminalRead(n) || n.Basis != BasisProductDefault || n.Source != "kb:opencode/shell_allow@"+knowledge.OpenCodeVersion {
+		t.Errorf("factory terminal read %+v", n)
+	}
+	if _, ok := kf["read_files|machine|user"]; ok {
+		t.Error("Kilo Code asks before commands: no terminal read")
 	}
 
 	// Settings: the user denies bash and edit asks; the project allows

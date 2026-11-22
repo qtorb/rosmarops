@@ -679,3 +679,48 @@ func TestDifferential_LaunchesCertaintyAndBasis(t *testing.T) {
 		}
 	}
 }
+
+// BV-276 (Albert 22-11): a product_default capability may carry a rule when
+// its source is the knowledge base (kb:), as an inferred wakes; a configured
+// one needs it; a product_default from elsewhere, or a declared one, may not
+// have one. Own validator and oracle agree.
+func TestDifferential_ProductDefaultRuleFromKB(t *testing.T) {
+	p := compileAll(t)["graph.v2"]
+	raw, err := os.ReadFile(filepath.Join("testdata", "valid", "graph.v2.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, basis, source string
+		rule                *string
+		want                bool
+	}{
+		{"default from kb with rule", "product_default", "kb:opencode/shell_allow@2026-11-22", ptr("terminal: bash: allow"), true},
+		{"default from kb without rule", "product_default", "kb:opencode/shell_allow@2026-11-22", nil, true},
+		{"default not from kb with rule", "product_default", "/home/u/.config/opencode/opencode.json", ptr("terminal: x"), false},
+		{"configured with rule", "configured", "/home/u/.config/opencode/opencode.json#/permission/bash", ptr("permission.bash: allow"), true},
+		{"configured without rule", "configured", "/home/u/.config/opencode/opencode.json#/permission/bash", nil, false},
+		{"declared with rule", "declared", "kb:grok-bot/local@2026-11-14", ptr("x"), false},
+	} {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		node := map[string]any{
+			"id": "cap_fixture_bv276", "kind": "capability", "type": "read_files", "basis": c.basis, "in_force": true,
+			"approval": "allow", "target_scope": "machine", "applies_in": "user", "source": c.source,
+		}
+		if c.rule != nil {
+			node["rule"] = *c.rule
+		}
+		nodes, _ := doc["nodes"].([]any)
+		doc["nodes"] = append(nodes, node)
+		b, _ := json.Marshal(doc)
+		own, oracle, _ := verdicts(t, p, b)
+		if own != c.want || oracle != c.want {
+			t.Errorf("%s: own %v, oracle %v, want %v", c.name, own, oracle, c.want)
+		}
+	}
+}
+
+func ptr(s string) *string { return &s }

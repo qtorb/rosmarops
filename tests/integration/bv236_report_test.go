@@ -153,10 +153,11 @@ func TestBV236ProfileViewWithoutJS(t *testing.T) {
 				t.Errorf("%s: %s copies something else", lang, id)
 			}
 		}
-		// Claude Code's row: «Score 11 → 32» with P1, the machine's score with P1.
+		// Claude Code's row: «Score 10 → 32» with P1 (10 since BV-276, Albert
+		// 22-11, replacing BV-237's 11), the machine's score with P1.
 		cc := between(t, page, `<section class="view pcv"`, `</section>`)
-		if !strings.Contains(cc, esc(cat.Text("pc.score", map[string]string{"a": "11", "b": "32"}))) {
-			t.Errorf("%s: Claude Code's row lacks «11 → 32»", lang)
+		if !strings.Contains(cc, esc(cat.Text("pc.score", map[string]string{"a": "10", "b": "32"}))) {
+			t.Errorf("%s: Claude Code's row lacks «10 → 32»", lang)
 		}
 		for _, mp := range v.Index.Machine.Profiles {
 			if mp.Profile.Profile == profiles.P1 && !strings.Contains(cc, `<span class="arrow">→</span><span class="cls`) {

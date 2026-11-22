@@ -17,11 +17,12 @@ func TestEncodeNamesFailingNode(t *testing.T) {
 	const fakePath = "/home/albert/.codex/config.toml"
 
 	g := Build(Fragment{Nodes: []Node{
-		// A product_default capability must not carry a rule: it does here.
+		// A product_default capability not from the knowledge base must not
+		// carry a rule (BV-276: from kb: it may): it does here.
 		{
 			ID: fakeID, Kind: KindCapability, Type: CapNetwork, Basis: BasisProductDefault,
 			InForce: true, Approval: ApprovalAllow, TargetScope: "any_destination",
-			Source: "kb:gemini-cli/web_search_default@x", Rule: fakeSecret,
+			Source: "gemini:user:web_search_default", Rule: fakeSecret,
 		},
 		// A git_repository resource must not carry configures: it does here.
 		{

@@ -172,12 +172,18 @@ func FromOpenCode(scan platform.OpenCodeScan, base knowledge.Base, discoveredAt 
 		})
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: d.source})
 		// Commands that run without asking read the whole computer
-		// (BV-245, b-i): the terminal-read capability. It carries its rule,
-		// which graph.v2 allows only on a configured capability, so it is
-		// emitted when a file allows bash, not for the factory default.
-		if c.key == "bash" && d.action == ApprovalAllow && d.configured {
+		// (BV-245, b-i): the terminal-read capability, also from the factory
+		// default (graph.v2 allows a rule on a product_default capability
+		// whose source is kb:, BV-276). OpenCode asks before the file
+		// commands it recognises when their paths leave the project
+		// (external_directory, tool/shell.ts:262-279, 392-403 at v1.19.6),
+		// but any other program reads anywhere without asking.
+		if c.key == "bash" && d.action == ApprovalAllow {
 			tid := "cap_" + keyHash(KindCapability, basis, client, CapReadFiles, terminalReadScope, appliesIn, d.source)
-			trule := TerminalReadRulePrefix + d.rule
+			trule := TerminalReadRulePrefix + "bash: allow"
+			if d.configured {
+				trule = TerminalReadRulePrefix + d.rule
+			}
 			b.node(Node{
 				ID: tid, Kind: KindCapability, Type: CapReadFiles, Basis: basis, InForce: true,
 				Approval: ApprovalAllow, TargetScope: terminalReadScope, AppliesIn: appliesIn, Rule: trule, Source: d.source,
