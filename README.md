@@ -112,11 +112,11 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Agent or source | What RosmarOps reads |
 |---|---|
 | Claude Code | `~/.claude/settings.json`, `~/.claude.json`, each project's `.claude/settings.json`, `.claude/settings.local.json` and `.mcp.json`, the managed settings, `CLAUDE.md`, `CLAUDE.local.md` and `.claude/rules`, and its skills |
-| Cursor | `~/.cursor` and each project's `.cursor`: permissions, sandbox, CLI settings, hooks, MCP servers, rules and skills |
+| Cursor | `~/.cursor` and each project's `.cursor`: permissions, sandbox (including its network policy), CLI settings (including its run mode and sandbox mode), hooks, MCP servers, rules and skills; the names of the team hooks in `~/.cursor/managed/team_<id>/hooks/`, never their content |
 | Cline | Its global state and MCP settings (in `~/.cline` and in VS Code), each project's `.clinerules` and `.cline` hooks and skills, and the keys in its `secrets.json` |
 | GitHub Copilot | VS Code's user and project `settings.json` and `mcp.json`, Copilot's own `config.json` and `mcp-config.json`, and its skills (`~/.copilot/skills`, `<repo>/.github/skills`) |
 | Codex | `config.toml` in `~/.codex` (or `CODEX_HOME`) and in each project's `.codex`, its profiles, the managed `requirements.toml` on Windows, `AGENTS.md`, and the keys in its `auth.json` |
-| Grok Build | `config.toml`, `managed_config.toml`, `requirements.toml` and `trusted_folders.toml` in `~/.grok` (or `GROK_HOME`), each project's `.grok/config.toml`, and the keys in its `auth.json` and `mcp_credentials.json` |
+| Grok Build | `config.toml`, `managed_config.toml`, `requirements.toml`, `trusted_folders.toml`, `sandbox.toml` and `hooks/*.json` in `~/.grok` (or `GROK_HOME`); on macOS and Linux, `managed_config.toml` and `requirements.toml` in `/etc/grok`; each project's `.grok/config.toml`, `.grok/sandbox.toml` and `.grok/hooks/*.json`; and the keys in its `auth.json` and `mcp_credentials.json` |
 | Antigravity CLI | Its settings in `~/.gemini/antigravity-cli`, its MCP servers and hooks (`~/.gemini/config` and each project's `.agents`), `GEMINI.md`, `.agents/rules` and its skills |
 | Gemini CLI | `~/.gemini/settings.json`, `system-defaults.json`, `trustedFolders.json`, each project's `.gemini/settings.json`, `GEMINI.md`, its skills and the keys in its `oauth_creds.json` |
 | Hermes Agent | `config.yaml` and its profiles in `~/.hermes` (on Windows, `%LOCALAPPDATA%\hermes`), MCP servers, the keys in its `.env` and `auth.json`, its skills, and its instruction files (including `SOUL.md`) |

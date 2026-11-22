@@ -8,6 +8,7 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/declared"
+	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/state"
 )
 
@@ -46,7 +47,7 @@ func TestAskDeclared_Cursor(t *testing.T) {
 	if strings.Count(out, "En Cursor, Settings > Agents > Approvals & Execution: ¿qué Run mode tienes?") != 2 {
 		t.Errorf("an invalid answer did not ask again:\n%s", out)
 	}
-	if st.Declared[declared.Cursor].KnowledgeVersion != "2026-10-25" || st.Declared[declared.Cursor].AnsweredAt != "2026-11-16T10:00:00Z" {
+	if st.Declared[declared.Cursor].KnowledgeVersion != knowledge.CursorVersion || st.Declared[declared.Cursor].AnsweredAt != "2026-11-16T10:00:00Z" {
 		t.Errorf("stored %+v", st.Declared[declared.Cursor])
 	}
 }

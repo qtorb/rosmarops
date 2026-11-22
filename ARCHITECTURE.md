@@ -195,6 +195,8 @@ Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 
 - **`adapters/windows` is used on all three systems.** Its files have no build constraint. `adapters/darwin` and `adapters/linux` call its readers with their own folder layout (`internal/agentdirs`).
 - **v1 and v2 live side by side.** The v2 graph and rules are the product. The v1 scanners `vscode`, `mcp`, `shellprofile`, `scheduledtasks`, `avexclusions`, `globals` and `repos` still run and still produce v1 findings. The v2 report keeps only the v1 findings that have not moved to v2. Each v1 scanner is removed when v2 replaces it, not before.
+- **Cursor's IDE and CLI are one agent.** Cursor's run mode comes from the IDE (`permissions.json`, or the person's answer) and from the CLI (`cli-config.json`'s `approvalMode`). When they differ, the least controlled one counts (`graph.CursorModeRank`). The CLI's `sandbox.mode: disabled` counts as `type: insecure_none`. The CLI's capabilities carry `applies_in` `cli:user`.
+- **Grok Build's layers come in precedence order.** `GrokScan.Layers` lists the system's and the user's managed config, the user's `config.toml`, then the user's and the system's requirements, lowest first; the projects' layers come after. The last layer that sets a value wins. A custom sandbox profile counts as the built-in profile it `extends`.
 - **Two `Finding` types.** `finding.Finding` is v1. `rules.Finding` is v2.
 - **Two meanings of "class".** A credential's class (`high`, `medium`, ... in `internal/rules`) sets the weight of its findings. An agent's exposure class (A-D in `internal/exposure`) describes how exposed it is.
 - **`allow` and `schedule` are not built.** The commands exist and print «not implemented yet».

@@ -53,7 +53,7 @@ const (
 const Version = "2026-10-24"
 
 // CursorVersion is the version of the embedded Cursor base (cursor.json).
-const CursorVersion = "2026-10-25"
+const CursorVersion = "2026-11-22"
 
 // HermesVersion is the version of the embedded Hermes base (hermes.json,
 // BV-111).
@@ -64,7 +64,7 @@ const CodexVersion = "2026-11-01"
 
 // GrokBuildVersion is the version of the embedded Grok Build base
 // (grok-build.json, BV-140).
-const GrokBuildVersion = "2026-11-08"
+const GrokBuildVersion = "2026-11-22"
 
 // GitHubCopilotVersion is the version of the embedded GitHub Copilot base
 // (github-copilot.json, BV-140).
@@ -93,7 +93,7 @@ const GrokBotVersion = "2026-11-14"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-14"
+const ReviewedOn = "2026-11-22"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
