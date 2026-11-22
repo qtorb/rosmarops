@@ -8,7 +8,7 @@ Free and open source (AGPL-3.0). It runs on your computer and only reads. Nothin
 
 *The [sample report](https://rosmarops.com/sample-report/), made with example data.*
 
-RosmarOps reads the configuration of the AI agents on your Windows, Mac or Linux computer, your repositories and your local credentials. It scores nine agents today: Claude Code, Cursor, Cline, GitHub Copilot, Codex, Grok Build, Antigravity CLI, Gemini CLI and Hermes Agent. It also detects Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Claude Desktop and n8n, without scoring them yet.
+RosmarOps reads the configuration of the AI agents on your Windows, Mac or Linux computer, your repositories and your local credentials. It scores eleven agents today: Claude Code, Cursor, Cline, GitHub Copilot, Codex, Grok Build, Antigravity CLI, Gemini CLI, Hermes Agent, OpenCode and Kilo Code. It also detects Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Claude Desktop and n8n, without scoring them yet.
 
 It tells you, with evidence:
 
@@ -119,6 +119,8 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | Grok Build | `config.toml`, `managed_config.toml`, `requirements.toml` and `trusted_folders.toml` in `~/.grok` (or `GROK_HOME`), each project's `.grok/config.toml`, and the keys in its `auth.json` and `mcp_credentials.json` |
 | Antigravity CLI | Its settings in `~/.gemini/antigravity-cli`, its MCP servers and hooks (`~/.gemini/config` and each project's `.agents`), `GEMINI.md`, `.agents/rules` and its skills |
 | Gemini CLI | `~/.gemini/settings.json`, `system-defaults.json`, `trustedFolders.json`, each project's `.gemini/settings.json`, `GEMINI.md`, its skills and the keys in its `oauth_creds.json` |
+| OpenCode | `opencode.json`/`.jsonc` (and `config.json`) in `~/.config/opencode` (or `XDG_CONFIG_HOME`), each project's `opencode.json(c)` and `.opencode/`, and the managed `opencode.json(c)` (`/etc/opencode`, `/Library/Application Support/opencode`, `%ProgramData%\opencode`): its permissions and MCP servers. Never its database or `auth.json` |
+| Kilo Code | `kilo.json(c)`, `opencode.json(c)` and `config.json` in `~/.config/kilo`, each project's `kilo.json(c)`/`opencode.json(c)` and `.kilocode/`, `.kilo/`, and the managed ones (`/etc/kilo` and equivalents): its permissions and MCP servers; also its legacy `mcp.json` in the project and the VS Code extension's `mcp_settings.json`. Never its database or `auth.json` |
 | Hermes Agent | `config.yaml` and its profiles in `~/.hermes` (on Windows, `%LOCALAPPDATA%\hermes`), MCP servers, the keys in its `.env` and `auth.json`, its skills, and its instruction files (including `SOUL.md`) |
 | Detected agents | Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Claude Desktop and n8n: only that they are installed, and for Claude Desktop its MCP servers |
 | Shared files | `AGENTS.md` in each project, and the skills in `~/.agents/skills` and `<repo>/.agents/skills`, which several agents load |
