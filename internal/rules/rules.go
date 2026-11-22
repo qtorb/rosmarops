@@ -54,6 +54,7 @@ var AllRules = []string{
 	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed, RuleActsWithoutYou,
 	RuleOrchestratorSkipsApprovals, RuleOrchestratorVulnerableVersion, RuleOrchestratorNetworkListen, RuleOrchestratorOpenSignup,
 	RuleSubagentAllTools, RuleSubagentPermissiveMode, RuleSubagentHookCommand, RuleSubagentInlineMCP,
+	RuleMCPUnpinnedLaunch, RuleMCPProjectAutoApprove,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -483,7 +484,11 @@ type Params struct {
 	// weight and the title, the disposition the title and the «another model»
 	// sentence, MCPID and VendorNote the provider note. {service} and {agent}
 	// come from Service and Agent above.
-	Category    string `json:"-"`
+	Category string `json:"-"`
+	// Launcher is mcp_unpinned_launch's {launcher} (npx, bunx, pnpm dlx, uvx,
+	// pipx run, docker run; BV-274): in memory only, like Category, so
+	// report.v2's params do not change.
+	Launcher    string `json:"-"`
 	Disposition string `json:"-"`
 	MCPID       string `json:"-"`
 	VendorNote  bool   `json:"-"`
@@ -739,6 +744,10 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// on the server node in memory (graph.ExternalAction).
 	mcpFindings, mcpServices := mcpExternal(in, nodes, view)
 	res.Findings = append(res.Findings, mcpFindings...)
+	// BV-274: unpinned MCP launches and Claude Code's automatic approval of
+	// project MCP servers.
+	res.Findings = append(res.Findings, mcpUnpinnedFindings(in, nodes)...)
+	res.Findings = append(res.Findings, mcpAutoApproveFindings(in)...)
 	// n8n over MCP (BV-175): one finding per (agent, n8n server). The server was
 	// marked by graph.CrossN8N; the first evidence node is the server, so the
 	// finding weighs 0 and sits outside the agent's band.
