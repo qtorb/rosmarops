@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,34 +12,56 @@ import (
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
+	"github.com/qtorb/rosmarops/internal/jsonkeys"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/scan/secrets"
 	"github.com/qtorb/rosmarops/internal/tomlsubset"
 )
 
-// grokCompatVendors and grokCompatSurfaces are the 18 [compat.<vendor>] cells
-// (CTO-16 Grok §2): three vendors by six surfaces, all enabled by default.
+// grokCompatVendors and grokCompatSurfaces are the [compat.<vendor>] cells:
+// Grok Build reads the harness folders of two vendors, Cursor and Claude, on
+// five surfaces, all on by default (docs.x.ai/build/settings/reference, read
+// 22-11-2026: [compat.cursor] and [compat.claude] with skills, rules,
+// agents, mcps and hooks).
 var (
-	grokCompatVendors  = []string{"cursor", "claude", "codex"}
-	grokCompatSurfaces = []string{"skills", "rules", "agents", "mcps", "hooks", "sessions"}
+	grokCompatVendors  = []string{"cursor", "claude"}
+	grokCompatSurfaces = []string{"skills", "rules", "agents", "mcps", "hooks"}
 )
 
-// ListGrok reads Grok Build's TOML config layers (BV-140, CTO-16 Grok §2), read
-// only: the user config.toml, each repo's .grok/config.toml (in force only when
-// the folder is trusted), the managed config and the requirements in GROK_HOME,
-// and trusted_folders.toml. On Windows Grok reads neither /etc/grok nor Claude
-// Code's managed-settings.json (paths.rs:22-41); this reader does not either.
+// grokSystemDir is where Grok Build reads the system's managed config and
+// requirements on macOS and Linux (docs.x.ai/build/enterprise, read
+// 22-11-2026). Grok does not read it on Windows.
+const grokSystemDir = "/etc/grok"
+
+// ListGrok reads Grok Build's configuration (BV-140, CTO-16 Grok §2), read
+// only: its TOML layers in precedence order (the system's and the user's
+// managed config, the user config.toml, the user's and the system's
+// requirements, docs.x.ai/build/enterprise), each repo's .grok/config.toml
+// (in force only when the folder is trusted), trusted_folders.toml, its own
+// hooks files and sandbox.toml. The system's files in /etc/grok only on
+// macOS and Linux; on Windows Grok reads neither /etc/grok nor Claude Code's
+// managed-settings.json (paths.rs:22-41), and this reader does not either.
 func (w *WindowsPlatform) ListGrok(ctx context.Context, repoRoots []string) (platform.GrokScan, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return platform.GrokScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
-	return ReadGrok(home, agentdirs.Env(os.LookupEnv), repoRoots), nil
+	system := ""
+	if w.layout == agentdirs.MacOSLayout || w.layout == agentdirs.LinuxLayout {
+		system = grokSystemDir
+	}
+	return ReadGrokWith(home, system, agentdirs.Env(os.LookupEnv), repoRoots), nil
 }
 
 // ReadGrok is ListGrok with the home folder, environment and repo roots given,
-// for tests. It is a pure function.
+// and no system folder, for tests.
 func ReadGrok(home string, env agentdirs.Env, repoRoots []string) platform.GrokScan {
+	return ReadGrokWith(home, "", env, repoRoots)
+}
+
+// ReadGrokWith is ReadGrok with the system folder (/etc/grok, or "" for
+// none) given.
+func ReadGrokWith(home, system string, env agentdirs.Env, repoRoots []string) platform.GrokScan {
 	dir := agentdirs.GrokHome(home, env)
 	scan := platform.GrokScan{ConfigDir: dir}
 	for _, name := range []string{"config.toml", "auth.json"} {
@@ -48,33 +71,132 @@ func ReadGrok(home string, env agentdirs.Env, repoRoots []string) platform.GrokS
 		}
 	}
 
-	// 1. User config.toml (full keys), plus the session credential files beside
-	// it (auth.json, mcp_credentials.json).
-	user := readGrokLayer(filepath.Join(dir, "config.toml"), platform.GrokLayerUser, "", false)
+	// 1. The layers, lowest precedence first (docs.x.ai/build/enterprise):
+	// the system's managed config, the user's managed config, the user
+	// config.toml (with the session credential files beside it), the user's
+	// requirements and the system's requirements, which no lower layer can
+	// override.
+	layer := func(path, kind string, sys bool) platform.GrokLayer {
+		l := readGrokLayer(path, kind, "", false)
+		l.System = sys
+		return l
+	}
+	var sysManaged, sysReq platform.GrokLayer
+	if system != "" {
+		sysManaged = layer(filepath.Join(system, "managed_config.toml"), platform.GrokLayerManaged, true)
+		scan.Layers = append(scan.Layers, sysManaged)
+	}
+	managed := layer(filepath.Join(dir, "managed_config.toml"), platform.GrokLayerManaged, false)
+	scan.Layers = append(scan.Layers, managed)
+	user := layer(filepath.Join(dir, "config.toml"), platform.GrokLayerUser, false)
 	user.SessionCreds = grokSessionCreds(dir)
 	scan.Layers = append(scan.Layers, user)
-
-	// 2. Managed config and requirements, from GROK_HOME (CTO-16 Grok §2; on
-	// Windows there is no /etc/grok).
-	managed := readGrokLayer(filepath.Join(dir, "managed_config.toml"), platform.GrokLayerManaged, "", false)
-	scan.Layers = append(scan.Layers, managed)
-	req := readGrokLayer(filepath.Join(dir, "requirements.toml"), platform.GrokLayerRequirements, "", false)
-	scan.Layers = append(scan.Layers, req)
+	scan.Layers = append(scan.Layers, layer(filepath.Join(dir, "requirements.toml"), platform.GrokLayerRequirements, false))
+	if system != "" {
+		sysReq = layer(filepath.Join(system, "requirements.toml"), platform.GrokLayerRequirements, true)
+		scan.Layers = append(scan.Layers, sysReq)
+	}
 
 	// Folder-trust control: on unless an exception turns it off (CTO-16 Grok §2).
-	scan.FolderTrustOff = user.FolderTrustEnabled != nil && !*user.FolderTrustEnabled ||
-		managed.FolderTrustEnabled != nil && !*managed.FolderTrustEnabled ||
-		envFlagOff(env, "GROK_FOLDER_TRUST")
+	off := func(l platform.GrokLayer) bool { return l.FolderTrustEnabled != nil && !*l.FolderTrustEnabled }
+	scan.FolderTrustOff = off(user) || off(managed) || off(sysManaged) || envFlagOff(env, "GROK_FOLDER_TRUST")
 	scan.Trusted = readGrokTrustedFolders(dir)
 
-	// 3. Project .grok/config.toml, one per repo root (only [mcp_servers],
+	// 2. Project .grok/config.toml, one per repo root (only [mcp_servers],
 	// [plugins], [permission] and [mcp]; in force only when trusted).
+	trusted := map[string]bool{}
 	for _, root := range repoRoots {
-		layer := readGrokLayer(filepath.Join(root, ".grok", "config.toml"), platform.GrokLayerProject, root, true)
-		layer.Trusted = grokRootTrusted(root, scan.Trusted, scan.FolderTrustOff, layer.Status)
-		scan.Layers = append(scan.Layers, layer)
+		l := readGrokLayer(filepath.Join(root, ".grok", "config.toml"), platform.GrokLayerProject, root, true)
+		l.Trusted = grokRootTrusted(root, scan.Trusted, scan.FolderTrustOff, l.Status)
+		scan.Layers = append(scan.Layers, l)
+		// A project's hooks and sandbox.toml need an explicit trust like its
+		// config.toml: a repository with no config.toml is not trusted for
+		// them unless trusted_folders.toml or the control says so.
+		trusted[root] = grokRootTrusted(root, scan.Trusted, scan.FolderTrustOff, platform.MCPSourceRead)
+	}
+
+	// 3. Grok's own hooks (docs.x.ai/build/features/hooks): the user's
+	// hooks/*.json and each repository's .grok/hooks/*.json; a project's run
+	// only once the folder is trusted.
+	scan.Hooks = grokHookFiles(filepath.Join(dir, "hooks"), "", true)
+	for _, root := range repoRoots {
+		scan.Hooks = append(scan.Hooks, grokHookFiles(filepath.Join(root, ".grok", "hooks"), root, trusted[root])...)
+	}
+
+	// 4. sandbox.toml: the user's and each repository's profiles.
+	scan.Sandboxes = append(scan.Sandboxes, readGrokSandbox(filepath.Join(dir, "sandbox.toml"), ""))
+	for _, root := range repoRoots {
+		scan.Sandboxes = append(scan.Sandboxes, readGrokSandbox(filepath.Join(root, ".grok", "sandbox.toml"), root))
 	}
 	return scan
+}
+
+// maxGrokHookFiles bounds the hook files read from one folder.
+const maxGrokHookFiles = 100
+
+// grokHookFiles reads the *.json files of one hooks folder: each must be
+// JSON; RosmarOps keeps no key of it (a hook is an executable resource of
+// Grok), and follows no link.
+func grokHookFiles(dir, root string, trusted bool) []platform.GrokHookFile {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []platform.GrokHookFile
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !strings.EqualFold(filepath.Ext(e.Name()), ".json") || len(out) >= maxGrokHookFiles {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		f := platform.GrokHookFile{Path: path, Root: root, Trusted: trusted}
+		raw, status, reason := readBounded(path)
+		f.Status, f.Reason = status, reason
+		if status == platform.MCPSourceRead {
+			var doc struct{}
+			if _, err := jsonkeys.Decode(raw, &doc); err != nil {
+				f.Status, f.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
+			}
+		}
+		slog.Info("grok: hooks file", "path", path, "status", f.Status)
+		out = append(out, f)
+	}
+	return out
+}
+
+// readGrokSandbox reads a sandbox.toml: its [profiles.<name>] tables with
+// extends, restrict_network, read_write and deny
+// (docs.x.ai/build/features/sandbox, read 22-11-2026).
+func readGrokSandbox(path, root string) platform.GrokSandboxFile {
+	f := platform.GrokSandboxFile{Path: path, Root: root}
+	raw, status, reason := readBounded(path)
+	f.Status, f.Reason = status, reason
+	if status != platform.MCPSourceRead {
+		return f
+	}
+	m, err := tomlsubset.Parse(raw)
+	if err != nil {
+		f.Status, f.Reason = platform.MCPSourceFailed, graph.Reason(graph.ReasonParseError, err.Error())
+		return f
+	}
+	profiles, _ := m["profiles"].(tomlsubset.Map)
+	for name, v := range profiles {
+		pm, ok := v.(tomlsubset.Map)
+		if !ok {
+			continue
+		}
+		p := platform.GrokSandboxProfile{Extends: "workspace", ReadWrite: tomlStringArray(pm, "read_write"), Deny: tomlStringArray(pm, "deny")}
+		if s, ok := tomlString(pm, "extends"); ok && strings.TrimSpace(s) != "" {
+			p.Extends = strings.TrimSpace(s)
+		}
+		if b, ok := tomlBool(pm, "restrict_network"); ok {
+			p.RestrictNetwork = &b
+		}
+		if f.Profiles == nil {
+			f.Profiles = map[string]platform.GrokSandboxProfile{}
+		}
+		f.Profiles[name] = p
+	}
+	return f
 }
 
 // grokRootTrusted reports whether Grok trusts a repo root (CTO-16 Grok §2): an

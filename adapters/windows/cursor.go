@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -85,6 +86,7 @@ func ReadCursorWith(home, enterpriseHooks, cliDir string, repoRoots []string) pl
 	if enterpriseHooks != "" {
 		add(enterpriseHooks, platform.CursorHooks, platform.CursorScopeEnterprise, "")
 	}
+	scan.TeamHooks = cursorTeamHooks(filepath.Join(dir, "managed"))
 	for _, root := range repoRoots {
 		ws := filepath.Join(root, ".cursor")
 		add(filepath.Join(ws, "permissions.json"), platform.CursorPermissions, platform.CursorScopeProject, root)
@@ -116,6 +118,9 @@ type (
 		Type                     string   `json:"type"`
 		ReadBoundary             string   `json:"readBoundary"`
 		AdditionalReadwritePaths []string `json:"additionalReadwritePaths"`
+		NetworkPolicy            struct {
+			Default any `json:"default"`
+		} `json:"networkPolicy"`
 	}
 	// cursorCLIDoc is cli-config.json and cli.json.
 	cursorCLIDoc struct {
@@ -123,6 +128,13 @@ type (
 			Allow []string `json:"allow"`
 			Deny  []string `json:"deny"`
 		} `json:"permissions"`
+		// The CLI's own settings: any JSON type is accepted, so a value of
+		// another type is ignored rather than failing the whole file.
+		ApprovalMode any `json:"approvalMode"`
+		Sandbox      struct {
+			Mode          any `json:"mode"`
+			NetworkAccess any `json:"networkAccess"`
+		} `json:"sandbox"`
 	}
 	// cursorHooksDoc is hooks.json: RosmarOps reads none of its keys (the
 	// file itself is an executable resource of Cursor).
@@ -180,8 +192,68 @@ func readCursorFile(path, kind, scope, root string) platform.CursorFile {
 		}
 	case platform.CursorSandbox:
 		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = sandbox.Type, sandbox.ReadBoundary, sandbox.AdditionalReadwritePaths
+		// networkPolicy.default: "allow" or "deny" (default "deny").
+		switch d, _ := sandbox.NetworkPolicy.Default.(string); d {
+		case "allow", "deny":
+			f.NetworkDefault = d
+		}
 	case platform.CursorCLI:
 		f.CLIAllow, f.CLIDeny = cli.Permissions.Allow, cli.Permissions.Deny
+		// Only the user's cli-config.json holds the CLI's own settings; a
+		// project's cli.json holds only permissions.
+		if scope != platform.CursorScopeUser {
+			break
+		}
+		switch m, _ := cli.ApprovalMode.(string); m {
+		case "allowlist", "auto-review", "unrestricted":
+			f.CLIApprovalMode = m
+		}
+		switch m, _ := cli.Sandbox.Mode.(string); m {
+		case "enabled", "disabled":
+			f.CLISandboxMode = m
+		}
+		// sandbox.networkAccess: its values are not documented
+		// (https://cursor.com/docs/cli/reference/configuration.md, read
+		// 22-11-2026: «Network access setting for sandbox mode»), so it is
+		// kept as written, bounded, and never scored.
+		if v, ok := cli.Sandbox.NetworkAccess.(string); ok && len(v) <= 64 {
+			f.CLINetworkAccess = v
+			slog.Info("cursor: cli sandbox.networkAccess read, not scored", "path", path)
+		}
 	}
 	return f
+}
+
+// maxCursorTeamHooks bounds the team hook files listed.
+const maxCursorTeamHooks = 200
+
+// cursorTeamHooks lists the files in <managed>/team_<id>/hooks/: the command
+// hooks Cursor's desktop app writes there on every sync from a team's
+// dashboard (https://cursor.com/docs/hooks, read 22-11-2026: «The desktop
+// app writes each command hook to ~/.cursor/managed/team_<team ID>/hooks/»).
+// It only lists names: no file is opened, and no link is followed.
+func cursorTeamHooks(managed string) []string {
+	teams, err := os.ReadDir(managed)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, t := range teams {
+		if !t.IsDir() || !strings.HasPrefix(t.Name(), "team_") {
+			continue
+		}
+		dir := filepath.Join(managed, t.Name(), "hooks")
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if !e.Type().IsRegular() || len(out) >= maxCursorTeamHooks {
+				continue
+			}
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	slog.Info("cursor: team hooks", "folder", managed, "files", len(out))
+	return out
 }

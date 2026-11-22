@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/config"
+	"github.com/qtorb/rosmarops/internal/declared"
 	"github.com/qtorb/rosmarops/internal/finding"
 
 	"github.com/qtorb/rosmarops/internal/graph"
@@ -1137,7 +1138,11 @@ func newAgentView(n graph.Node, caps []graph.Node, base knowledge.Base, repoRoot
 			c := v.inForce[i]
 			switch {
 			case graph.IsCursorMode(c):
-				v.mode, v.modeCap = c.TargetScope, &v.inForce[i]
+				// The IDE's mode and the CLI's approvalMode: the least
+				// controlled one counts.
+				if v.modeCap == nil || graph.CursorModeRank(graph.CursorModeOption(c)) > graph.CursorModeRank(graph.CursorModeOption(*v.modeCap)) {
+					v.mode, v.modeCap = c.TargetScope, &v.inForce[i]
+				}
 			case graph.IsCursorReadBoundary(c):
 				boundary[c.AppliesIn] = true
 			}
@@ -1359,6 +1364,19 @@ func (v *agentView) cursorEgress(base knowledge.Base) []way {
 	// person.
 	if v.modeCap != nil && v.mode == graph.CursorScopeRunEverything {
 		out = append(out, way{id: v.modeCap.ID, code: "egress_run_everything", cap: v.modeCap.ID, assumptions: with(*v.modeCap)})
+	}
+	// networkPolicy.default "allow": every domain is reachable from the
+	// sandbox, so a command that runs in it without a person (Auto-review or
+	// Allowlist with the sandbox on) sends data out.
+	if v.modeCap != nil {
+		switch graph.CursorModeOption(*v.modeCap) {
+		case declared.ModeAutoReviewSandbox, declared.ModeAllowlistSandbox:
+			for _, c := range v.inForce {
+				if graph.IsCursorNetworkAll(c) && c.AppliesIn == platform.MCPScopeUser {
+					out = append(out, way{id: c.ID, code: "egress_sandbox_network", cap: c.ID, assumptions: with(*v.modeCap)})
+				}
+			}
+		}
 	}
 	for _, c := range v.inForce {
 		// A terminalAllowlist entry, or the class of C2.
