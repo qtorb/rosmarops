@@ -96,3 +96,33 @@ func TestReadGrokBot_Presence(t *testing.T) {
 		t.Errorf("app folder not detected")
 	}
 }
+
+// BV-274: on macOS the app is Grok Bot.app in /Applications or
+// ~/Applications.
+func TestReadGrokBotMac_Presence(t *testing.T) {
+	home, apps := t.TempDir(), t.TempDir()
+	if scan := windows.ReadGrokBotMac(home, apps); scan.Present || scan.Status != platform.MCPSourceMissing {
+		t.Errorf("no app: %+v", scan)
+	}
+	if err := os.MkdirAll(filepath.Join(apps, "Grok Bot.app", "Contents"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if scan := windows.ReadGrokBotMac(home, apps); !scan.Present {
+		t.Error("/Applications/Grok Bot.app not detected")
+	}
+	user := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(user, "Applications", "Grok Bot.app"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if scan := windows.ReadGrokBotMac(user, t.TempDir()); !scan.Present {
+		t.Error("~/Applications/Grok Bot.app not detected")
+	}
+	// A file with the app's name is not the app.
+	odd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(odd, "Grok Bot.app"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if scan := windows.ReadGrokBotMac(t.TempDir(), odd); scan.Present {
+		t.Error("a file named Grok Bot.app counted as the app")
+	}
+}

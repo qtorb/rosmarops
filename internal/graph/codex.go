@@ -154,6 +154,12 @@ func CodexMCPServers(scan platform.CodexScan) []platform.MCPServer {
 			scope = platform.MCPScopeProject
 		}
 		for _, s := range l.MCP {
+			if s.Disabled {
+				// enabled = false: Codex does not start it, so no node, no
+				// loads edge and no credential, as a disabled server of the
+				// JSON clients (BV-274).
+				continue
+			}
 			out = append(out, platform.MCPServer{
 				Client:     knowledge.CodexProduct,
 				Name:       s.ID,

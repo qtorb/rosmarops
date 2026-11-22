@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/qtorb/rosmarops/internal/agentdirs"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
@@ -24,7 +25,27 @@ func (w *WindowsPlatform) ListGrokBot(_ context.Context) (platform.GrokBotScan, 
 	if err != nil {
 		return platform.GrokBotScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
+	if w.layout == agentdirs.MacOSLayout {
+		return ReadGrokBotMac(home, "/Applications"), nil
+	}
 	return ReadGrokBot(home, os.Getenv("LOCALAPPDATA")), nil
+}
+
+// ReadGrokBotMac is ListGrokBot on macOS (BV-274): the app is Grok Bot.app
+// in applications (/Applications) or in ~/Applications. Its settings are
+// the same ~/.grokbot/settings.json.
+func ReadGrokBotMac(home, applications string) platform.GrokBotScan {
+	present := false
+	for _, dir := range []string{applications, filepath.Join(home, "Applications")} {
+		if dir == "" {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(dir, "Grok Bot.app")); err == nil && info.IsDir() {
+			present = true
+			break
+		}
+	}
+	return readGrokBot(home, present)
 }
 
 // grokBotPermissions are the three local tool permission values (CTO-57 §3).
@@ -49,12 +70,19 @@ type grokBotSettings struct {
 
 // ReadGrokBot is ListGrokBot with the home folder and %LOCALAPPDATA% given.
 func ReadGrokBot(home, localAppData string) platform.GrokBotScan {
-	var scan platform.GrokBotScan
+	present := false
 	if localAppData != "" {
 		if info, err := os.Stat(filepath.Join(localAppData, "Programs", "Grok Bot")); err == nil && info.IsDir() {
-			scan.Present = true
+			present = true
 		}
 	}
+	return readGrokBot(home, present)
+}
+
+// readGrokBot reads ~/.grokbot/settings.json; present is whether the app
+// was found where the system installs it.
+func readGrokBot(home string, present bool) platform.GrokBotScan {
+	scan := platform.GrokBotScan{Present: present}
 	scan.SettingsPath = filepath.Join(home, ".grokbot", "settings.json")
 	info, err := os.Lstat(scan.SettingsPath)
 	switch {
