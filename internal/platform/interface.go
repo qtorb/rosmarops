@@ -709,6 +709,12 @@ type Platform interface {
 	// is never read.
 	ListOrchestrators(ctx context.Context, repoRoots []string) (OrchestratorScan, error)
 
+	// ListOpenCode reads OpenCode and Kilo Code at rest (BV-276): their
+	// user, project and managed configuration files (permission and mcp),
+	// and Kilo Code's legacy MCP files. Their session database and
+	// credential files are never opened.
+	ListOpenCode(ctx context.Context, repoRoots []string) ([]OpenCodeScan, error)
+
 	// ListCodex reads OpenAI Codex's TOML config layers (BV-140, CTO-16 §2):
 	// the user config, the profiles, each repository's .codex/config.toml (in
 	// force only when the user config trusts it) and the system requirements.

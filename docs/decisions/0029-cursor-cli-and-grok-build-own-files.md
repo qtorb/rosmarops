@@ -1,4 +1,4 @@
-# 0027. Cursor's CLI and sandbox network, and Grok Build's own hooks, sandbox and system files
+# 0029. Cursor's CLI and sandbox network, and Grok Build's own hooks, sandbox and system files
 
 Date: 2026-11-22
 

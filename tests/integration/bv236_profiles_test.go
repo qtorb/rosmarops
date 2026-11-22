@@ -80,7 +80,9 @@ func TestBV236ProfilePermissions(t *testing.T) {
 }
 
 // TestBV236ProfilePass: on the full test computer, the profile passes give
-// BV-237's numbers (Claude Code 11 D → 32 A with P0, 32 B with P1) and the
+// BV-237's numbers (Claude Code 11 D → 32 A with P0, 32 B with P1; 10 D
+// today since BV-276, Albert 22-11: OpenCode and Kilo Code are on the full
+// computer, and Claude Code can change their configuration too) and the
 // computer's score with each profile is the lowest among its agents.
 func TestBV236ProfilePass(t *testing.T) {
 	prev := graph.HostOS
@@ -104,8 +106,9 @@ func TestBV236ProfilePass(t *testing.T) {
 			}
 			continue
 		}
-		if a.Value == nil || *a.Value != 11 || a.Letter.Class == nil || *a.Letter.Class != "D" {
-			t.Errorf("Claude Code today: %v %v, want 11 D", a.Value, a.Letter.Class)
+		// BV-276 (Albert 22-11): 10, replacing BV-237's 11.
+		if a.Value == nil || *a.Value != 10 || a.Letter.Class == nil || *a.Letter.Class != "D" {
+			t.Errorf("Claude Code today: %v %v, want 10 D", a.Value, a.Letter.Class)
 		}
 		if len(a.Profiles) != 2 {
 			t.Fatalf("Claude Code profiles: %+v", a.Profiles)

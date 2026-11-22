@@ -111,6 +111,8 @@ var knownAgents = map[string]bool{
 	knowledge.AntigravityCLIProduct: true,
 	knowledge.GeminiCLIProduct:      true,
 	knowledge.ClineProduct:          true,
+	knowledge.OpenCodeProduct:       true,
+	knowledge.KiloCodeProduct:       true,
 }
 
 // ValidAgent reports whether s is one of the known product ids that may be sent
@@ -141,6 +143,8 @@ var agentNames = map[string]string{
 	knowledge.AntigravityCLIProduct: "Antigravity CLI",
 	knowledge.GeminiCLIProduct:      "Gemini CLI",
 	knowledge.ClineProduct:          "Cline",
+	knowledge.OpenCodeProduct:       "OpenCode",
+	knowledge.KiloCodeProduct:       "Kilo Code",
 }
 
 // AgentName is the product's display name for a known agent id, for the

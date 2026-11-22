@@ -32,6 +32,10 @@ func productOfSource(path string) string {
 		return "github-copilot"
 	case strings.Contains(p, "/.cursor/"):
 		return "cursor"
+	case strings.Contains(p, "/.config/opencode/"):
+		return "opencode"
+	case strings.Contains(p, "/.config/kilo/"):
+		return "kilo-code"
 	}
 	return ""
 }

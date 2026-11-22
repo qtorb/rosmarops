@@ -10,6 +10,8 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Subagent.** A helper agent of Claude Code, defined in a Markdown file in `~/.claude/agents/` or a project's `.claude/agents/`. RosmarOps reads only its header: which tools it may use, its permission mode, its hooks and the MCP servers it defines. One in the user's folder runs in every project without the folder-trust question.
 
+**OpenCode family.** OpenCode and Kilo Code. Kilo Code is a fork of OpenCode's code and keeps its configuration model: JSON or JSONC files in the user's folder, the project and a managed folder, each overriding the one before, with a `permission` key and an `mcp` key. RosmarOps scores both with one reader (ADR 0027).
+
 **Capability.** Something an agent can do: run shell commands, read files, write files, use the network, call an MCP tool, run in a permission mode, or operate an app. Each capability has an approval (`allow`, `ask`, `deny` or `unknown`) and a basis: set in a file (`configured`), the product's default (`product_default`), or answered by the person (`declared`).
 
 **Team hooks.** The hooks Cursor's desktop app copies to `~/.cursor/managed/team_<id>/hooks/` from a team's dashboard. RosmarOps lists their names and treats each as one of Cursor's executables; it never opens them. They do not tell what else the team's policy sets, so `team_policy_unknown` stays.
