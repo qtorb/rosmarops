@@ -32,15 +32,17 @@ import (
 // asserts that every scored product produced a note.
 
 const (
-	fmUser    = "José-Añá" // non-ASCII Windows user name
-	fmHome    = `C:\Users\` + fmUser
-	fmClaude  = fmHome + `\.claude`
-	fmCodex   = fmHome + `\.codex`
-	fmGrok    = fmHome + `\.grok`
-	fmGemini  = fmHome + `\.gemini`
-	fmCopilot = fmHome + `\AppData\Roaming\Code\User`
-	fmClineD  = fmHome + `\.cline\data`
-	fmHermesD = fmHome + `\AppData\Local\hermes` // %LOCALAPPDATA%
+	fmUser     = "José-Añá" // non-ASCII Windows user name
+	fmHome     = `C:\Users\` + fmUser
+	fmClaude   = fmHome + `\.claude`
+	fmCodex    = fmHome + `\.codex`
+	fmGrok     = fmHome + `\.grok`
+	fmGemini   = fmHome + `\.gemini`
+	fmCopilot  = fmHome + `\AppData\Roaming\Code\User`
+	fmClineD   = fmHome + `\.cline\data`
+	fmHermesD  = fmHome + `\AppData\Local\hermes` // %LOCALAPPDATA%
+	fmOpenCode = fmHome + `\.config\opencode`     // BV-276
+	fmKilo     = fmHome + `\.config\kilo`         // BV-276
 )
 
 var (
@@ -53,6 +55,7 @@ var (
 var fmScoredProducts = []string{
 	"claude-code", "cursor", "codex", "github-copilot",
 	"gemini-cli", "cline", "grok-build", "hermes", "antigravity-cli",
+	"opencode", "kilo-code", // BV-276 (Albert 22-11)
 }
 
 // fmRepos is the 48 repository roots under the user's src folder.
@@ -134,6 +137,8 @@ func fullMachineInput(configured bool) (pipeline.Input, fullMachineScans) {
 	gemini := platform.GeminiScan{ConfigDir: fmGemini, Present: true, FolderTrustEnabled: true}
 	cline := platform.ClineScan{ConfigDir: fmClineD, Present: true, GlobalStateStatus: st, HooksEnabled: true, MigrationVersion: 3}
 	var hermes platform.HermesScan
+	openCode := platform.OpenCodeScan{Product: "opencode", ConfigDir: fmOpenCode, Present: true}
+	kilo := platform.OpenCodeScan{Product: "kilo-code", ConfigDir: fmKilo, Present: true}
 	settings := platform.ClaudeSettingsScan{
 		Files: []platform.ClaudeSettingsFile{{Scope: platform.MCPScopeUser, ConfigPath: fmClaude + `\settings.json`, ConfigDir: fmClaude, Status: st}},
 		Trust: trust,
@@ -150,6 +155,8 @@ func fullMachineInput(configured bool) (pipeline.Input, fullMachineScans) {
 		copilot.Layers = []platform.CopilotLayer{{Kind: platform.CopilotLayerUser, Path: fmCopilot + `\settings.json`, Status: st}}
 		gemini.Layers = []platform.GeminiLayer{{Kind: platform.GeminiLayerUser, Path: fmGemini + `\settings.json`, Status: st}}
 		antigravity.Settings = platform.AntigravitySettings{Path: fmGemini + `\antigravity-cli\settings.json`, Status: st}
+		openCode.Layers = []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: fmOpenCode + `\opencode.jsonc`, Status: st}}
+		kilo.Layers = []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: fmKilo + `\kilo.jsonc`, Status: st}}
 		cline.HasAutoApproval = true
 		cline.ReadFiles, cline.EditFiles, cline.ExecuteSafeCommands, cline.UseBrowser, cline.UseMcp = true, false, true, true, false
 		cfg := platform.HermesConfig{Path: fmHermesD + `\config.yaml`, ConfigDir: fmHermesD, Status: st, ApprovalMode: "smart", TerminalBackend: "local"}
@@ -190,6 +197,8 @@ func fullMachineInput(configured bool) (pipeline.Input, fullMachineScans) {
 	servers = append(servers, graph.GrokMCPServers(grok)...)
 	servers = append(servers, graph.CopilotMCPServers(copilot)...)
 	servers = append(servers, graph.GeminiMCPServers(gemini)...)
+	servers = append(servers, graph.OpenCodeMCPServers(openCode)...)
+	servers = append(servers, graph.OpenCodeMCPServers(kilo)...)
 
 	in := pipeline.Input{
 		MCP:          platform.MCPScan{Servers: servers, Sources: hermes.Sources},
@@ -202,6 +211,7 @@ func fullMachineInput(configured bool) (pipeline.Input, fullMachineScans) {
 		Antigravity:  antigravity,
 		Gemini:       gemini,
 		Cline:        cline,
+		OpenCode:     []platform.OpenCodeScan{openCode, kilo},
 		Instructions: instr,
 		CredFiles:    creds,
 		Extensions:   exts,

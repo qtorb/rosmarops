@@ -52,8 +52,11 @@ func TestSchemaCTO3_Rejected(t *testing.T) {
 		"S3 unknown reason": func(t *testing.T, doc map[string]any) {
 			fixtureNode(t, doc, capDefault)["not_in_force_reason"] = "because"
 		},
-		"S4 rule with product_default": func(t *testing.T, doc map[string]any) {
-			fixtureNode(t, doc, capDefault)["rule"] = "Bash(*)"
+		// BV-276: a product_default capability may carry a rule only when
+		// its source is the knowledge base (kb:); from anywhere else, never.
+		"S4 rule with product_default not from kb": func(t *testing.T, doc map[string]any) {
+			n := fixtureNode(t, doc, capDefault)
+			n["rule"], n["source"] = "Bash(*)", "/home/u/.claude/settings.json#/permissions"
 		},
 		"S4 configured without rule": func(t *testing.T, doc map[string]any) {
 			delete(fixtureNode(t, doc, capConfigured), "rule")
@@ -107,6 +110,10 @@ func TestSchemaCTO3_Accepted(t *testing.T) {
 		},
 		"S8 assumption code": func(t *testing.T, doc map[string]any) {
 			fixtureEdge(t, doc, "edge_cursor_reaches_db_servicerole")["assumptions"] = []any{"read_deny_partial"}
+		},
+		"BV-276 rule with product_default from kb": func(t *testing.T, doc map[string]any) {
+			n := fixtureNode(t, doc, capDefault)
+			n["rule"], n["source"] = "terminal: bash: allow", "kb:claude-code/sandbox_network@2026-10-24"
 		},
 	}
 	for name, mutate := range cases {

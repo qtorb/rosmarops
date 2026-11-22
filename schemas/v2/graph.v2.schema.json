@@ -157,7 +157,7 @@
         },
         "rule": {
           "type": "string",
-          "description": "Literal text of the rule, with any secret redacted. Required when basis is configured; forbidden when it is product_default."
+          "description": "Literal text of the rule, with any secret redacted. Required when basis is configured. Allowed when basis is product_default and the source is the knowledge base (kb:), as an inferred wakes is (BV-276): the rule then names the documented default, such as the terminal read of commands that run without asking. Forbidden otherwise."
         },
         "approval": { "enum": ["allow", "ask", "deny", "unknown"] },
         "target_scope": {
@@ -185,7 +185,14 @@
             "required": ["basis"]
           },
           "then": { "required": ["rule"] },
-          "else": { "not": { "required": ["rule"] } }
+          "else": {
+            "if": {
+              "properties": { "basis": { "const": "product_default" }, "source": { "pattern": "^kb:" } },
+              "required": ["basis", "source"]
+            },
+            "then": {},
+            "else": { "not": { "required": ["rule"] } }
+          }
         }
       ]
     },
