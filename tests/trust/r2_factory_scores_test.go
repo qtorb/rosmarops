@@ -20,7 +20,7 @@ import (
 )
 
 // BV-198 point 8 (CTO-23 §1, §5): the reference computer «R2» as a repository
-// fixture, and a test that fixes the nine factory scores. R2 is a Windows-shaped
+// fixture, and a test that fixes the eleven factory scores. R2 is a Windows-shaped
 // machine with ONE scored agent installed, a git project (src/app) whose
 // AGENTS.md is present and whose .env (OPENAI key, a medium credential) is
 // ignored by git and so unversioned, and a user-level AWS key (high) in
@@ -252,6 +252,30 @@ func r2Antigravity(t *testing.T) report.V2 {
 	return r2BuildV2(t, &g, &settings, nil)
 }
 
+func r2OpenCode(t *testing.T) report.V2 {
+	return r2OpenCodeFamily(t, "opencode", fcHome+"/.config/opencode", "opencode.jsonc")
+}
+
+func r2KiloCode(t *testing.T) report.V2 {
+	return r2OpenCodeFamily(t, "kilo-code", fcHome+"/.config/kilo", "kilo.jsonc")
+}
+
+// r2OpenCodeFamily is OpenCode or Kilo Code installed alone, with its user
+// configuration file read and no permission set in it (the product's factory
+// permissions apply). Both load the repo's AGENTS.md.
+func r2OpenCodeFamily(t *testing.T, product, dir, file string) report.V2 {
+	scan := platform.OpenCodeScan{Product: product, ConfigDir: dir, Present: true, Layers: []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: dir + "/" + file, Status: platform.MCPSourceRead}}}
+	settings := r2Settings()
+	g := r2Assemble(t, pipeline.Input{
+		MCP:          platform.MCPScan{Servers: graph.OpenCodeMCPServers(scan)},
+		Settings:     settings,
+		OpenCode:     []platform.OpenCodeScan{scan},
+		CredFiles:    platform.CredentialFileScan{Entries: r2Creds()},
+		Instructions: platform.InstructionScan{Files: r2Instr(product, dir)},
+	})
+	return r2BuildV2(t, &g, &settings, nil)
+}
+
 func r2Prov() graph.Provenance {
 	return graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: knowledge.Composite, HostID: graph.HostID(fcSalt)}
 }
@@ -264,7 +288,7 @@ type r2Case struct {
 	band    string
 }
 
-// r2Cases are the nine scored agents of the reference computer, in the order
+// r2Cases are the eleven scored agents of the reference computer, in the order
 // factory-scores.json lists them.
 func r2Cases() []r2Case {
 	return []r2Case{
@@ -277,6 +301,8 @@ func r2Cases() []r2Case {
 		{"grok-build", r2Grok, 32, "exposed"},
 		{"hermes", r2Hermes, 32, "exposed"},
 		{"antigravity-cli", r2Antigravity, 76, "open_gaps"},
+		{"opencode", r2OpenCode, 31, "exposed"},    // signed by Albert 22-11 17:56
+		{"kilo-code", r2KiloCode, 75, "open_gaps"}, // signed by Albert 22-11 17:56
 	}
 }
 
@@ -369,9 +395,9 @@ func r2Detail(v report.V2, agentID string) ([]fsFinding, []string) {
 	return findings, assumptions
 }
 
-// r2Collect builds the nine R2 reports, checks each against its pinned score,
+// r2Collect builds the eleven R2 reports, checks each against its pinned score,
 // and returns the factory-scores document, the index version, and whether all
-// nine matched. A mismatch is reported with t.Errorf (CTO-23 §5).
+// eleven matched. A mismatch is reported with t.Errorf (CTO-23 §5).
 func r2Collect(t *testing.T) (doc factoryScores, allMatch bool) {
 	t.Helper()
 	allMatch = true
@@ -406,10 +432,10 @@ func envOr(name, def string) string {
 	return def
 }
 
-// TestR2FactoryScores fixes the nine factory scores of the reference computer
+// TestR2FactoryScores fixes the eleven factory scores of the reference computer
 // (CTO-23 §5). A change here without a code or knowledge-base change is a
 // regression; a deliberate change updates the pinned values in the same commit.
-// With ROSMAROPS_FACTORY_SCORES_OUT set, and only when all nine match, it also
+// With ROSMAROPS_FACTORY_SCORES_OUT set, and only when all eleven match, it also
 // writes factory-scores.json to that path (BV-200): the binary is untouched,
 // this lives only in the test, and with no variable nothing is written.
 func TestR2FactoryScores(t *testing.T) {
@@ -471,9 +497,9 @@ func TestFactoryScoresJSON(t *testing.T) {
 		}
 	})
 
-	// Shape sanity: nine agents, the format tag, R2.
-	if len(doc.Agents) != 9 {
-		t.Errorf("want 9 agents, got %d", len(doc.Agents))
+	// Shape sanity: eleven agents, the format tag, R2.
+	if len(doc.Agents) != 11 {
+		t.Errorf("want 11 agents, got %d", len(doc.Agents))
 	}
 	if doc.Format != "rosmarops.factory-scores/1" || doc.ReferenceComputer != "R2" {
 		t.Errorf("format/reference_computer: %q / %q", doc.Format, doc.ReferenceComputer)
@@ -550,7 +576,7 @@ func r2CursorStripe(t *testing.T) report.V2 {
 
 // TestR2StripeScores (BV-233): «Claude Code + stripe» and «Cursor + stripe»,
 // the payment server at user level, with their scores pinned. They are not in
-// factory-scores.json (the map's nine agents stay as they are): another model
+// factory-scores.json (the map's eleven agents stay as they are): another model
 // decides on Stripe's write tools (Claude Code's auto classifier, Cursor's
 // Auto-review), so the money finding is red.
 func TestR2StripeScores(t *testing.T) {
