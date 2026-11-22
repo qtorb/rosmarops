@@ -101,7 +101,8 @@ func TestRenderHTML_Memory(t *testing.T) {
 		{Path: "/src/a/dashboard/.env.local", Line: 4, Key: "SUPABASE_SERVICE_ROLE_KEY", Value: secrets.NewSecretValue(serviceRoleJWT)},
 	}, instructions)
 	run1 := memoryRun(t, &first, memory.File{}, v2Now, "")
-	run2 := memoryRun(t, &second, run1.NextMemory(), v2Now.Add(24*time.Hour), "")
+	// A memory from before BV-273: what is gone is no longer observed.
+	run2 := memoryRun(t, &second, asV3(run1.NextMemory()), v2Now.Add(24*time.Hour), "")
 	if len(run2.Memory.NoLongerObserved) == 0 {
 		t.Fatalf("memory %+v", run2.Memory)
 	}
@@ -140,9 +141,11 @@ func TestRenderHTML_Memory(t *testing.T) {
 		raw, _ := os.ReadFile(path)
 		p2 := string(raw)
 		box = memoryBox(t, p2, cat)
-		// v3 §17.2: one line of counts (a finding gone), no series.
+		// v3 §17.2: one line of counts (a finding gone), no series; BV-273: the
+		// counts at 0 are left out, so it starts with the gone ones.
+		gonePart := strings.Split(cat.Text("html.since.counts", nil), " · ")[3]
 		for _, want := range []string{
-			htmlEscape(strings.SplitN(cat.Text("html.since.counts", nil), "{", 2)[0]),
+			`<p>` + htmlEscape(strings.ReplaceAll(gonePart, "{gone}", "1")) + ` · `,
 			`<a href="` + report.PageName(gone, lang) + `">` + report.PageName(gone, lang) + `</a>`,
 		} {
 			if !strings.Contains(box, want) {

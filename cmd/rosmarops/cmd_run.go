@@ -515,6 +515,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// repos step runs and reports it; the limit-reached note reads it, falling
 	// back to every project when the repos step never ran.
 	reposNotReviewed := -1
+	var reposCompleted []string // BV-273: the repositories whose check finished
 	// BV-186: tracked files not opened because they are images, documents or
 	// other binaries; set by the repos step, shown in the report's coverage.
 	binarySkipped := 0
@@ -871,6 +872,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				OnProgress:      progress.repos,
 				OnCoverage:      func(notReviewed int) { reposNotReviewed = notReviewed },
 				OnBinarySkipped: func(n int) { binarySkipped = n },
+				OnCompleted:     func(roots []string) { reposCompleted = roots },
 			}
 			if saltErr == nil {
 				// Committed secrets become salted references in the scan;
@@ -987,12 +989,13 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	environment := hostenv.Detect()
 	buildV2 := func() (report.V2, rules.Result) {
 		return report.BuildV2(report.V2Input{
-			Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, Projects: projectsCoverage(search, prevRepos, homeDir),
+			Graph: built, GraphSHA256: builtSHA, Base: base, Bases: bases, RepoRoots: repoList, ReposCompleted: searchCompleteRepos(reposCompleted, search), Projects: projectsCoverage(search, prevRepos, homeDir),
 			Families: families, V1: r, GeneratedAt: time.Now(),
 			Previous: history.Last(), HistoryReset: historyReset, History: history.Entries,
 			Salt: salt, Memory: mem, MemoryReset: memReset, PriorRuns: st.HasRun() || priorReportsExist(reportDir),
-			AllowHits: allowHits,
-			Rotated:   cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
+			PreviousFindings: previousFindings(reportDir),
+			AllowHits:        allowHits,
+			Rotated:          cfg.AllowList.RotatedCredentials, Fixtures: cfg.AllowList.TestFixtures, Dismissed: cfg.AllowList.Dismissed, Accepted: cfg.AllowList.Accepted, ConfigFile: absPath(cfgPath),
 			FactoryGraph: builtFactory, Profiles: builtProfiles,
 			VSCodeFirstRun: vscodeFirstRun, ClaudeSettings: builtSettings, Home: homeDir, Hermes: hermesScan, Paperclip: paperclipScan, Orchestrators: orchScan, Codex: codexScan, Grok: grokScan, Cline: clineScan, Antigravity: antigravityScan,
 			IntegrityNotChecked: integrityNotChecked,

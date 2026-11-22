@@ -64,6 +64,13 @@ var FindingsMemoryV2Schema []byte
 //go:embed v2/findings-memory.v3.schema.json
 var FindingsMemoryV3Schema []byte
 
+// FindingsMemoryV4Schema is the embedded v2/findings-memory.v4.schema.json
+// (BV-273): last_checked.repos_complete, entries[].repos and the verdict
+// resolved.
+//
+//go:embed v2/findings-memory.v4.schema.json
+var FindingsMemoryV4Schema []byte
+
 // IntelSchema is the embedded intel/intel.v1.schema.json schema: the
 // threat-data snapshot contract (BV-100, F0a).
 //

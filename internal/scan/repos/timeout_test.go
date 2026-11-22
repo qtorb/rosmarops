@@ -64,10 +64,13 @@ func TestScanAllRepos_HangingGitScanTimeout(t *testing.T) {
 	var (
 		findings  []finding.Finding
 		baselines []state.RepoBaseline
+		completed = []string{"unset"}
 	)
 	begin := time.Now()
 	timeoutErr := scan.Run(ctx, []scan.Step{{Name: "repos", Run: func(ctx context.Context) func() {
-		f, bl, _ := ScanAllRepos(ctx, []string{a, b}, []state.RepoBaseline{prev}, ScanConfig{})
+		f, bl, _ := ScanAllRepos(ctx, []string{a, b}, []state.RepoBaseline{prev}, ScanConfig{
+			OnCompleted: func(roots []string) { completed = roots },
+		})
 		return func() { findings, baselines = f, bl }
 	}}})
 	elapsed := time.Since(begin)
@@ -95,6 +98,10 @@ func TestScanAllRepos_HangingGitScanTimeout(t *testing.T) {
 	}
 	if !reflect.DeepEqual(baselines, []state.RepoBaseline{prev}) {
 		t.Errorf("baselines: got %+v, want only the previous one of %s", baselines, a)
+	}
+	// BV-273: a repository that timed out did not finish its check.
+	if len(completed) != 0 {
+		t.Errorf("completed: got %v, want none", completed)
 	}
 }
 

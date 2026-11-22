@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/memory"
@@ -52,13 +53,26 @@ func TestRunWithProjectHookWritesMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("findings memory not written: %v", err)
 	}
-	schema, err := schemaval.Compile(schemas.FindingsMemoryV3Schema)
+	schema, err := schemaval.Compile(schemas.FindingsMemoryV4Schema)
 	if err != nil {
 		t.Fatal(err)
 	}
 	valid, err := schema.Validate(raw)
 	if err != nil || !valid.Valid() {
 		t.Fatalf("findings memory not valid against its schema: %v %v", err, valid.Errors())
+	}
+
+	// BV-273: the one repository finished its check, so the memory's base
+	// holds its salted reference (and never its path).
+	var base memory.File
+	if err := json.Unmarshal(raw, &base); err != nil {
+		t.Fatal(err)
+	}
+	if base.LastChecked == nil || base.LastChecked.ReposComplete == nil || len(*base.LastChecked.ReposComplete) != 1 {
+		t.Errorf("repos_complete: %+v, want the one repository", base.LastChecked)
+	}
+	if strings.Contains(string(raw), "projects") {
+		t.Errorf("the findings memory holds a path:\n%s", raw)
 	}
 
 	var st struct {

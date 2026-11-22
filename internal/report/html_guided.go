@@ -6,6 +6,7 @@ import (
 	"html"
 	"strconv"
 
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/profiles"
@@ -368,8 +369,8 @@ func (c htmlCtx) renderGuidedDetail(g guidedAgent, name string, o *rules.Overvie
 		if p.id == def {
 			checked = " checked"
 		}
-		c.w(`<label class="card"><input type="radio" name="gp-%s" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s</h4></div>`,
-			g.key, p.id, checked, c.t(p.name, nil))
+		c.w(`<label class="card"><input type="radio" name="gp-%s" value="%s"%s><div class="top"><span class="radio" aria-hidden="true"></span><h4>%s%s</h4></div>`,
+			g.key, p.id, checked, c.t(p.name, nil), c.inUsePill(graph.ClientDisplayName(g.product), p.id))
 		mp, measured := c.guidedMeasured(o, p.id)
 		if measured { // BV-248: measured on the declared settings
 			now, val, _ := c.agentNow(o.AgentID)

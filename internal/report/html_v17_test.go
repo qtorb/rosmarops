@@ -227,7 +227,11 @@ func TestRenderHTML_SinceColumn(t *testing.T) {
 			}
 			line := htmlEscape(cat.Plural("html.since.same", 3, map[string]string{"count": "3"}))
 			if c.name == "counts" {
-				line = esc("html.since.counts", map[string]string{"new": "2", "gone": "2", "still": "3"})
+				// BV-273: the counts at 0 (fixed, not checked) are left out.
+				line = map[string]string{
+					"en": "New findings: 2 · no longer observed: 2 · still there: 3",
+					"es": "Avisos nuevos: 2 · ya no se observan: 2 · siguen: 3",
+				}[lang]
 			}
 			if !strings.Contains(col, `<p>`+line+`</p>`) {
 				t.Errorf("%s %s: no %q in\n%s", c.name, lang, line, col)

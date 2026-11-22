@@ -42,6 +42,12 @@ const (
 	VerdictNoLongerObserved = "no_longer_observed"
 	VerdictNotComparable    = "not_comparable"
 	VerdictNotChecked       = "not_checked"
+	// VerdictResolved (BV-273) is an open finding that is gone from a place
+	// this run checked in full: its repositories finished their check and its
+	// agent is still here with its sources read. It is kept in the memory and
+	// the report's own data, not in report.v2.json's counts, whose verdicts
+	// are a closed list.
+	VerdictResolved = "resolved"
 )
 
 // AllVerdicts lists the verdicts.
@@ -64,9 +70,10 @@ const saltRefLabel = "rosmarops/findings-memory/salt-ref/v1"
 // with the salt, 16 hex.
 func SaltRef(salt []byte) string { return hash.Keyed(salt, []byte(saltRefLabel))[:16] }
 
-// SchemaVersion is the version written: v3 adds last_checked.mcp_dest_refs
-// (BV-91, D3); versions 1 and 2 are still read.
-const SchemaVersion = 3
+// SchemaVersion is the version written: v4 adds last_checked.repos_complete,
+// entries[].repos and the verdict resolved (BV-273); v3 added
+// last_checked.mcp_dest_refs (BV-91, D3). Versions 1 to 3 are still read.
+const SchemaVersion = 4
 
 // File mirrors schemas/v2/findings-memory.v2.schema.json (and v1, read
 // without SaltRef and AgentRefs).
@@ -94,6 +101,10 @@ type Checked struct {
 	// (BV-91, D3): HMAC(salt, comparison key ‖ destination_ref)[:16]. nil: no
 	// base (a v1 or v2 memory), so the first v3 run reports no change.
 	MCPDestRefs *[]string `json:"mcp_dest_refs,omitempty"`
+	// ReposComplete are the salted references of the repositories whose
+	// check finished in that run (BV-273): HMAC(salt, normalized absolute
+	// path)[:16]. nil: no base (a v1 to v3 memory).
+	ReposComplete *[]string `json:"repos_complete,omitempty"`
 }
 
 // Entry is one finding's memory.
@@ -119,13 +130,20 @@ type Entry struct {
 	// credentials, for "moved or merged" (§1.3).
 	Agent string   `json:"agent"`
 	Creds []string `json:"creds"`
+	// Repos are salted references to the repositories the finding is in
+	// (BV-273), as Checked.ReposComplete: empty for a finding outside every
+	// repository. nil: not known (an entry from a v3 memory not seen since),
+	// so it is never resolved.
+	Repos *[]string `json:"repos,omitempty"`
 }
 
 // Finding is one current finding, by its raw ids (references are salted
-// here, never stored raw).
+// here, never stored raw). Repos are the normalized absolute paths of the
+// repositories its files are in (BV-273).
 type Finding struct {
 	ID, Rule, Severity, Agent string
 	Creds                     []string
+	Repos                     []string
 }
 
 // Run is this run.
@@ -142,6 +160,13 @@ type Run struct {
 	// MemoryLost: RosmarOps ran before on this computer, but the memory it
 	// compares with is missing or was set aside (B8). Nothing compares.
 	MemoryLost bool
+	// ReposComplete are the normalized absolute paths of the repositories
+	// whose check finished in this run (BV-273): no scan_timeout, inside the
+	// global limit, and their root's project search finished.
+	ReposComplete []string
+	// Present are the graph ids of every agent of this run (BV-273): a gone
+	// finding of an agent that is no longer here is not resolved.
+	Present []string
 }
 
 // SeenAgent is one agent of the run: its comparison key (A1), whether it is
@@ -167,8 +192,11 @@ type Root struct {
 	Counts           map[string]int `json:"counts"`
 	NoLongerObserved []Gone         `json:"no_longer_observed"`
 	Moved            []Moved        `json:"moved"`
-	Reason           string         `json:"reason,omitempty"`
-	Reset            bool           `json:"reset"`
+	// Resolved are the open findings gone from a place this run checked in
+	// full (BV-273), sorted like NoLongerObserved. Not in report.v2.json.
+	Resolved []Gone `json:"-"`
+	Reason   string `json:"reason,omitempty"`
+	Reset    bool   `json:"reset"`
 
 	// NewAgents are the non-MCP agents new since the last checked run, by name,
 	// sorted (A1). NewMCP are the new MCP servers and MCPChanged the servers
@@ -188,6 +216,9 @@ type Gone struct {
 	Severity   string `json:"severity"`
 	OpenSince  string `json:"open_since"`
 	LastReport string `json:"last_report"`
+	// Mid is the finding's memory reference (BV-273), so the report can find
+	// its title in the previous report; not written to report.v2.json.
+	Mid string `json:"-"`
 }
 
 // Moved is a pair no_longer_observed + new of one rule and one agent with a
@@ -202,6 +233,10 @@ type Moved struct {
 // ref is the salted reference of an id: HMAC-SHA256 with the local salt,
 // 16 hex.
 func ref(salt []byte, id string) string { return hash.Keyed(salt, []byte(id))[:16] }
+
+// Ref is a finding id's memory reference (an Entry's Mid, a Gone's Mid), so
+// the report can match a gone finding with the previous report's (BV-273).
+func Ref(salt []byte, id string) string { return ref(salt, id) }
 
 // mcpDestRef is a server's salted destination reference (BV-91, D3):
 // HMAC(salt, comparison key ‖ destination_ref)[:16]. A server with no
@@ -324,13 +359,45 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 		e.Rule, e.Severity, e.LastSeen, e.LastVerdict = f.Rule, f.Severity, run.Date, verdict
 		e.LastReport, e.LastSeenRun, e.Open = run.Report, next.Runs, true
 		e.Agent, e.Creds = ref(salt, f.Agent), refs(salt, f.Creds)
+		repoRefs := uniqueSorted(refs(salt, f.Repos))
+		if repoRefs == nil {
+			repoRefs = []string{} // outside every repository
+		}
+		e.Repos = &repoRefs
 		byMid[mid] = e
 		root.Counts[verdict]++
 		verdicts[f.ID] = rules.FindingMemory{Verdict: verdict, OpenSince: e.OpenSince, FirstSeen: e.FirstSeen, Reappeared: e.Reappeared}
 	}
 
-	// The open findings this run did not see.
+	// The open findings this run did not see (BV-273): resolved only where
+	// this run checked their place in full; not checked, and still open, where
+	// it did not; no longer observed where it cannot be known (an entry from a
+	// v3 memory, or a base with no list of complete repositories).
+	complete := map[string]bool{}
+	for _, r := range refs(salt, run.ReposComplete) {
+		complete[r] = true
+	}
+	present := map[string]bool{}
+	for _, r := range refs(salt, run.Present) {
+		present[r] = true
+	}
+	noAgent := ref(salt, "")
+	resolvable := func(e Entry) (verdict string) {
+		if e.Repos == nil {
+			return VerdictNoLongerObserved
+		}
+		for _, r := range *e.Repos {
+			if !complete[r] {
+				return VerdictNotChecked
+			}
+		}
+		if e.Agent != noAgent && !present[e.Agent] {
+			return VerdictNotChecked
+		}
+		return VerdictResolved
+	}
 	var gone []Entry
+	goneVerdict := map[string]string{}
 	for mid, e := range byMid {
 		if seen[mid] || !e.Open {
 			continue
@@ -339,13 +406,21 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 		case !run.Complete:
 			// Not read is not clean: the finding stays open (§1.5).
 			e.LastVerdict = VerdictNotChecked
+			root.Counts[e.LastVerdict]++
 		case notComparable:
 			e.LastVerdict, e.Open = VerdictNotComparable, false
+			root.Counts[e.LastVerdict]++
 		default:
-			e.LastVerdict, e.Open = VerdictNoLongerObserved, false
-			gone = append(gone, e)
+			switch v := resolvable(e); v {
+			case VerdictNotChecked:
+				e.LastVerdict = VerdictNotChecked
+				root.Counts[e.LastVerdict]++
+			default:
+				e.Open = false
+				goneVerdict[mid] = v
+				gone = append(gone, e)
+			}
 		}
-		root.Counts[e.LastVerdict]++
 		byMid[mid] = e
 	}
 	sort.Slice(gone, func(i, j int) bool { return gone[i].Mid < gone[j].Mid })
@@ -364,9 +439,24 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 			break
 		}
 	}
+	// A moved finding is not a fixed one: it stays no longer observed.
 	for _, g := range gone {
-		if !used[g.Mid] {
-			root.NoLongerObserved = append(root.NoLongerObserved, Gone{Rule: g.Rule, Severity: g.Severity, OpenSince: g.OpenSince, LastReport: g.LastReport})
+		v := goneVerdict[g.Mid]
+		if used[g.Mid] {
+			v = VerdictNoLongerObserved
+		}
+		e := byMid[g.Mid]
+		e.LastVerdict = v
+		byMid[g.Mid] = e
+		item := Gone{Rule: g.Rule, Severity: g.Severity, OpenSince: g.OpenSince, LastReport: g.LastReport, Mid: g.Mid}
+		switch {
+		case v == VerdictResolved:
+			root.Resolved = append(root.Resolved, item)
+		default:
+			root.Counts[v]++
+			if !used[g.Mid] {
+				root.NoLongerObserved = append(root.NoLongerObserved, item)
+			}
 		}
 	}
 
@@ -385,9 +475,14 @@ func Update(prev File, run Run, cur []Finding, salt []byte) (File, map[string]ru
 		if destRefs = uniqueSorted(destRefs); destRefs == nil {
 			destRefs = []string{} // a base with no MCP server
 		}
+		repoRefs := uniqueSorted(refs(salt, run.ReposComplete))
+		if repoRefs == nil {
+			repoRefs = []string{} // a base with no complete repository
+		}
 		next.LastChecked = &Checked{
 			Run: next.Runs, Date: run.Date, RulesVersion: run.RulesVersion, KnowledgeVersion: run.KnowledgeVersion,
 			Agents: sortedCopy(run.Agents), Repos: run.Repos, AgentRefs: &agentRefs, MCPDestRefs: &destRefs,
+			ReposComplete: &repoRefs,
 		}
 	}
 	for _, e := range byMid {
@@ -488,7 +583,7 @@ func sameSet(a, b []string) bool {
 	return true
 }
 
-// validate validates raw against the schema of its schema_version: 1 or 2
+// validate validates raw against the schema of its schema_version: 1 to 4
 // (A2, the same pattern as the state). Any other version does not validate.
 func validate(raw []byte) error {
 	var head struct {
@@ -497,12 +592,14 @@ func validate(raw []byte) error {
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return fmt.Errorf("parse findings memory: %w", err)
 	}
-	schema := schemas.FindingsMemoryV3Schema
+	schema := schemas.FindingsMemoryV4Schema
 	switch head.SchemaVersion {
 	case 1:
 		schema = schemas.FindingsMemorySchema
 	case 2:
 		schema = schemas.FindingsMemoryV2Schema
+	case 3:
+		schema = schemas.FindingsMemoryV3Schema
 	}
 	s, err := schemaval.Compile(schema)
 	if err != nil {
@@ -555,7 +652,8 @@ func Read(dir string) (f File, reset bool, err error) {
 	return f, true, nil
 }
 
-// Write validates f and writes dir/findings-memory.json, always as v2.
+// Write validates f and writes dir/findings-memory.json, always as the
+// current version (SchemaVersion).
 func Write(dir string, f File) error {
 	f.SchemaVersion = SchemaVersion
 	if f.Entries == nil {

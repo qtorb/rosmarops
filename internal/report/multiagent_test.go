@@ -156,7 +156,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // three blocks (signed design of 18-11) in place of the sheet and of «What
 // to do first» / «What remains», and each problem's steps below it, at
 // BV-266 with «<task>» in the English launch command (checked: the two
-// lines of P3's command);
+// lines of P3's command), at BV-273 with the CSS of «Since the last check»
+// and of the green «In use» pill (checked: only those style rules; the page
+// has nothing fixed and no template in use);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

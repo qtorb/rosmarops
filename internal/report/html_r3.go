@@ -176,7 +176,9 @@ func (c htmlCtx) renderR3Result() {
 		case m.Unavailable != "":
 			reason = m.Unavailable
 		}
-		c.w(`<p>%s</p></div></section>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
+		c.w(`<p>%s</p></div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
+		c.renderR3Done(m)
+		c.w(`</section>`)
 		return
 	}
 	tone := bandTone(m.Band)
@@ -211,6 +213,7 @@ func (c htmlCtx) renderR3Result() {
 	}
 	text = strings.Replace(html.EscapeString(text), mark, "<b>"+html.EscapeString(c.agentName(m.AgentID))+"</b>", 1)
 	c.w(`<p class="r3-text">%s</p></div>`, text)
+	c.renderR3Done(m)
 	if len(c.v.Dismissed) > 0 { // the score leaves out what the person dismissed
 		c.w(`<p class="r3-note">%s</p>`, c.t("report.dismissed.note", nil))
 	}
@@ -393,7 +396,9 @@ func (c htmlCtx) renderR3Template(iss []issue) {
 		}
 	}
 	fixes := ""
-	if k > 0 {
+	if line := c.tplInUseLine(c.templateAgent()); line != "" {
+		fixes = line // BV-273: the person already uses one of its templates
+	} else if k > 0 {
 		fixes = c.t("html.r3.tpl.fixes", map[string]string{"k": strconv.Itoa(k), "groups": strings.Join(groups, ", ")})
 	} else {
 		fixes = c.t("html.r3.tpl.fixes_none", map[string]string{"agent": c.templateAgent()})
@@ -486,7 +491,9 @@ func r3Keys() []string {
 		"html.r3.group.cred.detail", "html.r3.group.cred.git", "html.r3.group.cred.git.one",
 		"html.r3.group.config", "html.r3.group.config.detail",
 		"html.r3.fix.rotate", "html.r3.fix.rotate_tpl", "html.r3.fix.tpl_all", "html.r3.fix.tpl_some", "html.r3.fix.steps",
+		"html.r3.done.title", "html.r3.done.count", "html.r3.done.count.one", "html.r3.done.score", "html.r3.done.more", "html.memory.evolution",
 		"html.r3.more", "html.r3.more.one", "html.r3.tpl.body", "html.r3.tpl.fixes", "html.r3.tpl.fixes_none", "html.r3.tpl.button", "html.r3.tpl.note",
+		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.r3.tpl.cursor_either", "html.tpl.in_use_pill",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
 		"report.dismissed.note", "html.today.incomplete",
 	}
@@ -542,6 +549,7 @@ body{background:var(--ds-surface)}
 .r3-pill{display:inline-block;font-size:13px;font-weight:600;border-radius:999px;padding:2px 10px;white-space:nowrap}
 .r3-pill.red{color:var(--ds-red);background:var(--ds-red-tint)}
 .r3-pill.amber{color:var(--ds-amber);background:var(--ds-amber-tint)}
+.r3-pill.green{color:var(--ds-green);background:var(--ds-green-tint)}
 a.r3-fix{font-weight:600;color:var(--ds-brand)}
 .r3-tpl{border:2px solid var(--ds-ink);flex-direction:row;align-items:center;gap:24px;flex-wrap:wrap}
 .r3-tpl-text{flex:999 1 460px;min-width:0;display:flex;flex-direction:column;gap:10px}
@@ -574,4 +582,11 @@ a.r3-fix{font-weight:600;color:var(--ds-brand)}
 .r3-tbl .c-f{width:auto;margin-top:6px}
 .r3-m{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ds-muted);margin-bottom:4px}
 .r3-tpl-act{flex-basis:100%}
-}`
+}
+.r3-done{margin:0;padding:14px 16px;border-radius:12px;background:var(--ds-green-tint);display:flex;flex-direction:column;gap:6px}
+.r3-done p{margin:0;font-size:15px;line-height:1.5;color:var(--ds-ink)}
+.r3-done-h{font-weight:700;color:var(--ds-green)}
+.r3-done ul{margin:0;padding-left:20px;font-size:15px;line-height:1.5}
+.r3-done summary{font-size:14px;font-weight:600;color:var(--ds-brand);cursor:pointer;min-height:44px;display:flex;align-items:center}
+.r3-done-series{font-size:14px;color:var(--ds-muted)}
+@media (max-width:600px){.r3-done{padding:12px 14px}}`

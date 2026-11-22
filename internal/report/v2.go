@@ -92,6 +92,8 @@ type V2 struct {
 	nextMemory     memory.File      // findings-memory.json after this run
 	memoryPrev     bool             // an earlier findings-memory.json was read
 	memoryLost     bool             // B8: prior runs, but no memory to compare with
+	resolved       []resolvedItem   // BV-273: the findings fixed since the last check
+	tplScans       tplScans         // BV-273: the settings the templates in use are read from
 	historyMissing bool             // B8: prior runs, but no index-history.json
 	hidden         []HiddenEntry    // B9: what the configuration hid, by entry
 	series         []int            // the evaluated agent's comparable scores, oldest first
@@ -394,6 +396,13 @@ type V2Input struct {
 	// Cursor); empty means Base alone.
 	Bases     map[string]knowledge.Base
 	RepoRoots []string
+	// ReposCompleted are the repositories whose check finished this run
+	// (BV-273): only they can show that a finding was fixed.
+	ReposCompleted []string
+	// PreviousFindings are the previous run's findings (its report.v2.json,
+	// read before this run writes its own), for the titles of the findings
+	// fixed since (BV-273). Optional.
+	PreviousFindings []rules.Finding
 	// Projects is this review's project search (coverage.projects, G4).
 	Projects *ProjectsCoverage
 
@@ -750,6 +759,16 @@ func applyMemory(v *V2, in V2Input) {
 	run.MemoryLost = in.PriorRuns && in.Memory.Runs == 0
 	if in.Graph != nil {
 		run.Seen = seenAgents(*in.Graph)
+		// BV-273: the agents still here, so a gone finding of an agent that
+		// left is not resolved.
+		for _, n := range in.Graph.Nodes {
+			if n.Kind == graph.KindAgent {
+				run.Present = append(run.Present, n.ID)
+			}
+		}
+	}
+	for _, r := range in.ReposCompleted {
+		run.ReposComplete = append(run.ReposComplete, graph.CanonicalPath(r))
 	}
 	// BV-184: the dismissed findings that appeared this run are still observed
 	// (only hidden from the score), so the memory tracks them too; this keeps
@@ -762,7 +781,7 @@ func applyMemory(v *V2, in V2Input) {
 		if MemoryUntracked[f.Rule] {
 			continue
 		}
-		mf := memory.Finding{ID: f.ID, Rule: f.Rule, Severity: f.Severity}
+		mf := memory.Finding{ID: f.ID, Rule: f.Rule, Severity: f.Severity, Repos: rules.FindingRepos(f, in.RepoRoots)}
 		machine := rules.IsMachineFinding(f) // no agent: the credential is the key
 		for i, n := range f.Evidence.Nodes {
 			switch {
@@ -796,6 +815,8 @@ func applyMemory(v *V2, in V2Input) {
 		setVerdict(&v.Dismissed[i])
 	}
 	v.Memory, v.nextMemory, v.memoryPrev = root, next, in.Memory.Runs > 0
+	v.resolved = resolvedItems(root.Resolved, in.PreviousFindings, in.Salt)
+	v.tplScans = tplScans{claude: in.ClaudeSettings, grok: in.Grok, cursor: in.Cursor}
 	v.memoryLost = run.MemoryLost
 	v.NewAgents = root.NewAgents // A1: from the memory, not from v1
 	if in.Graph != nil {

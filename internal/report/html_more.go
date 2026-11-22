@@ -205,10 +205,11 @@ func (c htmlCtx) renderSince() {
 	default:
 		newN := m.Counts[memory.VerdictNew] + m.Counts[memory.VerdictObservedAgain]
 		gone, still := m.Counts[memory.VerdictNoLongerObserved], m.Counts[memory.VerdictStillObserved]
-		if newN == 0 && gone == 0 {
+		fixed, unchecked := len(m.Resolved), m.Counts[memory.VerdictNotChecked]
+		if newN == 0 && gone == 0 && fixed == 0 && unchecked == 0 {
 			c.w(`<p>%s</p>`, html.EscapeString(c.cat.Plural("html.since.same", still, map[string]string{"count": strconv.Itoa(still)})))
 		} else {
-			c.w(`<p>%s</p>`, c.t("html.since.counts", map[string]string{"new": strconv.Itoa(newN), "gone": strconv.Itoa(gone), "still": strconv.Itoa(still)}))
+			c.w(`<p>%s</p>`, html.EscapeString(c.sinceCounts(map[string]int{"new": newN, "fixed": fixed, "unchecked": unchecked, "gone": gone, "still": still})))
 		}
 	}
 	for _, a := range c.scoredAgents() {
@@ -228,6 +229,11 @@ func (c htmlCtx) renderSince() {
 	var lines []string
 	for _, mv := range m.Moved {
 		lines = append(lines, c.t("memory.moved", map[string]string{"rule": mv.Rule}))
+	}
+	for _, g := range m.Resolved { // BV-273: before the ones no longer observed
+		lines = append(lines, c.t("memory.resolved.line", map[string]string{
+			"severity": c.cat.Text("severity."+g.Severity, nil), "rule": g.Rule, "open_since": g.OpenSince,
+		}))
 	}
 	for _, g := range m.NoLongerObserved {
 		report := html.EscapeString(g.LastReport)
@@ -476,7 +482,7 @@ dlg('ov-open','ov-dialog','ov-close');dlg('as-open','as-dialog','as-close');`
 // moreKeys are the catalog codes of §17.
 func moreKeys() []string {
 	keys := []string{
-		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score",
+		"html.since.title", "html.since.same.one", "html.since.same.other", "html.since.counts", "html.since.score", "memory.resolved.line",
 		"html.lang_switch", "html.weekly.title", "html.weekly.pitch", "html.weekly.prompt", "html.weekly.manual.step", "html.weekly.on", "html.weekly.other_exe", "html.weekly.agent_note", "html.weekly.copy_command",
 		// BV-165: the Linux weekly review (systemd user timer) and its no-systemd note.
 		"html.weekly.pitch.linux", "html.weekly.prompt.linux", "html.weekly.manual.step.linux", "html.weekly.no_systemd",
