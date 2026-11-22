@@ -29,6 +29,7 @@ type allAgentScans struct {
 	antigravity platform.AntigravityScan
 	gemini      platform.GeminiScan
 	cline       platform.ClineScan
+	openCode    []platform.OpenCodeScan // BV-276: OpenCode and Kilo Code
 	instr       platform.InstructionScan
 }
 
@@ -48,6 +49,10 @@ func allAgents(configured bool) allAgentScans {
 		antigravity: platform.AntigravityScan{ConfigDir: fcGemini, Present: true},
 		gemini:      platform.GeminiScan{ConfigDir: fcGemini, Present: true, FolderTrustEnabled: true},
 		cline:       platform.ClineScan{ConfigDir: fcHome + "/.cline/data", Present: true, GlobalStateStatus: st, HooksEnabled: true, MigrationVersion: 3},
+		openCode: []platform.OpenCodeScan{
+			{Product: "opencode", ConfigDir: fcHome + "/.config/opencode", Present: true},
+			{Product: "kilo-code", ConfigDir: fcHome + "/.config/kilo", Present: true},
+		},
 	}
 	if configured {
 		s.codex.Layers = []platform.CodexLayer{
@@ -62,6 +67,23 @@ func allAgents(configured bool) allAgentScans {
 		s.copilot.Layers = []platform.CopilotLayer{{Kind: platform.CopilotLayerUser, Path: fcCopilotDir + "/settings.json", Status: st}}
 		s.gemini.Layers = []platform.GeminiLayer{{Kind: platform.GeminiLayerUser, Path: fcGemini + "/settings.json", Status: st}}
 		s.antigravity.Settings = platform.AntigravitySettings{Path: fcGemini + "/antigravity-cli/settings.json", Status: st}
+		// OpenCode with a user and a project file (configured capabilities,
+		// each with its rule), and Kilo Code with an MCP server.
+		s.openCode[0].Layers = []platform.OpenCodeLayer{
+			{
+				Kind: platform.OpenCodeLayerUser, Path: fcHome + "/.config/opencode/opencode.jsonc", Status: st,
+				Permission: map[string]platform.OpenCodeRule{"bash": {Action: "allow"}, "edit": {Action: "ask"}},
+			},
+			{
+				Kind: platform.OpenCodeLayerProject, Path: fcRepo + "/opencode.json", Root: fcRepo, Status: st,
+				Permission: map[string]platform.OpenCodeRule{"*": {Action: "deny"}},
+			},
+		}
+		s.openCode[1].Layers = []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: fcHome + "/.config/kilo/kilo.jsonc", Status: st}}
+		s.openCode[1].Servers = []platform.MCPServer{{
+			Client: "kilo-code", Name: "fs", Command: "npx", Args: []string{"-y", "fs-mcp"}, ConfigPath: fcHome + "/.config/kilo/kilo.jsonc",
+			ConfigDir: fcHome + "/.config/kilo", Pointer: "/mcp/fs", LoadsMCP: true, Scope: platform.MCPScopeUser, Transport: "stdio",
+		}}
 		// Cline auto-approval (BV-202 C5): puts the five capabilities at
 		// basis=configured, which must each carry a rule or the encode fails.
 		s.cline.HasAutoApproval = true
@@ -102,6 +124,9 @@ func buildAllAgentsGraph(t *testing.T, s allAgentScans) graph.Graph {
 	servers = append(servers, graph.GrokMCPServers(s.grok)...)
 	servers = append(servers, graph.CopilotMCPServers(s.copilot)...)
 	servers = append(servers, graph.GeminiMCPServers(s.gemini)...)
+	for _, o := range s.openCode {
+		servers = append(servers, graph.OpenCodeMCPServers(o)...)
+	}
 	mcp := platform.MCPScan{Servers: servers, Sources: s.hermes.Sources}
 	creds := platform.CredentialFileScan{Entries: []platform.CredentialEntry{
 		{Path: fcHome + "/.aws/credentials", Line: 1, Key: "AWS_ACCESS_KEY_ID", Value: secrets.NewSecretValue("AKIAABCDEFGHIJ123456")},
@@ -118,6 +143,7 @@ func buildAllAgentsGraph(t *testing.T, s allAgentScans) graph.Graph {
 		Antigravity:  s.antigravity,
 		Gemini:       s.gemini,
 		Cline:        s.cline,
+		OpenCode:     s.openCode,
 		Instructions: s.instr,
 		CredFiles:    creds,
 		Extensions:   []platform.VSCodeExtension{{ID: "github.copilot"}, {ID: "saoudrizwan.claude-dev"}},

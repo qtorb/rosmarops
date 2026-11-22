@@ -43,6 +43,8 @@ var clientDisplayNames = map[string]string{
 	agentdirs.ClaudeDesktop:    "Claude Desktop",
 	agentdirs.N8N:              "n8n",          // BV-175: detected by its user folder
 	"paperclip":                "Paperclip",    // BV-264: orchestrator, not an ai_client
+	agentdirs.OpenCode:         "OpenCode",     // BV-276: scored
+	agentdirs.KiloCode:         "Kilo Code",    // BV-276: scored
 	"paseo":                    "Paseo",        // BV-268: orchestrator
 	"claude-squad":             "Claude Squad", // BV-268: orchestrator
 	"orca":                     "Orca",         // BV-268: orchestrator

@@ -27,15 +27,17 @@ import (
 // single-agent build (a factory-note case) populates only its own fields.
 type Input struct {
 	// Agent readers, in the shapes the collectors produce.
-	MCP          platform.MCPScan
-	Settings     platform.ClaudeSettingsScan
-	Cursor       platform.CursorScan
-	Hermes       platform.HermesScan
-	Codex        platform.CodexScan
-	Grok         platform.GrokScan
-	Copilot      platform.CopilotScan
-	Antigravity  platform.AntigravityScan
-	Gemini       platform.GeminiScan
+	MCP         platform.MCPScan
+	Settings    platform.ClaudeSettingsScan
+	Cursor      platform.CursorScan
+	Hermes      platform.HermesScan
+	Codex       platform.CodexScan
+	Grok        platform.GrokScan
+	Copilot     platform.CopilotScan
+	Antigravity platform.AntigravityScan
+	Gemini      platform.GeminiScan
+	// OpenCode are OpenCode and Kilo Code at rest (BV-276).
+	OpenCode     []platform.OpenCodeScan
 	Cline        platform.ClineScan
 	Instructions platform.InstructionScan
 	Skills       platform.SkillScan
@@ -153,6 +155,14 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 	frag = graph.Merge(frag, graph.FromGeminiCLI(in.Gemini, in.Now))
 	// The Cline VS Code extension (BV-193, CTO-22 Cline).
 	frag = graph.Merge(frag, graph.FromCline(in.Cline, ClineExtensionPresent(in.Extensions), in.Now))
+	// OpenCode and Kilo Code (BV-276), before the shared files too.
+	for _, s := range in.OpenCode {
+		base, err := openCodeBase(s.Product)
+		if err != nil {
+			return graph.Fragment{}, graph.PermissionStats{}, err
+		}
+		frag = graph.Merge(frag, graph.FromOpenCode(s, base, in.Now))
+	}
 	// Shared instruction and skills files, attached to every ai_client now
 	// present. Extensions add their own agent nodes and are order-independent.
 	frag = graph.AddInstructions(frag, in.Instructions, in.Now)
@@ -313,4 +323,12 @@ func ClaudeChannelPolicy(ao platform.AlwaysOnScan, s platform.ClaudeSettingsScan
 		out.Channels = append(out.Channels, ch)
 	}
 	return out
+}
+
+// openCodeBase is the knowledge base of an OpenCode-family product.
+func openCodeBase(product string) (knowledge.Base, error) {
+	if product == knowledge.KiloCodeProduct {
+		return knowledge.KiloCode()
+	}
+	return knowledge.OpenCode()
 }

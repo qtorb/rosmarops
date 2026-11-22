@@ -42,6 +42,12 @@ const (
 	// ~/.cline/data (decision 9).
 	ClineProduct = "cline"
 
+	// OpenCodeProduct and KiloCodeProduct are the OpenCode family, scored
+	// (BV-276): Kilo Code is a fork of OpenCode's code with its
+	// configuration model.
+	OpenCodeProduct = "opencode"
+	KiloCodeProduct = "kilo-code"
+
 	// GrokBotProduct is xAI's Grok Bot (BV-248, CTO-56 §2): its local
 	// execution and its account settings are declared by the person.
 	GrokBotProduct = "grok-bot"
@@ -82,6 +88,13 @@ const GeminiCLIVersion = "2026-11-08"
 // Not after ReviewedOn.
 const ClineVersion = "2026-11-03"
 
+// OpenCodeVersion and KiloCodeVersion are the versions of opencode.json and
+// kilo-code.json (BV-276), read at OpenCode v1.19.6 and Kilo Code v7.8.32.
+const (
+	OpenCodeVersion = "2026-11-22"
+	KiloCodeVersion = "2026-11-22"
+)
+
 // GrokBotVersion is the version of the embedded Grok Bot base (grok-bot.json,
 // BV-248): the day its documentation was read (CTO-46 §1.4).
 const GrokBotVersion = "2026-11-14"
@@ -93,7 +106,7 @@ const GrokBotVersion = "2026-11-14"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-14"
+const ReviewedOn = "2026-11-22"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
@@ -103,7 +116,7 @@ const ReviewedOn = "2026-11-14"
 // CompositeOf sorts them.
 // The parts are sorted by product (claude-code < codex < cursor <
 // github-copilot < grok-build < hermes), as CompositeOf sorts them.
-const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBotProduct + "@" + GrokBotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion
+const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBotProduct + "@" + GrokBotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion + ";" + KiloCodeProduct + "@" + KiloCodeVersion + ";" + OpenCodeProduct + "@" + OpenCodeVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -144,6 +157,12 @@ var clineJSON []byte
 
 //go:embed grok-bot.json
 var grokBotJSON []byte
+
+//go:embed opencode.json
+var openCodeJSON []byte
+
+//go:embed kilo-code.json
+var kiloCodeJSON []byte
 
 // Base is one product's knowledge base.
 type Base struct {
@@ -441,13 +460,37 @@ func Cline() (Base, error) {
 	return b, nil
 }
 
+// OpenCode returns the embedded OpenCode base (BV-276).
+func OpenCode() (Base, error) { return familyBase(openCodeJSON, OpenCodeVersion) }
+
+// KiloCode returns the embedded Kilo Code base (BV-276).
+func KiloCode() (Base, error) { return familyBase(kiloCodeJSON, KiloCodeVersion) }
+
+// familyBase decodes an OpenCode-family base, checks its version and shares
+// Claude Code's code launcher table, as the other bases do.
+func familyBase(raw []byte, version string) (Base, error) {
+	b, err := decode(raw)
+	if err != nil {
+		return Base{}, err
+	}
+	if b.Version != version {
+		return Base{}, fmt.Errorf("knowledge base %s: version %q, want %q", b.Product, b.Version, version)
+	}
+	cc, err := ClaudeCode()
+	if err != nil {
+		return Base{}, err
+	}
+	b.CodeLaunchers = cc.CodeLaunchers
+	return b, nil
+}
+
 // All returns every embedded base, by product: an agent whose product has a
 // base is evaluated. Codex joins the set with its graph builder, inference and
 // overview cells (BV-140 pieces c and d); Grok Build, GitHub Copilot, Gemini
 // CLI and Cline join the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline, GrokBot} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline, GrokBot, OpenCode, KiloCode} {
 		b, err := load()
 		if err != nil {
 			return nil, err

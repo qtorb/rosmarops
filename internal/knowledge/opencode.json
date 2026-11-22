@@ -1,0 +1,57 @@
+{
+  "product": "opencode",
+  "version": "2026-11-22",
+  "session_files": [],
+  "entries": [
+    {
+      "id": "read_workspace",
+      "type": "read_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: the default permission is \"*\": \"allow\"; read allows every file in the project and asks only for *.env and *.env.* (*.env.example is allowed)."
+    },
+    {
+      "id": "read_outside_ask",
+      "type": "read_files",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: external_directory asks by default: a file outside the project is read only after asking."
+    },
+    {
+      "id": "write_workspace",
+      "type": "write_files",
+      "approval": "allow",
+      "target_scope": "workspace",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: edit (which also covers write and patch) is under \"*\": \"allow\": it edits the project's files without asking."
+    },
+    {
+      "id": "shell_allow",
+      "type": "execute_shell",
+      "approval": "allow",
+      "target_scope": "*",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: bash is under \"*\": \"allow\": it runs any command without asking."
+    },
+    {
+      "id": "network_allow",
+      "type": "network",
+      "approval": "allow",
+      "target_scope": "any_destination",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: webfetch and websearch are under \"*\": \"allow\": they reach the network without asking."
+    },
+    {
+      "id": "mcp_allow",
+      "type": "invoke_mcp_tool",
+      "approval": "allow",
+      "target_scope": "*",
+      "source_url": "https://github.com/anomalyco/opencode/blob/v1.19.6/packages/opencode/src/agent/agent.ts#L119-L136",
+      "verified": "anomalyco/opencode v1.19.6 (f4e363c829), read 2026-11-22: MCP tools are under \"*\": \"allow\": they run without asking."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}
