@@ -8,7 +8,7 @@ description: Apply a RosmarOps permission template to your Claude Code user sett
 The templates are in `templates/<agent>/<use>/` of this repository. Each folder has the settings file and a README that says what the agent can do without asking and what it asks first.
 
 1. Find which agent and which use the person wants. If it is not clear, list the uses for their agent with the first line of each README and ask them to choose. Do not choose for them.
-2. Read the template file and the person's Claude Code user settings (`~/.claude/settings.json`). If that file does not exist, say so.
+2. Read the template file and the person's user settings for that agent: Claude Code's `~/.claude/settings.json`, Cursor's `~/.cursor/sandbox.json` or Grok Build's `~/.grok/config.toml`. If that file does not exist, say so.
 3. Show the change as a diff, and say in one line what the agent will no longer do without asking.
 4. Write the file only if the person says yes. If they say no, change nothing.
 5. These templates go in the user settings, so they apply to every project. Say this before showing the change. Never change managed settings.
