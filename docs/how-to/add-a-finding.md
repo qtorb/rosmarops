@@ -34,6 +34,8 @@ Fill every field of `Finding`:
 
 The first evidence node decides the score. If it is an evaluated agent, the finding enters that agent's score. If it is something else (the n8n folder), the finding weighs 0 and stays outside every agent's band.
 
+A fact the graph schema has no field for can ride on a node in memory only (a field tagged `json:"-"`), so `graph.v2` does not change. `package_known_malicious` (`Malicious`) and `mcp_unpinned_launch` (`Unpinned`, ADR 0026) work this way: the mark carries only what the text shows, and the encoded graph never holds it. The same goes for a param the texts need but `report.v2` has no field for (`Params.Launcher`).
+
 ### 2. Register and emit it: `internal/rules/rules.go`
 
 - Add the code to `AllRules`.
@@ -53,6 +55,12 @@ Either the memory tracks the rule (its code is in the rule enum of `schemas/v2/f
 ### 5. The group: `internal/index/index.go`
 
 Return a group for the rule in `GroupOf`. `n8n_key_with_data` is in `GroupN8N`. A new group also goes in `GroupOrder`.
+
+A rule that loads an MCP server should read its `loads` edges with `rules.LoadsInForce`: a project server the person rejected is not loaded and gives no finding.
+
+### 5b. The weight: `internal/index/index.go`
+
+A rule that enters an agent's score gets its weight in `weightIn`, from a new `index_version` on (`Version`), and 0 before it, so reports of two versions can still be compared. Raising `Version` changes the method line of the reference pages in `internal/report/testdata/`. The space computes its own copy of the score: say in the PR which weights and version it must take.
 
 ### 6. The texts
 

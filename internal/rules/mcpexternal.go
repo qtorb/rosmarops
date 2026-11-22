@@ -55,7 +55,7 @@ func mcpExternal(in Input, nodes map[string]graph.Node, view func(string) *agent
 	}
 	var loads []load
 	for _, e := range g.Edges {
-		if e.Type != graph.EdgeLoads {
+		if !LoadsInForce(e) {
 			continue
 		}
 		srv, ok := nodes[e.To]
@@ -416,4 +416,25 @@ func hermesMCPDisposition(v *agentView) string {
 	default:
 		return MCPApprovalAnotherModel
 	}
+}
+
+// LoadsInForce reports a loads edge the agent acts on: every one except a
+// project server the person rejected (Claude Code's disabledMcpjsonServers,
+// approval_state rejected). A rejected server is not loaded, so it gives no
+// MCP finding (BV-274).
+func LoadsInForce(e graph.Edge) bool {
+	return e.Type == graph.EdgeLoads && e.ApprovalState != graph.ApprovalRejected
+}
+
+// loadedServers are the mcp_server nodes with at least one loads edge in
+// force: the marks a server node carries (a malicious package, an unpinned
+// launch) count only for these.
+func loadedServers(g graph.Graph) map[string]bool {
+	out := map[string]bool{}
+	for _, e := range g.Edges {
+		if LoadsInForce(e) {
+			out[e.To] = true
+		}
+	}
+	return out
 }

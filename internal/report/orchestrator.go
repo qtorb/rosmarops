@@ -4,6 +4,7 @@ import (
 	"github.com/qtorb/rosmarops/internal/catalog"
 	"github.com/qtorb/rosmarops/internal/knowledge"
 	"github.com/qtorb/rosmarops/internal/rules"
+	"github.com/qtorb/rosmarops/internal/untrusted"
 )
 
 // The orchestrator rules (BV-264) render one signed sentence each, their
@@ -33,9 +34,21 @@ func IsSubagentRule(r string) bool {
 	return false
 }
 
+// IsMCPSupplyRule reports the two MCP rules of BV-274: one signed sentence
+// each, and a step of their own.
+func IsMCPSupplyRule(r string) bool {
+	return r == rules.RuleMCPUnpinnedLaunch || r == rules.RuleMCPProjectAutoApprove
+}
+
 // IsSentenceRule reports the rules whose one signed sentence is their title
-// everywhere: the orchestrator and the subagent rules.
-func IsSentenceRule(r string) bool { return IsOrchestratorRule(r) || IsSubagentRule(r) }
+// everywhere: the orchestrator, the subagent and the two MCP rules.
+func IsSentenceRule(r string) bool {
+	return IsOrchestratorRule(r) || IsSubagentRule(r) || IsMCPSupplyRule(r)
+}
+
+// unpinnedExample is the {example} of mcp_unpinned_launch's step: a literal
+// version, signed with the text (BV-274).
+const unpinnedExample = "1.2.3"
 
 // orchestratorKey is the finding's sentence: html.headline.<rule>, and for a
 // version found in npm's cache, its .npm_cache variant.
@@ -51,6 +64,14 @@ func orchestratorKey(f rules.Finding) string {
 // and {fixed}: the orchestrator is the finding's agent, the launched agent its
 // target, and the fixed version comes from Paperclip's knowledge base.
 func orchestratorParams(f rules.Finding) map[string]string {
+	if IsMCPSupplyRule(f.Rule) {
+		// BV-274: {server}, {package} and {scope} are read from disk:
+		// sanitized. {launcher} is one of six fixed words.
+		return map[string]string{
+			"agent": f.Params.Agent, "server": untrusted.PlainText(f.Params.Server), "launcher": f.Params.Launcher,
+			"package": untrusted.PlainText(f.Params.Package), "example": unpinnedExample, "scope": untrusted.PlainText(f.Params.Scope),
+		}
+	}
 	if IsSubagentRule(f.Rule) {
 		// BV-268 (option a): the subagent's name is target_agent, its mode scope.
 		return map[string]string{"agent": f.Params.Agent, "subagent": f.Params.TargetAgent, "mode": f.Params.Scope}
@@ -79,7 +100,10 @@ const subagentUserFolderKey = "html.subagent.user_folder"
 // orchestratorFixKeys are the orchestrator rules that have a step of their
 // own (html.fix.<rule>), filled like their sentence. The others keep the
 // generic html.fix.none line.
-var orchestratorFixKeys = []string{"html.fix." + rules.RuleOrchestratorVulnerableVersion, "html.fix." + rules.RuleOrchestratorNetworkListen, paseoListenFixKey}
+var orchestratorFixKeys = []string{
+	"html.fix." + rules.RuleOrchestratorVulnerableVersion, "html.fix." + rules.RuleOrchestratorNetworkListen, paseoListenFixKey,
+	"html.fix." + rules.RuleMCPUnpinnedLaunch, "html.fix." + rules.RuleMCPProjectAutoApprove,
+}
 
 // paseoListenFixKey is Paseo's step for orchestrator_network_listen: its key
 // is daemon.listen, not Paperclip's bind (BV-268).

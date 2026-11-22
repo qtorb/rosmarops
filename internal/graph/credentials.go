@@ -41,6 +41,7 @@ type credentialKind struct {
 // credential file's format states, to the credential type and service it
 // denotes. Every built-in pattern must have an entry (tested).
 var credentialKinds = map[string]credentialKind{
+	SecretByNamePattern:              {CredentialGenericSecret, ServiceUnknown}, // BV-274
 	"anthropic_api_key":              {CredentialAPIKey, "anthropic"},
 	"openai_project_key":             {CredentialAPIKey, "openai"},
 	"openai_api_key":                 {CredentialAPIKey, "openai"},
@@ -114,6 +115,41 @@ var paymentKeyByName = map[string]string{
 	"SQUARE_ACCESS_TOKEN":    "square_key_by_name",
 	"BRAINTREE_PRIVATE_KEY":  "braintree_key_by_name",
 	"BRAINTREE_ACCESS_TOKEN": "braintree_key_by_name",
+}
+
+// SecretByNamePattern is the kind of an MCP server's env or headers value
+// taken as a secret by its variable's name (BV-274): a generic secret of
+// unknown service, class medium.
+const SecretByNamePattern = "mcp_secret_by_name"
+
+// secretNameWords are the words that make a variable's name a secret's,
+// matched without case (BV-274, Albert 21-11).
+var secretNameWords = []string{"TOKEN", "KEY", "SECRET", "PASSWORD", "PASSWD"}
+
+// SecretByName reports an MCP env or headers value that is a secret by its
+// variable's name (BV-274): not empty, not a reference (${…}), at least 8
+// characters, not the literals true, false or null, not a pure number, and a
+// name that contains TOKEN, KEY, SECRET, PASSWORD or PASSWD in any case. The
+// caller has already checked that no known prefix matches.
+func SecretByName(key, value string) bool {
+	v := strings.TrimSpace(value)
+	if len(v) < 8 || strings.Contains(v, "${") {
+		return false
+	}
+	switch strings.ToLower(v) {
+	case "true", "false", "null":
+		return false
+	}
+	if strings.Trim(v, "0123456789.-+eE") == "" {
+		return false // a pure number
+	}
+	name := strings.ToUpper(key)
+	for _, w := range secretNameWords {
+		if strings.Contains(name, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // PaymentKeyByName returns the credential kind for a payment variable name, or
@@ -293,6 +329,10 @@ type credentialInput struct {
 	kind     string // set when the source states the credential kind
 	platform.EnvVar
 
+	// mcp is set for an MCP server's env or headers entry: only there is an
+	// unrecognised value taken as a secret by its variable's name (BV-274).
+	mcp bool
+
 	// committed is set for a secret a repository scan found (CTO-7 §2.2):
 	// already identified, without its value. location is empty when it is
 	// only in the history.
@@ -349,6 +389,7 @@ func mcpCredentialInputs(servers []platform.MCPServer) []credentialInput {
 				to:       to,
 				location: srv.ConfigPath + "#" + serverPointer(srv) + "/" + ev.section + "/" + pointerEscape(ev.Key),
 				EnvVar:   ev.EnvVar,
+				mcp:      true,
 			})
 		}
 	}
@@ -397,6 +438,11 @@ func credentialsFromRepos(inputs []credentialInput, families map[string]string, 
 			ok = secret != ""
 		} else {
 			patternID, secret, ok = secrets.ClassifyEnv(ev.Key, ev.Value, patterns)
+			if !ok && in.mcp && SecretByName(ev.Key, ev.Value.Reveal()) {
+				// BV-274: no known prefix, but the variable's name says it
+				// is a secret. The whole value is the secret.
+				patternID, secret, ok = SecretByNamePattern, strings.TrimSpace(ev.Value.Reveal()), true
+			}
 		}
 		if !ok {
 			continue
@@ -429,6 +475,7 @@ func credentialsFromRepos(inputs []credentialInput, families map[string]string, 
 				Service:      ident.service,
 				Fingerprint:  fp,
 				DiscoveredAt: seen,
+				SecretByName: patternID == SecretByNamePattern,
 			}
 			identities[id] = ident
 			locations[id] = make(map[string]bool)

@@ -941,6 +941,10 @@ var MemoryUntracked = map[string]bool{
 	rules.RuleSubagentPermissiveMode: true,
 	rules.RuleSubagentHookCommand:    true,
 	rules.RuleSubagentInlineMCP:      true,
+	// BV-274: the two MCP rules are re-derived each run from the servers and
+	// the settings; they are not in the memory schema's rule enum.
+	rules.RuleMCPUnpinnedLaunch:     true,
+	rules.RuleMCPProjectAutoApprove: true,
 }
 
 // buildIndex computes the Agent Posture Score of the run (I1–I9).

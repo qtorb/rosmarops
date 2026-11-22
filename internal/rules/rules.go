@@ -54,6 +54,7 @@ var AllRules = []string{
 	RuleN8NMCPBridge, RuleN8NKeyWithData, RuleComputerUseAppAllowed, RuleActsWithoutYou,
 	RuleOrchestratorSkipsApprovals, RuleOrchestratorVulnerableVersion, RuleOrchestratorNetworkListen, RuleOrchestratorOpenSignup,
 	RuleSubagentAllTools, RuleSubagentPermissiveMode, RuleSubagentHookCommand, RuleSubagentInlineMCP,
+	RuleMCPUnpinnedLaunch, RuleMCPProjectAutoApprove,
 }
 
 // AssumeCodeLauncherRule marks a way that rests on the code launcher table
@@ -219,6 +220,10 @@ func classOf(cred graph.Node, scope string) string {
 	// Payment keys classified by variable name (AP-10 Anexo 1, point 3):
 	// medium, not high, because the name does not tell production from test.
 	case cred.Type == graph.CredentialAPIKey && (cred.Service == "paypal" || cred.Service == "adyen" || cred.Service == "square" || cred.Service == "braintree"):
+		return ClassMedium
+	// A secret of an MCP server known by its variable's name (BV-274):
+	// medium, the name says it is a secret but not of what.
+	case cred.SecretByName:
 		return ClassMedium
 	}
 	return ClassUnclassified
@@ -479,7 +484,11 @@ type Params struct {
 	// weight and the title, the disposition the title and the «another model»
 	// sentence, MCPID and VendorNote the provider note. {service} and {agent}
 	// come from Service and Agent above.
-	Category    string `json:"-"`
+	Category string `json:"-"`
+	// Launcher is mcp_unpinned_launch's {launcher} (npx, bunx, pnpm dlx, uvx,
+	// pipx run, docker run; BV-274): in memory only, like Category, so
+	// report.v2's params do not change.
+	Launcher    string `json:"-"`
 	Disposition string `json:"-"`
 	MCPID       string `json:"-"`
 	VendorNote  bool   `json:"-"`
@@ -706,10 +715,15 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// Threat-intel matches (BV-100, F0a): one red finding per node the cross
 	// marked. The match rides on the node in memory; nothing is read here that
 	// is not already in the graph.
+	loaded := loadedServers(g)
 	for _, n := range g.Nodes {
-		if n.Malicious != nil {
-			res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
+		if n.Malicious == nil {
+			continue
 		}
+		if n.Kind == graph.KindAgent && n.Type == graph.AgentMCPServer && !loaded[n.ID] {
+			continue // a server no agent loads (rejected by the person): BV-274
+		}
+		res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
 	}
 	// Project hooks that run a repo script (BV-107): one finding per
 	// agent_executable resource whose command named a file inside the project.
@@ -730,11 +744,15 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// on the server node in memory (graph.ExternalAction).
 	mcpFindings, mcpServices := mcpExternal(in, nodes, view)
 	res.Findings = append(res.Findings, mcpFindings...)
+	// BV-274: unpinned MCP launches and Claude Code's automatic approval of
+	// project MCP servers.
+	res.Findings = append(res.Findings, mcpUnpinnedFindings(in, nodes)...)
+	res.Findings = append(res.Findings, mcpAutoApproveFindings(in)...)
 	// n8n over MCP (BV-175): one finding per (agent, n8n server). The server was
 	// marked by graph.CrossN8N; the first evidence node is the server, so the
 	// finding weighs 0 and sits outside the agent's band.
 	for _, e := range g.Edges {
-		if e.Type != graph.EdgeLoads {
+		if !LoadsInForce(e) {
 			continue
 		}
 		server, ok := nodes[e.To]

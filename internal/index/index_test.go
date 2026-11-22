@@ -245,3 +245,25 @@ func TestSubagentWeights(t *testing.T) {
 		}
 	}
 }
+
+// BV-274 (Albert 21-11): the two MCP rules weigh from index version 7 on.
+func TestMCPSupplyWeights(t *testing.T) {
+	user := rules.Finding{Rule: rules.RuleMCPUnpinnedLaunch, Severity: rules.SeverityYellow, Radius: rules.RadiusAnyProject}
+	project := rules.Finding{Rule: rules.RuleMCPUnpinnedLaunch, Severity: rules.SeverityYellow, Radius: rules.RadiusSameProject}
+	auto := rules.Finding{Rule: rules.RuleMCPProjectAutoApprove, Severity: rules.SeverityYellow}
+	for _, c := range []struct {
+		f    rules.Finding
+		v7   float64
+		name string
+	}{{user, 9, "unpinned, every project"}, {project, 6, "unpinned, one project"}, {auto, 8, "auto-approve"}} {
+		if got := weightIn(7, c.f); got != c.v7 {
+			t.Errorf("%s weighs %v in version 7, want %v", c.name, got, c.v7)
+		}
+		if got := weightIn(6, c.f); got != 0 {
+			t.Errorf("%s weighs %v in version 6, want 0", c.name, got)
+		}
+	}
+	if GroupOf(rules.RuleMCPUnpinnedLaunch) != GroupPackage || GroupOf(rules.RuleMCPProjectAutoApprove) != GroupAgentConfig {
+		t.Error("groups")
+	}
+}

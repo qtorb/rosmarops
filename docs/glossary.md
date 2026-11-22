@@ -29,6 +29,10 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Rule.** The code that turns a pattern in the graph into v2 findings, such as `cred_read_and_send` or `cred_in_git`. Rules live in `internal/rules`.
 
+**Unpinned launch.** An MCP server started by a launcher that fetches its code when it starts (`npx`, `bunx`, `pnpm dlx`, `uvx`, `pipx run`, `docker run`) without an exact version: its code can change every time it starts. `pkg@1.2.3`, `pkg==1.2.3` and `image@sha256:…` are pinned. The finding is `mcp_unpinned_launch` (ADR 0026).
+
+**Project auto-approval.** Claude Code's `enableAllProjectMcpServers: true`: it approves on its own every MCP server a project brings, without asking. The finding is `mcp_project_autoapprove` (ADR 0026).
+
 **Fixed (resolved).** A finding that was open and is gone from a place this review checked in full: each repository it was in finished its check (no time-out, inside the global limit, its root's project search finished), and its agent is still installed with its settings read. Only these count as «You fixed …» in the report and as fixed in the space. See [the decision](decisions/0025-fixed-only-where-checked.md).
 
 **Not checked.** A finding that was open and is not in this review because its place was not checked in full: a repository that timed out, was deleted or was not reached, or an agent that is no longer installed. It stays open: it is never counted as fixed.

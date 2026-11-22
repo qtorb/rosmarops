@@ -1097,6 +1097,9 @@ type CodexMCPServer struct {
 	Env        []EnvVar // values wrapped as SecretValue
 	HeaderKeys []string // http_headers names only
 	Headers    []EnvVar // http_headers values wrapped as SecretValue
+	// Disabled is enabled = false in [mcp_servers.<id>]: Codex does not
+	// start the server (BV-274).
+	Disabled bool
 }
 
 // GrokScan is what ListGrok read of xAI Grok Build's config (BV-140, CTO-16

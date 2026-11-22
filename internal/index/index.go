@@ -21,8 +21,10 @@ import (
 // mcp_external_action (AP-10, BV-117/BV-121). The weights of versions 1 to 3
 // are kept for the double calculation of I7. Version 5 adds
 // computer_use_app_allowed (BV-193). Version 6 adds the four subagent rules
-// (BV-268, Albert 20-11), weight 0 before it.
-const Version = 6
+// (BV-268, Albert 20-11), weight 0 before it. Version 7 adds
+// mcp_unpinned_launch and mcp_project_autoapprove (BV-274, Albert 21-11),
+// weight 0 before it.
+const Version = 7
 
 // K is the constant of the formula (I3).
 const K = 80.0
@@ -180,6 +182,12 @@ func GroupOf(rule string) string {
 	// BV-268: a Claude Code subagent's header is Claude Code's configuration.
 	case rules.RuleSubagentAllTools, rules.RuleSubagentPermissiveMode, rules.RuleSubagentHookCommand, rules.RuleSubagentInlineMCP:
 		return GroupAgentConfig
+	// BV-274: an MCP server whose code is not pinned is a package; approving
+	// every project server is Claude Code's configuration.
+	case rules.RuleMCPUnpinnedLaunch:
+		return GroupPackage
+	case rules.RuleMCPProjectAutoApprove:
+		return GroupAgentConfig
 	}
 	return ""
 }
@@ -309,6 +317,25 @@ func weightOf(f rules.Finding) float64 { return weightIn(Version, f) }
 // peso»): money 20 red / 6 asking; infrastructure and database 15; every
 // other class 8; ×1.5 when it reaches every project (radius any_project).
 func weightIn(version int, f rules.Finding) float64 {
+	// Version 7 adds the two MCP rules (BV-274, Albert 21-11): an unpinned
+	// launch 6, ×1.5 when the server loads in every project (radius
+	// any_project, as mcp_external_action); the automatic approval of project
+	// servers 8. Weight 0 before it.
+	switch f.Rule {
+	case rules.RuleMCPUnpinnedLaunch:
+		if version < 7 {
+			return 0
+		}
+		if f.Radius == rules.RadiusAnyProject {
+			return 9
+		}
+		return 6
+	case rules.RuleMCPProjectAutoApprove:
+		if version < 7 {
+			return 0
+		}
+		return 8
+	}
 	// Version 6 adds the subagent rules (BV-268, Albert 20-11): a permissive
 	// mode 15, a hook command or inline MCP servers 10, every tool 0 (shown,
 	// not counted); weight 0 before it.

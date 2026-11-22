@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/qtorb/rosmarops/internal/agentdirs"
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
 
@@ -173,5 +174,43 @@ func TestResolveCodexRequirements(t *testing.T) {
 	reg := codexFakeReg{HiveHKLM + "|" + codexPolicyKey + "|RequirementsPath": `D:\policy\req.toml`}
 	if got := resolveCodexRequirements(context.Background(), env, reg); got != `D:\policy\req.toml` {
 		t.Errorf("registry override: %q", got)
+	}
+}
+
+// BV-274: enabled = false in [mcp_servers.<id>] means Codex does not start
+// the server, so it is not loaded: no server for the shared MCP pipeline.
+func TestReadCodex_DisabledMCPServer(t *testing.T) {
+	home := t.TempDir()
+	codex := filepath.Join(home, ".codex")
+	writeFileCodex(t, filepath.Join(codex, "config.toml"), `[mcp_servers.on]
+command = "npx"
+args = ["-y", "server-on@1.0.0"]
+[mcp_servers.off]
+command = "npx"
+args = ["-y", "server-off"]
+enabled = false
+[mcp_servers.explicit]
+command = "uvx"
+args = ["tool==2.0.0"]
+enabled = true
+`)
+	scan := ReadCodex(home, envOf(map[string]string{"CODEX_HOME": codex}), nil, "")
+	user, ok := layerByKindRoot(scan, platform.CodexLayerUser, "")
+	if !ok || len(user.MCP) != 3 {
+		t.Fatalf("user MCP: %+v", user.MCP)
+	}
+	disabled := map[string]bool{}
+	for _, s := range user.MCP {
+		disabled[s.ID] = s.Disabled
+	}
+	if disabled["on"] || !disabled["off"] || disabled["explicit"] {
+		t.Errorf("disabled %v", disabled)
+	}
+	var names []string
+	for _, s := range graph.CodexMCPServers(scan) {
+		names = append(names, s.Name)
+	}
+	if strings.Join(names, ",") != "explicit,on" {
+		t.Errorf("loaded servers %v, want on and explicit (off has enabled = false)", names)
 	}
 }
