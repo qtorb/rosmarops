@@ -220,6 +220,10 @@ func classOf(cred graph.Node, scope string) string {
 	// medium, not high, because the name does not tell production from test.
 	case cred.Type == graph.CredentialAPIKey && (cred.Service == "paypal" || cred.Service == "adyen" || cred.Service == "square" || cred.Service == "braintree"):
 		return ClassMedium
+	// A secret of an MCP server known by its variable's name (BV-274):
+	// medium, the name says it is a secret but not of what.
+	case cred.SecretByName:
+		return ClassMedium
 	}
 	return ClassUnclassified
 }
@@ -706,10 +710,15 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// Threat-intel matches (BV-100, F0a): one red finding per node the cross
 	// marked. The match rides on the node in memory; nothing is read here that
 	// is not already in the graph.
+	loaded := loadedServers(g)
 	for _, n := range g.Nodes {
-		if n.Malicious != nil {
-			res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
+		if n.Malicious == nil {
+			continue
 		}
+		if n.Kind == graph.KindAgent && n.Type == graph.AgentMCPServer && !loaded[n.ID] {
+			continue // a server no agent loads (rejected by the person): BV-274
+		}
+		res.Findings = append(res.Findings, maliciousPackageFinding(in, n))
 	}
 	// Project hooks that run a repo script (BV-107): one finding per
 	// agent_executable resource whose command named a file inside the project.
@@ -734,7 +743,7 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// marked by graph.CrossN8N; the first evidence node is the server, so the
 	// finding weighs 0 and sits outside the agent's band.
 	for _, e := range g.Edges {
-		if e.Type != graph.EdgeLoads {
+		if !LoadsInForce(e) {
 			continue
 		}
 		server, ok := nodes[e.To]

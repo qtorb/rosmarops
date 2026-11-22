@@ -283,6 +283,9 @@ func envCredentials(in Input, res Result) map[[2]string]bool {
 	for _, e := range g.Edges {
 		switch e.Type {
 		case graph.EdgeLoads:
+			if !LoadsInForce(e) {
+				continue // a rejected project server is not loaded (BV-274)
+			}
 			if loads[e.From] == nil {
 				loads[e.From] = map[string]bool{}
 			}

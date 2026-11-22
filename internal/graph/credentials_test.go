@@ -245,3 +245,53 @@ func sortedCopy(ss []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// BV-274: in an MCP server's env and headers, a value with no known prefix
+// is a secret when its variable's name says so (TOKEN, KEY, SECRET,
+// PASSWORD, PASSWD, any case): a generic secret, class medium, fingerprint
+// only. Short values, references, true/false/null and pure numbers are not.
+func TestCredentialsFromMCP_SecretByName(t *testing.T) {
+	const random = "q8Zr3mV1xT9kLw2pN7cY" // no known prefix
+	srv := credServer("claude-code", "/home/u/.claude.json", "svc", env(
+		"MY_SERVICE_TOKEN", random,
+		"apiKey", random+"B",
+		"DB_PASSWD", random+"C",
+		"SHORT_TOKEN", "abc1234",
+		"REF_KEY", "${MY_KEY}",
+		"BEARER_TOKEN", "Bearer ${TOKEN}",
+		"BOOL_SECRET", "false",
+		"PORT_KEY", "12345678",
+		"LOG_LEVEL", random+"D",
+		"GITHUB_TOKEN", fakeGitHubPAT,
+	))
+	srv.Headers = env("X-Api-Key", random+"E", "Authorization", random+"F")
+	creds, receives := credentials(t, []platform.MCPServer{srv}, []byte("0123456789abcdef0123456789abcdef"))
+	byName := map[string]graph.Node{}
+	for _, c := range creds {
+		for _, loc := range c.Locations {
+			byName[loc[strings.LastIndex(loc, "/")+1:]] = c
+		}
+	}
+	for _, k := range []string{"MY_SERVICE_TOKEN", "apiKey", "DB_PASSWD", "X-Api-Key"} {
+		c, ok := byName[k]
+		if !ok || !c.SecretByName || c.Type != graph.CredentialGenericSecret || c.Service != graph.ServiceUnknown || c.Fingerprint == "" {
+			t.Errorf("%s: %+v %v", k, c, ok)
+		}
+	}
+	for _, k := range []string{"SHORT_TOKEN", "REF_KEY", "BEARER_TOKEN", "BOOL_SECRET", "PORT_KEY", "LOG_LEVEL", "Authorization"} {
+		if c, ok := byName[k]; ok {
+			t.Errorf("%s is not a secret by name: %+v", k, c)
+		}
+	}
+	if c := byName["GITHUB_TOKEN"]; c.SecretByName || c.Service != "github" {
+		t.Errorf("a known prefix keeps its own kind: %+v", c)
+	}
+	if len(receives) != len(creds) {
+		t.Errorf("%d receives edges for %d credentials: the server receives each", len(receives), len(creds))
+	}
+	for _, c := range creds {
+		if strings.Contains(c.Fingerprint, random) || strings.Contains(strings.Join(c.Locations, " "), random) {
+			t.Fatalf("a value reached the node: %+v", c)
+		}
+	}
+}
