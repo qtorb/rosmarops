@@ -91,6 +91,11 @@ var registry = []Entry{
 	{Product: "antigravity-cli", Sources: []ConfigSource{
 		{LayerUser, FormatJSON, true}, // ~/.gemini/antigravity-cli/settings.json
 	}},
+	// BV-276: the OpenCode family. Not on the full machine yet (adding them
+	// changes Claude Code's reference figures, which the owner signs), so,
+	// like Cursor, they declare no source yet.
+	{Product: "opencode", Sources: nil},
+	{Product: "kilo-code", Sources: nil},
 }
 
 // All returns the registry entries, one per scored product.

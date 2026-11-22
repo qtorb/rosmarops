@@ -69,7 +69,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `adapters/windows`: the readers of every agent's files. Despite its name, macOS and Linux use them too (see Known oddities).
 - `adapters/darwin`, `adapters/linux`: the macOS and Linux platforms. They call the readers of `adapters/windows` with their own folder layout.
 - `internal/platform`: the `Platform` interface and the data types every reader returns.
-- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux.
+- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux. OpenCode and Kilo Code (the OpenCode family) resolve their folder from `XDG_CONFIG_HOME` or `~/.config` on every system, and one reader (`adapters/windows/opencode.go`) serves both.
 - `internal/scan`: runs the scan steps under the global time limit.
 - `internal/scan/avexclusions`: new Windows Defender exclusions since the baseline (v1).
 - `internal/scan/configkeys`: configuration keys an agent reads differently from RosmarOps, as red findings.

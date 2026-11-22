@@ -416,3 +416,51 @@ func Products(present []Present) map[string]bool {
 func (l Layout) OrcaUserData(home string, env Env) string {
 	return filepath.Join(l.configBase(home, env), "Orca")
 }
+
+// Product codes of the OpenCode family (BV-276): OpenCode and Kilo Code, a
+// fork of OpenCode's code that keeps its configuration model.
+const (
+	OpenCode = "opencode"
+	KiloCode = "kilo-code"
+)
+
+// xdgConfigAll is $XDG_CONFIG_HOME, else <home>/.config, on every system:
+// OpenCode and Kilo Code resolve their global folder with xdg-basedir,
+// also on Windows and macOS (anomalyco/opencode v1.19.6,
+// packages/core/src/global.ts:3,13).
+func xdgConfigAll(home string, env Env) string {
+	if v, ok := lookup(env)("XDG_CONFIG_HOME"); ok && v != "" {
+		return v
+	}
+	return filepath.Join(home, ".config")
+}
+
+// OpenCodeDir is OpenCode's global configuration folder:
+// <xdg config>/opencode.
+func OpenCodeDir(home string, env Env) string {
+	return filepath.Join(xdgConfigAll(home, env), "opencode")
+}
+
+// KiloDir is Kilo Code's global configuration folder: <xdg config>/kilo
+// (Kilo-Org/kilocode v7.8.32, packages/core/src/global.ts:12,24).
+func KiloDir(home string, env Env) string {
+	return filepath.Join(xdgConfigAll(home, env), "kilo")
+}
+
+// OpenCodeManagedDir is the folder an administrator puts the managed
+// configuration of the OpenCode family in, for name opencode or kilo
+// (config/managed.ts:20-29): /etc/<name> (Linux), /Library/Application
+// Support/<name> (macOS), %ProgramData%\<name> (Windows).
+func (l Layout) OpenCodeManagedDir(name string, env Env) string {
+	switch l {
+	case MacOSLayout:
+		return filepath.Join("/Library", "Application Support", name)
+	case LinuxLayout:
+		return filepath.Join("/etc", name)
+	}
+	pd := `C:\ProgramData`
+	if v, ok := lookup(env)("ProgramData"); ok && v != "" {
+		pd = v
+	}
+	return filepath.Join(pd, name)
+}

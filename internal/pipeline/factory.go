@@ -35,6 +35,7 @@ func Factory(in Input) Input {
 	out.Antigravity = factoryAntigravity(in.Antigravity)
 	out.Gemini = factoryGemini(in.Gemini)
 	out.Cline = FactoryCline(in.Cline)
+	out.OpenCode = factoryOpenCode(in.OpenCode)
 	// BV-251: inbound channels and scheduled tasks are set up by the person,
 	// not defaults: taken out. The memory files stay, like the instruction
 	// files. (A Telegram or Discord token in Hermes's .env is a credential,
@@ -224,5 +225,21 @@ func FactoryCline(s platform.ClineScan) platform.ClineScan {
 	out.HasAutoApproval = false
 	out.ReadFiles, out.EditFiles, out.ExecuteSafeCommands, out.UseBrowser, out.UseMcp = false, false, false, false, false
 	out.Yolo, out.YoloKey = false, ""
+	return out
+}
+
+// factoryOpenCode is OpenCode and Kilo Code at their factory permissions
+// (BV-276): every file's permission taken out; the files, and their MCP
+// servers, stay.
+func factoryOpenCode(in []platform.OpenCodeScan) []platform.OpenCodeScan {
+	out := make([]platform.OpenCodeScan, len(in))
+	for i, s := range in {
+		out[i] = s
+		out[i].Layers = make([]platform.OpenCodeLayer, len(s.Layers))
+		for j, l := range s.Layers {
+			l.Permission = nil
+			out[i].Layers[j] = l
+		}
+	}
 	return out
 }

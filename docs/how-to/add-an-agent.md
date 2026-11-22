@@ -121,6 +121,10 @@ Add the agent, with a realistic configuration, to the machines the cross-agent t
 
 The factory score of a new agent is a published figure. The owner signs it before you pin it in `r2Cases`.
 
+## Two products that share one model
+
+OpenCode and Kilo Code (ADR 0027) share their configuration model, so one reader serves both. `adapters/windows/opencode.go` describes what tells them apart in an `openCodeFamily` value (file names, dot folders, the managed folder's name), and `internal/graph/opencode.go` builds both fragments from the product's own knowledge base. A third product of the same model is a new `openCodeFamily` and a knowledge file, not a new reader.
+
 ## An orchestrator
 
 A program that starts other agents (Paperclip, ADR 0022) is not an `ai_client`. It is an `agent` of type `orchestrator`:
