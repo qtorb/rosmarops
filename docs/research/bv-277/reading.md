@@ -69,7 +69,7 @@ Consulted on 2026-11-22. Each claim cites the product's source (Continue, file:l
 ## 3. Claude Desktop
 
 **Version**
-- v6.28899.6 (2026-20-11), bundling Claude Code 2.1.330 ([changelog](https://claude.com/docs/cowork/claude-desktop-changelog)).
+- v6.28899.6 (2026-11-20), bundling Claude Code 2.1.330 ([changelog](https://claude.com/docs/cowork/claude-desktop-changelog)).
 - **Linux is official, in beta, since v1.17377.1 (2026-06-30)**, as a `.deb` for Ubuntu 22.04+ and Debian 12+ ([code.claude.com/docs/en/desktop-linux](https://code.claude.com/docs/en/desktop-linux)).
 
 **`claude_desktop_config.json`**
