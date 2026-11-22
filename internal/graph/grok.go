@@ -94,26 +94,52 @@ func FromGrok(scan platform.GrokScan, settings platform.ClaudeSettingsScan, curs
 	// compact allow/deny/ask lists), evaluated deny > ask > allow.
 	b.grokToolRules(client, scan)
 
-	// BV-232 §1: [sandbox] profile, from the user and managed layers (the
-	// managed one wins). Not in force on native Windows, where the sandbox
-	// does not exist (Landlock on Linux, Seatbelt on macOS).
+	// BV-232 §1: [sandbox] profile. The layers come lowest precedence first
+	// (docs.x.ai/build/enterprise), so the last one that sets it wins: the
+	// managed config, then the user's config.toml, then the requirements,
+	// which pin it. Not in force on native Windows, where the sandbox does
+	// not exist (Landlock on Linux, Seatbelt on macOS).
 	profile, profilePath := "", ""
 	for _, l := range scan.Layers {
-		if l.Status != platform.MCPSourceRead || l.SandboxProfile == "" {
+		if l.Status != platform.MCPSourceRead || l.SandboxProfile == "" || l.Kind == platform.GrokLayerProject {
 			continue
 		}
-		switch {
-		case l.Kind == platform.GrokLayerManaged, l.Kind == platform.GrokLayerUser && profilePath == "":
-			profile, profilePath = l.SandboxProfile, l.Path
-		}
+		profile, profilePath = l.SandboxProfile, l.Path
 	}
 	if profile != "" {
+		// A custom profile of the user's sandbox.toml counts as the built-in
+		// profile it extends (docs.x.ai/build/features/sandbox).
+		base := grokProfileBase(scan, profile)
 		id := grokCapID(client, "sandbox", profilePath, CapExecuteShell, profile)
 		src := profilePath + "#/sandbox/profile"
-		n := sandboxCap(CapExecuteShell, profile)
+		n := sandboxCap(CapExecuteShell, base)
 		n.ID, n.Kind, n.Basis, n.AppliesIn, n.Rule, n.Source = id, KindCapability, BasisConfigured, platform.MCPScopeUser, ruleGrokSandboxProfile+profile, src
 		b.node(n)
 		b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: src})
+	}
+	for _, f := range scan.Sandboxes {
+		switch f.Status {
+		case platform.MCPSourceFailed:
+			b.failed = append(b.failed, SourceFailed{Path: f.Path, Reason: f.Reason})
+		case platform.MCPSourceRead:
+			b.read[canonicalPath(f.Path)] = f.Path
+		}
+	}
+
+	// Grok's own hooks (docs.x.ai/build/features/hooks) are its executables:
+	// the user's always, a project's only in a trusted folder.
+	for _, h := range scan.Hooks {
+		switch h.Status {
+		case platform.MCPSourceFailed:
+			b.failed = append(b.failed, SourceFailed{Path: h.Path, Reason: h.Reason})
+			continue
+		case platform.MCPSourceMissing:
+			continue
+		}
+		b.read[canonicalPath(h.Path)] = h.Path
+		if h.Root == "" || h.Trusted {
+			b.grokExecutable(client, h.Path, seen)
+		}
 	}
 
 	// 2. The effective permission mode: Grok's own [ui] mode, else Claude Code's
@@ -638,4 +664,28 @@ func (b *fragmentBuilder) grokToolRules(client string, scan platform.GrokScan) {
 			emit(CapExecuteShell, r.pattern, ApprovalAllow)
 		}
 	}
+}
+
+// grokBuiltinProfiles are the sandbox profiles Grok Build defines itself;
+// a custom profile cannot take one of these names
+// (docs.x.ai/build/features/sandbox, read 22-11-2026).
+var grokBuiltinProfiles = map[string]bool{"off": true, grokProfileWorkspace: true, grokProfileReadOnly: true, grokProfileStrict: true, "devbox": true}
+
+// grokProfileBase is the built-in profile a [sandbox] profile stands for: a
+// built-in name as it is, a custom one of the user's sandbox.toml as the
+// built-in it extends (workspace when it says none), and any other name as
+// it is (its rules are not known, so it limits nothing).
+func grokProfileBase(scan platform.GrokScan, profile string) string {
+	if grokBuiltinProfiles[profile] {
+		return profile
+	}
+	for _, f := range scan.Sandboxes {
+		if f.Root != "" || f.Status != platform.MCPSourceRead {
+			continue
+		}
+		if p, ok := f.Profiles[profile]; ok && grokBuiltinProfiles[p.Extends] {
+			return p.Extends
+		}
+	}
+	return profile
 }

@@ -77,7 +77,11 @@ func newCursorInference(client Node, caps []Node, nodes map[string]Node, base kn
 			case opt == CursorScopeRunEverything:
 				in.runAll = &in.inForce[i]
 			}
-			in.modeA = DeclaredAssumption(c)
+			// The CLI's approvalMode is read, not declared: it leaves the
+			// IDE mode's declared assumption as it is.
+			if !strings.HasPrefix(c.AppliesIn, cursorCLILayer) {
+				in.modeA = DeclaredAssumption(c)
+			}
 		case IsCursorExternalWrite(c):
 			in.external = &in.inForce[i]
 		}
@@ -102,8 +106,8 @@ func newCursorInference(client Node, caps []Node, nodes map[string]Node, base kn
 			continue
 		}
 		switch {
-		case c.Rule == CursorInsecureNoneRule:
-			in.insecure[c.AppliesIn] = true
+		case IsCursorNoSandbox(c):
+			in.insecure[strings.TrimPrefix(c.AppliesIn, cursorCLILayer)] = true
 		case strings.HasPrefix(c.Rule, cursorReadwriteRule):
 			in.readwrite = append(in.readwrite, c.TargetScope)
 		case strings.HasPrefix(c.Rule, cursorTerminalRule) && c.Type == CapExecuteShell && c.Approval == ApprovalAllow:

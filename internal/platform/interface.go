@@ -794,6 +794,12 @@ type CursorScan struct {
 	// only recorded, with no effect on the inference (K10).
 	WorkspaceTrusted []string
 
+	// TeamHooks are the files in ~/.cursor/managed/team_<id>/hooks/, the
+	// hooks Cursor's desktop app syncs from a team's dashboard
+	// (https://cursor.com/docs/hooks, read 22-11-2026). Only listed: their
+	// content is never opened.
+	TeamHooks []string
+
 	// Declared are the person's answers about Cursor's settings that are not
 	// readable at rest (BV-248, CTO-56 §1.2), question → option code, from
 	// state.json; nil when none. Not read from disk by the reader: the run
@@ -843,10 +849,28 @@ type CursorFile struct {
 	ReadBoundary             string
 	AdditionalReadwritePaths []string
 
+	// NetworkDefault is sandbox.json's networkPolicy.default when it is
+	// "allow" or "deny"; "" otherwise (https://cursor.com/docs/reference/sandbox.md,
+	// read 22-11-2026: default "deny").
+	NetworkDefault string
+
 	// cli-config.json and cli.json
 	// (https://cursor.com/docs/cli/reference/permissions.md).
 	CLIAllow []string
 	CLIDeny  []string
+
+	// cli-config.json only, the user's file: the CLI's own settings
+	// (https://cursor.com/docs/cli/reference/configuration.md, read
+	// 22-11-2026; «Only permissions can be configured at the project level»).
+	// CLIApprovalMode is approvalMode when it is allowlist, auto-review or
+	// unrestricted; CLISandboxMode is sandbox.mode when it is enabled or
+	// disabled (the values of --sandbox,
+	// https://cursor.com/docs/cli/reference/parameters.md); "" otherwise.
+	// CLINetworkAccess is sandbox.networkAccess as written: its values are
+	// not documented, so it is recorded and never scored.
+	CLIApprovalMode  string
+	CLISandboxMode   string
+	CLINetworkAccess string
 
 	// KeyConflicts are the JSON Pointers of the keys of this file that match
 	// a key RosmarOps reads only without regard to case (decision
@@ -1128,8 +1152,52 @@ type GrokScan struct {
 	// [folders."<root>"].trusted = true), canonical.
 	Trusted []string
 
-	// Layers are the config layers considered, each with its read outcome.
+	// Layers are the config layers considered, each with its read outcome,
+	// lowest precedence first (docs.x.ai/build/enterprise, read 22-11-2026):
+	// /etc/grok/managed_config.toml, GROK_HOME/managed_config.toml,
+	// GROK_HOME/config.toml, GROK_HOME/requirements.toml,
+	// /etc/grok/requirements.toml; then each repository's .grok/config.toml.
+	// The /etc/grok files exist only on macOS and Linux.
 	Layers []GrokLayer
+
+	// Hooks are Grok Build's own hook files (docs.x.ai/build/features/hooks,
+	// read 22-11-2026): GROK_HOME/hooks/*.json and each repository's
+	// .grok/hooks/*.json. A project's hooks run only in a trusted folder.
+	Hooks []GrokHookFile
+
+	// Sandboxes are the sandbox.toml files (GROK_HOME/sandbox.toml and each
+	// repository's .grok/sandbox.toml) with the profiles they define
+	// (docs.x.ai/build/features/sandbox, read 22-11-2026).
+	Sandboxes []GrokSandboxFile
+}
+
+// GrokHookFile is one Grok Build hooks file: only its path, scope and read
+// outcome; its commands are never run or followed.
+type GrokHookFile struct {
+	Path    string
+	Root    string // the repository, for a project file
+	Status  MCPSourceStatus
+	Reason  string
+	Trusted bool // a project file's folder is trusted (always true for the user's)
+}
+
+// GrokSandboxFile is one sandbox.toml and its [profiles.<name>] tables.
+type GrokSandboxFile struct {
+	Path     string
+	Root     string // the repository, for a project file
+	Status   MCPSourceStatus
+	Reason   string
+	Profiles map[string]GrokSandboxProfile
+}
+
+// GrokSandboxProfile is one custom sandbox profile: the built-in profile it
+// extends ("workspace" when absent), restrict_network when set, and its
+// extra read-write and denied paths as written.
+type GrokSandboxProfile struct {
+	Extends         string
+	RestrictNetwork *bool
+	ReadWrite       []string
+	Deny            []string
 }
 
 // Grok config layer kinds (CTO-16 Grok §2 precedence order, after the CLI
@@ -1137,8 +1205,8 @@ type GrokScan struct {
 const (
 	GrokLayerProject      = "project"      // <repo>/.grok/config.toml, only [mcp_servers]/[plugins]/[permission]/[mcp]
 	GrokLayerUser         = "user"         // GROK_HOME/config.toml
-	GrokLayerManaged      = "managed"      // GROK_HOME/managed_config.toml
-	GrokLayerRequirements = "requirements" // GROK_HOME/requirements.toml
+	GrokLayerManaged      = "managed"      // GROK_HOME/ or /etc/grok/managed_config.toml
+	GrokLayerRequirements = "requirements" // GROK_HOME/ or /etc/grok/requirements.toml
 )
 
 // GrokLayer is one Grok config layer and the subset of keys RosmarOps reads
@@ -1149,6 +1217,11 @@ type GrokLayer struct {
 	Root   string // the repo root, for a project layer
 	Status MCPSourceStatus
 	Reason string
+
+	// System reports a layer of /etc/grok (macOS and Linux), owned by the
+	// system: only there does [ui] disable_bypass_permissions_mode count
+	// (docs.x.ai/build/enterprise, read 22-11-2026).
+	System bool
 
 	// Trusted is whether the user trusts this project root (set by the reader
 	// from trusted_folders.toml and the §2 exceptions); only for a project

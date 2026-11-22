@@ -21,11 +21,19 @@ const (
 	cursorReadBoundaryRule = "readBoundary=workspace"
 	CursorInsecureNoneRule = "type=insecure_none"
 	cursorReadwriteRule    = "additionalReadwritePaths="
+	// CursorNetworkAllowRule is sandbox.json's networkPolicy.default "allow":
+	// every domain is reachable from the sandbox.
+	CursorNetworkAllowRule = "networkPolicy.default=allow"
+	// CursorCLISandboxOffRule is the CLI's sandbox.mode "disabled": the CLI
+	// runs commands with no sandbox, as type insecure_none does.
+	CursorCLISandboxOffRule = "sandbox.mode=disabled"
 
 	// ScopeSandboxNone is the target of a sandbox.json "type":
 	// "insecure_none", which counts as no sandbox
 	// (https://cursor.com/docs/reference/sandbox.md).
 	ScopeSandboxNone = "sandbox_insecure_none"
+	// ScopeSandboxNetworkAll is the target of networkPolicy.default "allow".
+	ScopeSandboxNetworkAll = "sandbox_network_all"
 
 	// CLI layers: the CLI's rules are recorded, not inferred (K10).
 	cursorCLILayer = "cli:"
@@ -96,12 +104,27 @@ func FromCursor(scan platform.CursorScan, settings platform.ClaudeSettingsScan, 
 				c.add(Node{Type: CapWriteFiles, Approval: ApprovalAllow, TargetScope: ScopeSandboxNone, InForce: true},
 					CursorInsecureNoneRule, "/type", patterns)
 			}
+			if f.NetworkDefault == "allow" {
+				c.add(Node{Type: CapNetwork, Approval: ApprovalAllow, TargetScope: ScopeSandboxNetworkAll, InForce: true},
+					CursorNetworkAllowRule, "/networkPolicy/default", patterns)
+			}
 			for i, p := range f.AdditionalReadwritePaths {
 				c.add(Node{Type: CapWriteFiles, Approval: ApprovalAllow, TargetScope: secrets.RedactMatches(p, patterns), InForce: true},
 					cursorReadwriteRule+p, "/additionalReadwritePaths/"+strconv.Itoa(i), patterns)
 			}
 		case platform.CursorCLI:
 			cli := capContext{b: b, client: client, file: f.Path, appliesIn: cursorCLILayer + layer}
+			// The CLI's own settings (user file only). approvalMode
+			// unrestricted is Run Everything; allowlist and auto-review add
+			// nothing. sandbox.mode disabled is no sandbox for the CLI.
+			if f.CLIApprovalMode == "unrestricted" {
+				cli.add(Node{Type: CapPermissionMode, Approval: ApprovalAllow, TargetScope: CursorScopeRunEverything, InForce: true},
+					cursorApprovalModeRule+f.CLIApprovalMode, "/approvalMode", patterns)
+			}
+			if f.CLISandboxMode == "disabled" {
+				cli.add(Node{Type: CapWriteFiles, Approval: ApprovalAllow, TargetScope: ScopeSandboxNone, InForce: true},
+					CursorCLISandboxOffRule, "/sandbox/mode", patterns)
+			}
 			for _, list := range []struct {
 				approval string
 				key      string
@@ -123,6 +146,15 @@ func FromCursor(scan platform.CursorScan, settings platform.ClaudeSettingsScan, 
 				}
 			}
 		}
+	}
+	// The team's hooks the desktop app syncs to ~/.cursor/managed/team_<id>/
+	// hooks/ are Cursor's executables: listed, never opened. A team policy
+	// does more than hooks, so team_policy_unknown stays.
+	for _, path := range scan.TeamHooks {
+		b.node(Node{
+			ID: "res_agent_executable_" + keyHash(ResourceAgentExecutable, canonicalPath(path)), Kind: KindResource,
+			Type: ResourceAgentExecutable, Path: path, Configures: client, DiscoveredAt: seen,
+		})
 	}
 	// Claude Code's hooks are Cursor's executables too (K7; third-party
 	// imports, annex): user, project and local settings. CTO-31 M2 (C2):
@@ -175,3 +207,16 @@ func cursorLayer(f platform.CursorFile) string {
 // cursorEnvRef is a Cursor value that names an environment variable: it is
 // not resolved at rest, and holds no secret (K10).
 var cursorEnvRef = regexp.MustCompile(`^\$\{env:[^}]*\}$`)
+
+// IsCursorNoSandbox reports a configured setting that leaves Cursor with no
+// sandbox: sandbox.json's type insecure_none, or the CLI's sandbox.mode
+// disabled.
+func IsCursorNoSandbox(c Node) bool {
+	return c.Basis == BasisConfigured && (c.Rule == CursorInsecureNoneRule || c.Rule == CursorCLISandboxOffRule)
+}
+
+// IsCursorNetworkAll reports sandbox.json's networkPolicy.default "allow" in
+// force.
+func IsCursorNetworkAll(c Node) bool {
+	return c.InForce && c.Basis == BasisConfigured && c.Rule == CursorNetworkAllowRule
+}

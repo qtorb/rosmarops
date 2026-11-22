@@ -2016,7 +2016,7 @@ func (oi overviewInputs) writesCell(v *agentView) OverviewCell {
 func (oi overviewInputs) runsCell(v *agentView) OverviewCell {
 	insecure := false
 	for _, c := range v.inForce {
-		insecure = insecure || c.Basis == graph.BasisConfigured && c.Rule == graph.CursorInsecureNoneRule
+		insecure = insecure || graph.IsCursorNoSandbox(c)
 	}
 	var cs []candidate
 	launchers := 0

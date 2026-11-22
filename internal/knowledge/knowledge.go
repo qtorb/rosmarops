@@ -59,7 +59,7 @@ const (
 const Version = "2026-10-24"
 
 // CursorVersion is the version of the embedded Cursor base (cursor.json).
-const CursorVersion = "2026-10-25"
+const CursorVersion = "2026-11-22"
 
 // HermesVersion is the version of the embedded Hermes base (hermes.json,
 // BV-111).
@@ -70,7 +70,7 @@ const CodexVersion = "2026-11-01"
 
 // GrokBuildVersion is the version of the embedded Grok Build base
 // (grok-build.json, BV-140).
-const GrokBuildVersion = "2026-11-08"
+const GrokBuildVersion = "2026-11-22"
 
 // GitHubCopilotVersion is the version of the embedded GitHub Copilot base
 // (github-copilot.json, BV-140).

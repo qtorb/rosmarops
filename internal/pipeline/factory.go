@@ -104,6 +104,8 @@ func factoryCursor(s platform.CursorScan) platform.CursorScan {
 		f.SandboxType, f.ReadBoundary, f.AdditionalReadwritePaths = "", "", nil
 		f.CLIAllow, f.CLIDeny = nil, nil
 		f.ApprovalMode = ""
+		f.NetworkDefault = ""
+		f.CLIApprovalMode, f.CLISandboxMode, f.CLINetworkAccess = "", "", ""
 		out.Files[i] = f
 	}
 	if s.Files == nil {

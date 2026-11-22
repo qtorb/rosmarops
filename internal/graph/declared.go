@@ -200,6 +200,23 @@ func CursorModeOption(n Node) string {
 	return ""
 }
 
+// CursorModeRank orders Cursor's run modes from the most controlled (0) to
+// the least: when the IDE and the CLI set different modes, the least
+// controlled one counts.
+func CursorModeRank(option string) int {
+	switch option {
+	case declared.ModeRunEverything:
+		return 4
+	case declared.ModeAutoReview, declared.ModeAutoReviewSandbox:
+		return 3
+	case declared.ModeAllowlistSandbox:
+		return 2
+	case declared.ModeAllowlist:
+		return 1
+	}
+	return 0
+}
+
 // IsCursorMode reports Cursor's mode capability: declared by C1 or read from
 // approvalMode.
 func IsCursorMode(n Node) bool {

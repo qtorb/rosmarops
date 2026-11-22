@@ -1,6 +1,6 @@
 {
   "product": "grok-build",
-  "version": "2026-11-08",
+  "version": "2026-11-22",
   "session_files": ["auth.json", "mcp_credentials.json"],
   "entries": [
     {
