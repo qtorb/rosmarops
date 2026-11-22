@@ -232,6 +232,9 @@ func BuildGraph(frag graph.Fragment, o GraphOpts) (graph.Graph, error) {
 			return graph.Graph{}, err
 		}
 	}
+	// BV-274: the servers whose launch fetches code without an exact
+	// version, parsed in memory from the same server list.
+	graph.MarkUnpinned(&g, o.IntelServers)
 	if o.IntelMatcher != nil || len(o.IntelServers) > 0 || len(o.IntelPkgs) > 0 {
 		graph.CrossIntel(&g, o.IntelServers, o.IntelPkgs, o.IntelMatcher, o.Now)
 	}

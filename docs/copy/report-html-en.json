@@ -908,5 +908,9 @@
   "html.headline.subagent_hook_command": "The subagent {subagent} runs a command of its own when it acts.",
   "html.headline.subagent_inline_mcp": "The subagent {subagent} connects to MCP servers defined inside its own file.",
   "html.subagent.user_folder": "It is in your user folder, so it runs in every project without the folder-trust question.",
-  "html.fix.orchestrator_network_listen.paseo": "In {orchestrator}'s config.json, set daemon.listen back to 127.0.0.1:6767."
+  "html.fix.orchestrator_network_listen.paseo": "In {orchestrator}'s config.json, set daemon.listen back to 127.0.0.1:6767.",
+  "html.headline.mcp_unpinned_launch": "{agent} starts the MCP server «{server}» with {launcher} and no fixed version: its code can change every time it starts.",
+  "html.fix.mcp_unpinned_launch": "Pin an exact version, for example {package}@{example}.",
+  "html.headline.mcp_project_autoapprove": "Claude Code approves every MCP server a project brings, on its own ({scope}).",
+  "html.fix.mcp_project_autoapprove": "Remove enableAllProjectMcpServers and approve each server when Claude Code asks you."
 }

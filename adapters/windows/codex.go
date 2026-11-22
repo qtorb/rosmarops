@@ -305,6 +305,9 @@ func codexMCPServers(m tomlsubset.Map) []platform.CodexMCPServer {
 		s.Args = tomlStringArray(sm, "args")
 		s.EnvKeys, s.Env = tomlSecretTable(sm, "env")
 		s.HeaderKeys, s.Headers = tomlSecretTable(sm, "http_headers")
+		if enabled, ok := tomlBool(sm, "enabled"); ok && !enabled {
+			s.Disabled = true
+		}
 		out = append(out, s)
 	}
 	return out

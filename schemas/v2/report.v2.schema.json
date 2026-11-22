@@ -374,7 +374,9 @@
             "subagent_all_tools",
             "subagent_permissive_mode",
             "subagent_hook_command",
-            "subagent_inline_mcp"
+            "subagent_inline_mcp",
+            "mcp_unpinned_launch",
+            "mcp_project_autoapprove"
           ]
         },
         "rule_version": {

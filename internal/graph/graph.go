@@ -196,6 +196,16 @@ type Node struct {
 	// package_known_malicious from it.
 	Malicious *intel.Match `json:"-"`
 
+	// SecretByName marks a credential taken as a secret by its variable's
+	// name, from an MCP server's env or headers (BV-274): its class is
+	// medium. In memory only, like Malicious.
+	SecretByName bool `json:"-"`
+
+	// Unpinned marks an mcp_server started by a launcher that fetches its
+	// code without an exact version (BV-274): only the launcher and the
+	// package or image name. In memory only, like Malicious.
+	Unpinned *UnpinnedLaunch `json:"-"`
+
 	// ScriptPath and ScriptSize, when set on an agent_executable resource
 	// built from a project settings file, say its command runs a script that
 	// lives inside the project (BV-107): the script's project-relative path

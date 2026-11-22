@@ -20,6 +20,7 @@ type mcpSrv struct {
 	readOnly                bool
 	rule                    string // "", "allow" or "deny" on mcp__<name>
 	scope                   string // applies_in: "user" (default) or "project:..."
+	approval                string // the loads edge's approval_state (BV-274)
 }
 
 // mcpEval builds a one-Claude-Code-agent graph that loads the servers and
@@ -46,6 +47,7 @@ func mcpEval(t *testing.T, srvs []mcpSrv) rules.Result {
 		edges = append(edges, graph.Edge{
 			ID: "loads_" + s.name, Type: graph.EdgeLoads, From: mcpClient, To: sid,
 			Source: home + "/.claude.json", Certainty: graph.CertaintyObserved, AppliesIn: scope,
+			ApprovalState: s.approval,
 		})
 		if s.rule != "" {
 			approval := graph.ApprovalAllow
@@ -190,5 +192,42 @@ func TestMCPExternal_Radius(t *testing.T) {
 	}
 	if proj.Radius != rules.RadiusSameProject {
 		t.Errorf("project radius %q", proj.Radius)
+	}
+}
+
+// BV-274: a project server the person rejected is not loaded, so it gives no
+// MCP finding; the same server approved still does.
+func TestMCPExternal_RejectedServerGivesNoFinding(t *testing.T) {
+	res := mcpEval(t, []mcpSrv{
+		{name: "stripe", service: "stripe", category: knowledge.CategoryMoney, scope: "project:" + home + "/repo", approval: graph.ApprovalRejected},
+		{name: "paypal", service: "paypal", category: knowledge.CategoryMoney, scope: "project:" + home + "/repo", approval: graph.ApprovalApproved},
+	})
+	if f, ok := mcpFindingBy(res, "stripe"); ok {
+		t.Errorf("a rejected server gave %+v", f)
+	}
+	if _, ok := mcpFindingBy(res, "paypal"); !ok {
+		t.Error("the approved server gave no finding")
+	}
+	for _, s := range mcpServices(t, res) {
+		if s.Service == "stripe" {
+			t.Errorf("a rejected server is listed: %+v", s)
+		}
+	}
+	if !rules.LoadsInForce(graph.Edge{Type: graph.EdgeLoads, ApprovalState: graph.ApprovalPending}) ||
+		rules.LoadsInForce(graph.Edge{Type: graph.EdgeLoads, ApprovalState: graph.ApprovalRejected}) ||
+		rules.LoadsInForce(graph.Edge{Type: graph.EdgeHas}) {
+		t.Error("LoadsInForce")
+	}
+}
+
+// BV-274: a secret known by its variable's name is class medium.
+func TestClassOf_SecretByName(t *testing.T) {
+	c := graph.Node{Kind: graph.KindCredential, Type: graph.CredentialGenericSecret, Service: graph.ServiceUnknown}
+	if got := rules.ClassOf(c, ""); got != rules.ClassUnclassified {
+		t.Errorf("a generic secret is %s", got)
+	}
+	c.SecretByName = true
+	if got := rules.ClassOf(c, ""); got != rules.ClassMedium {
+		t.Errorf("a secret by name is %s, want medium", got)
 	}
 }
