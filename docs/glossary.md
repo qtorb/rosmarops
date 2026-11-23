@@ -8,6 +8,8 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Orchestrator.** A program that starts other agents and gives them their work, such as Paperclip, Paseo, Claude Squad or Orca. It often skips their approvals and can wake them without anyone in front. In the graph it is an `agent` of type `orchestrator`, with a `launches` edge to each installed agent it supports. When the orchestrator writes in its own files the mode in which it starts each agent, the edge is observed; otherwise it is inferred from its defaults.
 
+**«Your orchestrators».** The report's card that lists, per orchestrator, the agents it can start, whether it removes their questions, how RosmarOps knows it and each agent's own score. It explains and asks for no action, so it carries the «To understand» treatment.
+
 **Subagent.** A helper agent of Claude Code, defined in a Markdown file in `~/.claude/agents/` or a project's `.claude/agents/`. RosmarOps reads only its header: which tools it may use, its permission mode, its hooks and the MCP servers it defines. One in the user's folder runs in every project without the folder-trust question.
 
 **OpenCode family.** OpenCode and Kilo Code. Kilo Code is a fork of OpenCode's code and keeps its configuration model: JSON or JSONC files in the user's folder, the project and a managed folder, each overriding the one before, with a `permission` key and an `mcp` key. RosmarOps scores both with one reader (ADR 0027).

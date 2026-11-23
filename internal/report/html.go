@@ -316,6 +316,9 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 	// «Computer profile» and Claude Code in detail, views of the same page;
 	// without JavaScript they show here, below the first screen.
 	c.renderProfileViews()
+	// BV-278: the frontier between the summary and the problems' steps, as
+	// wide as main and just above it.
+	c.renderDetail(iss)
 	c.w(`<main class="rep">`)
 
 	// Each problem's steps, behind the table's links, then the folded
@@ -1326,6 +1329,7 @@ func HTMLKeys() []string {
 		"html.verdict.new", "html.verdict.still", "html.verdict.again", "html.verdict.not_checked",
 	}
 	keys = append(keys, r3Keys()...)
+	keys = append(keys, fleetKeys()...)
 	// v3
 	keys = append(keys, "html.step.1", "html.step.1.counts",
 		"html.today.incomplete",

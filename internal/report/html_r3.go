@@ -95,6 +95,7 @@ func (c htmlCtx) renderR3(iss []issue) {
 	c.renderR3Result()
 	c.renderR3Findings(iss)
 	c.renderR3Template(iss)
+	c.renderFleet(iss)
 	c.renderR3Folds()
 	c.w(`<footer class="r3-foot"><span>%s</span><span>%s</span></footer>`,
 		c.t("html.r3.footer", nil), c.t("html.r3.method", map[string]string{"method": index.ClassRule}))
@@ -372,8 +373,13 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 			if count > 1 {
 				lead += " · " + strconv.Itoa(count) + " " + html.EscapeString(lowerFirst(c.cat.Text("html.r3.col.count", nil)))
 			}
-			c.w(`<tr><th scope="row" class="c-n">%d</th><td class="c-p"><span class="r3-m">%s %s</span><b>%s</b>%s</td><td class="c-c">%d</td><td class="c-l">%s</td><td class="c-f">%s</td></tr>`,
-				n, lead, c.pill(is), c.issueTitle(is), detail, count, c.pill(is), c.issueFix(is, n))
+			// The «Key» tag goes before the title of a credential problem.
+			tag := ""
+			if is.kind == issueCred {
+				tag = c.keyTag()
+			}
+			c.w(`<tr><th scope="row" class="c-n">%d</th><td class="c-p"><span class="r3-m">%s %s</span>%s<b>%s</b>%s</td><td class="c-c">%d</td><td class="c-l">%s</td><td class="c-f">%s</td></tr>`,
+				n, lead, c.pill(is), tag, c.issueTitle(is), detail, count, c.pill(is), c.issueFix(is, n))
 		}
 		c.w(`</tbody></table>`)
 	}
@@ -440,7 +446,12 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 	c.w(`<div class="r3-steps">`)
 	for i, is := range iss {
 		n := i + 1
-		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span><span>%s</span></h2>`, n, n, n, n, c.issueTitle(is))
+		// The «Key» tag goes after the title of a credential problem.
+		tag := ""
+		if is.kind == issueCred {
+			tag = c.keyTag()
+		}
+		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span><span>%s</span>%s</h2>`, n, n, n, n, c.issueTitle(is), tag)
 		if d := c.issueDetail(is); d != "" {
 			c.w(`<p class="r3-p-d">%s</p>`, d)
 		}
@@ -506,7 +517,7 @@ func r3CSS() string {
 		light.WriteString("--" + t.Name + ":" + t.Light + ";")
 		dark.WriteString("--" + t.Name + ":" + t.Dark + ";")
 	}
-	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules
+	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules + fleetRules
 }
 
 const r3Rules = `.r3{max-width:1040px;margin:0 auto;padding:28px 16px 8px;display:flex;flex-direction:column;gap:20px;color:var(--ds-ink)}
