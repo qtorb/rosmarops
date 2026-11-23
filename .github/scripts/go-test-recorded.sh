@@ -29,8 +29,12 @@ proxy="http://$addr"
 echo "recording proxy: $proxy"
 
 status=0
+# GOPROXY is left as it is: with GOPROXY=off, Go 1.27 no longer stamps a
+# module's version from a local tag, which a release test checks. The modules
+# are already in the cache from go vet; anything the go command fetched would
+# go through the recorder too, and fail there.
 HTTPS_PROXY="$proxy" https_proxy="$proxy" HTTP_PROXY="$proxy" http_proxy="$proxy" \
-  NO_PROXY="" no_proxy="" GOPROXY=off \
+  NO_PROXY="" no_proxy="" \
   go test -count=1 ./... || status=$?
 
 echo "connections the tests asked for (through the recording proxy):"
