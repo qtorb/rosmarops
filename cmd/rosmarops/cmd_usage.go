@@ -134,8 +134,7 @@ func usageBuildMaySend() bool {
 func usageStateKey(u *state.Usage) string {
 	switch {
 	case !usageBuildMaySend():
-		// Text pending from the owner (ADR 0032): until the catalog has it,
-		// the key itself shows.
+		// A build that never sends says so (ADR 0032).
 		return "usage.state.dev_build"
 	case u == nil:
 		return "usage.state.undecided"
