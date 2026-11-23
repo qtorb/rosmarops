@@ -16,17 +16,19 @@ import (
 // are never opened. So, as for Cursor, the least controlled case is
 // assumed: one capability, invoke_mcp_tool allow, from the knowledge base
 // entry mcp_always_allow_assumed (ui_mode_choice_unknown in the overview).
-// When the administrator's policy turns off persistent «Always allow»
-// approvals (mcpPersistentAlwaysAllowEnabled false), the capability is
-// configured ask, with that policy as its rule and source.
+// The managed policy is read and shown, but does not change this: the key
+// that turns off persistent «Always allow» approvals
+// (mcpPersistentAlwaysAllowEnabled) is documented only for Claude Desktop on
+// third-party platforms, and with it off a tool is still approved once per
+// session, not at each call (owner's decision, 23-11).
 
 // claudeDesktopMCPEntry is the knowledge base entry the capability rests
-// on without a policy: the least controlled case.
+// on: the least controlled case.
 const claudeDesktopMCPEntry = "mcp_always_allow_assumed"
 
 // FromClaudeDesktop builds Claude Desktop's fragment: its ai_client, its
 // capability to call MCP tools, and its managed policy as a source read or
-// failed. It is a pure function.
+// failed (data only: it does not change the capability). It is a pure function.
 func FromClaudeDesktop(scan platform.ClaudeDesktopScan, base knowledge.Base, discoveredAt time.Time) Fragment {
 	b := newFragmentBuilder()
 	if !scan.Present {
@@ -45,7 +47,7 @@ func FromClaudeDesktop(scan platform.ClaudeDesktopScan, base knowledge.Base, dis
 	case platform.MCPSourceRead:
 		b.read[canonicalPath(m.Path)] = m.Path
 	}
-	approval, basis, rule, source := "", BasisProductDefault, "", ""
+	approval, source := "", ""
 	for _, e := range base.Entries {
 		if e.ID == claudeDesktopMCPEntry {
 			approval, source = e.Approval, "kb:"+knowledge.ClaudeDesktopProduct+"/"+e.ID+"@"+base.Version
@@ -54,14 +56,10 @@ func FromClaudeDesktop(scan platform.ClaudeDesktopScan, base knowledge.Base, dis
 	if approval == "" {
 		return b.fragment()
 	}
-	if m.Status == platform.MCPSourceRead && m.PersistentAlwaysAllow != nil && !*m.PersistentAlwaysAllow {
-		basis, rule, source = BasisConfigured, "mcpPersistentAlwaysAllowEnabled: false", m.Path+"#mcpPersistentAlwaysAllowEnabled"
-		approval = ApprovalAsk
-	}
-	id := "cap_" + keyHash(KindCapability, basis, client, CapInvokeMCPTool, scopeAll, platform.MCPScopeUser, source)
+	id := "cap_" + keyHash(KindCapability, BasisProductDefault, client, CapInvokeMCPTool, scopeAll, platform.MCPScopeUser, source)
 	b.node(Node{
-		ID: id, Kind: KindCapability, Type: CapInvokeMCPTool, Basis: basis, InForce: true,
-		Approval: approval, TargetScope: scopeAll, AppliesIn: platform.MCPScopeUser, Rule: rule, Source: source,
+		ID: id, Kind: KindCapability, Type: CapInvokeMCPTool, Basis: BasisProductDefault, InForce: true,
+		Approval: approval, TargetScope: scopeAll, AppliesIn: platform.MCPScopeUser, Source: source,
 	})
 	b.edge(Edge{ID: edgeID(EdgeHas, client, id), Type: EdgeHas, From: client, To: id, Source: source})
 	return b.fragment()

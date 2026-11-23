@@ -8,10 +8,10 @@ import (
 	"github.com/qtorb/rosmarops/internal/platform"
 )
 
-// BV-277: without a policy, Claude Desktop's MCP tools are assumed to run
-// without asking (its «Always allow» approvals are not read); a managed policy that stops persistent «Allow always»
-// makes the same capability configured; a policy file that failed the
-// ownership check is a source not read.
+// BV-277: Claude Desktop's MCP tools are assumed to run without asking (its
+// «Always allow» approvals are not read). A managed policy that stops
+// persistent «Always allow» is read as data and changes nothing; a policy
+// file that failed the ownership check is a source not read.
 func TestFromClaudeDesktop(t *testing.T) {
 	base, err := knowledge.ClaudeDesktop()
 	if err != nil {
@@ -27,7 +27,7 @@ func TestFromClaudeDesktop(t *testing.T) {
 	scan.Managed = platform.ClaudeDesktopManaged{Path: "/etc/claude-desktop/managed-settings.json", Status: platform.MCPSourceRead, PersistentAlwaysAllow: &no}
 	f := FromClaudeDesktop(scan, base, now)
 	c = capsOf(f)[CapInvokeMCPTool+"|*|user"]
-	if c.Basis != BasisConfigured || c.Rule != "mcpPersistentAlwaysAllowEnabled: false" || c.Approval != ApprovalAsk {
+	if c.Basis != BasisProductDefault || c.Rule != "" || c.Approval != ApprovalAllow {
 		t.Fatalf("managed: %+v", c)
 	}
 	if len(f.Coverage.SourcesRead) != 1 {

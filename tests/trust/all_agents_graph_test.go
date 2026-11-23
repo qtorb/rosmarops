@@ -81,8 +81,8 @@ func allAgents(configured bool) allAgentScans {
 				Permission: map[string]platform.OpenCodeRule{"*": {Action: "deny"}},
 			},
 		}
-		// Claude Desktop with a managed policy that stops persistent «Allow
-		// always» approvals: its MCP capability is configured.
+		// Claude Desktop with a managed policy that stops persistent «Always
+		// allow» approvals: read as data, the capability does not change.
 		no := false
 		s.desktop.Managed = platform.ClaudeDesktopManaged{Path: `registry:HKLM\SOFTWARE\Policies\Claude`, Status: st, PersistentAlwaysAllow: &no}
 		s.openCode[1].Layers = []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: fcHome + "/.config/kilo/kilo.jsonc", Status: st}}

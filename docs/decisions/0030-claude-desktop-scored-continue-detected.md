@@ -29,11 +29,11 @@ Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19, in two messages: the dec
 - **What it can do:** outside Cowork, it acts on the computer only through MCP tools, from the servers of `claude_desktop_config.json` and its desktop extensions (`.mcpb`).
 - **Factory fact:** from the factory it asks before each MCP tool call. The source is the Model Context Protocol documentation, «Connect to local MCP servers», version 2026-07-28, read for v6.28899.6. The knowledge base `claude-desktop.json` keeps it as `mcp_ask`.
 - **Assumption it is scored on:** each tool can be set to «Always allow», and those approvals live in the app's databases, which are never opened. So, as for Cursor, the least controlled case is assumed: the tools of its MCP servers and extensions run without asking. This is one capability, `invoke_mcp_tool` `allow`, from the knowledge base entry `mcp_always_allow_assumed`.
-  - **Exception:** when the managed policy sets `mcpPersistentAlwaysAllowEnabled` to false, it asks; the capability is then configured `ask`, with the policy as its rule.
-  - **What that key means:** the Claude Desktop changelog, read on 2026-11-23, says v1.24012.9 (2026-07-24) added it «letting admins disable the persistent "Always allow" approvals for MCP tools while keeping session-scoped approvals available». v6.28899.2 (2026-11-19) says that with false, MCP tool prompts offer «Allow for this session» instead of «Always allow».
-  - **Two limits of that reading:**
-    - every mention is in the changelog's section for Claude Desktop on third-party platforms (3P), and the standard enterprise configuration page does not list the key, although it is read from the same managed locations;
-    - with false, a tool approved for the session runs without asking again in that session.
+  - **No exception for the managed policy** (owner's decision, 23-11): `mcpPersistentAlwaysAllowEnabled` does not change the score, and Claude Desktop is always scored on the least controlled case, for two reasons:
+    - **where it is documented:** every mention of the key is in the changelog's section for Claude Desktop on third-party platforms (3P), and the standard enterprise configuration page does not list it. The changelog, read on 2026-11-23, says v1.24012.9 (2026-07-24) added it «letting admins disable the persistent "Always allow" approvals for MCP tools while keeping session-scoped approvals available»;
+    - **what it does:** with `false`, MCP tool prompts offer «Allow for this session» instead of «Always allow» (v6.28899.2, 2026-11-19), so a tool is approved once per session, not at each call.
+
+    The policy is still read, with the ownership check, and shown as data.
 - **Outside the score:** Cowork is outside the score and the report says it is not read. The Code tab is not scored apart: it is Claude Code. The old not-evaluated reason `claude_desktop` is no longer emitted: its text is retired, and the value stays in the report.v2 enum, because removing it would change the schema.
 - **Desktop extensions:** RosmarOps lists only the file names in `Claude Extensions Settings`, to know which extensions are installed. Those files can hold an extension's secrets and are never opened. That they are active is an assumption declared in the report.
 - **Managed policy:** `isLocalDevMcpEnabled`, `isDesktopExtensionEnabled` and `mcpPersistentAlwaysAllowEnabled`.
@@ -44,7 +44,7 @@ Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19, in two messages: the dec
   - **Effects:**
     - `isLocalDevMcpEnabled` false: the servers of the config file stay on disk (their keys are still credentials), but load nothing;
     - `isDesktopExtensionEnabled` false: no extension is assumed active;
-    - `mcpPersistentAlwaysAllowEnabled` false: the MCP capability is configured by that policy.
+    - `mcpPersistentAlwaysAllowEnabled` false: read as data only; it does not change the score (see above).
 - **Plist reader, signed by the owner:** managed preferences are often binary property lists. `internal/plistsubset` reads the small part RosmarOps needs, XML or binary, with no dependency: the top-level booleans, integers and strings. Any other value is skipped, and a malformed file is refused whole.
 - **Reference computer:** Claude Desktop's factory score and its class on the exposure map are computed, not pinned: the owner signs them. It is not on the full test machine yet, because that would move the reference figures.
 

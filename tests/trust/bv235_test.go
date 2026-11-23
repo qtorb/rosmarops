@@ -106,6 +106,7 @@ func TestBV235R2ClassesUnchanged(t *testing.T) {
 		"claude-code": "D", "cursor": "D", "codex": "C", "github-copilot": "B", "gemini-cli": "B",
 		"cline": "D", "grok-build": "C", "hermes": "D", "antigravity-cli": "B",
 		"opencode": "C", "kilo-code": "B", // signed by Albert, 22-11
+		"claude-desktop": "A", // signed by Albert, 23-11 08:49
 	}
 	got := r2ExposureAgents(t)
 	if len(got) != len(want) {

@@ -38,7 +38,7 @@ type ClaudeDesktopManaged struct {
 	// extensions.
 	Extensions *bool
 	// PersistentAlwaysAllow is mcpPersistentAlwaysAllowEnabled: false means
-	// an «Allow always» approval does not persist, so every MCP tool call
-	// asks.
+	// an «Always allow» approval does not persist beyond the session. Read
+	// as data; it does not change the score (ADR 0030).
 	PersistentAlwaysAllow *bool
 }
