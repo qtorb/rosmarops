@@ -385,6 +385,9 @@ func (oi overviewInputs) cells(v *agentView) []OverviewCell {
 	if v.node.Platform == knowledge.OpenCodeProduct || v.node.Platform == knowledge.KiloCodeProduct {
 		return oi.openCodeCells(v) // BV-276
 	}
+	if v.node.Platform == knowledge.ClaudeDesktopProduct {
+		return oi.claudeDesktopCells(v) // BV-277
+	}
 	return []OverviewCell{
 		oi.readsCell(v), oi.writesCell(v), oi.runsCell(v), oi.sendsCell(v), oi.changesCell(v), oi.providerCell(v),
 	}

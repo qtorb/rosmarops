@@ -12,6 +12,10 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **OpenCode family.** OpenCode and Kilo Code. Kilo Code is a fork of OpenCode's code and keeps its configuration model: JSON or JSONC files in the user's folder, the project and a managed folder, each overriding the one before, with a `permission` key and an `mcp` key. RosmarOps scores both with one reader (ADR 0027).
 
+**Managed policy.** Settings an administrator sets for a product, which override the person's: a file under `/etc`, `/Library` or ProgramData, or a registry key under `SOFTWARE\Policies`. RosmarOps reads Claude Desktop's managed files only when they and their folders belong to an administrator (ADR 0030), as it does for the company configuration.
+
+**Desktop extension.** A packaged MCP server Claude Desktop installs (`.mcpb`). RosmarOps knows an extension by the name of its settings file and never opens that file, which can hold the extension's secrets; that it is active is an assumption.
+
 **Capability.** Something an agent can do: run shell commands, read files, write files, use the network, call an MCP tool, run in a permission mode, or operate an app. Each capability has an approval (`allow`, `ask`, `deny` or `unknown`) and a basis: set in a file (`configured`), the product's default (`product_default`), or answered by the person (`declared`).
 
 **Team hooks.** The hooks Cursor's desktop app copies to `~/.cursor/managed/team_<id>/hooks/` from a team's dashboard. RosmarOps lists their names and treats each as one of Cursor's executables; it never opens them. They do not tell what else the team's policy sets, so `team_policy_unknown` stays.

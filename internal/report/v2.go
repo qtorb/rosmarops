@@ -150,6 +150,10 @@ type V2 struct {
 	// code (NotCheckedCodes), in that order: shown, not in the JSON
 	// (decision 2026-10-29, macOS vista previa, point 3).
 	NotChecked []string `json:"-"`
+	// DesktopExtensions are Claude Desktop's desktop extension ids (BV-277),
+	// listed with its assumptions: assumed active, their settings files are
+	// never opened. Not in the JSON.
+	DesktopExtensions []string `json:"-"`
 	// SpaceConnected is true when this computer is connected to the online
 	// space (BV-137): the «Your space» section is shown only then. Set by the
 	// command before the HTML is rendered; not in the JSON.
@@ -495,6 +499,10 @@ type V2Input struct {
 	// Optional.
 	Cline platform.ClineScan
 
+	// ClaudeDesktop is Claude Desktop's scan (BV-277): its desktop
+	// extensions (listed with its assumptions) and managed policy.
+	ClaudeDesktop platform.ClaudeDesktopScan
+
 	// Antigravity is the Antigravity CLI scan (BV-244): whether agentMode is
 	// written, for default_mode_depends_on_version. Optional.
 	Antigravity platform.AntigravityScan
@@ -613,6 +621,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 		OS:                  in.V1.Platform.OS,
 		engineVersion:       in.V1.EngineVersion,
 		NotChecked:          notChecked(in.V1.Platform.OS, in.NotChecked),
+		DesktopExtensions:   desktopExtensions(in.ClaudeDesktop),
 
 		NotificationUnavailable: in.NotificationUnavailable,
 		Environment:             in.Environment,
@@ -1418,4 +1427,13 @@ func sandboxBlockedProjects(g graph.Graph, repoRoots []string, home string) []st
 		}
 	}
 	return out
+}
+
+// desktopExtensions are the extension ids the report lists for Claude
+// Desktop (BV-277): none when its managed policy turns extensions off.
+func desktopExtensions(s platform.ClaudeDesktopScan) []string {
+	if !s.Present || (s.Managed.Extensions != nil && !*s.Managed.Extensions) {
+		return nil
+	}
+	return s.Extensions
 }

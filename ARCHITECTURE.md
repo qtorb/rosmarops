@@ -69,7 +69,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `adapters/windows`: the readers of every agent's files. Despite its name, macOS and Linux use them too (see Known oddities).
 - `adapters/darwin`, `adapters/linux`: the macOS and Linux platforms. They call the readers of `adapters/windows` with their own folder layout.
 - `internal/platform`: the `Platform` interface and the data types every reader returns.
-- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux. OpenCode and Kilo Code (the OpenCode family) resolve their folder from `XDG_CONFIG_HOME` or `~/.config` on every system, and one reader (`adapters/windows/opencode.go`) serves both.
+- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux. OpenCode and Kilo Code (the OpenCode family) resolve their folder from `XDG_CONFIG_HOME` or `~/.config` on every system, and one reader (`adapters/windows/opencode.go`) serves both. Claude Desktop's folder is `%APPDATA%\Claude`, `~/Library/Application Support/Claude` or `~/.config/Claude`; Continue's is `~/.continue` or `CONTINUE_GLOBAL_DIR` (ADR 0030).
 - `internal/scan`: runs the scan steps under the global time limit.
 - `internal/scan/avexclusions`: new Windows Defender exclusions since the baseline (v1).
 - `internal/scan/configkeys`: configuration keys an agent reads differently from RosmarOps, as red findings.
@@ -88,9 +88,9 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/scan/workflows`: empty (a `.gitkeep` only).
 - `internal/skills`: the agent skills on disk (`SKILL.md` and scripts).
 - `internal/firstrun`: finds the projects of a first use, or asks for the folder.
-- `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)).
+- `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)). `ReadAdminFile` gives the same ownership check to another product's managed file (Claude Desktop's, ADR 0030); on macOS it checks the file but there is no company mode.
 - `internal/hostenv`: tells whether the review runs in a container, WSL, a virtual machine or Windows Sandbox.
-- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML and YAML the agents use. `yamlsubset.ParseKeysWithMapItems` also reads lists of mappings, for Claude Code's subagent headers.
+- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`, `internal/plistsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML, YAML and property lists the agents use. `yamlsubset.ParseKeysWithMapItems` also reads lists of mappings, for Claude Code's subagent headers and Continue's MCP servers. `plistsubset` reads the top-level booleans, integers and strings of an XML or binary property list, for Claude Desktop's managed preferences on macOS.
 
 ### Engine
 

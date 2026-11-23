@@ -1,0 +1,17 @@
+{
+  "product": "claude-desktop",
+  "version": "2026-11-23",
+  "session_files": [],
+  "entries": [
+    {
+      "id": "mcp_ask",
+      "type": "invoke_mcp_tool",
+      "approval": "ask",
+      "target_scope": "*",
+      "source_url": "https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/docs/2026-07-28/develop/connect-local-servers.mdx",
+      "verified": "Model Context Protocol docs, «Connect to local MCP servers», version 2026-07-28, read 2026-11-23 for Claude Desktop v6.28899.6 (2026-11-20): «All actions require your explicit approval before execution». An «Always allow» approval per tool (changelog v1.24012.9, 2026-07-24) is kept in the app's databases, which RosmarOps never opens; the factory behaviour is to ask before each MCP tool call."
+    }
+  ],
+  "mitigations": [],
+  "code_launchers": []
+}

@@ -37,13 +37,16 @@ type Input struct {
 	Antigravity platform.AntigravityScan
 	Gemini      platform.GeminiScan
 	// OpenCode are OpenCode and Kilo Code at rest (BV-276).
-	OpenCode     []platform.OpenCodeScan
-	Cline        platform.ClineScan
-	Instructions platform.InstructionScan
-	Skills       platform.SkillScan
-	CredFiles    platform.CredentialFileScan
-	Extensions   []platform.VSCodeExtension
-	Repos        graph.Repos
+	OpenCode []platform.OpenCodeScan
+	// ClaudeDesktop is Claude Desktop's extensions and managed policy
+	// (BV-277); its MCP servers are in MCP.
+	ClaudeDesktop platform.ClaudeDesktopScan
+	Cline         platform.ClineScan
+	Instructions  platform.InstructionScan
+	Skills        platform.SkillScan
+	CredFiles     platform.CredentialFileScan
+	Extensions    []platform.VSCodeExtension
+	Repos         graph.Repos
 
 	// Context.
 	Provenance graph.Provenance
@@ -135,6 +138,9 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 	if in.Cursor.Declared == nil {
 		in.Cursor.Declared = in.Declared[declared.Cursor]
 	}
+	// BV-277: Claude Desktop's managed policy decides whether the servers
+	// of its configuration file load.
+	in.MCP.Servers = graph.ClaudeDesktopServers(in.MCP.Servers, in.ClaudeDesktop)
 	frag, stats, err := graph.FromScansWithGrok(in.MCP, in.Settings, in.Cursor, in.CredFiles, in.Repos, in.Hermes, in.Codex, in.Grok, in.Salt, in.Now)
 	if err != nil {
 		return graph.Fragment{}, graph.PermissionStats{}, err
@@ -162,6 +168,14 @@ func fragment(in Input) (graph.Fragment, graph.PermissionStats, error) {
 			return graph.Fragment{}, graph.PermissionStats{}, err
 		}
 		frag = graph.Merge(frag, graph.FromOpenCode(s, base, in.Now))
+	}
+	// Claude Desktop (BV-277), before the shared files too.
+	if in.ClaudeDesktop.Present {
+		base, err := knowledge.ClaudeDesktop()
+		if err != nil {
+			return graph.Fragment{}, graph.PermissionStats{}, err
+		}
+		frag = graph.Merge(frag, graph.FromClaudeDesktop(in.ClaudeDesktop, base, in.Now))
 	}
 	// Shared instruction and skills files, attached to every ai_client now
 	// present. Extensions add their own agent nodes and are order-independent.

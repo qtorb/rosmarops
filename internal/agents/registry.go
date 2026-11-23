@@ -99,6 +99,10 @@ var registry = []Entry{
 	{Product: "kilo-code", Sources: []ConfigSource{
 		{LayerUser, FormatJSONC, true}, // ~/.config/kilo/kilo.jsonc
 	}},
+	// BV-277: Claude Desktop. Not on the full machine yet (adding it changes
+	// the reference figures, which the owner signs), so, like Cursor, it
+	// declares no source yet.
+	{Product: "claude-desktop", Sources: nil},
 }
 
 // All returns the registry entries, one per scored product.
