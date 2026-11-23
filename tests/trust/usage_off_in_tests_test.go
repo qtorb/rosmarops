@@ -7,6 +7,14 @@ package trust_test
 // and that no usage package was built; this test checks what they are told
 // to do: every journey answers «no» to the usage question, and no workflow
 // or script turns usage statistics on or marks an installation as the team's.
+//
+// Go tests are not scanned here. A test that turned usage statistics on by
+// mistake did it with a bare Enter (the question's default is yes), which no
+// text scan can tell from any other answer. Two checks look at behaviour
+// instead: a build that is not a published version never asks or sends
+// (cmd_usage.go, usageBuildMaySend), and CI runs every test behind a proxy
+// that records where they go and fails on app.rosmarops.com
+// (.github/scripts/go-test-recorded.sh). See ADR 0032.
 
 import (
 	"io/fs"

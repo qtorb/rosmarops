@@ -1131,8 +1131,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	// the program truly cannot ask: no one present, or the ask was already made
 	// and declined this run.
 	v2.ProblemsWillAsk = presentForProblems(m, unattended) && !st.SendProblemsWithoutAsking && !problemsAskedThisRun
-	// The report's usage statistics line, from the state's answer.
+	// The report's usage statistics line, from the state's answer; none when
+	// the after-report step is about to ask, as for the problem list.
 	v2.UsageState = usageStateKey(st.Usage)
+	if usageWillAsk(st.Usage, unattended) {
+		v2.UsageState = ""
+	}
 
 	// Write report files.
 	progress.line("console.progress.report", nil)
@@ -1223,6 +1227,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 				v2, _ = buildV2()
 				v2.SpaceConnected, v2.SpaceSentDate, v2.SpaceRejected = prev.SpaceConnected, prev.SpaceSentDate, prev.SpaceRejected
 				v2.ProblemsSentThisRun, v2.ProblemsUnsent, v2.ProblemsWillAsk = prev.ProblemsSentThisRun, prev.ProblemsUnsent, prev.ProblemsWillAsk
+				v2.UsageState = prev.UsageState
 				v2.AgentHooks = agentHooksFor(builtSettings, v2, exePath)
 				if htmlPath, err = writeReport(v2); err != nil {
 					return "", err

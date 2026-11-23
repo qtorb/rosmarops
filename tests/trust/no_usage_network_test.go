@@ -22,6 +22,11 @@ import (
 // local proxy that only records (it never reaches the internet). Linux +
 // strace, like the problem reports' tests.
 
+// publishedBuild builds the program as a published version: only those ask
+// about usage statistics and send them (a build without -X main.version says
+// 0.1.0-dev and never does), so the usage tests build one.
+var publishedBuild = []string{"-ldflags", "-X main.version=9.9.9"}
+
 // usageHome lays out a HOME with a config and a state whose usage answer is u
 // (nil: no answer).
 func usageHome(t *testing.T, u *state.Usage) string {
@@ -57,7 +62,7 @@ func TestNoNetwork_Usage_NoSendWithoutConsent(t *testing.T) {
 	if err != nil {
 		t.Skip("strace not available: runtime network check not executed")
 	}
-	bin := buildBin(t, "./cmd/rosmarops", nil)
+	bin := buildBin(t, "./cmd/rosmarops", publishedBuild)
 	traces := map[string]string{}
 	for name, u := range map[string]*state.Usage{"undecided": nil, "off": usageAnswer(false)} {
 		for _, args := range [][]string{{"run"}, {"run", "--unattended"}} {
@@ -86,7 +91,7 @@ func TestNoNetwork_UsageSend_OnlyFixedHost(t *testing.T) {
 		t.Skip("strace not available")
 	}
 	recorder := buildBin(t, "./tests/trust/testdata/proxyrecorder", nil)
-	bin := buildBin(t, "./cmd/rosmarops", nil)
+	bin := buildBin(t, "./cmd/rosmarops", publishedBuild)
 	home := usageHome(t, usageAnswer(true))
 
 	connects, inet := runBehindRecordingProxy(t, strace, recorder, bin, home, "run", "--unattended")
@@ -123,7 +128,7 @@ func TestUsageSendFailureChangesNothing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
 	}
-	bin := buildBin(t, "./cmd/rosmarops", nil)
+	bin := buildBin(t, "./cmd/rosmarops", publishedBuild)
 	result := func(home string) (string, int) {
 		code := 0
 		cmd := exec.Command(bin, "run", "--unattended")
@@ -180,5 +185,28 @@ func TestCompanyRuntimeHasNoUsage(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(report.DataDir(filepath.Join(report.DefaultReportDirIn(s.home))), usage.LastFileName)); err == nil {
 		t.Error("a usage summary was written in the company review")
+	}
+}
+
+// A build that is not a published version never sends usage statistics, even
+// with the state recording them on: behind the recording proxy, a review of a
+// plain `go build` (0.1.0-dev) asks for no connection at all.
+func TestNoNetwork_Usage_DevBuildNeverSends(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the proxy+strace network check is implemented for Linux")
+	}
+	strace, err := exec.LookPath("strace")
+	if err != nil {
+		t.Skip("strace not available")
+	}
+	recorder := buildBin(t, "./tests/trust/testdata/proxyrecorder", nil)
+	bin := buildBin(t, "./cmd/rosmarops", nil)
+	home := usageHome(t, usageAnswer(true))
+	connects, inet := runBehindRecordingProxy(t, strace, recorder, bin, home, "run", "--unattended")
+	if len(connects) != 0 || len(inet) != 0 {
+		t.Errorf("a development build connected: CONNECT %v, inet %v", connects, inet)
+	}
+	if _, err := os.Stat(filepath.Join(report.DataDir(report.DefaultReportDirIn(home)), usage.LastFileName)); err == nil {
+		t.Errorf("a development build built a usage package")
 	}
 }

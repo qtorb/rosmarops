@@ -28,7 +28,7 @@ The command is for the team, so the general help does not show it.
 
 ## Tests never turn usage statistics on
 
-Test computers are not the team's installations: they must send nothing. Every journey answers no to the usage question, and the journeys and the realistic end-to-end run check at the end that their test computers have usage statistics off and built no usage summary ([journeys](journeys.md)). A trust test fails if a steps file, workflow or script turns them on or marks an installation.
+Test computers are not the team's installations: they must send nothing. Every journey answers no to the usage question, and the journeys and the realistic end-to-end run check at the end that their test computers have usage statistics off and built no usage summary ([journeys](journeys.md)). A trust test fails if a steps file, workflow or script turns them on or marks an installation. A build that is not a published version (`0.1.0-dev` from `go build` or `go test`, a journey's `X.Y.Z-journeys.N`) never asks or sends at all; the trust sandbox runs behind a proxy where nothing listens; and CI's Linux `verify` job runs the tests behind a proxy that records where they go, failing if any asks for app.rosmarops.com ([ADR 0032](../decisions/0032-only-published-versions-send-usage.md)).
 
 ## Where it is
 
