@@ -62,20 +62,26 @@ func loadUsage(t *testing.T, stPath string) *state.Usage {
 	return st.Usage
 }
 
-// The answers. Enter, s, S, y, Y are yes; n, N are no; anything else
-// asks once more and then counts as no; a closed input is no.
+// The answers (BV-285). s, S, y, Y turn usage statistics on; n, N turn
+// them off; Enter alone is no answer; anything else asks once more and then
+// counts as Enter; a closed input counts as Enter.
 func TestAskUsageAnswers(t *testing.T) {
 	cat, err := catalog.Load("en")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for in, want := range map[string]bool{
-		"\n": true, "s\n": true, "S\n": true, "y\n": true, "Y\n": true, "  y  \n": true,
-		"n\n": false, "N\n": false, "maybe\ny\n": true, "maybe\nwhat\ny\n": false, "": false,
+	type answer struct{ on, answered bool }
+	for in, want := range map[string]answer{
+		"\n": {}, "   \n": {}, "": {},
+		"s\n": {true, true}, "S\n": {true, true}, "y\n": {true, true}, "Y\n": {true, true}, "  y  \n": {true, true},
+		"n\n": {false, true}, "N\n": {false, true},
+		"maybe\ny\n": {true, true}, "maybe\nn\n": {false, true},
+		"maybe\nwhat\ny\n": {}, "maybe\n\n": {}, "maybe": {}, "yes\nno\n": {},
 	} {
 		var out bytes.Buffer
-		if got := askUsage(strings.NewReader(in), &out, cat); got != want {
-			t.Errorf("%q: %v, want %v", in, got, want)
+		on, answered := askUsage(strings.NewReader(in), &out, cat)
+		if (answer{on, answered}) != want {
+			t.Errorf("%q: on %v answered %v, want %+v", in, on, answered, want)
 		}
 		if !strings.Contains(out.String(), cat.Text("usage.ask.prompt", nil)) {
 			t.Errorf("%q: no prompt in %q", in, out.String())
@@ -93,14 +99,16 @@ func TestUsageNoConsoleNoQuestionNoSend(t *testing.T) {
 	}
 }
 
-// Enter is yes, and the yes sends at once; n is no and sends nothing.
+// y is yes, and the yes sends at once; n is no and sends nothing; Enter
+// alone, odd text twice or a closed input records nothing and sends nothing,
+// so the question comes back at the next review.
 func TestUsageAnswerThenSend(t *testing.T) {
-	stPath, sends := usageTestHome(t, nil, "\n")
+	stPath, sends := usageTestHome(t, nil, "y\n")
 	reports := t.TempDir()
 	afterReportUsage(reports, "en", true)
 	u := loadUsage(t, stPath)
 	if u == nil || !u.Enabled || u.TextVersion != usage.TextVersion || u.DecidedAt != "2026-11-18T12:00:00Z" || *sends != 1 {
-		t.Fatalf("Enter: usage %+v, %d sends", u, *sends)
+		t.Fatalf("y: usage %+v, %d sends", u, *sends)
 	}
 	if _, err := os.Stat(filepath.Join(report.DataDir(reports), usage.LastFileName)); err != nil {
 		t.Errorf("no %s: %v", usage.LastFileName, err)
@@ -110,6 +118,17 @@ func TestUsageAnswerThenSend(t *testing.T) {
 	afterReportUsage(t.TempDir(), "en", true)
 	if u := loadUsage(t, stPath); u == nil || u.Enabled || *sends != 0 {
 		t.Errorf("n: usage %+v, %d sends", u, *sends)
+	}
+
+	for _, in := range []string{"\n", "what\n?\n", ""} {
+		stPath, sends = usageTestHome(t, nil, in)
+		afterReportUsage(t.TempDir(), "en", true)
+		if u := loadUsage(t, stPath); u != nil || *sends != 0 {
+			t.Errorf("%q: usage %+v, %d sends; want no answer and no send", in, u, *sends)
+		}
+		if !usageUndecided(loadUsage(t, stPath)) {
+			t.Errorf("%q: not asked again at the next review", in)
+		}
 	}
 }
 

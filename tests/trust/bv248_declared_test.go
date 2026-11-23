@@ -248,8 +248,8 @@ func TestGrokBotNoSettingsTextLeaks(t *testing.T) {
 	writeGrokBot(t, s)
 	// Enter keeps the default for Cursor's two questions and Grok Bot's two;
 	// then «n» to whatever the review asks after: the problem list's three
-	// questions and the usage statistics question, where a bare Enter would
-	// be «yes».
+	// questions and the usage statistics question (where a bare Enter was
+	// «yes» until ADR 0033).
 	runInPTY(t, s, []string{s.binary, "run", "--lang", "en"}, strings.Repeat("\n", 4)+strings.Repeat("n\n", 12))
 	if raw, err := os.ReadFile(filepath.Join(s.home, ".rosmarops", "state.json")); err != nil || strings.Contains(string(raw), `"enabled": true`) {
 		t.Fatalf("usage statistics on after the review (%v):\n%s", err, raw)
