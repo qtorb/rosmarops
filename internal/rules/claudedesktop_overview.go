@@ -7,11 +7,12 @@ import (
 // Claude Desktop's six rows (BV-277). Outside Cowork, which is not read and
 // not scored, the app reads, writes, runs and sends only through MCP tools:
 // the servers it loads and its desktop extensions (assumed active: their
-// settings files are never opened). Each MCP tool call asks first by
-// default, so with at least one such route the person decides, on the whole
-// computer (what a tool does inside is out of scope); with none, it does
-// nothing of the kind. Its «Allow always» approvals live in the app's
-// databases: every cell rests on ui_mode_choice_unknown.
+// settings files are never opened). Its «Always allow» approvals live in the
+// app's databases, so the least controlled case is assumed: with at least one
+// such route nobody decides, on the whole computer (what a tool does inside
+// is out of scope), unless the managed policy turns persistent approvals off
+// and the person decides; with none, it does nothing of the kind. Every cell
+// rests on ui_mode_choice_unknown.
 
 func (oi overviewInputs) claudeDesktopCells(v *agentView) []OverviewCell {
 	routes := oi.claudeDesktopRoutes(v)

@@ -8,8 +8,8 @@ import (
 	"github.com/qtorb/rosmarops/internal/platform"
 )
 
-// BV-277: a factory Claude Desktop asks before each MCP tool call (the
-// knowledge base); a managed policy that stops persistent «Allow always»
+// BV-277: without a policy, Claude Desktop's MCP tools are assumed to run
+// without asking (its «Always allow» approvals are not read); a managed policy that stops persistent «Allow always»
 // makes the same capability configured; a policy file that failed the
 // ownership check is a source not read.
 func TestFromClaudeDesktop(t *testing.T) {
@@ -20,7 +20,7 @@ func TestFromClaudeDesktop(t *testing.T) {
 	now := time.Date(2026, 11, 23, 0, 0, 0, 0, time.UTC)
 	scan := platform.ClaudeDesktopScan{Present: true, ConfigDir: "/home/u/.config/Claude"}
 	c, ok := capsOf(FromClaudeDesktop(scan, base, now))[CapInvokeMCPTool+"|*|user"]
-	if !ok || c.Approval != ApprovalAsk || c.Basis != BasisProductDefault || c.Rule != "" || c.Source != "kb:claude-desktop/mcp_ask@"+knowledge.ClaudeDesktopVersion {
+	if !ok || c.Approval != ApprovalAllow || c.Basis != BasisProductDefault || c.Rule != "" || c.Source != "kb:claude-desktop/mcp_always_allow_assumed@"+knowledge.ClaudeDesktopVersion {
 		t.Fatalf("factory: %+v", c)
 	}
 	no := false

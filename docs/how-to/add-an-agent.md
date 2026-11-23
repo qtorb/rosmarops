@@ -127,7 +127,7 @@ OpenCode and Kilo Code (ADR 0027) share their configuration model, so one reader
 
 ## An agent that keeps its approvals in the app
 
-Claude Desktop (ADR 0030) keeps its «Allow always» approvals in the app's databases, which RosmarOps never opens. Its knowledge base gives the factory behaviour (it asks before each MCP tool), its overview rows rest on `ui_mode_choice_unknown`, and its assumptions say what was not read. An administrator's managed file for such a product is read through `company.ReadAdminFile`, which checks who owns the file and its folders before reading it.
+Claude Desktop (ADR 0030) keeps its «Always allow» approvals in the app's databases, which RosmarOps never opens. Its knowledge base keeps the factory fact (it asks before each MCP tool) and the least controlled case it is scored on (its tools run without asking), as for Cursor. Its overview rows rest on `ui_mode_choice_unknown`, and its assumptions say what was not read. An administrator's managed file for such a product is read through `company.ReadAdminFile`, which checks who owns the file and its folders before reading it.
 
 An agent that is no longer maintained (Continue) is detected with its MCP servers and gets its own not-evaluated reason. It gets no knowledge base or score.
 

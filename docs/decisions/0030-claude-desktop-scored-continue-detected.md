@@ -14,10 +14,10 @@ Both keep part of what decides their permissions in the app's own storage, not i
 
 ## Decision
 
-Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19.
+Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19, in two messages: the decisions on the reading, then the correction of Claude Desktop's assumption and the texts.
 
 **Continue: detected, not scored.**
-- The reason is a new not-evaluated code, `continue_unmaintained`, added to the report.v2 reason enum.
+- The reason is a new not-evaluated code, `continue_unmaintained`, added to the report.v2 reason enum. The owner signed this schema change explicitly.
 - What is read:
   - the global folder `~/.continue`, or `CONTINUE_GLOBAL_DIR` when it is an absolute path;
   - its MCP servers only, through the shared MCP pipeline, with the treatment of keys and versions of every agent (ADR 0026). They come from `config.yaml`, or `config.json` when there is no `config.yaml`, and from every YAML or JSON file under each project's `.continue/mcpServers`.
@@ -27,23 +27,29 @@ Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19.
 
 **Claude Desktop: scored, also on Linux (`~/.config/Claude`).**
 - **What it can do:** outside Cowork, it acts on the computer only through MCP tools, from the servers of `claude_desktop_config.json` and its desktop extensions (`.mcpb`).
-- **Factory mode:** it asks before each MCP tool call. The source is the Model Context Protocol documentation, «Connect to local MCP servers», version 2026-07-28, read for v6.28899.6. This is one capability, `invoke_mcp_tool` `ask`, from the knowledge base `claude-desktop.json`.
-- **Assumption:** what lives only in its databases is never opened and is declared as an assumption: it asks before each tool, as from the factory. Cowork is outside the score and the report says it is not read. The Code tab is not scored apart: it is Claude Code.
+- **Factory fact:** from the factory it asks before each MCP tool call. The source is the Model Context Protocol documentation, «Connect to local MCP servers», version 2026-07-28, read for v6.28899.6. The knowledge base `claude-desktop.json` keeps it as `mcp_ask`.
+- **Assumption it is scored on:** each tool can be set to «Always allow», and those approvals live in the app's databases, which are never opened. So, as for Cursor, the least controlled case is assumed: the tools of its MCP servers and extensions run without asking. This is one capability, `invoke_mcp_tool` `allow`, from the knowledge base entry `mcp_always_allow_assumed`.
+  - **Exception:** when the managed policy sets `mcpPersistentAlwaysAllowEnabled` to false, it asks; the capability is then configured `ask`, with the policy as its rule.
+  - **What that key means:** the Claude Desktop changelog, read on 2026-11-23, says v1.24012.9 (2026-07-24) added it «letting admins disable the persistent "Always allow" approvals for MCP tools while keeping session-scoped approvals available». v6.28899.2 (2026-11-19) says that with false, MCP tool prompts offer «Allow for this session» instead of «Always allow».
+  - **Two limits of that reading:**
+    - every mention is in the changelog's section for Claude Desktop on third-party platforms (3P), and the standard enterprise configuration page does not list the key, although it is read from the same managed locations;
+    - with false, a tool approved for the session runs without asking again in that session.
+- **Outside the score:** Cowork is outside the score and the report says it is not read. The Code tab is not scored apart: it is Claude Code. The old not-evaluated reason `claude_desktop` is no longer emitted: its text is retired, and the value stays in the report.v2 enum, because removing it would change the schema.
 - **Desktop extensions:** RosmarOps lists only the file names in `Claude Extensions Settings`, to know which extensions are installed. Those files can hold an extension's secrets and are never opened. That they are active is an assumption declared in the report.
 - **Managed policy:** `isLocalDevMcpEnabled`, `isDesktopExtensionEnabled` and `mcpPersistentAlwaysAllowEnabled`.
   - **Windows:** read from `HKLM`, else `HKCU`, `\SOFTWARE\Policies\Claude`, with the registry reader GitHub Copilot and Codex already use. When `HKLM` holds any of these values, `HKCU` is ignored.
   - **macOS:** read from the managed preferences of `com.anthropic.claudefordesktop` in `/Library/Managed Preferences/` (the computer's, then the user's).
   - **Linux:** read from `/etc/claude-desktop/managed-settings.json`.
-  - **The files** are read only after the administrator ownership check of the company configuration (ADR 0018). On Linux and macOS: a regular file, not a link, which with every folder up to the root belongs to root with no write for group or others. macOS still has no company mode. A file that fails the check is not read, and the report lists it as not read.
+  - **The files** are read only after the administrator ownership check, which the owner signed sharing with macOS, of the company configuration (ADR 0018). On Linux and macOS: a regular file, not a link, which with every folder up to the root belongs to root with no write for group or others. macOS still has no company mode. A file that fails the check is not read, and the report lists it as not read.
   - **Effects:**
     - `isLocalDevMcpEnabled` false: the servers of the config file stay on disk (their keys are still credentials), but load nothing;
     - `isDesktopExtensionEnabled` false: no extension is assumed active;
     - `mcpPersistentAlwaysAllowEnabled` false: the MCP capability is configured by that policy.
-- **Plist reader:** managed preferences are often binary property lists. `internal/plistsubset` reads the small part RosmarOps needs, XML or binary, with no dependency: the top-level booleans, integers and strings. Any other value is skipped, and a malformed file is refused whole.
+- **Plist reader, signed by the owner:** managed preferences are often binary property lists. `internal/plistsubset` reads the small part RosmarOps needs, XML or binary, with no dependency: the top-level booleans, integers and strings. Any other value is skipped, and a malformed file is refused whole.
 - **Reference computer:** Claude Desktop's factory score and its class on the exposure map are computed, not pinned: the owner signs them. It is not on the full test machine yet, because that would move the reference figures.
 
 ## Consequences
 
 - One more scored agent and one more detected one. The knowledge review date moves to 2026-11-23.
-- The texts the person reads for the new reason, Claude Desktop's assumptions, its Cowork line and its extensions line come from the owner. Until then they are marked `[pending copy]`.
+- The texts the person reads for the new reason, Claude Desktop's assumption, its Cowork line and its extensions line are the owner's, placed literally.
 - The ownership check now runs on macOS too, for files of other products. The company configuration and the administrator fingerprint list are still not looked for there.

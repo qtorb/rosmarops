@@ -10,16 +10,19 @@ import (
 // Claude Desktop in the graph (BV-277). Outside Cowork, which is not read
 // and not scored, what the app may do on the computer goes through MCP tools
 // (the servers of claude_desktop_config.json, through the shared pipeline,
-// and its desktop extensions). By default it asks before each MCP tool call:
-// one capability, invoke_mcp_tool ask, from the knowledge base. Its
-// «Allow always» approvals live in the app's databases, which are never
-// opened, so the factory default is an assumption (ui_mode_choice_unknown in
-// the overview). When the administrator's policy turns off persistent
-// «Allow always» approvals (mcpPersistentAlwaysAllowEnabled false), the
-// same capability is configured, with that policy as its rule and source.
+// and its desktop extensions). From the factory it asks before each MCP
+// tool call (knowledge base entry mcp_ask), but each tool can be set to
+// «Always allow», and those approvals live in the app's databases, which
+// are never opened. So, as for Cursor, the least controlled case is
+// assumed: one capability, invoke_mcp_tool allow, from the knowledge base
+// entry mcp_always_allow_assumed (ui_mode_choice_unknown in the overview).
+// When the administrator's policy turns off persistent «Always allow»
+// approvals (mcpPersistentAlwaysAllowEnabled false), the capability is
+// configured ask, with that policy as its rule and source.
 
-// claudeDesktopMCPEntry is the knowledge base entry of its MCP default.
-const claudeDesktopMCPEntry = "mcp_ask"
+// claudeDesktopMCPEntry is the knowledge base entry the capability rests
+// on without a policy: the least controlled case.
+const claudeDesktopMCPEntry = "mcp_always_allow_assumed"
 
 // FromClaudeDesktop builds Claude Desktop's fragment: its ai_client, its
 // capability to call MCP tools, and its managed policy as a source read or
