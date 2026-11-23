@@ -18,6 +18,13 @@ import (
 // entries given, repo as the repository, salt as the local salt, at day.
 func scenarioV2(t *testing.T, salt []byte, home, repo string, entries []platform.CredentialEntry, day time.Time) report.V2 {
 	t.Helper()
+	return scenarioV2With(t, salt, home, repo, entries, day, nil)
+}
+
+// scenarioV2With is scenarioV2 with the graph changed by edit before the
+// report is built (nil changes nothing).
+func scenarioV2With(t *testing.T, salt []byte, home, repo string, entries []platform.CredentialEntry, day time.Time, edit func(*graph.Graph)) report.V2 {
+	t.Helper()
 	claudeDir := home + "/.claude"
 	settings := platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{{
 		Scope: platform.MCPScopeUser, ConfigPath: claudeDir + "/settings.json", ConfigDir: claudeDir,
@@ -30,6 +37,9 @@ func scenarioV2(t *testing.T, salt []byte, home, repo string, entries []platform
 	g, err := pipeline.BuildGraph(frag, pipeline.GraphOpts{Provenance: graph.Provenance{EngineVersion: "t", RulesVersion: graph.RulesVersion, KnowledgeVersion: graph.KnowledgeVersion, HostID: graph.HostID(salt)}, RepoRoots: []string{repo}, Home: home, Now: day})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if edit != nil {
+		edit(&g)
 	}
 	base, err := knowledge.ClaudeCode()
 	if err != nil {

@@ -16,6 +16,23 @@ The HTML report opens with three blocks: the result, the findings grouped by pro
 - `resolved` lives in the findings memory and in the report's own data, not in `report.v2.json`: its verdict counts are a closed list there, and adding one is a schema change for the owner.
 - Block 3's line says which template the person already uses (`tplInUseLine` in `internal/report/tplinuse.go`) and, if there is one, the next stricter template for the same use on this system; the card of the template in use has the green «In use» pill.
 
+## «Your orchestrators», the «Key» tag and the frontier (BV-278)
+
+- **«Your orchestrators»** (`renderFleet` in `internal/report/html_fleet.go`) sits between block 3 and the folds. It appears only when the graph has an orchestrator with a `launches` edge.
+  - **Rows.** `BuildV2` keeps the edges in memory (`fleetOf`), sorted by orchestrator and then by agent. They are not in the JSON.
+  - **Columns:**
+    - the agent, with a line when it gets the orchestrator's environment;
+    - `approval_override` as a red, green or amber pill;
+    - how we know: the base name of the file it was read in, as text read from the disk, or «Assumed: its factory setting»;
+    - the agent's own score pill;
+    - «See the warning ›» to the `#p-N` of the problem that holds its `orchestrator_skips_approvals` finding.
+  - **Under each table:** one grey line per distinct assumption of its edges, with the catalog's `unknown.<code>` text. The assumptions every agent shares are left out, as in the findings' own lists.
+  - **No URL.** The card links nowhere outside the page.
+- **«To understand»** (`.r3-und`, `undEyebrow`) is the treatment of a card that explains and asks for no action. «Your orchestrators» is the first one.
+- **The «Key» tag** (`.r3-tag`, `keyTag`) marks the credential problems (`issueCred`: `cred_readable`, `cred_read_and_send`, `cred_in_git`). It goes before the title in the table and after it in the problem's steps.
+- **The frontier** (`renderDetail`, `.r3-detail`) goes between the first screen and `main`, only when there is a problem. It is as wide as `main`, and hidden in the alternate views.
+- **The person's lists apply to every finding.** «No me afecta» and «Lo asumo» apply to the orchestrator and subagent findings too (`applyPersonLists` in `internal/rules/rules.go`), so a dismissed or accepted warning is never linked from the card.
+
 ## Rules to keep
 
 - **No new field.** The groups are drawn, never written: `report.v2`, `graph.v2`, usage statistics and the company summary count findings, not problems. A field for the groups is a schema change for the owner to decide.
