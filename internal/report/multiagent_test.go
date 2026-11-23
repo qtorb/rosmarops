@@ -162,7 +162,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // review date (checked: only «22» for «14» in that date), at BV-278 with
 // the CSS of «Your orchestrators», «To understand», the «Key» tag and the
 // frontier, the frontier above main and the «Key» tag on the page's
-// credential problem, in the table and in its steps (checked: only those);
+// credential problem, in the table and in its steps (checked: only those),
+// at BV-282 with the header in two lines at 700 px or less (checked: the
+// one added CSS line);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {
