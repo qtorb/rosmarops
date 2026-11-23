@@ -186,7 +186,9 @@ func testUsageLayout(t *testing.T, lang string) {
 			t.Errorf("button widths %d and %d, want text %d and %d plus %d", yes.w, no.w, yt, nt, pad)
 		}
 	}
-	if !strings.Contains(raw["PT"], ",True,Segoe UI Semibold,") {
+	// «Segoe UI Semibold» is its own family at the regular style, so
+	// Font.Bold is False: the family name is what makes it semibold.
+	if !strings.Contains(raw["PT"], ",Segoe UI Semibold,") {
 		t.Errorf("«never» is not Segoe UI Semibold: %q", raw["PT"])
 	}
 	if raw["KEYS"] != "accept:True cancel:True preview:True focus:True timer:60000" {
