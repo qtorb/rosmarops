@@ -320,7 +320,7 @@ func TestRenderV2JSON_ValidatesSchema(t *testing.T) {
 	// (as the Cline CLI and Claude Desktop reasons did). One detected agent per
 	// reason, validated.
 	for _, reason := range []string{
-		rules.NotEvaluatedNoInference, rules.NotEvaluatedClineCLI, rules.NotEvaluatedClaudeDesktop,
+		rules.NotEvaluatedNoInference, rules.NotEvaluatedClineCLI, rules.NotEvaluatedContinue,
 	} {
 		v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 		r := reason

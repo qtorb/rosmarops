@@ -29,7 +29,8 @@ type allAgentScans struct {
 	antigravity platform.AntigravityScan
 	gemini      platform.GeminiScan
 	cline       platform.ClineScan
-	openCode    []platform.OpenCodeScan // BV-276: OpenCode and Kilo Code
+	openCode    []platform.OpenCodeScan    // BV-276: OpenCode and Kilo Code
+	desktop     platform.ClaudeDesktopScan // BV-277: Claude Desktop
 	instr       platform.InstructionScan
 }
 
@@ -53,6 +54,7 @@ func allAgents(configured bool) allAgentScans {
 			{Product: "opencode", ConfigDir: fcHome + "/.config/opencode", Present: true},
 			{Product: "kilo-code", ConfigDir: fcHome + "/.config/kilo", Present: true},
 		},
+		desktop: platform.ClaudeDesktopScan{Present: true, ConfigDir: fcHome + "/AppData/Roaming/Claude", Extensions: []string{"ant.dir.filesystem"}},
 	}
 	if configured {
 		s.codex.Layers = []platform.CodexLayer{
@@ -79,6 +81,10 @@ func allAgents(configured bool) allAgentScans {
 				Permission: map[string]platform.OpenCodeRule{"*": {Action: "deny"}},
 			},
 		}
+		// Claude Desktop with a managed policy that stops persistent «Always
+		// allow» approvals: read as data, the capability does not change.
+		no := false
+		s.desktop.Managed = platform.ClaudeDesktopManaged{Path: `registry:HKLM\SOFTWARE\Policies\Claude`, Status: st, PersistentAlwaysAllow: &no}
 		s.openCode[1].Layers = []platform.OpenCodeLayer{{Kind: platform.OpenCodeLayerUser, Path: fcHome + "/.config/kilo/kilo.jsonc", Status: st}}
 		s.openCode[1].Servers = []platform.MCPServer{{
 			Client: "kilo-code", Name: "fs", Command: "npx", Args: []string{"-y", "fs-mcp"}, ConfigPath: fcHome + "/.config/kilo/kilo.jsonc",
@@ -127,32 +133,38 @@ func buildAllAgentsGraph(t *testing.T, s allAgentScans) graph.Graph {
 	for _, o := range s.openCode {
 		servers = append(servers, graph.OpenCodeMCPServers(o)...)
 	}
+	servers = append(servers, platform.MCPServer{
+		Client: "claude-desktop", Name: "fs", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-filesystem@2025.8.21"},
+		ConfigPath: s.desktop.ConfigDir + "/claude_desktop_config.json", Pointer: "/mcpServers/fs", LoadsMCP: true,
+		ConfigDir: s.desktop.ConfigDir, Scope: platform.MCPScopeUser, Transport: "stdio",
+	})
 	mcp := platform.MCPScan{Servers: servers, Sources: s.hermes.Sources}
 	creds := platform.CredentialFileScan{Entries: []platform.CredentialEntry{
 		{Path: fcHome + "/.aws/credentials", Line: 1, Key: "AWS_ACCESS_KEY_ID", Value: secrets.NewSecretValue("AKIAABCDEFGHIJ123456")},
 	}}
 
 	res, err := pipeline.Assemble(pipeline.Input{
-		MCP:          mcp,
-		Settings:     s.settings,
-		Cursor:       s.cursor,
-		Hermes:       s.hermes,
-		Codex:        s.codex,
-		Grok:         s.grok,
-		Copilot:      s.copilot,
-		Antigravity:  s.antigravity,
-		Gemini:       s.gemini,
-		Cline:        s.cline,
-		OpenCode:     s.openCode,
-		Instructions: s.instr,
-		CredFiles:    creds,
-		Extensions:   []platform.VSCodeExtension{{ID: "github.copilot"}, {ID: "saoudrizwan.claude-dev"}},
-		Repos:        graph.Repos{},
-		Provenance:   r2Prov(),
-		Salt:         fcSalt,
-		RepoRoots:    []string{fcRepo},
-		Home:         fcHome,
-		Now:          fcNow,
+		MCP:           mcp,
+		Settings:      s.settings,
+		Cursor:        s.cursor,
+		Hermes:        s.hermes,
+		Codex:         s.codex,
+		Grok:          s.grok,
+		Copilot:       s.copilot,
+		Antigravity:   s.antigravity,
+		Gemini:        s.gemini,
+		Cline:         s.cline,
+		OpenCode:      s.openCode,
+		ClaudeDesktop: s.desktop,
+		Instructions:  s.instr,
+		CredFiles:     creds,
+		Extensions:    []platform.VSCodeExtension{{ID: "github.copilot"}, {ID: "saoudrizwan.claude-dev"}},
+		Repos:         graph.Repos{},
+		Provenance:    r2Prov(),
+		Salt:          fcSalt,
+		RepoRoots:     []string{fcRepo},
+		Home:          fcHome,
+		Now:           fcNow,
 	})
 	if err != nil {
 		t.Fatalf("pipeline.Assemble: %v", err)

@@ -36,6 +36,7 @@ func Factory(in Input) Input {
 	out.Gemini = factoryGemini(in.Gemini)
 	out.Cline = FactoryCline(in.Cline)
 	out.OpenCode = factoryOpenCode(in.OpenCode)
+	out.ClaudeDesktop = FactoryClaudeDesktop(in.ClaudeDesktop)
 	// BV-251: inbound channels and scheduled tasks are set up by the person,
 	// not defaults: taken out. The memory files stay, like the instruction
 	// files. (A Telegram or Discord token in Hermes's .env is a credential,
@@ -244,4 +245,12 @@ func factoryOpenCode(in []platform.OpenCodeScan) []platform.OpenCodeScan {
 		}
 	}
 	return out
+}
+
+// FactoryClaudeDesktop is Claude Desktop at its factory settings (BV-277):
+// the managed policy taken out; the extensions, and the MCP servers of its
+// configuration file, stay.
+func FactoryClaudeDesktop(s platform.ClaudeDesktopScan) platform.ClaudeDesktopScan {
+	s.Managed = platform.ClaudeDesktopManaged{}
+	return s
 }

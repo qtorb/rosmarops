@@ -322,6 +322,11 @@ type Input struct {
 	// Optional.
 	Cline platform.ClineScan
 
+	// ClaudeDesktop is Claude Desktop's scan (BV-277): the overview reads
+	// whether it has desktop extensions, assumed active, and whether the
+	// managed policy turns them off. Optional.
+	ClaudeDesktop platform.ClaudeDesktopScan
+
 	// Antigravity is the Antigravity CLI scan (BV-244): the overview reads
 	// whether agentMode is written, for default_mode_depends_on_version.
 	// Optional: without it (Present false) the assumption is not added.

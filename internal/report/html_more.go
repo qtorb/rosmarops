@@ -432,6 +432,18 @@ func (c htmlCtx) renderAssumeItems(anchor bool) {
 			continue
 		}
 		c.w(`<li>%s</li>`, c.t("html.assume."+product, nil))
+		// BV-277: Claude Desktop's Cowork is not read, and its desktop
+		// extensions, listed by name, are assumed active.
+		if product == knowledge.ClaudeDesktopProduct {
+			c.w(`<li>%s</li>`, c.t("html.assume.claude-desktop.cowork", nil))
+			if len(c.v.DesktopExtensions) > 0 {
+				names := make([]string, len(c.v.DesktopExtensions))
+				for i, n := range c.v.DesktopExtensions {
+					names[i] = untrusted.PlainText(n)
+				}
+				c.w(`<li>%s</li>`, c.t("html.assume.claude-desktop.extensions", map[string]string{"names": listNames(c.cat, names)}))
+			}
+		}
 		// BV-244: an assumption of the agent's own rows, with its text.
 		for _, code := range rowAssumptionsInDialog {
 			if agentRowsCarry(a, code) {
@@ -488,7 +500,7 @@ func moreKeys() []string {
 		"html.weekly.pitch.linux", "html.weekly.prompt.linux", "html.weekly.manual.step.linux", "html.weekly.no_systemd",
 		"html.assume.scope.linux",
 		"html.agentfix.title", "html.agentfix.body", "html.card.line",
-		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.antigravity-cli", "html.assume.gemini-cli", "html.assume.codex", "html.assume.grok-build", "html.assume.grok-bot", "html.assume.github-copilot", "html.assume.cline", "html.assume.hermes", "html.assume.opencode", "html.assume.kilo-code", "html.assume.scope", "html.assume.scope.macos",
+		"html.assume.open", "html.assume.title", "html.assume.common", "html.assume.claude-code", "html.assume.cursor", "html.assume.antigravity-cli", "html.assume.gemini-cli", "html.assume.codex", "html.assume.grok-build", "html.assume.grok-bot", "html.assume.github-copilot", "html.assume.cline", "html.assume.hermes", "html.assume.opencode", "html.assume.kilo-code", "html.assume.claude-desktop", "html.assume.claude-desktop.cowork", "html.assume.claude-desktop.extensions", "html.assume.scope", "html.assume.scope.macos",
 		"html.na.title", "html.na.intro",
 		"html.integrity.not_checked", "html.integrity.state_lost", "html.unattended.pending", "html.config.rejected",
 		"html.abort.run_failed", // BV-93, B3: the run-could-not-finish page

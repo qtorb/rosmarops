@@ -213,9 +213,10 @@ func (l Layout) CopilotJetBrainsDir(home string, env Env) string {
 func ClaudeDesktopDir(home string, env Env) string { return WindowsLayout.ClaudeDesktopDir(home, env) }
 
 // ClaudeDesktopDir is Claude Desktop's folder: %APPDATA%\Claude on Windows
-// (the installer's path; the MSIX one is not covered),
-// ~/Library/Application Support/Claude on macOS (modelcontextprotocol docs,
-// LECTURA-101 §2).
+// (the installer's path; the MSIX one is ClaudeDesktopMSIXDir),
+// ~/Library/Application Support/Claude on macOS and $XDG_CONFIG_HOME/Claude
+// (~/.config/Claude) on Linux (modelcontextprotocol.io, "Connect to local MCP
+// servers", 2026-07-28).
 func (l Layout) ClaudeDesktopDir(home string, env Env) string {
 	return filepath.Join(l.configBase(home, env), "Claude")
 }
@@ -281,7 +282,8 @@ func Detect(home string, env Env) []Present { return WindowsLayout.Detect(home, 
 //     .gemini\antigravity or the folder AntigravityUserDir; a
 //     .gemini folder alone is Gemini CLI's and does not count;
 //   - Hermes Agent: HermesHome\config.yaml;
-//   - Claude Desktop: <ClaudeDesktopDir>\claude_desktop_config.json.
+//   - Claude Desktop: <ClaudeDesktopDir>\claude_desktop_config.json;
+//   - Continue: the folder ContinueDir.
 func (l Layout) Detect(home string, env Env) []Present {
 	if home == "" {
 		return nil
@@ -357,9 +359,9 @@ func (l Layout) Detect(home string, env Env) []Present {
 	if p := filepath.Join(hermes, "config.yaml"); exists(p) {
 		out = append(out, Present{Hermes, hermes, p})
 	}
-	// Claude Desktop is not offered on Linux (no official Linux build), so it
-	// is not searched there (BV-165).
-	if l != LinuxLayout {
+	// Claude Desktop: Windows, macOS and, since its Linux beta (v1.17377.1,
+	// 2026-06-30), Linux in ~/.config/Claude (BV-277).
+	{
 		desktop := l.ClaudeDesktopDir(home, env)
 		marker := ""
 		if p := filepath.Join(desktop, "claude_desktop_config.json"); exists(p) {
@@ -383,11 +385,32 @@ func (l Layout) Detect(home string, env Env) []Present {
 	if data := ClineDataDir(home, env); exists(filepath.Join(data, "settings", "global-settings.json")) {
 		out = append(out, Present{ClineCLI, data, filepath.Join(data, "settings", "global-settings.json")})
 	}
+	// Continue (BV-277): its global folder. Continue is no longer maintained
+	// and is detected, not scored.
+	if c := ContinueDir(home, env); isDir(c) {
+		out = append(out, Present{Continue, c, c})
+	}
 	// n8n (BV-175): its user folder, ~/.n8n on every OS, or $N8N_USER_FOLDER/.n8n.
 	if n8n := N8NDir(home, env); isDir(n8n) {
 		out = append(out, Present{N8N, n8n, n8n})
 	}
 	return out
+}
+
+// Continue is Continue's product code (BV-277): the VS Code extension
+// continue.continue and its CLI share the global folder.
+const Continue = "continue"
+
+// ContinueDir is Continue's global folder: CONTINUE_GLOBAL_DIR when it is an
+// absolute path, else <home>/.continue, on every system
+// (continuedev/continue 5522c6f, core/util/paths.ts:27-36). Continue resolves
+// a relative value against its own working folder, which RosmarOps cannot
+// know, so a relative value falls back to the default.
+func ContinueDir(home string, env Env) string {
+	if v, ok := lookup(env)("CONTINUE_GLOBAL_DIR"); ok && filepath.IsAbs(v) {
+		return v
+	}
+	return filepath.Join(home, ".continue")
 }
 
 // N8NDir is n8n's user folder: $N8N_USER_FOLDER/.n8n when the variable is set

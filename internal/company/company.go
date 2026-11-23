@@ -228,6 +228,14 @@ func Lists(list []Entry, sha, version string) bool {
 	return false
 }
 
+// ReadAdminFile reads an administrator's file (another product's managed
+// configuration, BV-277) after the same ownership check as the company
+// configuration: on Windows, owned by and writable only by administrators;
+// on Linux and macOS, a regular file, not a link, that it and every folder
+// up to the root belong to root with no write for group or others. A file
+// that fails the check is an error wrapping ErrUntrusted.
+func ReadAdminFile(path string) ([]byte, error) { return readTrusted(path) }
+
 // readTrusted reads path after the ownership check of the file and its
 // folder (and, on Linux, every folder up to the root).
 func readTrusted(path string) ([]byte, error) {

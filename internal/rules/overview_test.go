@@ -404,10 +404,9 @@ func mustDate(t *testing.T, s string) time.Time {
 // evaluated (no_inference), all its cells not_evaluated, whether it is a
 // client, an extension or both (decision 2026-10-26, agentes y MCP nuevos,
 // A3).
-// BV-193 (CTO-22 Claude Desktop §7 D1): Claude Desktop is detected, not
-// evaluated, with its own reason text; its MCP servers and keys are still
-// listed (as credential/server nodes elsewhere).
-func TestOverview_ClaudeDesktopDetected(t *testing.T) {
+// BV-277: Claude Desktop is scored. With no MCP server and no extension it
+// acts on nothing; each row is «you», on nothing, from no setting.
+func TestOverview_ClaudeDesktopEvaluated(t *testing.T) {
 	g, _ := ovEvaluate(t, ovFixture{roots: allRoots})
 	g.Nodes = append(g.Nodes,
 		graph.Node{ID: "agent_client_dddddddddddddddd", Kind: graph.KindAgent, Type: graph.AgentAIClient, Platform: "claude-desktop", Name: "Claude Desktop"},
@@ -420,8 +419,13 @@ func TestOverview_ClaudeDesktopDetected(t *testing.T) {
 			found = &res.AgentsOverview[i]
 		}
 	}
-	if found == nil || found.Evaluated || found.NotEvaluatedReason == nil || *found.NotEvaluatedReason != rules.NotEvaluatedClaudeDesktop {
+	if found == nil || !found.Evaluated || found.NotEvaluatedReason != nil || len(found.Rows) != 6 {
 		t.Fatalf("Claude Desktop: %+v", found)
+	}
+	for _, c := range found.Rows[:4] {
+		if c.Decider != rules.DeciderYou || c.Scope != rules.ScopeNone || c.Assumed {
+			t.Errorf("%s: %+v", c.Row, c)
+		}
 	}
 }
 

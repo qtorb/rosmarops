@@ -8,7 +8,7 @@ Free and open source (AGPL-3.0). It runs on your computer and only reads. Nothin
 
 *The [sample report](https://rosmarops.com/sample-report/), made with example data.*
 
-RosmarOps reads the configuration of the AI agents on your Windows, Mac or Linux computer, your repositories and your local credentials. It scores eleven agents today: Claude Code, Cursor, Cline, GitHub Copilot, Codex, Grok Build, Antigravity CLI, Gemini CLI, Hermes Agent, OpenCode and Kilo Code. It also detects Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Claude Desktop and n8n, without scoring them yet.
+RosmarOps reads the configuration of the AI agents on your Windows, Mac or Linux computer, your repositories and your local credentials. It scores twelve agents today: Claude Code, Cursor, Cline, GitHub Copilot, Codex, Grok Build, Antigravity CLI, Gemini CLI, Hermes Agent, OpenCode, Kilo Code and Claude Desktop. It also detects Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Continue and n8n, without scoring them.
 
 It tells you, with evidence:
 
@@ -68,8 +68,6 @@ The macOS version is a preview. The report lists what it does not check yet on m
 
 4. The report opens in your browser when it finishes.
 
-Claude Desktop is not looked for on Linux, because it has no Linux version.
-
 ## Check the download
 
 Each release has a `SHA256SUMS.txt` file and a GitHub artifact attestation:
@@ -122,7 +120,8 @@ To reproduce the released `rosmarops.exe` exactly, check out the release tag in 
 | OpenCode | `opencode.json`/`.jsonc` (and `config.json`) in `~/.config/opencode` (or `XDG_CONFIG_HOME`), each project's `opencode.json(c)` and `.opencode/`, and the managed `opencode.json(c)` (`/etc/opencode`, `/Library/Application Support/opencode`, `%ProgramData%\opencode`): its permissions and MCP servers. Never its database or `auth.json` |
 | Kilo Code | `kilo.json(c)`, `opencode.json(c)` and `config.json` in `~/.config/kilo`, each project's `kilo.json(c)`/`opencode.json(c)` and `.kilocode/`, `.kilo/`, and the managed ones (`/etc/kilo` and equivalents): its permissions and MCP servers; also its legacy `mcp.json` in the project and the VS Code extension's `mcp_settings.json`. Never its database or `auth.json` |
 | Hermes Agent | `config.yaml` and its profiles in `~/.hermes` (on Windows, `%LOCALAPPDATA%\hermes`), MCP servers, the keys in its `.env` and `auth.json`, its skills, and its instruction files (including `SOUL.md`) |
-| Detected agents | Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Claude Desktop and n8n: only that they are installed, and for Claude Desktop its MCP servers |
+| Claude Desktop | `claude_desktop_config.json` in `%APPDATA%\Claude` (and the Microsoft Store copy), `~/Library/Application Support/Claude` or `~/.config/Claude`: its MCP servers; the names of its desktop extensions in `Claude Extensions Settings`, never their files; and its managed policy (`HKLM`/`HKCU\SOFTWARE\Policies\Claude`, `/Library/Managed Preferences/com.anthropic.claudefordesktop.plist`, `/etc/claude-desktop/managed-settings.json`). Never its databases |
+| Detected agents | Antigravity (the app), GitHub Copilot for JetBrains, Cline CLI, Continue and n8n: only that they are installed, and for Continue its MCP servers (`~/.continue/config.yaml` or `config.json`, and each project's `.continue/mcpServers`); never its `permissions.yaml` |
 | Shared files | `AGENTS.md` in each project, and the skills in `~/.agents/skills` and `<repo>/.agents/skills`, which several agents load |
 | Credentials | `.env` files in your repositories, MCP `env` and `headers` blocks, agent settings and common credential files (npm, AWS, GitHub CLI, git, Railway, Supabase) |
 | Repositories | Keys in tracked files and in git history, hooks, workflows |

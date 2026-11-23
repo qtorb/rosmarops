@@ -153,7 +153,7 @@ func TestExposurePotential(t *testing.T) {
 	t.Logf("wrote exposure-potential to %s (%d bytes)", out, len(data))
 }
 
-// TestExposurePotentialJSON validates the document: eleven agents, the v1 format
+// TestExposurePotentialJSON validates the document: twelve agents, the v1 format
 // tag, every axis present, and no value carrying catalog prose (no string value
 // has a space, so no sentence slipped in).
 func TestExposurePotentialJSON(t *testing.T) {
@@ -164,8 +164,8 @@ func TestExposurePotentialJSON(t *testing.T) {
 	if doc.ContagionComputerSource != "r2_fixtures" {
 		t.Errorf("contagion_computer_source = %q, want r2_fixtures (D1)", doc.ContagionComputerSource)
 	}
-	if len(doc.Agents) != 11 {
-		t.Fatalf("want 11 agents, got %d", len(doc.Agents))
+	if len(doc.Agents) != 12 {
+		t.Fatalf("want 12 agents, got %d", len(doc.Agents))
 	}
 	for _, a := range doc.Agents {
 		// CTO-31 M1: while the registry is not complete, complexity has no data
