@@ -42,11 +42,21 @@ fit its list, nothing is sent.
 At the end of a check run from a terminal, or at the end of the window when
 you double-click RosmarOps, after the problem-report step. It asks once:
 
-> Send usage statistics? [Y/n]
+> Send usage statistics? Type y for yes or n for no, and press Enter. Enter alone leaves it for later:
 
-Enter or `y` is yes; `n` is no. A scheduled weekly check, the Claude Code
+`y` (or `s`) is yes; `n` is no. Enter alone records nothing: usage statistics
+stay off and you are asked again at the next check from a terminal. Anything
+else asks once more and then counts as Enter. When it asks at the end of a
+check, that check's report has no usage statistics line, since you are
+answering right then ([ADR 0033](decisions/0033-enter-is-not-yes-for-usage.md)). A scheduled weekly check, the Claude Code
 plugin and any run without a terminal never ask and, until you answer, never
 send. If the question's text changes, it asks again.
+
+Only a published version of RosmarOps (a version that is exactly three
+numbers, such as `0.19.0`) asks or sends. A copy built from the source code
+without a version, which says `0.1.0-dev`, and the test builds never ask and
+never send, even if usage statistics are on: test runs are never counted as
+someone's checks ([ADR 0032](decisions/0032-only-published-versions-send-usage.md)).
 
 ## How to turn it off or on
 

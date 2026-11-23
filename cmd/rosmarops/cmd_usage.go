@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -114,9 +115,28 @@ func runUsageTeam(args []string, stPath string, st state.State, cat catalog.Cata
 	return nil
 }
 
-// usageStateKey is the line that says whether usage statistics are on.
+// publishedVersion is the form of a published version: three numbers and
+// nothing else. A build without one (go build or go test without
+// -ldflags -X main.version, which says 0.1.0-dev) or with a prerelease part
+// (the journeys' X.Y.Z-journeys.N) is not a copy a person installed.
+var publishedVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// usageBuildMaySend reports whether this build may ask about usage statistics
+// and send them. Only a published version may: a development or test build
+// never asks and never sends, whatever the state records, so that no test run
+// is ever counted as a person's installation.
+func usageBuildMaySend() bool {
+	return publishedVersion.MatchString(version)
+}
+
+// usageStateKey is the line that says whether usage statistics are on. A
+// build that never sends says so, whatever the answer.
 func usageStateKey(u *state.Usage) string {
 	switch {
+	case !usageBuildMaySend():
+		// Text pending from the owner (ADR 0032): until the catalog has it,
+		// the key itself shows.
+		return "usage.state.dev_build"
 	case u == nil:
 		return "usage.state.undecided"
 	case u.Enabled:
@@ -149,9 +169,13 @@ func usageUndecided(u *state.Usage) bool {
 	return u == nil || u.TextVersion < usageTextVersion
 }
 
-// askUsage asks the question in a console: Enter, s, S, y or Y is yes;
-// n or N is no; anything else repeats the question once and then counts as no.
-func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) bool {
+// askUsage asks the question in a console. It returns the answer and whether
+// there is one: s, S, y or Y turns usage statistics on; n or N turns them
+// off. Enter alone is no answer: nothing is recorded, they stay off and
+// undecided, and the question comes back at the next review with someone
+// present. Anything else asks once more and then counts as Enter, and so does
+// an input that ends.
+func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) (on, answered bool) {
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, cat.Text("usage.ask.title", nil))
 	fmt.Fprintln(out, cat.Text("usage.ask.body", nil))
@@ -162,26 +186,38 @@ func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) bool {
 		fmt.Fprint(out, cat.Text("usage.ask.prompt", nil)+" ")
 		line, err := r.ReadString('\n')
 		switch strings.TrimSpace(line) {
-		case "", "s", "S", "y", "Y":
-			if err != nil && line == "" {
-				return false // the input ended: nobody answered
-			}
-			return true
+		case "":
+			return false, false // Enter alone, or the input ended: left for later
+		case "s", "S", "y", "Y":
+			return true, true
 		case "n", "N":
-			return false
+			return false, true
 		}
 		if err != nil {
-			return false
+			return false, false
 		}
 	}
-	return false
+	return false, false
+}
+
+// usageWillAsk reports whether this review's after-report step will ask the
+// usage question: a published version, no answer to the current text, and
+// someone at a console (never in a scheduled review). The report then shows
+// no usage line, so it does not say «will ask at the next scan» while the
+// program is about to ask now.
+func usageWillAsk(u *state.Usage, unattended bool) bool {
+	return usageBuildMaySend() && usageUndecided(u) && !unattended && runCanAsk()
 }
 
 // afterReportUsage is the usage step after a review's report:
 // with someone at a console and no answer to the current text, it asks and
 // records the answer; then, with usage statistics on, it sends this review's
-// package. It never fails the run and never changes the report.
+// package. It never fails the run and never changes the report. A build that
+// is not a published version does neither (usageBuildMaySend).
 func afterReportUsage(reportDir, lang string, canAskNow bool) {
+	if !usageBuildMaySend() {
+		return
+	}
 	stPath, err := state.StatePath()
 	if err != nil {
 		return
@@ -198,7 +234,13 @@ func afterReportUsage(reportDir, lang string, canAskNow bool) {
 		if err != nil {
 			return
 		}
-		if err := decideUsage(&st, askUsage(runInput, os.Stdout, cat), usageNow()); err != nil {
+		on, answered := askUsage(runInput, os.Stdout, cat)
+		if !answered {
+			// Left for later: nothing recorded, nothing sent.
+			fmt.Println(cat.Text(usageStateKey(st.Usage), nil))
+			return
+		}
+		if err := decideUsage(&st, on, usageNow()); err != nil {
 			slog.Warn("usage: answer", "err", err)
 			return
 		}

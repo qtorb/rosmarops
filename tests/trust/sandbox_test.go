@@ -151,6 +151,20 @@ func newSandboxWith(t *testing.T, o sandboxOpts) *sandbox {
 }
 
 // sandboxEnv is the real environment with every redirected variable replaced.
+// sandboxProxy sends every HTTPS request of the sandbox's runs to a local
+// address where nothing listens: the program reaches the network only
+// through this proxy, so a send that a test triggers by mistake fails on this
+// computer and never reaches app.rosmarops.com. No NO_PROXY exception: the
+// fixed host is never exempt.
+var sandboxProxy = map[string]string{
+	"HTTPS_PROXY": sandboxDeadProxy, "https_proxy": sandboxDeadProxy,
+	"HTTP_PROXY": sandboxDeadProxy, "http_proxy": sandboxDeadProxy,
+	"NO_PROXY": "", "no_proxy": "",
+}
+
+// sandboxDeadProxy is a local address with no service: port 1 on loopback.
+const sandboxDeadProxy = "http://127.0.0.1:1"
+
 func sandboxEnv(redirect map[string]string) []string {
 	var env []string
 	for _, kv := range os.Environ() {
@@ -158,9 +172,15 @@ func sandboxEnv(redirect map[string]string) []string {
 		if _, ok := redirect[name]; ok {
 			continue
 		}
+		if _, ok := sandboxProxy[name]; ok {
+			continue
+		}
 		env = append(env, kv)
 	}
 	for name, val := range redirect {
+		env = append(env, name+"="+val)
+	}
+	for name, val := range sandboxProxy {
 		env = append(env, name+"="+val)
 	}
 	sort.Strings(env)
