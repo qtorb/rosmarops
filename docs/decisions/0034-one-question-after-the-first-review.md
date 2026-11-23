@@ -19,7 +19,7 @@ After a double click, the report opened in the browser, and then came, one after
 **On Windows the question is a window**, `usageWindowScript` in `cmd/rosmarops/windowscripts.go`. It is a new, short script built from the connect window's pieces: the same form, colours, fonts, scale and flat buttons. The connect window's script is not changed.
 
 - **The answers:**
-  - «Yes, help» turns usage statistics on and sends this review's summary. The window then shows a thank-you that closes with OK, the X, or by itself after 60 seconds (a `Timer` in the script).
+  - «Yes, help» turns usage statistics on and sends this review's summary. The window then shows a thank-you that closes with OK, the X, or by itself after 60 seconds (a `Timer` in the script). The window then fits the thank-you: 28 px above the text, OK 16 px under it and 28 px below, with the same width and the same top-left corner (corrected on 23-11).
   - «No, thanks» turns them off. They are not asked again.
   - Closing with the X or Esc, or giving no answer in 10 minutes, records nothing. The question comes back at the next review with someone present.
 - **The keys:**

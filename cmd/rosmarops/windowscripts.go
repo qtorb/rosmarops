@@ -1551,9 +1551,19 @@ $form.Add_KeyUp({
 $thanksTimer = New-Object System.Windows.Forms.Timer
 $thanksTimer.Interval = 60000
 $thanksTimer.Add_Tick({ $thanksTimer.Stop(); $form.Close() })
+# The thank-you fits its content: 28 px above the text, 16 px between it and
+# OK, 28 px below. The width stays and so does the top-left corner. Sizes are
+# in the window's current scale (the window may be scaled for the screen's
+# DPI by now), read from its width, which is 480 at that scale.
 function Show-Thanks {
   $tl.Visible = $false; $wl.Visible = $false; $bl.Visible = $false; $nl.Visible = $false; $cl.Visible = $false
   $yes.Visible = $false; $no.Visible = $false
+  $k = $form.ClientSize.Width / 480.0
+  $at = $form.Location
+  $okY = $thl.Bottom + [int][math]::Round(16 * $k)
+  $ok.Location = New-Object System.Drawing.Point($ok.Left, $okY)
+  $form.ClientSize = New-Object System.Drawing.Size($form.ClientSize.Width, ($okY + $ok.Height + [int][math]::Round(28 * $k)))
+  $form.Location = $at
   $thl.Visible = $true
   $ok.Visible = $true
   $script:tabbed = $false
@@ -1575,6 +1585,8 @@ $no.Add_Click({
 $ok.Add_Click({ $form.Close() })
 function Write-Layout($prefix) {
   [Console]::Out.WriteLine($prefix + 'CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
+  [Console]::Out.WriteLine($prefix + 'POS=' + $form.Location.X + ',' + $form.Location.Y)
+  [Console]::Out.WriteLine($prefix + 'THFONT=' + $thl.Font.Name + ',' + $thl.Font.SizeInPoints + ',' + $thl.ForeColor.ToArgb() + ',' + $thl.MaximumSize.Width)
   foreach ($p in @(@('TITLE', $tl), @('WHY', $wl), @('BODY', $bl), @('NEVER', $nl), @('CHECK', $cl), @('THANKS', $thl), @('YES', $yes), @('NO', $no), @('OK', $ok))) {
     $c = $p[1]
     [Console]::Out.WriteLine($prefix + $p[0] + '=' + $c.Left + ',' + $c.Top + ',' + $c.Width + ',' + $c.Height + ',' + $c.Visible)

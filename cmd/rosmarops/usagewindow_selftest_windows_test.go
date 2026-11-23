@@ -265,6 +265,25 @@ func testUsageYes(t *testing.T, lang string) {
 	if !strings.HasSuffix(raw["KEYS"], "timer:60000") {
 		t.Errorf("thank-you timer %q, want 60000 ms", raw["KEYS"])
 	}
+	// The thank-you fits its content (§4, corrected 23-11): 28 px above the
+	// text, OK 16 px under it, 28 px below OK; the width and the top-left
+	// corner do not change. The text is Segoe UI 10.5 in the body colour,
+	// 424 px wide.
+	cw, ch := 0, 0
+	if c := strings.Split(raw["CLIENT"], ","); len(c) == 2 {
+		cw, _ = strconv.Atoi(c[0])
+		ch, _ = strconv.Atoi(c[1])
+	}
+	if cw != 480 || ok.t != th.bottom()+16 || ok.bottom() != ch-28 {
+		t.Errorf("thank-you window %dx%d, OK at y %d (bottom %d), text bottom %d: want 480 wide, OK 16 px under the text and 28 px from the bottom", cw, ch, ok.t, ok.bottom(), th.bottom())
+	}
+	_, before := layoutOf(t, lines, "")
+	if raw["POS"] == "" || raw["POS"] != before["POS"] {
+		t.Errorf("the window moved: %q, then %q", before["POS"], raw["POS"])
+	}
+	if want := "Segoe UI,10.5," + strconv.Itoa(argbOf(0x4F4C46)) + ",424"; raw["THFONT"] != want {
+		t.Errorf("thank-you text %q, want %q", raw["THFONT"], want)
+	}
 }
 
 // «No, thanks» writes no and closes.
