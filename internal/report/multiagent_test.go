@@ -164,7 +164,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // frontier, the frontier above main and the «Key» tag on the page's
 // credential problem, in the table and in its steps (checked: only those),
 // at BV-282 with the header in two lines at 700 px or less (checked: the
-// one added CSS line);
+// one added CSS line), at BV-289 with the verdict and the «Start here» card
+// in block 1 and their CSS (checked: only those, and block 1's sentence at
+// 15 px in the second ink);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

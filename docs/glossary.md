@@ -96,6 +96,12 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Integrity check.** The comparison, before every command but `init`, `baseline`, `--help` and `--version`, of the program and its configuration with the references in the state. A change is accepted only by the person in a console, by the administrator's list or by a Microsoft Store update; otherwise the command stops with a red report. See [the decision](decisions/0006-self-integrity-check.md).
 
+**Verdict.** The first line of the report's block 1: one plain sentence for the level of the score block 1 shows (exposed, open gaps or contained). With no score there is none. See [the decision](decisions/0035-verdict-start-here-and-what-it-means.md).
+
+**Start here.** The card under the score in block 1 with one recommended action, the first case that holds: a template that fixes urgent findings, when none is in use; a key saved in git whose service is known; or problem 1. No problems, no card. See [the decision](decisions/0035-verdict-start-here-and-what-it-means.md).
+
+**What it means.** The sentence a finding shows in the HTML report under its title, where the others show their impact. The eleven rules whose title was their only sentence have one now, with variants for the cases the main sentence would overstate. See [the decision](decisions/0035-verdict-start-here-and-what-it-means.md).
+
 ## Problems and statistics
 
 **Problem report.** The list of problems RosmarOps ran into during reviews, kept on the computer as a closed list of codes. It is sent only when the person presses «Send», or after they chose to send the next ones without asking. See [the decision](decisions/0013-problem-reports-with-permission.md).
