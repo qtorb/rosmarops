@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/catalog"
+	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/index"
 	"github.com/qtorb/rosmarops/internal/platform"
 	"github.com/qtorb/rosmarops/internal/report"
@@ -17,8 +18,45 @@ import (
 func TestNoExternalInHTML(t *testing.T) {
 	day := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	home, repo := "/home/alice", "/home/alice/projects/app"
-	v := scenarioV2(t, []byte("0123456789abcdef0123456789abcdef"), home, repo,
-		[]platform.CredentialEntry{credEntry(repo+"/.env", 1, "GITHUB_TOKEN", fakeGitHubPAT)}, day)
+	entries := []platform.CredentialEntry{credEntry(repo+"/.env", 1, "GITHUB_TOKEN", fakeGitHubPAT)}
+	salt := []byte("0123456789abcdef0123456789abcdef")
+	noExternalInHTML(t, scenarioV2(t, salt, home, repo, entries, day), home)
+	// BV-278: with orchestrators, the «Your orchestrators» card is on the page
+	// and still links nowhere (its Observatory link was removed, signed 23-11).
+	withOrch := scenarioV2With(t, salt, home, repo, entries, day, func(g *graph.Graph) {
+		claude := ""
+		for _, n := range g.Nodes {
+			if n.Kind == graph.KindAgent && n.Type == graph.AgentAIClient {
+				claude = n.ID
+			}
+		}
+		for _, o := range []struct{ id, name, certainty, source, override string }{
+			{"agent_orch_paseo", "Paseo", graph.CertaintyObserved, home + "/.paseo/config.json", graph.ApprovalSkipsAll},
+			{"agent_orch_orca", "Orca", graph.CertaintyInferred, "kb:orca", graph.ApprovalSkipsAll},
+		} {
+			g.Nodes = append(g.Nodes, graph.Node{ID: o.id, Kind: graph.KindAgent, Type: graph.AgentOrchestrator, Name: o.name, ConfigPath: home + "/." + o.id})
+			g.Edges = append(g.Edges, graph.Edge{
+				ID: "edge_launches_" + o.id, Type: graph.EdgeLaunches, From: o.id, To: claude, Source: o.source,
+				Certainty: o.certainty, ApprovalOverride: o.override, EnvPassthrough: true,
+				Assumptions: []string{graph.AssumeOrchestratorSettingsNotRead},
+			})
+		}
+	})
+	noExternalInHTML(t, withOrch, home)
+	for _, lang := range []string{"en", "es"} {
+		cat, err := catalog.Load(lang)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page := report.RenderHTML(withOrch, cat, home, time.UTC); !strings.Contains(page, `class="r3-card r3-und r3-fl"`) {
+			t.Fatalf("%s: no orchestrators card — the case would be vacuous", lang)
+		}
+	}
+}
+
+// noExternalInHTML is the check itself, on one report.
+func noExternalInHTML(t *testing.T, v report.V2, home string) {
+	t.Helper()
 	// BV-158: not connected, the «Your space» section shows the «Create your
 	// space» button (the exact-URL exception below), and the card is in the
 	// folded «More information» (the SVG-namespace exception). Both exceptions

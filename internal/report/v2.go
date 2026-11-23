@@ -128,6 +128,9 @@ type V2 struct {
 	// «where» line of cred_in_git (BV-219): the commit and the path inside
 	// the repository. Not in the JSON; empty when the report is read back.
 	committed map[string]committedPlace
+	// fleet are the graph's launches edges from an orchestrator, for the
+	// «Your orchestrators» card (0.19). In memory only.
+	fleet []fleetRow
 	// integrityNotChecked is V2Input's (v3 §17.5).
 	integrityNotChecked bool
 	// storeOld and storeNew are the versions of a Microsoft Store update the
@@ -631,6 +634,7 @@ func BuildV2(in V2Input) (V2, rules.Result) {
 	if in.Graph != nil {
 		g := *in.Graph
 		v.committed = committedPlaces(g)
+		v.fleet = fleetOf(g)
 		prov, sha := g.Provenance, in.GraphSHA256
 		v.Provenance.Graph, v.Provenance.GraphSHA256 = &prov, &sha
 		res = evaluate(in, g, fams)

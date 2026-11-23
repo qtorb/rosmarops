@@ -3,6 +3,7 @@ package rules
 import (
 	"testing"
 
+	"github.com/qtorb/rosmarops/internal/config"
 	"github.com/qtorb/rosmarops/internal/graph"
 	"github.com/qtorb/rosmarops/internal/platform"
 )
@@ -192,6 +193,39 @@ func TestOrchestratorSkipsApprovalsWithoutPaperclip(t *testing.T) {
 		case "Orca":
 			if f.Confidence != ConfidenceMedium || f.Evidence.Locations[0] != "/home/u/.config/Orca" {
 				t.Errorf("Orca: confidence %s, locations %v", f.Confidence, f.Evidence.Locations)
+			}
+		}
+	}
+}
+
+// BV-278: the orchestrator findings come after the rest, and the person's
+// lists apply to them too: a dismissed one leaves the scored set, an accepted
+// one carries its date.
+func TestOrchestratorFindingsFollowThePersonsLists(t *testing.T) {
+	in := orchInput(platform.PaperclipInstance{}, nil, "", nil,
+		map[string]string{"Claude Code": graph.ApprovalSkipsAll, "Codex": graph.ApprovalOverrideUnknown})
+	ids := map[string]string{}
+	for _, f := range Evaluate(in).Findings {
+		if f.Rule == RuleOrchestratorSkipsApprovals {
+			ids[f.Params.TargetAgent] = f.ID
+		}
+	}
+	if len(ids) != 2 {
+		t.Fatalf("findings %v", ids)
+	}
+	in.Dismissed = []config.AllowEntryDismissed{{ID: ids["Claude Code"], Date: "2026-11-23"}}
+	in.Accepted = []config.AllowEntryAccepted{{ID: ids["Codex"], Date: "2026-11-23"}}
+	res := Evaluate(in)
+	if len(res.Dismissed) != 1 || res.Dismissed[0].ID != ids["Claude Code"] {
+		t.Errorf("dismissed %v", res.Dismissed)
+	}
+	for _, f := range res.Findings {
+		switch f.ID {
+		case ids["Claude Code"]:
+			t.Error("a dismissed finding still counts")
+		case ids["Codex"]:
+			if f.Accepted == nil || f.Accepted.Date != "2026-11-23" {
+				t.Errorf("accepted finding without its date: %+v", f.Accepted)
 			}
 		}
 	}
