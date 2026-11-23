@@ -118,25 +118,36 @@ func runNoArgs() int {
 		recordProblems(report.DataDir(filepath.Dir(absPath(htmlPath))), problems.Entry{Code: problems.ReportNotOpened, Step: problems.StepNotify, Day: today(time.Now())})
 	}
 
-	// BV-158 part 4 (decision A): after the report opens, offer to connect when
-	// this computer is not connected and the offer was not declined in the last
-	// 7 days. This is the double click, never --unattended and never `run`. A
-	// connection failure changes nothing here (the report and exit code stand).
-	offerConnect(stPath)
+	reportDir := filepath.Dir(absPath(htmlPath))
+	// BV-286: the installation's first review shows only the usage statistics
+	// question, after the problem list if something failed: no connect offer
+	// and no «No me afecta» window until the next review. The following
+	// reviews ask about usage statistics first, while there is no answer, and
+	// then go on as before. The usage step also sends this review's summary
+	// while usage statistics are on.
+	if firstReviewThisRun {
+		offerProblemsAfterReport(reportDir, lang, true)
+		afterReportUsage(reportDir, lang, runCanAsk())
+	} else {
+		afterReportUsage(reportDir, lang, runCanAsk())
 
-	// BV-184 point 3: after the connect window, offer to dismiss findings when
-	// at least one is new. Double click uses the home configuration (U2), like
-	// the run. A failure to show or save changes nothing here.
-	offerDismissAfterReport(lang, cfgPath, stPath, true, time.Now())
+		// BV-158 part 4 (decision A): after the report opens, offer to connect
+		// when this computer is not connected and the offer was not declined in
+		// the last 7 days. This is the double click, never --unattended and
+		// never `run`. A connection failure changes nothing here (the report
+		// and exit code stand).
+		offerConnect(stPath)
 
-	// BV-210 §2 A / CTO-32 C3: the problems step (Window A, or the untick box
-	// after an automatic send) runs after the report has opened, so an
-	// unanswered window never delays the report.
-	offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), lang, true)
+		// BV-184 point 3: after the connect window, offer to dismiss findings
+		// when at least one is new. Double click uses the home configuration
+		// (U2), like the run. A failure to show or save changes nothing here.
+		offerDismissAfterReport(lang, cfgPath, stPath, true, time.Now())
 
-	// Usage statistics, the window's last step: asked when there is no
-	// answer to the current text, sent after the review while they are on.
-	afterReportUsage(filepath.Dir(absPath(htmlPath)), lang, runCanAsk())
+		// BV-210 §2 A / CTO-32 C3: the problems step (Window A, or the untick
+		// box after an automatic send) runs after the report has opened, so an
+		// unanswered window never delays the report.
+		offerProblemsAfterReport(reportDir, lang, true)
+	}
 
 	if reportOpened {
 		if isTerminal(os.Stdout) {

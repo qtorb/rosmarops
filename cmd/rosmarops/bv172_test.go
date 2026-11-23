@@ -54,6 +54,8 @@ func TestBV172_RejectForgetsAndReoffers(t *testing.T) {
 			if err := state.SaveState(filepath.Join(rosmaDir, "state.json"), st); err != nil {
 				t.Fatal(err)
 			}
+			// An earlier review: the connect offer comes from the second review on.
+			seedEarlierReview(t)
 			salt, _ := st.Salt()
 			sec, _ := kit.NewSecret(salt)
 			kitID, _ := kit.NewKitID()

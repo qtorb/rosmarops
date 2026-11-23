@@ -41,6 +41,35 @@ var usageNow = time.Now
 // an answer to an older one is asked again. A variable for the tests.
 var usageTextVersion = usage.TextVersion
 
+// firstReviewThisRun is whether this run's review is the installation's
+// first (no last_run and no earlier reports, as the report's PriorRuns): set
+// by runWith before it writes either, read by the steps after the report
+// (BV-286). Reset at the start of every review.
+var firstReviewThisRun bool
+
+// usageWindowHook is the seam for the usage statistics window (BV-286):
+// production is askUsageWindow, a window on Windows and nothing elsewhere;
+// the tests replace it, and TestMain neutralizes it so the test suite never
+// opens a real window.
+var usageWindowHook = askUsageWindow
+
+// usageWindowAnswer is what the usage statistics window got.
+type usageWindowAnswer int
+
+const (
+	// usageWindowNotShown: there is no window here (macOS, Linux) or it could
+	// not be shown; the question is asked in the console instead.
+	usageWindowNotShown usageWindowAnswer = iota
+	// usageWindowYes: «Yes, help».
+	usageWindowYes
+	// usageWindowNo: «No, thanks».
+	usageWindowNo
+	// usageWindowLater: closed with the X or Esc, or nobody answered in time:
+	// nothing is recorded and the question comes back at the next review with
+	// someone present.
+	usageWindowLater
+)
+
 // lastUsageInput is this run's review, as the usage package needs it: set by
 // runWith once the report is written, read by the after-report step. nil when
 // no review finished this run.
@@ -169,6 +198,11 @@ func usageUndecided(u *state.Usage) bool {
 	return u == nil || u.TextVersion < usageTextVersion
 }
 
+// usageConsoleKeys are the question's texts in the console, in their order
+// (BV-286): the window's (title, why, body, never, check), then the command
+// that turns them off. The question itself (usage.ask.prompt) follows.
+var usageConsoleKeys = []string{"usage.ask.title", "usage.ask.why", "usage.ask.body", "usage.ask.never", "usage.ask.check", "usage.ask.off"}
+
 // askUsage asks the question in a console. It returns the answer and whether
 // there is one: s, S, y or Y turns usage statistics on; n or N turns them
 // off. Enter alone is no answer: nothing is recorded, they stay off and
@@ -177,10 +211,9 @@ func usageUndecided(u *state.Usage) bool {
 // an input that ends.
 func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) (on, answered bool) {
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, cat.Text("usage.ask.title", nil))
-	fmt.Fprintln(out, cat.Text("usage.ask.body", nil))
-	fmt.Fprintln(out, cat.Text("usage.ask.never", nil))
-	fmt.Fprintln(out, cat.Text("usage.ask.off", nil))
+	for _, k := range usageConsoleKeys {
+		fmt.Fprintln(out, cat.Text(k, nil))
+	}
 	r := bufio.NewReader(in)
 	for try := 0; try < 2; try++ {
 		fmt.Fprint(out, cat.Text("usage.ask.prompt", nil)+" ")
@@ -234,7 +267,25 @@ func afterReportUsage(reportDir, lang string, canAskNow bool) {
 		if err != nil {
 			return
 		}
-		on, answered := askUsage(runInput, os.Stdout, cat)
+		// BV-286: on Windows the question is a window; where there is none, or
+		// it could not be shown, it is asked in the console. The window stays
+		// open on its «thank you» after «Yes, help» while this review's
+		// summary is sent; finish waits for it to close.
+		var on, answered bool
+		ans, finish := usageWindowHook(cat)
+		if finish != nil {
+			defer finish()
+		}
+		switch ans {
+		case usageWindowYes:
+			on, answered = true, true
+		case usageWindowNo:
+			on, answered = false, true
+		case usageWindowLater:
+			on, answered = false, false
+		default:
+			on, answered = askUsage(runInput, os.Stdout, cat)
+		}
 		if !answered {
 			// Left for later: nothing recorded, nothing sent.
 			fmt.Println(cat.Text(usageStateKey(st.Usage), nil))

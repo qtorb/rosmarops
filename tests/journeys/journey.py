@@ -200,6 +200,10 @@ class Journey:
         if SYSTEM == "windows":
             for w in windows:
                 env[SELFTEST_HOOK[w]] = "1"
+            # The usage statistics window (BV-286) opens only in a published
+            # version; whenever it does, it answers itself as «later», so no
+            # journey ever waits for it.
+            env[SELFTEST_HOOK["usage"]] = "1"
         p = subprocess.run(cmd, env=env, cwd=home, capture_output=True, text=True,
                            encoding="utf-8", errors="replace")
         why = (p.stderr or p.stdout).strip().splitlines()
@@ -372,9 +376,10 @@ def r1(args):
         home = j.make_home(label, paperclip=True)
         if not args.msix_cand:
             binary = j.install(home, args.bin)
-        ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=R1_WINDOWS)
+        r1_windows = usage_windows(args.version)
+        ok, why = j.drive("r1.steps", lang, [binary], home, label, windows=r1_windows)
         j.check(f"{label}: no arguments ends without an unplanned question", ok, why)
-        j.window_checks(home, os.path.join(j.out, label + ".txt"), label, R1_WINDOWS)
+        j.window_checks(home, os.path.join(j.out, label + ".txt"), label, r1_windows)
         rep = j.review_checks(home, lang, os.path.join(j.out, label + ".txt"), label)
         j.paperclip_checks(rep, label)
         if SYSTEM == "linux":
@@ -402,14 +407,31 @@ def r1(args):
 # read, so never in any output.
 PAPERCLIP_FAKE_SECRETS = ("FAKEpaperclipMASTERkeyFORjourneysONLY0000", "FAKEpaperclipJWTsecretFORjourneysONLY0000")
 
-# R1, the first review: every finding is new, so after the report the double
-# click offers to connect and then the findings window.
-R1_WINDOWS = ("connect", "findings")
-# R2, after the update: the previous version already reviewed this computer, so
-# no finding is new and the double click offers only to connect; `findings`
+# A published version (X.Y.Z) asks about usage statistics; a journeys build
+# (X.Y.Z-journeys.N, every pull request) never does (BV-284), so in a pull
+# request's journeys the usage statistics window never opens.
+PUBLISHED = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+def usage_windows(version):
+    """The usage statistics window, when this version opens it."""
+    return ("usage",) if PUBLISHED.match(version or "") else ()
+
+
+# R1, the first review (BV-286): the double click shows only the usage
+# statistics window (and the problem list, if something failed, which a
+# journey's computer does not have): no connect offer and no findings window.
+# R2, after the update: the previous version already reviewed this computer,
+# so no finding is new; the double click asks about usage statistics first
+# while there is no answer (the window answers itself «later», and TextVersion
+# 2 asks again whoever answered text 1), then offers to connect; `findings`
 # always opens its window.
-R2_WINDOWS = {"no arguments": ("connect",), "findings": ("findings",)}
-SELFTEST_HOOK = {"connect": "ROSMAROPS_CONNECT_WINDOW_SELFTEST", "findings": "ROSMAROPS_FINDINGS_WINDOW_SELFTEST"}
+def r2_windows(version):
+    return {"no arguments": usage_windows(version) + ("connect",), "findings": ("findings",)}
+
+
+SELFTEST_HOOK = {"connect": "ROSMAROPS_CONNECT_WINDOW_SELFTEST", "findings": "ROSMAROPS_FINDINGS_WINDOW_SELFTEST",
+                 "usage": "ROSMAROPS_USAGE_WINDOW_SELFTEST"}
 
 
 # R2's commands after the update: (label, argv, kind, how to judge it).
@@ -497,7 +519,7 @@ def r2(args):
         shutil.copyfile(os.path.join(home, state), before)
         slug = "r2-" + label.replace(" ", "-").replace("--", "")
         if kind == "store":
-            windows = R2_WINDOWS.get(label, ())
+            windows = r2_windows(args.version).get(label, ())
             if "--unattended" in argv:
                 code = j.plain([binary] + argv, home, lang, slug)
                 ok, why = code == 0 and not red_report(home), f"exit {code}" + (", a red report" if red_report(home) else "")
@@ -515,7 +537,7 @@ def r2(args):
             j.check(f"{label}: the state records the update as accepted by the Store", via == "store",
                     f"binary_accepted_via {via!r}")
         elif kind == "ask":
-            windows = R2_WINDOWS.get(label, ())
+            windows = r2_windows(args.version).get(label, ())
             ok, why = j.drive("r2-ask.steps", lang, [binary] + argv, home, slug, yes=yes, windows=windows)
             j.check(f"{label}: asks in the person's language and goes on", ok, why)
             j.window_checks(home, os.path.join(j.out, slug + ".txt"), label, windows)

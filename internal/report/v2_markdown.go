@@ -136,7 +136,9 @@ var staticKeys = []string{
 	// «ask again» command confirmation.
 	"problems.terminal.send", "problems.autosent.body", "problems.autosent.body.one", "problems.ok", "problems.ask_again", "problems.ask.done",
 	// The usage statistics question, printed by the run (cmd/rosmarops).
-	"usage.ask.title", "usage.ask.body", "usage.ask.never", "usage.ask.off", "usage.ask.prompt",
+	"usage.ask.title", "usage.ask.why", "usage.ask.body", "usage.ask.never", "usage.ask.check", "usage.ask.off", "usage.ask.prompt",
+	// BV-286: the usage statistics window on Windows (cmd/rosmarops).
+	"usage.window.yes", "usage.window.no", "usage.window.thanks", "usage.window.ok",
 	// BV-271: the team mark (rosmarops usage team on|off)
 	"console.usage_team_on", "console.usage_team_off",
 }

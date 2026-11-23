@@ -69,6 +69,7 @@ func TestWindowScriptsKeepTheBootstrapInput(t *testing.T) {
 		"connectWindowScript": connectWindowScript,
 		"problemWindowScript": problemWindowScript,
 		"problemBoxScript":    problemBoxScript,
+		"usageWindowScript":   usageWindowScript,
 	}
 	for name, sc := range scripts {
 		if strings.Contains(sc, "InputEncoding") {
@@ -85,6 +86,7 @@ func TestBV211bScriptsAsciiNoSentinel(t *testing.T) {
 		"connectWindowScript": connectWindowScript,
 		"problemWindowScript": problemWindowScript,
 		"problemBoxScript":    problemBoxScript,
+		"usageWindowScript":   usageWindowScript,
 	}
 	for name, sc := range scripts {
 		for i, r := range sc {

@@ -1400,3 +1400,235 @@ $timer.Start()
 [void]$form.ShowDialog()
 [Console]::Out.WriteLine($script:choice)
 `
+
+// usageWindowScript is the usage statistics window (BV-286), built from the
+// connect window's pieces (connectWindowScript: the same form, colours, fonts,
+// scale and flat buttons) without changing it. The first stdin line is the
+// base64 JSON config. The window writes SHOWN once it has painted, then one
+// answer line: "yes" («Yes, help»: the window then shows its thank-you, which
+// closes with OK, the X, or by itself after 60 seconds), "no" («No, thanks»:
+// the window closes) or "later" (closed with the X or Esc before answering).
+// There is no default or cancel button and no button has the focus when it
+// opens, so Enter and the space bar do nothing until the person moves the
+// focus to a button with Tab; Esc closes like the X. Under Constrained
+// Language Mode Add-Type fails and PowerShell exits before SHOWN, which the
+// caller treats as «no window» and asks in the console.
+//
+// ROSMAROPS_USAGE_WINDOW_SELFTEST makes the window report its layout and
+// close itself as "later" (the journeys on Windows); with
+// ROSMAROPS_USAGE_WINDOW_SELFTEST_ANSWER set to yes, no or keys it presses
+// that button, or types Enter, the space bar and Esc, for the Windows CI
+// self-test. ROSMAROPS_USAGE_WINDOW_SHOT (a PNG path), _SHOT_SCALE and
+// _SHOT_STATE (question or thanks) capture the window for the screenshots.
+// None is ever set in production.
+const usageWindowScript = `$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_USAGE_WINDOW_SELFTEST)
+$stAnswer = $env:ROSMAROPS_USAGE_WINDOW_SELFTEST_ANSWER
+$cfg = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadLine().Trim())) | ConvertFrom-Json
+try {
+  Add-Type -Namespace RO -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value);'
+  [void][RO.Dpi]::SetProcessDpiAwarenessContext([System.IntPtr](-4))
+} catch {
+  try {
+    Add-Type -Namespace RO -Name Dpi2 -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    [void][RO.Dpi2]::SetProcessDPIAware()
+  } catch { }
+}
+# The connect window's look and its single scale mechanism (see
+# connectWindowScript): $f is 1 in production, and only the screenshots scale.
+$shot = $env:ROSMAROPS_USAGE_WINDOW_SHOT
+$shotScale = $env:ROSMAROPS_USAGE_WINDOW_SHOT_SCALE
+$shotState = $env:ROSMAROPS_USAGE_WINDOW_SHOT_STATE
+$f = 1.0
+if ($shot -and $shotScale) { $f = [double]$shotScale }
+function Px($n) { return [int][math]::Round([double]$n * $f) }
+$cWhite  = [System.Drawing.ColorTranslator]::FromHtml('#FFFFFF')
+$cInk    = [System.Drawing.ColorTranslator]::FromHtml('#1B1A18')
+$cMuted  = [System.Drawing.ColorTranslator]::FromHtml('#4F4C46')
+$cBorder = [System.Drawing.ColorTranslator]::FromHtml('#C9C5BC')
+$cCobalt = [System.Drawing.ColorTranslator]::FromHtml('#2346B8')
+$fTitle  = New-Object System.Drawing.Font('Segoe UI Semibold', [single](15 * $f))
+$fBody   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
+$fStrong = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10.5 * $f))
+$fBtnP   = New-Object System.Drawing.Font('Segoe UI Semibold', [single](10.5 * $f))
+$fBtnS   = New-Object System.Drawing.Font('Segoe UI', [single](10.5 * $f))
+$form = New-Object System.Windows.Forms.Form
+$form.Text = $cfg.title
+if ($shot) { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::None }
+else { $form.AutoScaleMode = [System.Windows.Forms.AutoScaleMode]::Dpi; $form.AutoScaleDimensions = New-Object System.Drawing.SizeF(96, 96) }
+$form.TopMost = $true
+$form.FormBorderStyle = 'FixedSingle'
+$form.StartPosition = 'CenterScreen'
+$form.BackColor = $cWhite
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), (Px 248))
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$iconSet = $false
+if ($cfg.icon -and (Test-Path -LiteralPath $cfg.icon)) {
+  try { $ic = [System.Drawing.Icon]::ExtractAssociatedIcon($cfg.icon); if ($ic -ne $null) { $form.Icon = $ic; $iconSet = $true } } catch { }
+}
+if (-not $iconSet -and $cfg.iconfallback -and (Test-Path -LiteralPath $cfg.iconfallback)) {
+  try { $form.Icon = New-Object System.Drawing.Icon($cfg.iconfallback); $iconSet = $true } catch { }
+}
+# '' until the person answers; 'yes' or 'no' once written.
+$script:result = ''
+function New-Para($text, $font, $fore, $y) {
+  $l = New-Object System.Windows.Forms.Label
+  $l.AutoSize = $true
+  $l.MaximumSize = New-Object System.Drawing.Size((Px 424), 0)
+  $l.Font = $font; $l.ForeColor = $fore; $l.BackColor = $cWhite
+  $l.Text = $text
+  $l.Location = New-Object System.Drawing.Point((Px 28), $y)
+  $form.Controls.Add($l)
+  return $l
+}
+# Title (usage.ask.title) at (28, 28); then why, body, never (Semibold, ink)
+# and check, each 424 wide: why 12 px under the title, the others 10 px apart.
+$tl = New-Para $cfg.titletext $fTitle $cInk (Px 28)
+$wl = New-Para $cfg.why $fBody $cMuted ($tl.Bottom + (Px 12))
+$bl = New-Para $cfg.body $fBody $cMuted ($wl.Bottom + (Px 10))
+$nl = New-Para $cfg.never $fStrong $cInk ($bl.Bottom + (Px 10))
+$cl = New-Para $cfg.check $fBody $cMuted ($nl.Bottom + (Px 10))
+# The thank-you (usage.window.thanks) replaces them at (28, 28).
+$thl = New-Para $cfg.thanks $fBody $cMuted (Px 28)
+$thl.Visible = $false
+# The window grows with the text; the buttons never wrap: 16 px under the last
+# paragraph and 28 px from the bottom edge.
+$clientH = $cl.Bottom + (Px 16) + (Px 40) + (Px 28)
+$form.ClientSize = New-Object System.Drawing.Size((Px 480), $clientH)
+$btnY = $clientH - (Px 28) - (Px 40)
+function New-FlatButton($text, $font, $back, $fore, $borderSize, $primary) {
+  $b = New-Object System.Windows.Forms.Button
+  $b.Text = $text
+  $b.Font = $font
+  $b.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+  $b.FlatAppearance.BorderSize = $borderSize
+  if ($borderSize -gt 0) { $b.FlatAppearance.BorderColor = $cBorder }
+  $b.BackColor = $back
+  $b.ForeColor = $fore
+  $b.AutoSize = $false
+  $m = [System.Windows.Forms.TextRenderer]::MeasureText($text, $font)
+  $b.Height = Px 40
+  $b.Width = $m.Width + (Px 36)
+  if ($primary) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
+  $form.Controls.Add($b)
+  return $b
+}
+# Primary "Yes, help" (cobalt, white text, ink on hover) on the right, 28 px
+# from the edge; secondary "No, thanks" (white, 1 px border, ink text) 12 px
+# to its left. The thank-you has one primary button, OK, on the right.
+$yes = New-FlatButton $cfg.yes $fBtnP $cCobalt $cWhite 0 $true
+$yes.FlatAppearance.MouseOverBackColor = $cInk
+$yes.FlatAppearance.MouseDownBackColor = $cInk
+$no  = New-FlatButton $cfg.no  $fBtnS $cWhite $cInk 1 $false
+$ok  = New-FlatButton $cfg.ok  $fBtnP $cCobalt $cWhite 0 $true
+$ok.FlatAppearance.MouseOverBackColor = $cInk
+$ok.FlatAppearance.MouseDownBackColor = $cInk
+$yes.Location = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $yes.Width), $btnY)
+$no.Location  = New-Object System.Drawing.Point(($yes.Left - (Px 12) - $no.Width), $btnY)
+$ok.Location  = New-Object System.Drawing.Point(((Px 480) - (Px 28) - $ok.Width), $btnY)
+$ok.Visible = $false
+# No default button and no cancel button: Enter and Esc are handled below.
+$form.AcceptButton = $null
+$form.CancelButton = $null
+# The window sees the keys first. Esc closes it like the X. Until the person
+# moves the focus to a button with Tab, Enter and the space bar do nothing.
+$form.KeyPreview = $true
+$script:tabbed = $false
+$form.Add_KeyDown({
+  param($s, $e)
+  if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $e.Handled = $true; $e.SuppressKeyPress = $true; $form.Close(); return }
+  if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Tab) { $script:tabbed = $true; return }
+  if (-not $script:tabbed -and ($e.KeyCode -eq [System.Windows.Forms.Keys]::Return -or $e.KeyCode -eq [System.Windows.Forms.Keys]::Space)) { $e.Handled = $true; $e.SuppressKeyPress = $true }
+})
+$form.Add_KeyUp({
+  param($s, $e)
+  if (-not $script:tabbed -and ($e.KeyCode -eq [System.Windows.Forms.Keys]::Return -or $e.KeyCode -eq [System.Windows.Forms.Keys]::Space)) { $e.Handled = $true }
+})
+# The thank-you closes by itself after 60 seconds.
+$thanksTimer = New-Object System.Windows.Forms.Timer
+$thanksTimer.Interval = 60000
+$thanksTimer.Add_Tick({ $thanksTimer.Stop(); $form.Close() })
+function Show-Thanks {
+  $tl.Visible = $false; $wl.Visible = $false; $bl.Visible = $false; $nl.Visible = $false; $cl.Visible = $false
+  $yes.Visible = $false; $no.Visible = $false
+  $thl.Visible = $true
+  $ok.Visible = $true
+  $script:tabbed = $false
+  $form.ActiveControl = $null
+  $thanksTimer.Start()
+}
+$yes.Add_Click({
+  if ($script:result -ne '') { return }
+  $script:result = 'yes'
+  [Console]::Out.WriteLine('yes'); [Console]::Out.Flush()
+  Show-Thanks
+})
+$no.Add_Click({
+  if ($script:result -ne '') { return }
+  $script:result = 'no'
+  [Console]::Out.WriteLine('no'); [Console]::Out.Flush()
+  $form.Close()
+})
+$ok.Add_Click({ $form.Close() })
+function Write-Layout($prefix) {
+  [Console]::Out.WriteLine($prefix + 'CLIENT=' + $form.ClientSize.Width + ',' + $form.ClientSize.Height)
+  foreach ($p in @(@('TITLE', $tl), @('WHY', $wl), @('BODY', $bl), @('NEVER', $nl), @('CHECK', $cl), @('THANKS', $thl), @('YES', $yes), @('NO', $no), @('OK', $ok))) {
+    $c = $p[1]
+    [Console]::Out.WriteLine($prefix + $p[0] + '=' + $c.Left + ',' + $c.Top + ',' + $c.Width + ',' + $c.Height + ',' + $c.Visible)
+  }
+  [Console]::Out.WriteLine($prefix + 'PT=' + $tl.Font.SizeInPoints + ',' + $wl.Font.SizeInPoints + ',' + $nl.Font.Bold + ',' + $nl.Font.Name + ',' + $yes.Font.SizeInPoints)
+  [Console]::Out.WriteLine($prefix + 'TEXTW=' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.yes, $fBtnP).Width) + ',' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.no, $fBtnS).Width) + ',' + ([System.Windows.Forms.TextRenderer]::MeasureText($cfg.ok, $fBtnP).Width) + ',' + (Px 36))
+  [Console]::Out.WriteLine($prefix + 'COLORS=' + $form.BackColor.ToArgb() + ',' + $tl.ForeColor.ToArgb() + ',' + $wl.ForeColor.ToArgb() + ',' + $nl.ForeColor.ToArgb() + ',' + $yes.BackColor.ToArgb() + ',' + $yes.ForeColor.ToArgb() + ',' + $yes.FlatAppearance.MouseOverBackColor.ToArgb() + ',' + $no.BackColor.ToArgb() + ',' + $no.ForeColor.ToArgb() + ',' + $no.FlatAppearance.BorderSize)
+  [Console]::Out.WriteLine($prefix + 'KEYS=accept:' + ($form.AcceptButton -eq $null) + ' cancel:' + ($form.CancelButton -eq $null) + ' preview:' + $form.KeyPreview + ' focus:' + ($form.ActiveControl -eq $null) + ' timer:' + $thanksTimer.Interval)
+  [Console]::Out.WriteLine($prefix + 'FORM=' + $form.FormBorderStyle + ',' + $form.TopMost + ',' + $form.StartPosition + ',' + $form.Text)
+  [Console]::Out.Flush()
+}
+$form.Add_Shown({
+  # No button has the focus when the window opens.
+  $form.ActiveControl = $null
+  [Console]::Out.WriteLine('SHOWN'); [Console]::Out.Flush()
+  if ($shot) {
+    if ($shotState -eq 'thanks') { $script:result = 'shot'; Show-Thanks }
+    $form.Refresh()
+    Start-Sleep -Milliseconds 500
+    $b = $form.Bounds
+    $bmp = New-Object System.Drawing.Bitmap($b.Width, $b.Height)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+    $bmp.Save($shot, [System.Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+    $script:result = 'shot'
+    $form.Close()
+    return
+  }
+  if (-not $selftest) { return }
+  Write-Layout ''
+  switch ($stAnswer) {
+    'yes' {
+      $yes.PerformClick()
+      Write-Layout 'T'
+      $form.Close()
+    }
+    'no' { $no.PerformClick() }
+    'keys' {
+      # Type Enter and the space bar with no button chosen: the window must stay
+      # open with no answer; then Esc closes it like the X.
+      $kt = New-Object System.Windows.Forms.Timer
+      $kt.Interval = 400
+      $script:kstep = 0
+      $kt.Add_Tick({
+        $script:kstep++
+        if ($script:kstep -eq 1) { $form.Activate(); [System.Windows.Forms.SendKeys]::SendWait('{ENTER}'); [System.Windows.Forms.SendKeys]::SendWait(' ') }
+        elseif ($script:kstep -eq 2) { [Console]::Out.WriteLine('AFTERKEYS=open:' + $form.Visible + ' result:' + $script:result); [Console]::Out.Flush(); [System.Windows.Forms.SendKeys]::SendWait('{ESC}') }
+        else { $kt.Stop(); if ($form.Visible) { $form.Close() } }
+      })
+      $kt.Start()
+    }
+    default { $form.Close() }
+  }
+})
+[void]$form.ShowDialog()
+if ($script:result -eq '') { [Console]::Out.WriteLine('later'); [Console]::Out.Flush() }`

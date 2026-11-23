@@ -58,6 +58,8 @@ func bv176Setup(t *testing.T) (stPath, reportDir string) {
 	if err := state.SaveState(filepath.Join(rosmaDir, "state.json"), st); err != nil {
 		t.Fatal(err)
 	}
+	// An earlier review: the connect offer comes from the second review on.
+	seedEarlierReview(t)
 	salt, _ := st.Salt()
 	sec, err := kit.NewSecret(salt)
 	if err != nil {

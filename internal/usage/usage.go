@@ -30,7 +30,7 @@ const (
 	SchemaName = "usage.v1"
 	// TextVersion is the version of the question's text (usage.ask.*): a state
 	// whose answer is older is asked again.
-	TextVersion = 1
+	TextVersion = 2
 	// LastFileName is the copy of the last package sent or tried, in the
 	// reports' data folder, overwritten each time.
 	LastFileName = "rosmarops-usage-last.json"
