@@ -26,7 +26,7 @@ func TestUsagePackageCarriesNoSecrets(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("sandboxed black-box run is implemented for Unix-like hosts")
 	}
-	bin := buildBin(t, "./cmd/rosmarops", nil)
+	bin := buildBin(t, "./cmd/rosmarops", publishedBuild)
 	home := usageHome(t, usageAnswer(true))
 	const (
 		project = "zz-planted-project-name"

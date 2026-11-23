@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -114,9 +115,28 @@ func runUsageTeam(args []string, stPath string, st state.State, cat catalog.Cata
 	return nil
 }
 
-// usageStateKey is the line that says whether usage statistics are on.
+// publishedVersion is the form of a published version: three numbers and
+// nothing else. A build without one (go build or go test without
+// -ldflags -X main.version, which says 0.1.0-dev) or with a prerelease part
+// (the journeys' X.Y.Z-journeys.N) is not a copy a person installed.
+var publishedVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// usageBuildMaySend reports whether this build may ask about usage statistics
+// and send them. Only a published version may: a development or test build
+// never asks and never sends, whatever the state records, so that no test run
+// is ever counted as a person's installation.
+func usageBuildMaySend() bool {
+	return publishedVersion.MatchString(version)
+}
+
+// usageStateKey is the line that says whether usage statistics are on. A
+// build that never sends says so, whatever the answer.
 func usageStateKey(u *state.Usage) string {
 	switch {
+	case !usageBuildMaySend():
+		// Text pending from the owner (ADR 0032): until the catalog has it,
+		// the key itself shows.
+		return "usage.state.dev_build"
 	case u == nil:
 		return "usage.state.undecided"
 	case u.Enabled:
@@ -180,8 +200,12 @@ func askUsage(in io.Reader, out io.Writer, cat catalog.Catalog) bool {
 // afterReportUsage is the usage step after a review's report:
 // with someone at a console and no answer to the current text, it asks and
 // records the answer; then, with usage statistics on, it sends this review's
-// package. It never fails the run and never changes the report.
+// package. It never fails the run and never changes the report. A build that
+// is not a published version does neither (usageBuildMaySend).
 func afterReportUsage(reportDir, lang string, canAskNow bool) {
+	if !usageBuildMaySend() {
+		return
+	}
 	stPath, err := state.StatePath()
 	if err != nil {
 		return

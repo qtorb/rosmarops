@@ -55,8 +55,11 @@ jobs:
         run: |
           test "$(sh .github/scripts/release-flags.sh v0.5.0-alpha.1)" = "--prerelease --latest=false"
           test "$(sh .github/scripts/release-flags.sh v0.5.0)" = "--latest"
-      - name: go test (trust tests included)
-        run: go test -count=1 ./...
+      - name: go test (trust tests included), behind a proxy that records where it goes
+        # Fails if any test asks for app.rosmarops.com: no test run may ever
+        # reach production (BV-284). Only this Linux job runs the program in a
+        # terminal, where the usage statistics question is asked.
+        run: bash .github/scripts/go-test-recorded.sh
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
       - name: go test -race (schemaval differential oracle, BV-133)

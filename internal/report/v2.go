@@ -198,7 +198,7 @@ type V2 struct {
 	SandboxBlockedProjects []string `json:"-"`
 
 	// UsageState is the catalog key of the report's usage statistics line
-	//: usage.state.on, usage.state.off or usage.state.undecided; ""
+	//: usage.state.on, usage.state.off, usage.state.undecided or, from a build that never sends, usage.state.dev_build; ""
 	// shows no line. In memory only.
 	UsageState string `json:"-"`
 }

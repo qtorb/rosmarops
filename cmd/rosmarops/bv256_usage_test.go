@@ -41,8 +41,11 @@ func usageTestHome(t *testing.T, u *state.Usage, input string) (stPath string, s
 		t.Fatal(err)
 	}
 	n := 0
-	prevSend, prevIn, prevLast, prevNow := sendUsageFn, runInput, lastUsageInput, usageNow
-	t.Cleanup(func() { sendUsageFn, runInput, lastUsageInput, usageNow = prevSend, prevIn, prevLast, prevNow })
+	prevSend, prevIn, prevLast, prevNow, prevVersion := sendUsageFn, runInput, lastUsageInput, usageNow, version
+	t.Cleanup(func() {
+		sendUsageFn, runInput, lastUsageInput, usageNow, version = prevSend, prevIn, prevLast, prevNow, prevVersion
+	})
+	version = "0.15.0" // a published version: only these ask and send
 	sendUsageFn = func(context.Context, spacenet.UsageConsent, []byte) (int, error) { n++; return 204, nil }
 	runInput = strings.NewReader(input)
 	usageNow = func() time.Time { return time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC) }
