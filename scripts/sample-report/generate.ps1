@@ -202,10 +202,13 @@ $onClaudeMD = $v2.findings | Where-Object {
 if (-not $onClaudeMD) { $failures.Add("no foreign_agent_instructions_writable finding on $claudeMD") }
 if ($enHTML -notmatch 'shop-api[\\/]CLAUDE\.md') { $failures.Add('the English HTML does not show shop-api\CLAUDE.md') }
 
-# 1c. Claude Desktop is detected, not evaluated, with no note: listed in the
-# index's not_evaluated and in the English HTML, and in no coverage gap.
-if (@($v2.index.scope.not_evaluated) -notcontains 'Claude Desktop') { $failures.Add('Claude Desktop is not among the detected agents') }
-if ($enHTML -notmatch 'Detected, not evaluated yet: [^<]*Claude Desktop') { $failures.Add('the English HTML does not list Claude Desktop as detected') }
+# 1c. Claude Desktop is scored (BV-277, ADR 0030): its ai_client is in
+# graph.v2.json, it is not among the detected-only agents, and it is in no
+# coverage gap.
+$cdClient = @($graph.nodes | Where-Object { $_.type -eq 'ai_client' -and $_.platform -eq 'claude-desktop' })
+if ($cdClient.Count -ne 1) { $failures.Add("want exactly one claude-desktop ai_client in graph.v2.json, got $($cdClient.Count)") }
+if (@($v2.index.scope.not_evaluated) -contains 'Claude Desktop') { $failures.Add('Claude Desktop is listed as not evaluated') }
+if ($enHTML -match 'Detected, not evaluated yet: [^<]*Claude Desktop') { $failures.Add('the English HTML lists Claude Desktop as detected only') }
 $gaps = @($v2.coverage.sources_failed) + @($v2.coverage.agents_unsupported) + @($v2.coverage.scan_errors) | Where-Object { $_ }
 if ($gaps | Where-Object { ($_ | ConvertTo-Json -Compress) -match 'Claude' }) { $failures.Add('a coverage note names Claude Desktop') }
 
