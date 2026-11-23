@@ -41,6 +41,9 @@ Signed by Albert on 2026-11-23 (BV-277), aimed at 0.19, in two messages: the dec
   - **macOS:** read from the managed preferences of `com.anthropic.claudefordesktop` in `/Library/Managed Preferences/` (the computer's, then the user's).
   - **Linux:** read from `/etc/claude-desktop/managed-settings.json`.
   - **The files** are read only after the administrator ownership check, which the owner signed sharing with macOS, of the company configuration (ADR 0018). On Linux and macOS: a regular file, not a link, which with every folder up to the root belongs to root with no write for group or others. macOS still has no company mode. A file that fails the check is not read, and the report lists it as not read.
+  - **Which keys count** (owner's criterion, 23-11): a key documented for the standard installation may change the graph; one documented only for Claude Desktop on third-party platforms is read and shown as data, and changes neither the graph, the overview nor the score.
+    - `isLocalDevMcpEnabled` and `isDesktopExtensionEnabled` are on the standard page, «Enterprise configuration for Claude Desktop» (support.claude.com/en/articles/12622667, «Updated this week», read on 2026-11-23 for v6.28899.6). The page opens with «Administrators on Team or Enterprise plans can control Claude Desktop through system policies». Its policy table reads «isLocalDevMcpEnabled | Boolean | true | Enable local MCP servers» and «isDesktopExtensionEnabled | Boolean | true | Enable/disable extensions». Both count.
+    - `mcpPersistentAlwaysAllowEnabled` is not on that page, only in the changelog's third-party section. It is data only (see above).
   - **Effects:**
     - `isLocalDevMcpEnabled` false: the servers of the config file stay on disk (their keys are still credentials), but load nothing;
     - `isDesktopExtensionEnabled` false: no extension is assumed active;
