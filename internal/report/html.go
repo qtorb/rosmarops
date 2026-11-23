@@ -1288,7 +1288,7 @@ func HTMLKeys() []string {
 		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
 		"html.projects.title", "html.projects.summary", "html.projects.item", "cc.P2.old",
-		"usage.state.on", "usage.state.off", "usage.state.undecided",
+		"usage.state.on", "usage.state.off", "usage.state.undecided", "usage.state.dev_build",
 		"html.projects.source.home", "html.projects.source.root", "html.projects.source.claude",
 		"html.projects.source.workspace", "html.projects.source.previous", "html.projects.source.listed",
 		"html.projects.new", "html.projects.gone", "html.projects.not_searched.title",

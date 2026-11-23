@@ -1033,6 +1033,7 @@
   "usage.state.on": "Estadísticas de uso: activadas. El último resumen enviado está en data/rosmarops-usage-last.json. Para apagarlas: rosmarops usage off",
   "usage.state.off": "Estadísticas de uso: apagadas. Para activarlas: rosmarops usage on",
   "usage.state.undecided": "Estadísticas de uso: apagadas hasta que respondas. RosmarOps lo preguntará al final de la próxima revisión desde una terminal.",
+  "usage.state.dev_build": "Estadísticas de uso: esta compilación está hecha desde el código fuente, así que no pregunta ni envía nunca.",
   "usage.help": "Activa o apaga las estadísticas de uso, o muestra si están activadas.",
   "console.usage_team_on": "Esta instalación queda marcada como del equipo de RosmarOps. Sus estadísticas de uso se contarán aparte.",
   "console.usage_team_off": "Esta instalación ya no está marcada como del equipo de RosmarOps.",

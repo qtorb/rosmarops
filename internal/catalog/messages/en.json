@@ -1186,6 +1186,7 @@
   "usage.state.on": "Usage statistics: on. The last summary sent is in data/rosmarops-usage-last.json. To turn them off: rosmarops usage off",
   "usage.state.off": "Usage statistics: off. To turn them on: rosmarops usage on",
   "usage.state.undecided": "Usage statistics: off until you answer. RosmarOps will ask at the end of the next scan from a terminal.",
+  "usage.state.dev_build": "Usage statistics: this build was made from the source code, so it never asks and never sends.",
   "usage.help": "Turn usage statistics on or off, or show whether they are on.",
   "console.usage_team_on": "This installation is now marked as RosmarOps team. Its usage statistics will be counted apart.",
   "console.usage_team_off": "This installation is no longer marked as RosmarOps team.",
