@@ -31,6 +31,9 @@ type WindowsPlatform struct {
 	// Cursor's enterprise hooks file on that layout.
 	layout           agentdirs.Layout
 	cursorEnterprise string
+	// desktopManaged are Claude Desktop's managed files to look for; nil
+	// takes the layout's (BV-277).
+	desktopManaged []string
 }
 
 // Options build a platform on these file readers for another layout: the
@@ -43,11 +46,14 @@ type Options struct {
 	ManagedDir string
 	// CursorEnterpriseHooks is Cursor's enterprise hooks file; "" reads none.
 	CursorEnterpriseHooks string
+	// ClaudeDesktopManaged are Claude Desktop's managed files to look for;
+	// nil takes the layout's. For tests.
+	ClaudeDesktopManaged []string
 }
 
 // NewOn returns a platform whose readers use o's layout and locations.
 func NewOn(o Options) *WindowsPlatform {
-	w := &WindowsPlatform{layout: o.Layout, cursorEnterprise: o.CursorEnterpriseHooks}
+	w := &WindowsPlatform{layout: o.Layout, cursorEnterprise: o.CursorEnterpriseHooks, desktopManaged: o.ClaudeDesktopManaged}
 	if o.ManagedDir != "" {
 		w.managed = &managedLocations{dir: filepath.Clean(o.ManagedDir)}
 	}

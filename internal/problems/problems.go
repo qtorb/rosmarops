@@ -113,6 +113,7 @@ var knownAgents = map[string]bool{
 	knowledge.ClineProduct:          true,
 	knowledge.OpenCodeProduct:       true,
 	knowledge.KiloCodeProduct:       true,
+	knowledge.ClaudeDesktopProduct:  true,
 }
 
 // ValidAgent reports whether s is one of the known product ids that may be sent
@@ -145,6 +146,7 @@ var agentNames = map[string]string{
 	knowledge.ClineProduct:          "Cline",
 	knowledge.OpenCodeProduct:       "OpenCode",
 	knowledge.KiloCodeProduct:       "Kilo Code",
+	knowledge.ClaudeDesktopProduct:  "Claude Desktop",
 }
 
 // AgentName is the product's display name for a known agent id, for the

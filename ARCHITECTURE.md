@@ -69,7 +69,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `adapters/windows`: the readers of every agent's files. Despite its name, macOS and Linux use them too (see Known oddities).
 - `adapters/darwin`, `adapters/linux`: the macOS and Linux platforms. They call the readers of `adapters/windows` with their own folder layout.
 - `internal/platform`: the `Platform` interface and the data types every reader returns.
-- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux. OpenCode and Kilo Code (the OpenCode family) resolve their folder from `XDG_CONFIG_HOME` or `~/.config` on every system, and one reader (`adapters/windows/opencode.go`) serves both.
+- `internal/agentdirs`: the configuration folders of each agent on Windows, macOS and Linux. OpenCode and Kilo Code (the OpenCode family) resolve their folder from `XDG_CONFIG_HOME` or `~/.config` on every system, and one reader (`adapters/windows/opencode.go`) serves both. Claude Desktop's folder is `%APPDATA%\Claude`, `~/Library/Application Support/Claude` or `~/.config/Claude`; Continue's is `~/.continue` or `CONTINUE_GLOBAL_DIR` (ADR 0030).
 - `internal/scan`: runs the scan steps under the global time limit.
 - `internal/scan/avexclusions`: new Windows Defender exclusions since the baseline (v1).
 - `internal/scan/configkeys`: configuration keys an agent reads differently from RosmarOps, as red findings.
@@ -88,9 +88,9 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 - `internal/scan/workflows`: empty (a `.gitkeep` only).
 - `internal/skills`: the agent skills on disk (`SKILL.md` and scripts).
 - `internal/firstrun`: finds the projects of a first use, or asks for the folder.
-- `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)).
+- `internal/company`: a managed computer's company configuration and administrator fingerprint list: their machine folder, the ownership check, and reading both files (see [docs/company.md](docs/company.md)). `ReadAdminFile` gives the same ownership check to another product's managed file (Claude Desktop's, ADR 0030); on macOS it checks the file but there is no company mode.
 - `internal/hostenv`: tells whether the review runs in a container, WSL, a virtual machine or Windows Sandbox.
-- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML and YAML the agents use. `yamlsubset.ParseKeysWithMapItems` also reads lists of mappings, for Claude Code's subagent headers.
+- `internal/jsonc`, `internal/jsonkeys`, `internal/tomlsubset`, `internal/yamlsubset`, `internal/plistsubset`: in-house readers for JSON with comments, JSON with exact keys, and the small parts of TOML, YAML and property lists the agents use. `yamlsubset.ParseKeysWithMapItems` also reads lists of mappings, for Claude Code's subagent headers and Continue's MCP servers. `plistsubset` reads the top-level booleans, integers and strings of an XML or binary property list, for Claude Desktop's managed preferences on macOS.
 
 ### Engine
 
@@ -110,7 +110,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 
 ### Output
 
-- `internal/report`: builds and writes the reports: Markdown, JSON, the v2 JSON, the HTML pages and the export for your AI. The HTML's first screen (`html_r3.go`) groups the findings by problem while it draws the page (`issues.go`): by the service a credential opens, and by the agent that can change other agents' settings. There is no field for it in `report.v2`: the groups are drawn from data the JSON already has, so the findings and their counts stay the same for every other reader. See [the decision](docs/decisions/0020-report-in-three-blocks.md). Between block 3 and the folds, «Your orchestrators» (`html_fleet.go`) shows each orchestrator's `launches` edges, kept in memory by `BuildV2`, with the agent's own score and a link to the problem of its warning ([ADR 0030](docs/decisions/0030-orchestrators-card-and-report-treatments.md)).
+- `internal/report`: builds and writes the reports: Markdown, JSON, the v2 JSON, the HTML pages and the export for your AI. The HTML's first screen (`html_r3.go`) groups the findings by problem while it draws the page (`issues.go`): by the service a credential opens, and by the agent that can change other agents' settings. There is no field for it in `report.v2`: the groups are drawn from data the JSON already has, so the findings and their counts stay the same for every other reader. See [the decision](docs/decisions/0020-report-in-three-blocks.md). Between block 3 and the folds, «Your orchestrators» (`html_fleet.go`) shows each orchestrator's `launches` edges, kept in memory by `BuildV2`, with the agent's own score and a link to the problem of its warning ([ADR 0031](docs/decisions/0031-orchestrators-card-and-report-treatments.md)).
 - `internal/report` also exports the templates for the open repository `qtorb/rosmarops-templates` (`templates_export.go`): each template «Choose a template» offers, as the text the report copies, with a README made of the catalog's English texts that describe it. `tools/exporttemplates` writes them, with the Claude Code skill `skills/rosmarops-templates/SKILL.md`. Nothing in them comes from the computer that runs the export. See [how to export the templates](docs/how-to/export-the-templates.md).
 - `internal/spacenet`: the only package that uses the network: HTTPS to `app.rosmarops.com`, only with permission.
 - `internal/results`: the sealed results package for the space.

@@ -48,6 +48,11 @@ const (
 	OpenCodeProduct = "opencode"
 	KiloCodeProduct = "kilo-code"
 
+	// ClaudeDesktopProduct is Anthropic's Claude Desktop app, scored
+	// (BV-277): what it may do on its own goes through MCP servers and
+	// desktop extensions; its Code tab is Claude Code.
+	ClaudeDesktopProduct = "claude-desktop"
+
 	// GrokBotProduct is xAI's Grok Bot (BV-248, CTO-56 §2): its local
 	// execution and its account settings are declared by the person.
 	GrokBotProduct = "grok-bot"
@@ -95,6 +100,10 @@ const (
 	KiloCodeVersion = "2026-11-22"
 )
 
+// ClaudeDesktopVersion is the version of claude-desktop.json (BV-277), read
+// at Claude Desktop v6.28899.6.
+const ClaudeDesktopVersion = "2026-11-23"
+
 // GrokBotVersion is the version of the embedded Grok Bot base (grok-bot.json,
 // BV-248): the day its documentation was read (CTO-46 §1.4).
 const GrokBotVersion = "2026-11-14"
@@ -106,7 +115,7 @@ const GrokBotVersion = "2026-11-14"
 // older than it, warns that the program may be out of date (compared offline
 // against the run's own local date). It is not before any embedded base's
 // Version (checked by tests).
-const ReviewedOn = "2026-11-22"
+const ReviewedOn = "2026-11-23"
 
 // Composite is the knowledge_version recorded in the graph's and the
 // report's provenance: every embedded base as product@version, sorted by
@@ -116,7 +125,7 @@ const ReviewedOn = "2026-11-22"
 // CompositeOf sorts them.
 // The parts are sorted by product (claude-code < codex < cursor <
 // github-copilot < grok-build < hermes), as CompositeOf sorts them.
-const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBotProduct + "@" + GrokBotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion + ";" + KiloCodeProduct + "@" + KiloCodeVersion + ";" + OpenCodeProduct + "@" + OpenCodeVersion
+const Composite = AntigravityCLIProduct + "@" + AntigravityCLIVersion + ";" + ClaudeCodeProduct + "@" + Version + ";" + ClaudeDesktopProduct + "@" + ClaudeDesktopVersion + ";" + ClineProduct + "@" + ClineVersion + ";" + CodexProduct + "@" + CodexVersion + ";" + CursorProduct + "@" + CursorVersion + ";" + GeminiCLIProduct + "@" + GeminiCLIVersion + ";" + GitHubCopilotProduct + "@" + GitHubCopilotVersion + ";" + GrokBotProduct + "@" + GrokBotVersion + ";" + GrokBuildProduct + "@" + GrokBuildVersion + ";" + HermesProduct + "@" + HermesVersion + ";" + KiloCodeProduct + "@" + KiloCodeVersion + ";" + OpenCodeProduct + "@" + OpenCodeVersion
 
 // CompositeOf is the composite knowledge_version of bases.
 func CompositeOf(bases map[string]Base) string {
@@ -157,6 +166,9 @@ var clineJSON []byte
 
 //go:embed grok-bot.json
 var grokBotJSON []byte
+
+//go:embed claude-desktop.json
+var claudeDesktopJSON []byte
 
 //go:embed opencode.json
 var openCodeJSON []byte
@@ -460,13 +472,16 @@ func Cline() (Base, error) {
 	return b, nil
 }
 
+// ClaudeDesktop returns the embedded Claude Desktop base (BV-277).
+func ClaudeDesktop() (Base, error) { return familyBase(claudeDesktopJSON, ClaudeDesktopVersion) }
+
 // OpenCode returns the embedded OpenCode base (BV-276).
 func OpenCode() (Base, error) { return familyBase(openCodeJSON, OpenCodeVersion) }
 
 // KiloCode returns the embedded Kilo Code base (BV-276).
 func KiloCode() (Base, error) { return familyBase(kiloCodeJSON, KiloCodeVersion) }
 
-// familyBase decodes an OpenCode-family base, checks its version and shares
+// familyBase decodes a base (the OpenCode family, Claude Desktop), checks its version and shares
 // Claude Code's code launcher table, as the other bases do.
 func familyBase(raw []byte, version string) (Base, error) {
 	b, err := decode(raw)
@@ -490,7 +505,7 @@ func familyBase(raw []byte, version string) (Base, error) {
 // CLI and Cline join the same way.
 func All() (map[string]Base, error) {
 	out := map[string]Base{}
-	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline, GrokBot, OpenCode, KiloCode} {
+	for _, load := range []func() (Base, error){ClaudeCode, Cursor, Hermes, Codex, GrokBuild, GitHubCopilot, AntigravityCLI, GeminiCLI, Cline, GrokBot, OpenCode, KiloCode, ClaudeDesktop} {
 		b, err := load()
 		if err != nil {
 			return nil, err

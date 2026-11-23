@@ -1757,6 +1757,7 @@
                 "graph_missing",
                 "cline_cli",
                 "claude_desktop",
+                "continue_unmaintained",
                 "antigravity_app",
                 "copilot_jetbrains"
               ]

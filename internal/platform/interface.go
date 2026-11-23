@@ -709,6 +709,12 @@ type Platform interface {
 	// is never read.
 	ListOrchestrators(ctx context.Context, repoRoots []string) (OrchestratorScan, error)
 
+	// ListClaudeDesktop reads what bears on Claude Desktop's score (BV-277):
+	// the names of its desktop extensions and its managed policy. Its MCP
+	// servers come from ListMCPServers; its databases and the extension
+	// settings files are never opened.
+	ListClaudeDesktop(ctx context.Context) (ClaudeDesktopScan, error)
+
 	// ListOpenCode reads OpenCode and Kilo Code at rest (BV-276): their
 	// user, project and managed configuration files (permission and mcp),
 	// and Kilo Code's legacy MCP files. Their session database and
