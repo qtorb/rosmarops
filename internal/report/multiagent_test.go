@@ -159,7 +159,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // lines of P3's command), at BV-273 with the CSS of «Since the last check»
 // and of the green «In use» pill (checked: only those style rules; the page
 // has nothing fixed and no template in use), at BV-275 with the knowledge
-// review date (checked: only «22» for «14» in that date);
+// review date (checked: only «22» for «14» in that date), at BV-282 with
+// the header in two lines at 700 px or less (checked: the one added CSS
+// line);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

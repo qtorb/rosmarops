@@ -808,7 +808,8 @@ a.spacego i{width:8px;height:8px;border-radius:50%;background:#7CE0A8;box-shadow
 .rows dd.empty{color:var(--s-ink3)}
 .rows .nc{background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:2px}
 [hidden]{display:none!important}
-@media (max-width:1099px){.bar{padding:0 16px}.sheetwrap{padding:16px}.sheet{padding:18px 16px 12px}.res{grid-template-columns:minmax(0,1fr)}}`
+@media (max-width:1099px){.bar{padding:0 16px}.sheetwrap{padding:16px}.sheet{padding:18px 16px 12px}.res{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:700px){.bar{height:auto;flex-wrap:wrap;row-gap:0;padding:12px 16px}.bar .sp{flex-basis:100%;height:8px}}`
 
 // sheetJS opens and closes the views, follows the chosen use and profile,
 // and shows or copies a profile's text (BV-236 §2–§3). When the browser
