@@ -566,9 +566,43 @@ func Evaluate(in Input) Result {
 	finishAlwaysOn(in, &res)
 	// BV-264: the orchestrator rules read the graph's launches edges and the
 	// Paperclip scan; no other rule depends on them.
-	res.Findings = append(res.Findings, orchestratorFindings(in)...)
-	res.Findings = append(res.Findings, subagentFindings(in)...) // BV-268
+	// They come after the person's lists were applied, so the lists are
+	// applied to them too: a dismissed one leaves the scored set and an
+	// accepted one carries its date (BV-278).
+	late := append(orchestratorFindings(in), subagentFindings(in)...) // BV-268
+	late, dismissed := applyPersonLists(in, late)
+	res.Findings = append(res.Findings, late...)
+	res.Dismissed = append(res.Dismissed, dismissed...)
 	return res
+}
+
+// applyPersonLists applies allow_list.dismissed and allow_list.accepted to
+// fs: it returns the findings that still count, the accepted ones with their
+// date, and the dismissed ones apart.
+func applyPersonLists(in Input, fs []Finding) (kept, dismissed []Finding) {
+	if len(in.Dismissed) == 0 && len(in.Accepted) == 0 {
+		return fs, nil
+	}
+	gone := make(map[string]bool, len(in.Dismissed))
+	for _, d := range in.Dismissed {
+		gone[d.ID] = true
+	}
+	accepted := make(map[string]string, len(in.Accepted))
+	for _, a := range in.Accepted {
+		accepted[a.ID] = a.Date
+	}
+	kept = fs[:0:0]
+	for _, f := range fs {
+		if gone[f.ID] {
+			dismissed = append(dismissed, f)
+			continue
+		}
+		if d, ok := accepted[f.ID]; ok {
+			f.Accepted = &Accepted{Date: d}
+		}
+		kept = append(kept, f)
+	}
+	return kept, dismissed
 }
 
 // envReachSource marks the in-memory reaches of a credential an agent's own
@@ -779,33 +813,10 @@ func evaluate(in Input, env map[[2]string]bool) Result {
 	// only the findings that still count; the dismissed ones that appeared are
 	// kept in res.Dismissed so the report can list them and the person can
 	// recover them. A dismissed id that no longer appears is simply not here.
-	if len(in.Dismissed) > 0 {
-		dismissed := make(map[string]bool, len(in.Dismissed))
-		for _, d := range in.Dismissed {
-			dismissed[d.ID] = true
-		}
-		kept := res.Findings[:0:0]
-		for _, f := range res.Findings {
-			if dismissed[f.ID] {
-				res.Dismissed = append(res.Dismissed, f)
-				continue
-			}
-			kept = append(kept, f)
-		}
-		res.Findings = kept
-	}
 	// BV-235 R3: an accepted finding keeps counting; it only carries the date.
-	if len(in.Accepted) > 0 {
-		accepted := make(map[string]string, len(in.Accepted))
-		for _, a := range in.Accepted {
-			accepted[a.ID] = a.Date
-		}
-		for i := range res.Findings {
-			if d, ok := accepted[res.Findings[i].ID]; ok {
-				res.Findings[i].Accepted = &Accepted{Date: d}
-			}
-		}
-	}
+	var dismissed []Finding
+	res.Findings, dismissed = applyPersonLists(in, res.Findings)
+	res.Dismissed = append(res.Dismissed, dismissed...)
 	if res.Findings == nil {
 		res.Findings = []Finding{} // a report with no finding still lists none
 	}
