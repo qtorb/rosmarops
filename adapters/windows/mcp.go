@@ -103,6 +103,8 @@ var remoteTypes = map[string]bool{"http": true, "streamable-http": true, "sse": 
 //     virtualized copy (CTO-22 Claude Desktop §2)
 //  6. Antigravity: %USERPROFILE%\.gemini\config\mcp_config.json and
 //     <repo>\.agents\mcp_config.json (https://antigravity.google/docs/settings)
+//  7. Continue: <ContinueDir>\config.yaml (or config.json) and every YAML or
+//     JSON file under <repo>\.continue\mcpServers (see continue.go)
 //
 // It also lists the agents detected by the existence of their configuration
 // (agentdirs.Detect: Codex, Antigravity, Hermes Agent, Claude Desktop), in
@@ -271,6 +273,15 @@ func (w *WindowsPlatform) ListMCPServers(_ context.Context, repoRoots []string) 
 			})
 		}
 	}
+
+	// 7. Continue (BV-277, detected and not scored): the MCP servers of its
+	// config.yaml (or config.json when there is none) and of each project's
+	// .continue/mcpServers folder.
+	if has[agentdirs.Continue] {
+		for _, spec := range continueSources(agentdirs.ContinueDir(home, nil), repoRoots) {
+			add(spec)
+		}
+	}
 	return scan, nil
 }
 
@@ -397,6 +408,12 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 				entries["/projects/"+pointerEscape(project)+"/mcpServers/"+pointerEscape(name)] = namedEntry{name: name, entry: e, project: project}
 			}
 		}
+	case formatContinueYAML, formatContinueConfigJSON, formatContinueJSON:
+		got, err := continueEntries(format, path, raw)
+		if err != nil {
+			return nil, parseFailed(src, path, err)
+		}
+		entries = got
 	default:
 		var cfg mcpSettingsFile
 		conflicts, err := jsonkeys.Decode(raw, &cfg)
@@ -447,7 +464,7 @@ func readMCPFile(spec sourceSpec) ([]platform.MCPServer, platform.MCPSource) {
 		switch {
 		case classify && remoteTypes[entry.Type],
 			client == agentdirs.AntigravityCLI && url != "",
-			client == "cursor", client == "cline", client == agentdirs.ClaudeDesktop:
+			client == "cursor", client == "cline", client == agentdirs.ClaudeDesktop, client == agentdirs.Continue:
 			headers = secretVars(entry.Headers, sortedKeys(entry.Headers))
 		}
 

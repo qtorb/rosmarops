@@ -82,10 +82,11 @@ const (
 	NoFindingFeedsOtherFindings = "feeds_other_findings"
 
 	NotEvaluatedNoInference      = "no_inference"
-	NotEvaluatedAntigravityApp   = "antigravity_app"   // BV-140: Antigravity App/IDE keep the preset in the app, not a readable file
-	NotEvaluatedCopilotJetBrains = "copilot_jetbrains" // BV-140: Copilot in JetBrains keeps approvals in the IDE's storage, not read yet
-	NotEvaluatedClineCLI         = "cline_cli"         // BV-193: the Cline CLI approves every tool by default; launch flags are not readable
-	NotEvaluatedClaudeDesktop    = "claude_desktop"    // BV-193: Claude Desktop keeps tool approvals and computer-use permissions inside the app
+	NotEvaluatedAntigravityApp   = "antigravity_app"       // BV-140: Antigravity App/IDE keep the preset in the app, not a readable file
+	NotEvaluatedCopilotJetBrains = "copilot_jetbrains"     // BV-140: Copilot in JetBrains keeps approvals in the IDE's storage, not read yet
+	NotEvaluatedClineCLI         = "cline_cli"             // BV-193: the Cline CLI approves every tool by default; launch flags are not readable
+	NotEvaluatedClaudeDesktop    = "claude_desktop"        // BV-193: Claude Desktop keeps tool approvals and computer-use permissions inside the app
+	NotEvaluatedContinue         = "continue_unmaintained" // BV-277: Continue is no longer maintained; its MCP servers are read, its permissions are not
 	NotEvaluatedCoverage         = "coverage"
 	NotEvaluatedGraphMissing     = "graph_missing"
 
@@ -122,7 +123,7 @@ var (
 	AllScopes              = []string{ScopeMachine, ScopeSameProject, ScopeNone, ScopeSandbox, ScopeAnyDestination, ScopeListedDestinations, ScopeConfig, ScopeInstructions}
 	AllOrigins             = []string{OriginProductDefault, OriginConfigured, OriginMixed, OriginNone, OriginProductDefaultNotChecked, OriginDeclared}
 	AllNoFindingReasons    = []string{NoFindingNoTargets, NoFindingNotAFinding, NoFindingFeedsOtherFindings}
-	AllNotEvaluatedReasons = []string{NotEvaluatedNoInference, NotEvaluatedAntigravityApp, NotEvaluatedCopilotJetBrains, NotEvaluatedClineCLI, NotEvaluatedClaudeDesktop, NotEvaluatedCoverage, NotEvaluatedGraphMissing}
+	AllNotEvaluatedReasons = []string{NotEvaluatedNoInference, NotEvaluatedAntigravityApp, NotEvaluatedCopilotJetBrains, NotEvaluatedClineCLI, NotEvaluatedClaudeDesktop, NotEvaluatedContinue, NotEvaluatedCoverage, NotEvaluatedGraphMissing}
 	AllPendingReasons      = []string{PendingModelProviderResearch}
 	AllExcluded            = []string{ExcludedProtectedPaths, ExcludedSandboxProtectedPaths, ExcludedDefaultIgnoreFileTools, ExcludedDocumentedNetworkExceptions}
 	AllRecipients          = []string{RecipientAnthropicAPI, RecipientCustomGateway, RecipientAWSBedrock, RecipientGoogleVertex, RecipientMicrosoftFoundry, RecipientAnthropicAWS, RecipientVendorBackend, RecipientNotReadable}
@@ -328,6 +329,8 @@ func notEvaluatedReasonFor(product string) string {
 		return NotEvaluatedClineCLI
 	case "claude-desktop": // keeps its approvals inside the app (BV-193, CTO-22 decision 3)
 		return NotEvaluatedClaudeDesktop
+	case "continue": // no longer maintained (BV-277): detected, not scored
+		return NotEvaluatedContinue
 	}
 	return NotEvaluatedNoInference
 }
