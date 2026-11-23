@@ -686,7 +686,13 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	// unchanged). Same locations the «Where» line shows there; for
 	// cred_in_git, the commit and the file inside the project (BV-219).
 	c.findingWhere(f)
-	c.w(`<p>%s%s</p>`, c.impact(f), c.configHelp(f)+c.gitEnvHelp(f))
+	// A finding with no impact paragraph of its own says what it means here,
+	// in the HTML report only.
+	what := c.impact(f)
+	if what == "" {
+		what = html.EscapeString(c.meaningText(f))
+	}
+	c.w(`<p>%s%s</p>`, what, c.configHelp(f)+c.gitEnvHelp(f))
 	if o := c.others(f); o != "" {
 		c.w(`<p>%s</p>`, o)
 	}
@@ -1288,7 +1294,7 @@ func HTMLKeys() []string {
 		"report.integrity.binary_store", "report.weekly.points_to_old_exe", // BV-222
 		// CTO-38 §4.2: «Projects checked»
 		"html.projects.title", "html.projects.summary", "html.projects.item", "cc.P2.old",
-		"usage.state.on", "usage.state.off", "usage.state.undecided",
+		"usage.state.on", "usage.state.off", "usage.state.undecided", "usage.state.dev_build",
 		"html.projects.source.home", "html.projects.source.root", "html.projects.source.claude",
 		"html.projects.source.workspace", "html.projects.source.previous", "html.projects.source.listed",
 		"html.projects.new", "html.projects.gone", "html.projects.not_searched.title",
@@ -1329,6 +1335,7 @@ func HTMLKeys() []string {
 		"html.verdict.new", "html.verdict.still", "html.verdict.again", "html.verdict.not_checked",
 	}
 	keys = append(keys, r3Keys()...)
+	keys = append(keys, MeaningKeys...)
 	keys = append(keys, fleetKeys()...)
 	// v3
 	keys = append(keys, "html.step.1", "html.step.1.counts",

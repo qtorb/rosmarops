@@ -92,7 +92,7 @@ func (c htmlCtx) renderR3(iss []issue) {
 	c.w(`<div class="r3" id="top">`)
 	c.renderR3Head()
 	c.renderSheetNotes()
-	c.renderR3Result()
+	c.renderR3Result(iss)
 	c.renderR3Findings(iss)
 	c.renderR3Template(iss)
 	c.renderFleet(iss)
@@ -166,9 +166,15 @@ func lowerFirst(s string) string {
 	return string(unicode.ToLower(r)) + s[n:]
 }
 
-func (c htmlCtx) renderR3Result() {
+func (c htmlCtx) renderR3Result(iss []issue) {
 	m := c.sheetScore()
-	c.w(`<section class="r3-card" aria-labelledby="r3-h1">%s<div class="r3-res">`, c.r3Title(1, "r3-h1", "html.r3.h1"))
+	c.w(`<section class="r3-card" aria-labelledby="r3-h1">%s`, c.r3Title(1, "r3-h1", "html.r3.h1"))
+	// The verdict, in plain words, is the block's first line; with no score
+	// (no agent evaluated) there is none.
+	if m.Value != nil {
+		c.w(`<p class="r3-verdict">%s</p>`, c.t("html.r3.verdict."+m.Band, nil))
+	}
+	c.w(`<div class="r3-res">`)
 	if m.Value == nil {
 		reason := index.ReasonNotApplicable
 		switch {
@@ -178,6 +184,7 @@ func (c htmlCtx) renderR3Result() {
 			reason = m.Unavailable
 		}
 		c.w(`<p>%s</p></div>`, c.t("html.index.unavailable", map[string]string{"reason": c.cat.Text("html.index.reason."+reason, nil)}))
+		c.renderR3Start(iss)
 		c.renderR3Done(m)
 		c.w(`</section>`)
 		return
@@ -214,6 +221,7 @@ func (c htmlCtx) renderR3Result() {
 	}
 	text = strings.Replace(html.EscapeString(text), mark, "<b>"+html.EscapeString(c.agentName(m.AgentID))+"</b>", 1)
 	c.w(`<p class="r3-text">%s</p></div>`, text)
+	c.renderR3Start(iss)
 	c.renderR3Done(m)
 	if len(c.v.Dismissed) > 0 { // the score leaves out what the person dismissed
 		c.w(`<p class="r3-note">%s</p>`, c.t("report.dismissed.note", nil))
@@ -289,17 +297,7 @@ func (c htmlCtx) issueFix(is issue, n int) string {
 			k++
 		}
 	}
-	service := is.service
-	if is.kind == issueOne {
-		if f := is.findings[0]; f.Rule == rules.RuleCredInGit {
-			for _, cr := range credsOf(f) {
-				if s := c.v.credServices[cr]; s.service != "" && s.service != "unknown" {
-					service = s.service
-				}
-			}
-		}
-	}
-	if len(is.inGit()) > 0 && service != "" && service != "unknown" {
+	if service := c.issueGitService(is); service != "" {
 		if k > 0 {
 			return `<a class="r3-fix" ` + href + `>` + c.t("html.r3.fix.rotate_tpl", nil) + `</a>`
 		}
@@ -322,8 +320,9 @@ func (c htmlCtx) pill(is issue) string {
 	return `<span class="r3-pill amber">` + c.t("html.group.yellow", nil) + `</span>`
 }
 
-func (c htmlCtx) renderR3Findings(iss []issue) {
-	urgent, review, findings := 0, 0, 0
+// r3RowCounts are the problems' rows as the first screen counts them: the
+// urgent (red) ones, the ones to review, and all of them.
+func (c htmlCtx) r3RowCounts(iss []issue) (urgent, review, findings int) {
 	for _, is := range iss {
 		for _, r := range c.issueRows(is) {
 			findings++
@@ -334,6 +333,11 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 			}
 		}
 	}
+	return urgent, review, findings
+}
+
+func (c htmlCtx) renderR3Findings(iss []issue) {
+	urgent, review, findings := c.r3RowCounts(iss)
 	c.w(`<section class="r3-card" aria-labelledby="r3-h2"><div class="r3-top">%s<p class="r3-counts">%s</p></div>`,
 		c.r3Title(2, "r3-h2", "html.r3.h2"),
 		c.t("html.r3.counts", map[string]string{
@@ -386,9 +390,9 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 	c.w(`</section>`)
 }
 
-func (c htmlCtx) renderR3Template(iss []issue) {
-	k := 0
-	var groups []string
+// r3TemplateFixes are the urgent (red) rows the template fixes, and the
+// numbers of the problems they are in.
+func (c htmlCtx) r3TemplateFixes(iss []issue) (k int, groups []string) {
 	for i, is := range iss {
 		got := false
 		for _, r := range c.issueRows(is) {
@@ -401,6 +405,11 @@ func (c htmlCtx) renderR3Template(iss []issue) {
 			groups = append(groups, strconv.Itoa(i+1))
 		}
 	}
+	return k, groups
+}
+
+func (c htmlCtx) renderR3Template(iss []issue) {
+	k, groups := c.r3TemplateFixes(iss)
 	fixes := ""
 	if line := c.tplInUseLine(c.templateAgent()); line != "" {
 		fixes = line // BV-273: the person already uses one of its templates
@@ -491,7 +500,7 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 
 // r3Keys are the catalog codes the first screen emits.
 func r3Keys() []string {
-	return []string{
+	return append([]string{
 		"html.r3.title", "html.r3.sub", "html.r3.meta", "html.r3.h1", "html.r3.h2", "html.r3.h3",
 		"html.r3.result", "html.r3.provisional", "html.r3.counts",
 		"html.r3.agents", "html.r3.agents.one", "html.r3.projects", "html.r3.projects.one",
@@ -507,7 +516,7 @@ func r3Keys() []string {
 		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.r3.tpl.cursor_either", "html.tpl.in_use_pill",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
 		"report.dismissed.note", "html.today.incomplete",
-	}
+	}, r3StartKeys...)
 }
 
 // r3CSS is the style of the three blocks and of the problems' steps.
@@ -542,7 +551,14 @@ body{background:var(--ds-surface)}
 .r3-score.amber{background:var(--ds-amber-tint);color:var(--ds-amber)}
 .r3-score.green{background:var(--ds-green-tint);color:var(--ds-green)}
 .r3-note,.r3-empty{margin:0;font-size:14px;color:var(--ds-muted)}
-.r3-text{margin:0;flex:999 1 420px;min-width:0;font-size:16px;line-height:1.5}
+.r3-text{margin:0;flex:999 1 420px;min-width:0;font-size:15px;line-height:1.5;color:var(--ds-ink-2)}
+.r3-verdict{margin:0;max-width:820px;font-size:22px;line-height:1.3;font-weight:700;color:var(--ds-ink)}
+.r3-start{border:2px solid var(--ds-ink);border-radius:12px;padding:16px 20px;display:flex;flex-direction:row;align-items:center;gap:24px;flex-wrap:wrap}
+.r3-start-t{flex:999 1 460px;min-width:0}
+.r3-start-t p{margin:0;font-size:16px;line-height:1.5}
+.r3-start-t p.r3-start-e{margin:0 0 4px;font-size:12px;line-height:1.3;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ds-ink)}
+.r3-start-a{flex:1 0 220px;display:flex;flex-direction:column;gap:6px}
+.r3-start-a span{font-size:13px;color:var(--ds-muted);text-align:center}
 .r3-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .r3-counts{margin:0;font-size:14px;color:var(--ds-muted)}
 .r3-tbl{width:100%;border-collapse:collapse;font-size:15px;line-height:1.45}
@@ -593,6 +609,9 @@ a.r3-fix{font-weight:600;color:var(--ds-brand)}
 .r3-tbl .c-f{width:auto;margin-top:6px}
 .r3-m{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--ds-muted);margin-bottom:4px}
 .r3-tpl-act{flex-basis:100%}
+.r3-verdict{font-size:19px}
+.r3-start{padding:14px}
+.r3-start-a{flex-basis:100%}
 }
 .r3-done{margin:0;padding:14px 16px;border-radius:12px;background:var(--ds-green-tint);display:flex;flex-direction:column;gap:6px}
 .r3-done p{margin:0;font-size:15px;line-height:1.5;color:var(--ds-ink)}
