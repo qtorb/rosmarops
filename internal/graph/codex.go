@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"strings"
 	"time"
 
 	"github.com/qtorb/rosmarops/internal/knowledge"
@@ -418,4 +419,58 @@ func (in codexInference) edge(typ, to string, cap Node) Edge {
 		e.Via = cap.ID
 	}
 	return e
+}
+
+// codexKBWorkspaceWrite is the knowledge-base entry of Codex's factory write
+// to the workspace (write_files, allow, working_directory).
+const codexKBWorkspaceWrite = "write_workspace"
+
+// codexUserReadOnly reports whether Codex's user config sets the read-only
+// sandbox (sandbox_mode = "read-only", or default_permissions = ":read-only").
+func codexUserReadOnly(scan platform.CodexScan) bool {
+	for _, l := range scan.Layers {
+		if l.Kind == platform.CodexLayerUser && l.Status == platform.MCPSourceRead && codexEffectiveSandbox(l) == "read-only" {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutCodexReadOnlyWrite drops Codex's factory write to the workspace from
+// its product defaults when the user config sets the read-only sandbox: what
+// is configured overrides the product's default, and Codex's documentation
+// agrees that in read-only mode it does not edit files without approval
+// (ADR 0036). The configured read-only capabilities stand in its place.
+// Reading, commands and network keep their defaults: the documentation is not
+// consistent there. A trusted project's config never removes the default: it
+// applies only inside that project.
+func withoutCodexReadOnlyWrite(f Fragment, scan platform.CodexScan) Fragment {
+	if !scan.Exists || !codexUserReadOnly(scan) {
+		return f
+	}
+	client := clientID(knowledge.CodexProduct, scan.ConfigDir)
+	prefix := "kb:" + knowledge.CodexProduct + "/" + codexKBWorkspaceWrite + "@"
+	isDefault := map[string]bool{}
+	for _, n := range f.Nodes {
+		if n.Kind == KindCapability && n.Basis == BasisProductDefault && strings.HasPrefix(n.Source, prefix) {
+			isDefault[n.ID] = true
+		}
+	}
+	drop := map[string]bool{}
+	edges := f.Edges[:0:0]
+	for _, e := range f.Edges {
+		if e.From == client && isDefault[e.To] {
+			drop[e.To] = true
+			continue
+		}
+		edges = append(edges, e)
+	}
+	nodes := f.Nodes[:0:0]
+	for _, n := range f.Nodes {
+		if !drop[n.ID] {
+			nodes = append(nodes, n)
+		}
+	}
+	f.Nodes, f.Edges = nodes, edges
+	return f
 }

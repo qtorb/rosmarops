@@ -168,11 +168,11 @@ func TestReadCodex_OversizeNotOpened(t *testing.T) {
 // back to %ProgramData%\OpenAI\Codex\requirements.toml.
 func TestResolveCodexRequirements(t *testing.T) {
 	env := envOf(map[string]string{"ProgramData": `C:\PD`})
-	if got := resolveCodexRequirements(context.Background(), env, nil); got != filepath.Join(`C:\PD`, "OpenAI", "Codex", "requirements.toml") {
+	if got := resolveCodexRequirements(context.Background(), agentdirs.WindowsLayout, env, nil); got != filepath.Join(`C:\PD`, "OpenAI", "Codex", "requirements.toml") {
 		t.Errorf("ProgramData fallback: %q", got)
 	}
 	reg := codexFakeReg{HiveHKLM + "|" + codexPolicyKey + "|RequirementsPath": `D:\policy\req.toml`}
-	if got := resolveCodexRequirements(context.Background(), env, reg); got != `D:\policy\req.toml` {
+	if got := resolveCodexRequirements(context.Background(), agentdirs.WindowsLayout, env, reg); got != `D:\policy\req.toml` {
 		t.Errorf("registry override: %q", got)
 	}
 }
