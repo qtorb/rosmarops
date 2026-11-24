@@ -387,31 +387,86 @@ var keywordErrors = map[string]string{
 	"if/then": "condition_then", "if/else": "condition_else", "properties/items/$ref": "nested",
 }
 
+// brokenChunk is how many paths of one fixture a parallel subtest of
+// TestDifferential_BrokenFixtures mutates: small enough that the largest
+// fixture spreads over every CPU, large enough that the subtests stay few.
+const brokenChunk = 16
+
+// brokenResult is what one parallel subtest of TestDifferential_BrokenFixtures
+// found: how many documents it checked, how many the oracle rejected, and the
+// oracle's error types. Each subtest writes only its own slot.
+type brokenResult struct {
+	total, invalid int
+	seen           map[string]bool
+}
+
 // Every targeted mutation of every fixture: the verdicts match, and every
 // keyword of §1.2 breaks at least one of them.
+//
+// The mutations are split into parallel subtests, by fixture and by chunks of
+// brokenChunk paths (BV-295): the same documents and the same comparisons as
+// one serial loop, spread over the CPUs, so the package keeps a wide margin
+// under go test's timeout on the slower macOS runners. The keyword coverage is
+// checked once every subtest has finished, over all of them together.
 func TestDifferential_BrokenFixtures(t *testing.T) {
 	pairs := compileAll(t)
-	seen := map[string]bool{}
-	total, invalid := 0, 0
-	for name, docs := range fixtures(t) {
-		for _, raw := range docs {
+	type job struct {
+		name  string
+		raw   []byte
+		paths []path
+	}
+	var jobs []job
+	all := fixtures(t)
+	names := make([]string, 0, len(all))
+	for name := range all {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		for _, raw := range all[name] {
 			var paths []path
 			walk(decode(t, raw), nil, &paths)
-			for _, at := range paths {
-				for _, doc := range mutations(t, raw, at) {
-					own, oracle, types := verdicts(t, pairs[name], doc)
-					total++
-					if !oracle {
-						invalid++
-					}
-					if own != oracle {
-						t.Fatalf("%s at %v: own %v, oracle %v %v\n%.2000s", name, at, own, oracle, types, doc)
-					}
-					for _, ty := range types {
-						seen[ty] = true
+			for start := 0; start < len(paths); start += brokenChunk {
+				end := min(start+brokenChunk, len(paths))
+				jobs = append(jobs, job{name: name, raw: raw, paths: paths[start:end]})
+			}
+		}
+	}
+	results := make([]brokenResult, len(jobs))
+	t.Run("mutations", func(t *testing.T) {
+		for i, j := range jobs {
+			t.Run(fmt.Sprintf("%s#%d", j.name, i), func(t *testing.T) {
+				t.Parallel()
+				r := brokenResult{seen: map[string]bool{}}
+				for _, at := range j.paths {
+					for _, doc := range mutations(t, j.raw, at) {
+						own, oracle, types := verdicts(t, pairs[j.name], doc)
+						r.total++
+						if !oracle {
+							r.invalid++
+						}
+						if own != oracle {
+							t.Fatalf("%s at %v: own %v, oracle %v %v\n%.2000s", j.name, at, own, oracle, types, doc)
+						}
+						for _, ty := range types {
+							r.seen[ty] = true
+						}
 					}
 				}
-			}
+				results[i] = r
+			})
+		}
+	})
+	if t.Failed() {
+		return
+	}
+	seen := map[string]bool{}
+	total, invalid := 0, 0
+	for _, r := range results {
+		total += r.total
+		invalid += r.invalid
+		for ty := range r.seen {
+			seen[ty] = true
 		}
 	}
 	for kw, ty := range keywordErrors {
@@ -419,7 +474,7 @@ func TestDifferential_BrokenFixtures(t *testing.T) {
 			t.Errorf("no broken fixture breaks %s (%s)", kw, ty)
 		}
 	}
-	t.Logf("%d mutated documents, %d invalid", total, invalid)
+	t.Logf("%d mutated documents, %d invalid, in %d parallel subtests", total, invalid, len(jobs))
 }
 
 // mutationSeed is the seed of the random-chain test. It is 49 by default and
@@ -445,29 +500,46 @@ func mutationSeed(t testing.TB) int64 {
 // Seeded random chains of mutations, so changes combine. The seed is always
 // logged, and repeated in a failure, so the failing run can be replayed with
 // ROSMAROPS_SCHEMAVAL_SEED.
+//
+// Each fixture runs in its own parallel subtest with its own generator,
+// seeded from the seed and the fixture's place in the sorted list (BV-295):
+// the same number of rounds per fixture as one serial loop, spread over the
+// CPUs, and a failure names the fixture and the seed that replay it.
 func TestDifferential_RandomMutations(t *testing.T) {
 	pairs := compileAll(t)
 	seed := mutationSeed(t)
 	t.Logf("seed=%d (override with ROSMAROPS_SCHEMAVAL_SEED)", seed)
-	rng := rand.New(rand.NewSource(seed))
 	rounds := 150
 	if testing.Short() {
 		rounds = 40
 	}
-	for name, docs := range fixtures(t) {
-		for _, raw := range docs {
-			for i := 0; i < rounds; i++ {
-				doc := raw
-				for steps := 1 + rng.Intn(3); steps > 0; steps-- {
-					var paths []path
-					walk(decode(t, doc), nil, &paths)
-					ms := mutations(t, doc, paths[rng.Intn(len(paths))])
-					doc = ms[rng.Intn(len(ms))]
+	all := fixtures(t)
+	names := make([]string, 0, len(all))
+	for name := range all {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	k := 0
+	for _, name := range names {
+		for _, raw := range all[name] {
+			fixtureSeed := seed + int64(k)
+			k++
+			t.Run(fmt.Sprintf("%s#%d", name, k-1), func(t *testing.T) {
+				t.Parallel()
+				rng := rand.New(rand.NewSource(fixtureSeed))
+				for i := 0; i < rounds; i++ {
+					doc := raw
+					for steps := 1 + rng.Intn(3); steps > 0; steps-- {
+						var paths []path
+						walk(decode(t, doc), nil, &paths)
+						ms := mutations(t, doc, paths[rng.Intn(len(paths))])
+						doc = ms[rng.Intn(len(ms))]
+					}
+					if own, oracle, types := verdicts(t, pairs[name], doc); own != oracle {
+						t.Fatalf("%s round %d (seed=%d, fixture seed=%d): own %v, oracle %v %v\n%.2000s", name, i, seed, fixtureSeed, own, oracle, types, doc)
+					}
 				}
-				if own, oracle, types := verdicts(t, pairs[name], doc); own != oracle {
-					t.Fatalf("%s round %d (seed=%d): own %v, oracle %v %v\n%.2000s", name, i, seed, own, oracle, types, doc)
-				}
-			}
+			})
 		}
 	}
 }
