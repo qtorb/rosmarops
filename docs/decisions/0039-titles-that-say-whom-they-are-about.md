@@ -26,6 +26,7 @@ Signed by Albert with blocks 153 and 161 (24-11), with the advisor's answers to 
 - The technical details keep the raw «*».
 - The HTML report and the Markdown show this line.
 - The export for your AI keeps every place of a finding in its data block, as before.
+- Known limit: past its 48 KB cut, the export for your AI gives each finding only its title, as for every other finding, so a desktop finding there says how many apps and not which.
 - The findings window and the space view have no «where» line, so they show the title with the number.
 
 **«Acts without you» says the agent.**
