@@ -207,8 +207,14 @@ jobs:
       # No strace on macOS: TestNoNetwork_RuntimeNoInetSockets skips here
       # (declared limit, decision 2026-10-28, macOS, M1a); the static
       # network checks run.
-      - name: go test (trust tests included)
-        run: go test -count=1 ./...
+      - name: go test (trust tests included), every package but internal/schemaval
+        # internal/schemaval runs in the next step, on its own: its differential
+        # tests against the oracle are the longest of the module, and with the
+        # CPUs to themselves they keep a wide margin under go test's 10-minute
+        # limit even on a slow runner (BV-295).
+        run: go test -count=1 $(go list ./... | grep -v '/internal/schemaval$')
+      - name: go test internal/schemaval (the differential tests, on their own)
+        run: go test -count=1 ./internal/schemaval/
       - name: Full-machine pipeline (BV-203 E8, required on all three systems)
         run: go test -count=1 -run TestFullMachinePipeline ./tests/integration/
 
