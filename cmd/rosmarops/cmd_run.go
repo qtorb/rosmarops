@@ -115,22 +115,34 @@ func runRun(inv cli.Invocation) error {
 		// a notification and the run_failed exit code. Never returns.
 		abortRun(abortOptions{lang: inv.Flags["lang"], unattended: true}, err)
 	}
+	if err != nil {
+		return err
+	}
+	reportDir := filepath.Dir(absPath(htmlPath))
+	interactive := !unattended && runCanAsk()
+	// Usage statistics (BV-286): asked only with a console and never in a
+	// scheduled review; sent after every review while they are on. The first
+	// review asks after the problem list; the following ones ask first.
+	first := firstReviewThisRun
+	if !first {
+		afterReportUsage(reportDir, inv.Flags["lang"], interactive)
+	}
 	// From an interactive terminal (never a scheduled review), when at least
 	// one finding is new, run says where findings are dismissed or accepted
-	// instead of asking: the question itself is `rosmarops findings`.
-	if err == nil && !unattended && runCanAsk() {
-		if cfgPath, e := config.ResolveConfigPath(); e == nil {
+	// instead of asking: the question itself is `rosmarops findings`. Not in
+	// the installation's first review (BV-286), which asks only about usage
+	// statistics and, if something failed, the problem list.
+	if interactive {
+		if cfgPath, e := config.ResolveConfigPath(); e == nil && !first {
 			findingsHintAfterReport(os.Stdout, inv.Flags["lang"], cfgPath)
 		}
 		// BV-210 §2 A / CTO-32 C3: the problems step after the report is written.
-		offerProblemsAfterReport(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], true)
+		offerProblemsAfterReport(reportDir, inv.Flags["lang"], true)
 	}
-	// Usage statistics, last: asked only with a console and never in a
-	// scheduled review; sent after every review while they are on.
-	if err == nil {
-		afterReportUsage(filepath.Dir(absPath(htmlPath)), inv.Flags["lang"], !unattended && runCanAsk())
+	if first {
+		afterReportUsage(reportDir, inv.Flags["lang"], interactive)
 	}
-	return err
+	return nil
 }
 
 // runMode is how a run was started: by hand (zero value), as a scheduled
@@ -312,6 +324,12 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	notebook := problems.New(dataDir)
 	problemsAutoSentThisRun = 0
 	problemsAskedThisRun = false
+	// BV-286: this is the installation's first review when no review ran
+	// before (no last_run, no earlier reports), the same test as the report's
+	// PriorRuns. Read here, before this review writes either; the steps after
+	// the report use it to show only the usage statistics question (and the
+	// problem list, if any) the first time.
+	firstReviewThisRun = !(st.HasRun() || priorReportsExist(reportDir))
 	// BV-210 test aid: ROSMAROPS_DEMO_PROBLEM lets Albert see the windows
 	// without touching his real config — it only writes to the problem notebook
 	// and run mark (allowed paths), never to any agent or RosmarOps config.

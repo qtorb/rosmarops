@@ -39,18 +39,44 @@ fit its list, nothing is sent.
 
 ## When it asks
 
-At the end of a check run from a terminal, or at the end of the window when
-you double-click RosmarOps, after the problem-report step. It asks once:
+After the report of a check you run yourself: a double click, the Microsoft
+Store icon, or `rosmarops run` from a terminal.
+
+- In the first check on a computer, it is the only question, after the
+  problem list if something failed. The offer to connect your space and the
+  «No me afecta» window start from the next check.
+- In the following checks, while you have not answered, it is the first
+  question after the report.
+
+On Windows it is a window. It says, briefly, what is sent and what never is,
+and has two buttons:
+
+- **Yes, help** turns usage statistics on and sends this check's summary. The
+  window then says thank you and closes with OK, or by itself after a minute.
+- **No, thanks** turns them off. You are not asked again.
+
+Closing the window with the X or Esc, or leaving it unanswered for ten
+minutes, records nothing: you are asked again at the next check. Enter does
+nothing: the window has no default button.
+
+On macOS and Linux, or if the window cannot be shown, it asks in the
+terminal, with the same texts and then:
 
 > Send usage statistics? Type y for yes or n for no, and press Enter. Enter alone leaves it for later:
 
 `y` (or `s`) is yes; `n` is no. Enter alone records nothing: usage statistics
-stay off and you are asked again at the next check from a terminal. Anything
-else asks once more and then counts as Enter. When it asks at the end of a
-check, that check's report has no usage statistics line, since you are
-answering right then ([ADR 0033](decisions/0033-enter-is-not-yes-for-usage.md)). A scheduled weekly check, the Claude Code
-plugin and any run without a terminal never ask and, until you answer, never
-send. If the question's text changes, it asks again.
+stay off and you are asked again at the next check. Anything else asks once
+more and then counts as Enter.
+
+When it asks at the end of a check, that check's report has no usage
+statistics line, since you are answering right then
+([ADR 0033](decisions/0033-enter-is-not-yes-for-usage.md)). A scheduled weekly
+check, the Claude Code plugin and any run without a terminal never ask and,
+until you answer, never send.
+
+If the question's text changes, it asks again. It changed in 0.20, so if you
+answered before, you are asked once more, with the window
+([ADR 0034](decisions/0034-one-question-after-the-first-review.md)).
 
 Only a published version of RosmarOps (a version that is exactly three
 numbers, such as `0.19.0`) asks or sends. A copy built from the source code

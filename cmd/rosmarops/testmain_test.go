@@ -21,5 +21,8 @@ func TestMain(m *testing.M) {
 	problemUIHook = func(problemAsk) (problemAnswer, bool) { return problemAnswer{}, false }
 	showProblemOutcomeFn = func(catalog.Catalog, bool, string) {}
 	problemUnmarkHook = func(catalog.Catalog, int) bool { return false }
+	// BV-286: and the usage statistics window: the question is then asked in
+	// the console, which the tests answer.
+	usageWindowHook = func(catalog.Catalog) (usageWindowAnswer, func()) { return usageWindowNotShown, nil }
 	os.Exit(m.Run())
 }

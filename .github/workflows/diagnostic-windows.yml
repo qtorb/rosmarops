@@ -25,6 +25,7 @@ on:
     paths:
       - "cmd/rosmarops/connectwindow*.go"
       - "cmd/rosmarops/findingswindow*.go"
+      - "cmd/rosmarops/usagewindow*.go"
       - "tools/winres/**"
       - "assets/windows/**"
       - ".github/workflows/diagnostic-windows.yml"
@@ -139,6 +140,46 @@ jobs:
         with:
           name: findings-window-screenshots
           path: findings-shots/*.png
+          if-no-files-found: warn
+
+  # BV-286: the usage statistics window on a real Windows desktop. The
+  # self-test checks the window's layout and colours (§4), that Enter and the
+  # space bar do nothing and Esc closes it, and each button's answer and the
+  # thank-you, in ES and EN; the screenshots render the question and the
+  # thank-you in ES and EN at 100 % and 150 %. Gated behind the run env vars so
+  # the normal verify-windows job never launches a GUI; runs by hand and, via
+  # the pull_request trigger above, on a PR that touches usagewindow*.go.
+  usage-window:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.24.7"
+          cache: false
+      - name: Usage window self-test
+        env:
+          ROSMAROPS_USAGE_WINDOW_SELFTEST_RUN: "1"
+        run: go test ./cmd/rosmarops -run '^TestUsageWindowSelfTest$' -count=1 -v
+      # Every capture must land: a failed capture fails the job. The upload runs
+      # even on failure so whatever was captured is still there for diagnosis.
+      - name: Usage window screenshots (ES/EN, question and thank-you, 100% and 150%)
+        env:
+          ROSMAROPS_USAGE_WINDOW_SHOT_DIR: ${{ github.workspace }}\usage-shots
+        run: |
+          New-Item -ItemType Directory -Force -Path usage-shots | Out-Null
+          go test ./cmd/rosmarops -run '^TestUsageWindowScreenshots$' -count=1 -v
+      - name: Upload usage window screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: usage-window-screenshots
+          path: usage-shots/*.png
           if-no-files-found: warn
 
   # BV-149: on a real Windows build, the .exe must show the rosemary icon and a
