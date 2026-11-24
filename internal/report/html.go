@@ -354,7 +354,7 @@ func renderHTML(v V2, cat catalog.Catalog, home string, loc *time.Location, exis
 		c.renderOverviewDialog()
 		c.renderAssumeDialog()
 	}
-	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS+"\n"+sheetJS)
+	c.w(`</main><script>%s</script></body></html>`+"\n", htmlJS+"\n"+dialogJS+"\n"+sheetJS+"\n"+foldJS)
 	return sb.String()
 }
 

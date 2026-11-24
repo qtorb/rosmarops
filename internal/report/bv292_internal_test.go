@@ -140,7 +140,8 @@ func TestFamilyBoxInTableAndDetail(t *testing.T) {
 	for _, w := range []string{
 		`<span class="r3-n" aria-hidden="true">1</span>` + familyIcon(familyBetween, true) + `<span class="r3-pt"><span class="r3-fl">`,
 		familyIcon(familyMCP, false),
-		`<div class="r3-pa"><h3>` + escapeHTML(cat.Text("html.r3.group.config", map[string]string{"agent": c.agentName("agent_cline")})) + `</h3>`,
+		// BV-294 §2.1: each agent is a folded line with its name.
+		`<span class="r3-ag-n">` + escapeHTML(c.agentName("agent_cline")) + `</span>`,
 	} {
 		if !strings.Contains(detail, w) {
 			t.Errorf("detail lacks %q", w)
@@ -152,8 +153,8 @@ func TestFamilyBoxInTableAndDetail(t *testing.T) {
 	if strings.Contains(table+detail, "r3-tag") {
 		t.Error("the «Key» tag is still in the table or the detail")
 	}
-	if strings.Count(detail, `class="r3-pa"`) != 2 {
-		t.Errorf("%d parts in the single row's section, want 2", strings.Count(detail, `class="r3-pa"`))
+	if strings.Count(detail, `<details class="r3-ag"`) != 2 {
+		t.Errorf("%d agent lines in the single row's section, want 2", strings.Count(detail, `<details class="r3-ag"`))
 	}
 }
 

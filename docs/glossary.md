@@ -98,6 +98,8 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Verdict.** The first line of the report's block 1: one plain sentence for the level of the score block 1 shows (exposed, open gaps or contained). With no score there is none. See [the decision](decisions/0035-verdict-start-here-and-what-it-means.md).
 
+**Folded problem.** A problem of the report's detail past the first six: one line with its number, family box, title, count and level, opened by a click or by a link to it. See [the decision](decisions/0038-a-detail-you-can-manage.md).
+
 **Problem family.** What a problem of the report's table is about: Key, Between agents, Agent, MCP, Orchestrator, Subagent, Project or Desktop. It is shown as an icon box coloured by the problem's level, with the family's name above the title. A rule that fits no family has neither. See [the decision](decisions/0037-problem-families-and-single-row.md).
 
 **Start here.** The card under the score in block 1 with one recommended action, the first case that holds: a template that fixes urgent findings, when none is in use; a key saved in git whose service is known; or problem 1. No problems, no card. See [the decision](decisions/0035-verdict-start-here-and-what-it-means.md).

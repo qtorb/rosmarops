@@ -170,6 +170,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // at BV-292 with each problem's family box and name, in the table, the
 // detail headers (not the findings' rows), the «Key» tag gone from both, and
 // their CSS (checked: only those);
+// at BV-294 with the «Start here» card's family box, the detail's CSS and
+// the local script that opens a folded problem on a link (checked: only
+// those; four problems, none folded);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

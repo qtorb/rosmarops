@@ -124,8 +124,8 @@ func (c htmlCtx) renderFleet(iss []issue) {
 		"orchestrators": c.cat.Plural("html.fleet.counts.orchestrators", len(groups), map[string]string{"count": strconv.Itoa(len(groups))}),
 		"agents":        c.cat.Plural("html.fleet.counts.agents", len(agents), map[string]string{"count": strconv.Itoa(len(agents))}),
 	})
-	c.w(`<section class="r3-card r3-und r3-fl" aria-labelledby="r3-fl-h">%s<div class="r3-top"><h2 class="r3-h" id="r3-fl-h">%s</h2><p class="r3-counts">%s</p></div><p class="r3-fl-intro">%s</p>`,
-		c.undEyebrow(), c.t("html.fleet.title", nil), counts, c.t("html.fleet.intro", nil))
+	c.w(`<section class="r3-card r3-und r3-fl" aria-labelledby="r3-fl-h">%s<div class="r3-top"><h2 class="r3-h" id="r3-fl-h">%s%s</h2><p class="r3-counts">%s</p></div><p class="r3-fl-intro">%s</p>`,
+		c.undEyebrow(), familyIconNeutral(familyOrch), c.t("html.fleet.title", nil), counts, c.t("html.fleet.intro", nil))
 	warn := c.fleetWarnings(iss)
 	cols := []string{c.t("html.fleet.col.agent", nil), c.t("html.fleet.col.asks", nil), c.t("html.fleet.col.source", nil), c.t("html.fleet.col.score", nil)}
 	for _, g := range groups {
