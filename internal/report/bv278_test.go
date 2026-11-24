@@ -233,29 +233,40 @@ func TestFleet_DismissedOrAcceptedWarning(t *testing.T) {
 	}
 }
 
-// The «Key» tag: before the title in the table, after it in the detail, only
-// on credential problems; the frontier before the problems' steps.
+// The family's icon box (BV-292 §8, replacing the 0.19 «Key» tag): to the
+// left of the text in the table, after the number in the detail, with the
+// family's name above the title; the credential problem's is the key, and no
+// tag is left in the table or the detail; the frontier before the steps.
 func TestKeyTagAndFrontier(t *testing.T) {
 	g := v2Graph(t)
 	v := buildV2(t, &g, report.Build("t", nil, nil, 0, 0, 0, 0, nil))
 	for _, lang := range []string{"en", "es"} {
 		page := renderHTML(t, lang, v)
 		key := map[string]string{"en": "Key", "es": "Clave"}[lang]
-		tag := `<span class="r3-tag"><svg`
-		if !regexp.MustCompile(`<td class="c-p"><span class="r3-m">[^<]*<span class="r3-pill [a-z]+">[^<]*</span></span><span class="r3-tag"><svg[^>]*>.*?</svg>` + key + `</span><b>`).MatchString(page) {
-			t.Errorf("%s: no tag before a problem's title in the table", lang)
+		keyIcon := `<circle cx="7.5" cy="15.5" r="5.5"/><path d="M11.5 11.5 21 2M17 6l3 3M14 9l2 2"/>`
+		box := `<span class="r3-ico (red|amber)" aria-hidden="true"><svg[^>]*>`
+		if !regexp.MustCompile(`<td class="c-p"><div class="r3-pc">` + box + regexp.QuoteMeta(keyIcon) + `</svg></span><div class="r3-pt"><span class="r3-m">[^<]*<span class="r3-pill [a-z]+">[^<]*</span></span><span class="r3-fl">` + key + `</span><b>`).MatchString(page) {
+			t.Errorf("%s: no key box and family name before a credential problem's title in the table", lang)
 		}
-		if !regexp.MustCompile(`<h2 id="p-\d+-h"><span class="r3-n"[^>]*>\d+</span><span>[^<]*</span><span class="r3-tag"><svg`).MatchString(page) {
-			t.Errorf("%s: no tag after a problem's title in the detail", lang)
+		if !regexp.MustCompile(`<h2 id="p-\d+-h"><span class="r3-n"[^>]*>\d+</span>` + box + regexp.QuoteMeta(keyIcon) + `</svg></span><span class="r3-pt"><span class="r3-fl">` + key + `</span><span>`).MatchString(page) {
+			t.Errorf("%s: no key box after the number in the detail", lang)
 		}
-		// Only credential problems carry it: the config problem does not.
+		// Every problem row has its family's box: the credential one the key.
 		_, tbl, _ := strings.Cut(page, `<table class="r3-tbl">`)
 		tbl, _, _ = strings.Cut(tbl, `</table>`)
-		for _, row := range strings.Split(tbl, "<tr>")[2:] {
+		rows := strings.Split(tbl, `<tr class="r3-hi">`)[1:]
+		if len(rows) == 0 {
+			t.Fatalf("%s: no row with a box", lang)
+		}
+		for _, row := range rows {
 			cred := strings.Contains(row, "within reach") || strings.Contains(row, "al alcance")
-			if cred != strings.Contains(row, tag) {
-				t.Errorf("%s: tag on a row %v: %.200s", lang, cred, row)
+			if cred != strings.Contains(row, keyIcon) {
+				t.Errorf("%s: key icon on a row %v: %.200s", lang, cred, row)
 			}
+		}
+		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
+		if strings.Contains(tbl, "r3-tag") || strings.Contains(steps, "r3-tag") {
+			t.Errorf("%s: the «Key» tag is still in the table or the detail", lang)
 		}
 		// The frontier, once, right before the steps.
 		title := map[string]string{"en": "The detail, problem by problem", "es": "El detalle, problema a problema"}[lang]

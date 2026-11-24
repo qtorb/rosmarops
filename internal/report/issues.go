@@ -69,6 +69,9 @@ const (
 	issueCred   = "cred"   // a service's credentials, within reach of agents
 	issueConfig = "config" // an agent that can change other agents' settings
 	issueOne    = "one"    // a single finding, with its own text
+	// issueConfigMany: two or more agents that can change other agents'
+	// settings, one row with a part per agent (each an issueConfig).
+	issueConfigMany = "config_many"
 )
 
 // issue is one problem of the first screen: the findings it joins, in the
@@ -78,9 +81,10 @@ type issue struct {
 	key      string
 	findings []rules.Finding
 
-	service string // issueCred: the service's id
-	project bool   // issueCred: the credentials name one project
-	agentID string // issueConfig: the agent that can change the others
+	service string  // issueCred: the service's id
+	project bool    // issueCred: the credentials name one project
+	agentID string  // issueConfig: the agent that can change the others
+	parts   []issue // issueConfigMany: one issueConfig per agent, in the table's order
 }
 
 // red reports an urgent problem: any of its findings is red.
@@ -254,13 +258,44 @@ func issuesOf(fs []rules.Finding, svc map[string]credService) []issue {
 		}
 		final = append(final, is)
 	}
-	sort.SliceStable(final, func(i, j int) bool {
-		if final[i].red() != final[j].red() {
-			return final[i].red()
+	sortIssues(final)
+	return mergeConfigIssues(final)
+}
+
+// sortIssues orders the problems: urgent first, then the ones with more
+// findings.
+func sortIssues(iss []issue) {
+	sort.SliceStable(iss, func(i, j int) bool {
+		if iss[i].red() != iss[j].red() {
+			return iss[i].red()
 		}
-		return len(final[i].findings) > len(final[j].findings)
+		return len(iss[i].findings) > len(iss[j].findings)
 	})
-	return final
+}
+
+// mergeConfigIssues joins two or more problems of agents that can change
+// other agents' settings into one row: its findings are theirs, its parts
+// keep each agent's problem in the order they had, and the row takes its
+// place among the others by the same order. One such problem stays as it is.
+func mergeConfigIssues(iss []issue) []issue {
+	var parts, rest []issue
+	for _, is := range iss {
+		if is.kind == issueConfig {
+			parts = append(parts, is)
+		} else {
+			rest = append(rest, is)
+		}
+	}
+	if len(parts) < 2 {
+		return iss
+	}
+	many := issue{kind: issueConfigMany, key: "cfg_many", parts: parts}
+	for _, p := range parts {
+		many.findings = append(many.findings, p.findings...)
+	}
+	out := append(rest, many)
+	sortIssues(out)
+	return out
 }
 
 // issueGain is a problem's «if you fix this»: the shown score now and with

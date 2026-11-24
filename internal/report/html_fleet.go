@@ -80,12 +80,6 @@ func (c htmlCtx) undEyebrow() string {
 		c.t("html.und.eyebrow", nil) + `</p>`
 }
 
-// keyTag is the «Key» tag of a problem whose resource is a credential.
-func (c htmlCtx) keyTag() string {
-	return `<span class="r3-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M11.5 11.5 21 2M17 6l3 3M14 9l2 2"/></svg>` +
-		c.t("html.tag.key", nil) + `</span>`
-}
-
 // fleetWarnings are, per launches edge, the number of the problem that holds
 // its orchestrator_skips_approvals finding. A dismissed finding is not among
 // the findings and an accepted one is not in any problem, so neither has one.

@@ -245,6 +245,9 @@ func (c htmlCtx) issueTitle(is issue) string {
 		return html.EscapeString(c.cat.Plural("html.r3.group.cred", n, p))
 	case issueConfig:
 		return c.t("html.r3.group.config", map[string]string{"agent": c.agentName(is.agentID)})
+	case issueConfigMany:
+		head, _ := c.configManyText(is)
+		return head
 	}
 	return c.rowTitle(is.findings[0])
 }
@@ -271,8 +274,24 @@ func (c htmlCtx) issueDetail(is issue) string {
 			names = append(names, c.agentName(t))
 		}
 		return c.t("html.r3.group.config.detail", map[string]string{"targets": joinNames(names)})
+	case issueConfigMany:
+		_, tail := c.configManyText(is)
+		return tail
 	}
 	return ""
+}
+
+// configManyText is the single row's sentence, escaped, in the two pieces
+// the table shows: the bold part up to the list of agents, and the list
+// with what follows it. The agents are in the table's order.
+func (c htmlCtx) configManyText(is issue) (head, tail string) {
+	var names []string
+	for _, p := range is.parts {
+		names = append(names, c.agentName(p.agentID))
+	}
+	s := c.cat.Text("html.r3.issue.config_many", map[string]string{"n": strconv.Itoa(len(is.parts)), "agents": r3Mark})
+	h, t, _ := strings.Cut(s, r3Mark)
+	return html.EscapeString(strings.TrimSpace(h)), html.EscapeString(joinNames(names) + t)
 }
 
 // serviceDisplay is a service's name as the report shows it.
@@ -377,13 +396,16 @@ func (c htmlCtx) renderR3Findings(iss []issue) {
 			if count > 1 {
 				lead += " · " + strconv.Itoa(count) + " " + html.EscapeString(lowerFirst(c.cat.Text("html.r3.col.count", nil)))
 			}
-			// The «Key» tag goes before the title of a credential problem.
-			tag := ""
-			if is.kind == issueCred {
-				tag = c.keyTag()
+			// A problem with a family has its icon box to the left of the text
+			// and the family's name above the title; one without starts where
+			// the box would.
+			fam := issueFamily(is)
+			ico, tr := familyIcon(fam, is.red()), `<tr>`
+			if ico != "" {
+				tr = `<tr class="r3-hi">`
 			}
-			c.w(`<tr><th scope="row" class="c-n">%d</th><td class="c-p"><span class="r3-m">%s %s</span>%s<b>%s</b>%s</td><td class="c-c">%d</td><td class="c-l">%s</td><td class="c-f">%s</td></tr>`,
-				n, lead, c.pill(is), tag, c.issueTitle(is), detail, count, c.pill(is), c.issueFix(is, n))
+			c.w(`%s<th scope="row" class="c-n">%d</th><td class="c-p"><div class="r3-pc">%s<div class="r3-pt"><span class="r3-m">%s %s</span>%s<b>%s</b>%s</div></div></td><td class="c-c">%d</td><td class="c-l">%s</td><td class="c-f">%s</td></tr>`,
+				tr, n, ico, lead, c.pill(is), c.familyName(fam), c.issueTitle(is), detail, count, c.pill(is), c.issueFix(is, n))
 		}
 		c.w(`</tbody></table>`)
 	}
@@ -455,47 +477,67 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 	c.w(`<div class="r3-steps">`)
 	for i, is := range iss {
 		n := i + 1
-		// The «Key» tag goes after the title of a credential problem.
-		tag := ""
-		if is.kind == issueCred {
-			tag = c.keyTag()
-		}
-		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span><span>%s</span>%s</h2>`, n, n, n, n, c.issueTitle(is), tag)
+		// After the number, the family's icon box; the family's name above
+		// the title.
+		fam := issueFamily(is)
+		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span>%s<span class="r3-pt">%s<span>%s</span></span></h2>`,
+			n, n, n, n, familyIcon(fam, is.red()), c.familyName(fam), c.issueTitle(is))
 		if d := c.issueDetail(is); d != "" {
 			c.w(`<p class="r3-p-d">%s</p>`, d)
 		}
-		if now, then, agent, ok := issueGain(c.v, c.sheetScore(), is); ok {
-			p := map[string]string{"now": strconv.Itoa(now), "then": strconv.Itoa(then)}
-			key := "html.gain"
-			if agent != "" {
-				key, p["agent"] = "html.gain.agent", c.agentName(agent)
+		if is.kind == issueConfigMany {
+			// One part per agent, each with its problem's title, detail, score
+			// gain (with that agent's findings) and findings; no gain for the
+			// whole row.
+			for _, part := range is.parts {
+				c.w(`<div class="r3-pa"><h3>%s</h3>`, c.issueTitle(part))
+				if d := c.issueDetail(part); d != "" {
+					c.w(`<p class="r3-p-d">%s</p>`, d)
+				}
+				c.renderIssueBody(part)
+				c.w(`</div>`)
 			}
-			c.w(`<p class="proj">%s</p>`, c.t(key, p))
+			c.w(`</section>`)
+			continue
 		}
-		var reps []rules.Finding
-		for _, r := range c.issueRows(is) {
-			reps = append(reps, r.rep)
-		}
-		// Urgent rows first; within each level, the rows of the agent whose
-		// score the first screen shows first.
-		scored, hasScored := c.scored()
-		rank := func(f rules.Finding) int {
-			r := 0
-			if f.Severity != rules.SeverityRed {
-				r += 2
-			}
-			if !hasScored || !c.ofScoredAgent(f, scored) {
-				r++
-			}
-			return r
-		}
-		sort.SliceStable(reps, func(a, b int) bool { return rank(reps[a]) < rank(reps[b]) })
-		for _, f := range reps {
-			c.renderRow(f)
-		}
+		c.renderIssueBody(is)
 		c.w(`</section>`)
 	}
 	c.w(`</div>`)
+}
+
+// renderIssueBody is a problem's score gain line and its findings, under
+// its header and detail line.
+func (c htmlCtx) renderIssueBody(is issue) {
+	if now, then, agent, ok := issueGain(c.v, c.sheetScore(), is); ok {
+		p := map[string]string{"now": strconv.Itoa(now), "then": strconv.Itoa(then)}
+		key := "html.gain"
+		if agent != "" {
+			key, p["agent"] = "html.gain.agent", c.agentName(agent)
+		}
+		c.w(`<p class="proj">%s</p>`, c.t(key, p))
+	}
+	var reps []rules.Finding
+	for _, r := range c.issueRows(is) {
+		reps = append(reps, r.rep)
+	}
+	// Urgent rows first; within each level, the rows of the agent whose
+	// score the first screen shows first.
+	scored, hasScored := c.scored()
+	rank := func(f rules.Finding) int {
+		r := 0
+		if f.Severity != rules.SeverityRed {
+			r += 2
+		}
+		if !hasScored || !c.ofScoredAgent(f, scored) {
+			r++
+		}
+		return r
+	}
+	sort.SliceStable(reps, func(a, b int) bool { return rank(reps[a]) < rank(reps[b]) })
+	for _, f := range reps {
+		c.renderRow(f)
+	}
 }
 
 // r3Keys are the catalog codes the first screen emits.
@@ -515,8 +557,8 @@ func r3Keys() []string {
 		"html.r3.more", "html.r3.more.one", "html.r3.tpl.body", "html.r3.tpl.fixes", "html.r3.tpl.fixes_none", "html.r3.tpl.button", "html.r3.tpl.note",
 		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.r3.tpl.cursor_either", "html.tpl.in_use_pill",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
-		"report.dismissed.note", "html.today.incomplete",
-	}, r3StartKeys...)
+		"report.dismissed.note", "html.today.incomplete", "html.r3.issue.config_many",
+	}, append(r3StartKeys, familyKeys()...)...)
 }
 
 // r3CSS is the style of the three blocks and of the problems' steps.
@@ -526,7 +568,7 @@ func r3CSS() string {
 		light.WriteString("--" + t.Name + ":" + t.Light + ";")
 		dark.WriteString("--" + t.Name + ":" + t.Dark + ";")
 	}
-	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules + fleetRules
+	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules + fleetRules + familyCSS
 }
 
 const r3Rules = `.r3{max-width:1040px;margin:0 auto;padding:28px 16px 8px;display:flex;flex-direction:column;gap:20px;color:var(--ds-ink)}
