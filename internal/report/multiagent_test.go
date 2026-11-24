@@ -167,6 +167,9 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // one added CSS line), at BV-289 with the verdict and the «Start here» card
 // in block 1 and their CSS (checked: only those, and block 1's sentence at
 // 15 px in the second ink);
+// at BV-292 with each problem's family box and name, in the table, the
+// detail headers (not the findings' rows), the «Key» tag gone from both, and
+// their CSS (checked: only those);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

@@ -62,6 +62,16 @@ var r3Texts = []struct{ key, es, en string }{
 	{"html.r3.assumptions", "Supuestos del análisis ›", "Analysis assumptions ›"},
 	{"html.r3.footer", "Generado en tu ordenador. Solo lectura: no ha cambiado nada.", "Generated on your computer. Read only: nothing was changed."},
 	{"html.r3.method", "Metodología {method}", "Methodology {method}"},
+	// BV-292 (signed 24-11 08:51): the families and the single row.
+	{"html.family.key", "Clave", "Key"},
+	{"html.family.between_agents", "Entre agentes", "Between agents"},
+	{"html.family.agent", "Agente", "Agent"},
+	{"html.family.mcp", "MCP", "MCP"},
+	{"html.family.orchestrator", "Orquestador", "Orchestrator"},
+	{"html.family.subagent", "Subagente", "Subagent"},
+	{"html.family.project", "Proyecto", "Project"},
+	{"html.family.desktop", "Escritorio", "Desktop"},
+	{"html.r3.issue.config_many", "{n} de tus agentes pueden cambiar la configuración de otros: {agents}.", "{n} of your agents can change other agents' settings: {agents}."},
 	// BV-289 (signed 23-11 18:36; the corrected sentences of §6.1): the
 	// verdict, «Start here» and «What it means».
 	{"html.r3.verdict.exposed", "Al menos uno de tus agentes puede hacer mucho en este ordenador sin preguntarte.", "At least one of your agents can do a lot on this computer without asking you."},
