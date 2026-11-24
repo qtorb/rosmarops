@@ -21,8 +21,13 @@ func (c htmlCtx) renderR3Start(iss []issue) {
 		return
 	}
 	var text, action string
+	// The card's icon is what it proposes: the family of the problem it
+	// leads to (the key for a key in git); for the template, the family of
+	// the first problem it fixes, Agent when it leads to none.
+	ico := ""
+	at := func(i int) string { return familyIcon(issueFamily(iss[i]), iss[i].red()) }
 	urgent, _, _ := c.r3RowCounts(iss)
-	k, _ := c.r3TemplateFixes(iss)
+	k, groups := c.r3TemplateFixes(iss)
 	gitAt, service := 0, ""
 	for i, is := range iss {
 		if s := c.issueGitService(is); s != "" {
@@ -35,16 +40,24 @@ func (c htmlCtx) renderR3Start(iss []issue) {
 	// the template fixes: some, and the person does not already use one.
 	case k > 0 && c.tplInUseLine(c.templateAgent()) == "":
 		text = c.r3StartText("html.r3.start.tpl", map[string]string{"k": strconv.Itoa(k), "n": strconv.Itoa(urgent)}, "")
+		ico = familyIcon(familyAgent, true)
+		if len(groups) > 0 {
+			if g, err := strconv.Atoi(groups[0]); err == nil && g >= 1 && g <= len(iss) {
+				ico = at(g - 1)
+			}
+		}
 		action = `<a class="r3-btn" href="#v-pc" data-view="v-pc">` + c.t("html.r3.tpl.button", nil) + `</a><span>` + c.t("html.r3.tpl.note", nil) + `</span>`
 	case gitAt > 0:
 		text = c.r3StartText("html.r3.start.git", map[string]string{"service": serviceDisplay(service)}, "")
+		ico = familyIcon(familyKey, iss[gitAt-1].red())
 		action = `<a class="r3-btn" href="#p-` + strconv.Itoa(gitAt) + `">` + c.t("html.r3.start.steps", nil) + `</a>`
 	default:
 		text = c.r3StartText("html.r3.start.first", map[string]string{"title": r3Mark}, c.issueTitle(iss[0]))
+		ico = at(0)
 		action = `<a class="r3-btn" href="#p-1">` + c.t("html.r3.start.steps", nil) + `</a>`
 	}
-	c.w(`<div class="r3-start"><div class="r3-start-t"><p class="r3-start-e">%s</p><p>%s</p></div><div class="r3-start-a">%s</div></div>`,
-		c.t("html.r3.start.eyebrow", nil), text, action)
+	c.w(`<div class="r3-start"><div class="r3-start-t">%s<div><p class="r3-start-e">%s</p><p>%s</p></div></div><div class="r3-start-a">%s</div></div>`,
+		ico, c.t("html.r3.start.eyebrow", nil), text, action)
 }
 
 // r3Mark stands for a piece of HTML that is already escaped (a problem's

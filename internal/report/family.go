@@ -120,8 +120,6 @@ const familyCSS = `
 .r3-ico svg{width:20px;height:20px}
 .r3-ico.red{background:var(--ds-red-tint);color:var(--ds-red)}
 .r3-ico.amber{background:var(--ds-amber-tint);color:var(--ds-amber)}
-.r3-pa{margin-top:16px;padding-top:12px;border-top:1px solid var(--ds-line)}
-.r3-pa h3{margin:0 0 6px;font-size:17px;line-height:1.3;font-weight:700}
 .r3-fl{display:block;margin-bottom:2px;font-size:12px;line-height:1.3;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ds-muted)}
 @media (max-width:700px){
 .r3-pc{gap:12px}

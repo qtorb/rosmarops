@@ -62,6 +62,18 @@ var r3Texts = []struct{ key, es, en string }{
 	{"html.r3.assumptions", "Supuestos del análisis ›", "Analysis assumptions ›"},
 	{"html.r3.footer", "Generado en tu ordenador. Solo lectura: no ha cambiado nada.", "Generated on your computer. Read only: nothing was changed."},
 	{"html.r3.method", "Metodología {method}", "Methodology {method}"},
+	// BV-294 (signed 24-11 09:22): the detail a person can manage.
+	{"html.r3.cfg.agent.count", "{n} avisos", "{n} findings"},
+	{"html.r3.cfg.agent.count.one", "1 aviso", "1 finding"},
+	{"html.r3.cfg.agent.targets", "Puede cambiar a: {targets}.", "It can change: {targets}."},
+	{"html.r3.cfg.many.config", "{agent} puede cambiar la configuración de {n} agentes", "{agent} can change the settings of {n} agents"},
+	{"html.r3.cfg.many.instructions", "{agent} puede reescribir las instrucciones de {n} agentes", "{agent} can rewrite the instructions of {n} agents"},
+	{"html.r3.cfg.many.program", "{agent} puede cambiar un programa que ejecutan {n} agentes", "{agent} can change a program that {n} agents run"},
+	{"html.r3.group.secret.many", "{n} secretos al alcance de {agents} sin preguntarte", "{n} secrets within reach of {agents} without asking you"},
+	{"html.r3.group.same", "{title} · {n} veces", "{title} · {n} times"},
+	{"html.r3.rest.title", "Los otros {n} problemas", "The other {n} problems"},
+	{"html.r3.rest.title.one", "El otro problema", "The other problem"},
+	{"html.r3.rest.sub", "Plegados. Ábrelos cuando te toque.", "Folded. Open them when you get to them."},
 	// BV-292 (signed 24-11 08:51): the families and the single row.
 	{"html.family.key", "Clave", "Key"},
 	{"html.family.between_agents", "Entre agentes", "Between agents"},

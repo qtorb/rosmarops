@@ -56,7 +56,7 @@ func (c htmlCtx) pendingFindings() []rules.Finding {
 
 // issues are this report's problems, in the first screen's order.
 func (c htmlCtx) issues() []issue {
-	return issuesOf(c.pendingFindings(), c.v.credServices)
+	return c.mergeSameTitle(issuesOf(c.pendingFindings(), c.v.credServices))
 }
 
 // issueRows are a problem's rows as the report counts findings: one per
@@ -248,6 +248,8 @@ func (c htmlCtx) issueTitle(is issue) string {
 	case issueConfigMany:
 		head, _ := c.configManyText(is)
 		return head
+	case issueSame:
+		return c.sameTitle(is)
 	}
 	return c.rowTitle(is.findings[0])
 }
@@ -477,38 +479,58 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 	c.w(`<div class="r3-steps">`)
 	for i, is := range iss {
 		n := i + 1
+		if i == detailOpen {
+			// Past the first problems, each is a folded line under a heading.
+			rest := len(iss) - detailOpen
+			c.w(`<div class="r3-rest"><h3 class="r3-rest-h">%s</h3><p class="r3-rest-s">%s</p>`,
+				c.t(c.cat.One("html.r3.rest.title", rest), map[string]string{"n": strconv.Itoa(rest)}), c.t("html.r3.rest.sub", nil))
+		}
+		if i >= detailOpen {
+			c.renderFoldedHead(n, is)
+			c.w(`<section class="r3-p" id="p-%d">`, n)
+			c.renderIssueContent(is)
+			c.w(`</section></details>`)
+			if n == len(iss) {
+				c.w(`</div>`)
+			}
+			continue
+		}
 		// After the number, the family's icon box; the family's name above
 		// the title.
 		fam := issueFamily(is)
 		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span>%s<span class="r3-pt">%s<span>%s</span></span></h2>`,
 			n, n, n, n, familyIcon(fam, is.red()), c.familyName(fam), c.issueTitle(is))
-		if d := c.issueDetail(is); d != "" {
-			c.w(`<p class="r3-p-d">%s</p>`, d)
-		}
-		if is.kind == issueConfigMany {
-			// One part per agent, each with its problem's title, detail, score
-			// gain (with that agent's findings) and findings; no gain for the
-			// whole row.
-			for _, part := range is.parts {
-				c.w(`<div class="r3-pa"><h3>%s</h3>`, c.issueTitle(part))
-				if d := c.issueDetail(part); d != "" {
-					c.w(`<p class="r3-p-d">%s</p>`, d)
-				}
-				c.renderIssueBody(part)
-				c.w(`</div>`)
-			}
-			c.w(`</section>`)
-			continue
-		}
-		c.renderIssueBody(is)
+		c.renderIssueContent(is)
 		c.w(`</section>`)
 	}
 	c.w(`</div>`)
 }
 
+// renderIssueContent is a problem's section under its header: its detail
+// line, and its score gain and findings, or, for the single «between
+// agents» problem, one folded line per agent.
+func (c htmlCtx) renderIssueContent(is issue) {
+	if d := c.issueDetail(is); d != "" {
+		c.w(`<p class="r3-p-d">%s</p>`, d)
+	}
+	if is.kind == issueConfigMany {
+		c.renderAgentLines(is)
+		return
+	}
+	c.renderIssueBody(is)
+}
+
 // renderIssueBody is a problem's score gain line and its findings, under
 // its header and detail line.
 func (c htmlCtx) renderIssueBody(is issue) {
+	c.renderGain(is)
+	for _, f := range c.rankedReps(is) {
+		c.renderRow(f)
+	}
+}
+
+// renderGain is a problem's «if you fix this» line, when it moves the score.
+func (c htmlCtx) renderGain(is issue) {
 	if now, then, agent, ok := issueGain(c.v, c.sheetScore(), is); ok {
 		p := map[string]string{"now": strconv.Itoa(now), "then": strconv.Itoa(then)}
 		key := "html.gain"
@@ -517,12 +539,15 @@ func (c htmlCtx) renderIssueBody(is issue) {
 		}
 		c.w(`<p class="proj">%s</p>`, c.t(key, p))
 	}
+}
+
+// rankedReps are a problem's rows' findings: urgent first; within each
+// level, those of the agent whose score the first screen shows first.
+func (c htmlCtx) rankedReps(is issue) []rules.Finding {
 	var reps []rules.Finding
 	for _, r := range c.issueRows(is) {
 		reps = append(reps, r.rep)
 	}
-	// Urgent rows first; within each level, the rows of the agent whose
-	// score the first screen shows first.
 	scored, hasScored := c.scored()
 	rank := func(f rules.Finding) int {
 		r := 0
@@ -535,9 +560,7 @@ func (c htmlCtx) renderIssueBody(is issue) {
 		return r
 	}
 	sort.SliceStable(reps, func(a, b int) bool { return rank(reps[a]) < rank(reps[b]) })
-	for _, f := range reps {
-		c.renderRow(f)
-	}
+	return reps
 }
 
 // r3Keys are the catalog codes the first screen emits.
@@ -558,7 +581,7 @@ func r3Keys() []string {
 		"html.r3.tpl.in_use", "html.r3.tpl.next", "html.r3.tpl.top", "html.r3.tpl.cursor_either", "html.tpl.in_use_pill",
 		"html.r3.how", "html.r3.assumptions", "html.r3.footer", "html.r3.method",
 		"report.dismissed.note", "html.today.incomplete", "html.r3.issue.config_many",
-	}, append(r3StartKeys, familyKeys()...)...)
+	}, append(append(r3StartKeys, familyKeys()...), detailKeys()...)...)
 }
 
 // r3CSS is the style of the three blocks and of the problems' steps.
@@ -568,7 +591,7 @@ func r3CSS() string {
 		light.WriteString("--" + t.Name + ":" + t.Light + ";")
 		dark.WriteString("--" + t.Name + ":" + t.Dark + ";")
 	}
-	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules + fleetRules + familyCSS
+	return ":root{" + light.String() + "}\n@media (prefers-color-scheme:dark){:root{" + dark.String() + "}}\n" + r3Rules + fleetRules + familyCSS + detailCSS
 }
 
 const r3Rules = `.r3{max-width:1040px;margin:0 auto;padding:28px 16px 8px;display:flex;flex-direction:column;gap:20px;color:var(--ds-ink)}
@@ -596,7 +619,7 @@ body{background:var(--ds-surface)}
 .r3-text{margin:0;flex:999 1 420px;min-width:0;font-size:15px;line-height:1.5;color:var(--ds-ink-2)}
 .r3-verdict{margin:0;max-width:820px;font-size:22px;line-height:1.3;font-weight:700;color:var(--ds-ink)}
 .r3-start{border:2px solid var(--ds-ink);border-radius:12px;padding:16px 20px;display:flex;flex-direction:row;align-items:center;gap:24px;flex-wrap:wrap}
-.r3-start-t{flex:999 1 460px;min-width:0}
+.r3-start-t{flex:999 1 460px;min-width:0;display:flex;align-items:flex-start;gap:14px}
 .r3-start-t p{margin:0;font-size:16px;line-height:1.5}
 .r3-start-t p.r3-start-e{margin:0 0 4px;font-size:12px;line-height:1.3;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ds-ink)}
 .r3-start-a{flex:1 0 220px;display:flex;flex-direction:column;gap:6px}
