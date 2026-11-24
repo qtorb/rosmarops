@@ -171,7 +171,7 @@ func TestCredInGitWhere_Tracked(t *testing.T) {
 	if n := bv219Findings(v2); n != 2 {
 		t.Fatalf("%d cred_in_git findings for a committed .env, want 2 (one per key)", n)
 	}
-	if !strings.Contains(page, "está guardada en git") || strings.Contains(page, "está en tu historial de git") {
+	if !strings.Contains(page, ": en git") || strings.Contains(page, ": en tu historial de git") {
 		t.Error("a tracked key's title does not say it is saved in git")
 	}
 	want := `<p class="where">En <code>.env</code>, que git sigue, en el proyecto ~` + string(filepath.Separator) + `proj.`
@@ -199,7 +199,7 @@ func TestCredInGitWhere_HistoryOnly(t *testing.T) {
 	if n := bv219Findings(v2); n != 2 {
 		t.Fatalf("%d cred_in_git findings for a key only in the history, want 2 (one per key)", n)
 	}
-	if !strings.Contains(page, "está en tu historial de git") || strings.Contains(page, "está guardada en git") {
+	if !strings.Contains(page, ": en tu historial de git") || strings.Contains(page, ": en git") {
 		t.Error("a history-only key's title does not say it is in the history")
 	}
 	if len(commit) != 7 {

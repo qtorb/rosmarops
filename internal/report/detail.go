@@ -168,10 +168,11 @@ func writeType(f rules.Finding) string {
 	return "config"
 }
 
-// renderAgentLines is the single «between agents» problem's parts: one
-// folded line per agent, the first open, with its count and the oldest
-// «open since» of its findings; inside, whom it can change, its score gain
-// and its findings, three or more of one kind joined in one row.
+// renderAgentLines is a single row's parts (the «between agents» problem,
+// or one of its own shared by three agents or more): one folded line per
+// agent, the first open, with its count and the oldest «open since» of its
+// findings; inside, whom it can change (between agents only), its score
+// gain and its findings, three or more of one kind joined in one row.
 func (c htmlCtx) renderAgentLines(is issue) {
 	for i, part := range is.parts {
 		open := ""
@@ -185,11 +186,13 @@ func (c htmlCtx) renderAgentLines(is issue) {
 		}
 		c.w(`<details class="r3-ag"%s><summary><span class="chev" aria-hidden="true">›</span><span class="r3-ag-n">%s</span><span class="r3-ag-c">%s</span>%s</summary><div class="r3-ag-b">`,
 			open, html.EscapeString(c.agentName(part.agentID)), c.r3Count("html.r3.cfg.agent.count", count), since)
-		var names []string
-		for _, t := range part.targets() {
-			names = append(names, c.agentName(t))
+		if is.kind == issueConfigMany { // a problem of its own has no one else to change
+			var names []string
+			for _, t := range part.targets() {
+				names = append(names, c.agentName(t))
+			}
+			c.w(`<p class="r3-ag-t">%s</p>`, c.t("html.r3.cfg.agent.targets", map[string]string{"targets": joinNames(names)}))
 		}
-		c.w(`<p class="r3-ag-t">%s</p>`, c.t("html.r3.cfg.agent.targets", map[string]string{"targets": joinNames(names)}))
 		c.renderGain(part)
 		c.renderTypedRows(part)
 		c.w(`</div></details>`)
@@ -280,12 +283,12 @@ func familyIconNeutral(family string) string {
 
 // detailKeys are the catalog codes of the detail's new texts.
 func detailKeys() []string {
-	return []string{
+	return append(ownManyKeys, []string{
 		"html.r3.cfg.agent.count", "html.r3.cfg.agent.count.one", "html.r3.cfg.agent.targets",
 		"html.r3.cfg.many.config", "html.r3.cfg.many.instructions", "html.r3.cfg.many.program",
 		"html.r3.group.secret.many", "html.r3.group.same",
 		"html.r3.rest.title", "html.r3.rest.title.one", "html.r3.rest.sub",
-	}
+	}...)
 }
 
 // foldJS opens a folded problem when a link leads to it, for the browsers

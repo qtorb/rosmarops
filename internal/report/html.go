@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1117,19 +1118,55 @@ func malParams(f rules.Finding) map[string]string { return findingParams(f) }
 
 // computerUseKey is the catalog key of a computer_use_app_allowed finding
 // (BV-193): red for a terminal/interpreter or default_app_access allow, yellow
-// otherwise.
+// otherwise. Its title says which agent and sums up the list: every app when
+// the list holds "*", the apps by name up to three, how many from four on.
 func computerUseKey(f rules.Finding) string {
+	key := "finding.computer_use_app_allowed.yellow"
 	if f.Severity == rules.SeverityRed {
-		return "finding.computer_use_app_allowed.red"
+		key = "finding.computer_use_app_allowed.red"
+		if slices.Contains(f.Evidence.Locations, computerUseAllApps) {
+			return key + ".all"
+		}
 	}
-	return "finding.computer_use_app_allowed.yellow"
+	if len(f.Evidence.Locations) >= computerUseManyApps {
+		return key + ".many"
+	}
+	return key
 }
 
-// computerUseParams fills {app} and {apps} from the finding's app list (its
-// Evidence.Locations), joined; config-derived, sanitized when rendered.
+// computerUseKeys are the catalog codes of a desktop finding's title and
+// «where» line.
+var computerUseKeys = []string{
+	"finding.computer_use_app_allowed.red", "finding.computer_use_app_allowed.red.all",
+	"finding.computer_use_app_allowed.red.many", "finding.computer_use_app_allowed.yellow",
+	"finding.computer_use_app_allowed.yellow.many", "html.where", "html.where.all_apps",
+}
+
+// computerUseManyApps is from how many apps a desktop finding's title says
+// how many instead of naming them; the «where» line still names them all.
+const computerUseManyApps = 4
+
+// computerUseParams fills {agent}, {n} and {app}/{apps} from the finding's
+// app list (its Evidence.Locations), joined; config-derived, sanitized when
+// rendered.
 func computerUseParams(f rules.Finding) map[string]string {
 	apps := strings.Join(f.Evidence.Locations, ", ")
-	return map[string]string{"agent": f.Params.Agent, "app": apps, "apps": apps}
+	return map[string]string{"agent": f.Params.Agent, "app": apps, "apps": apps, "n": strconv.Itoa(len(f.Evidence.Locations))}
+}
+
+// computerUseWhere is a desktop finding's «where» line: every app, by name,
+// with no «and n more», and "*" said as all apps (the technical details keep
+// the raw "*").
+func (c htmlCtx) computerUseWhere(f rules.Finding) string {
+	var parts []string
+	for _, a := range f.Evidence.Locations {
+		if a == computerUseAllApps {
+			parts = append(parts, c.t("html.where.all_apps", nil))
+			continue
+		}
+		parts = append(parts, `<code>`+html.EscapeString(untrusted.PlainText(a))+`</code>`)
+	}
+	return `<p class="where">` + c.t("html.where", nil) + ` ` + strings.Join(parts, ", ") + `</p>`
 }
 
 // titleText is the finding's title (§4).
@@ -1150,7 +1187,7 @@ func (c htmlCtx) titleText(f rules.Finding) string {
 		return c.cat.Text(computerUseKey(f), computerUseParams(f))
 	}
 	if f.Rule == rules.RuleActsWithoutYou { // BV-251
-		return c.cat.Text("finding.acts_without_you.title", nil)
+		return c.cat.Text("finding.acts_without_you.title", map[string]string{"agent": f.Params.Agent})
 	}
 	if IsSentenceRule(f.Rule) { // BV-264, BV-268: one signed sentence
 		return OrchestratorTitle(c.cat, f)
@@ -1446,7 +1483,7 @@ func HTMLKeys() []string {
 		"finding.package_known_malicious.action", "report.intel_stamp")
 	// BV-193: the Computer Use finding renders with its one signed sentence as
 	// the title (red or yellow), no separate impact.
-	keys = append(keys, "finding.computer_use_app_allowed.red", "finding.computer_use_app_allowed.yellow")
+	keys = append(keys, computerUseKeys...)
 	// BV-107: the project-hook finding also renders with its finding.* texts.
 	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
 		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",

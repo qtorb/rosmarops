@@ -56,7 +56,7 @@ func (c htmlCtx) pendingFindings() []rules.Finding {
 
 // issues are this report's problems, in the first screen's order.
 func (c htmlCtx) issues() []issue {
-	return c.mergeSameTitle(issuesOf(c.pendingFindings(), c.v.credServices))
+	return mergeOwnIssues(c.mergeSameTitle(issuesOf(c.pendingFindings(), c.v.credServices)))
 }
 
 // issueRows are a problem's rows as the report counts findings: one per
@@ -248,6 +248,9 @@ func (c htmlCtx) issueTitle(is issue) string {
 	case issueConfigMany:
 		head, _ := c.configManyText(is)
 		return head
+	case issueOwnMany:
+		head, _ := c.ownManyText(is)
+		return head
 	case issueSame:
 		return c.sameTitle(is)
 	}
@@ -279,6 +282,9 @@ func (c htmlCtx) issueDetail(is issue) string {
 	case issueConfigMany:
 		_, tail := c.configManyText(is)
 		return tail
+	case issueOwnMany:
+		_, tail := c.ownManyText(is)
+		return tail
 	}
 	return ""
 }
@@ -287,11 +293,17 @@ func (c htmlCtx) issueDetail(is issue) string {
 // the table shows: the bold part up to the list of agents, and the list
 // with what follows it. The agents are in the table's order.
 func (c htmlCtx) configManyText(is issue) (head, tail string) {
+	return c.manyText(is, "html.r3.issue.config_many")
+}
+
+// manyText is a single row's sentence key, with {n} its parts and {agents}
+// their agents in the table's order, escaped, cut before the list of agents.
+func (c htmlCtx) manyText(is issue, key string) (head, tail string) {
 	var names []string
 	for _, p := range is.parts {
 		names = append(names, c.agentName(p.agentID))
 	}
-	s := c.cat.Text("html.r3.issue.config_many", map[string]string{"n": strconv.Itoa(len(is.parts)), "agents": r3Mark})
+	s := c.cat.Text(key, map[string]string{"n": strconv.Itoa(len(is.parts)), "agents": r3Mark})
 	h, t, _ := strings.Cut(s, r3Mark)
 	return html.EscapeString(strings.TrimSpace(h)), html.EscapeString(joinNames(names) + t)
 }
@@ -513,7 +525,7 @@ func (c htmlCtx) renderIssueContent(is issue) {
 	if d := c.issueDetail(is); d != "" {
 		c.w(`<p class="r3-p-d">%s</p>`, d)
 	}
-	if is.kind == issueConfigMany {
+	if is.kind == issueConfigMany || is.kind == issueOwnMany {
 		c.renderAgentLines(is)
 		return
 	}

@@ -172,14 +172,13 @@ func HTMLFindingKeys() []string {
 	ph := "finding." + rules.RuleProjectHookRunsRepoScript
 	nb := "finding." + rules.RuleN8NMCPBridge
 	nk := "finding." + rules.RuleN8NKeyWithData
-	cu := "finding." + rules.RuleComputerUseAppAllowed
 	keys := []string{
 		pk + ".title", pk + ".why", pk + ".action",
 		ph + ".title", ph + ".title.large", ph + ".what", ph + ".what.large", ph + ".impact", ph + ".fix",
 		nb + ".title", nb + ".what", nb + ".step1", nb + ".step2",
 		nk + ".title", nk + ".what", nk + ".step1",
-		cu + ".red", cu + ".yellow",
 	}
+	keys = append(keys, computerUseKeys...)
 	keys = append(keys, ActsKeys()...)
 	return append(keys, mcpExternalKeys()...)
 }
@@ -221,8 +220,9 @@ func CatalogKeys() []string {
 			continue
 		}
 		if r == rules.RuleComputerUseAppAllowed {
-			// BV-193: one signed sentence per colour, no generic what/why.
-			keys = append(keys, "finding."+r+".red", "finding."+r+".yellow")
+			// BV-193: one signed sentence per colour, no generic what/why;
+			// the title's variants and the «where» line with every app.
+			keys = append(keys, computerUseKeys...)
 			continue
 		}
 		if r == rules.RuleActsWithoutYou {
@@ -488,7 +488,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 			continue
 		}
 		if f.Rule == rules.RuleActsWithoutYou { // BV-251: the title and its detail lines
-			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), cat.Text("finding.acts_without_you.title", nil))
+			w("### %s %s\n\n", severityEmoji(finding.Severity(f.Severity)), cat.Text("finding.acts_without_you.title", map[string]string{"agent": f.Params.Agent}))
 			w("%s\n\n", strings.Join([]string{t("severity."+f.Severity, p), t("confidence."+f.Confidence, p)}, " · "))
 			for _, l := range ActsDetail(cat, f) {
 				w("%s\n\n", l)
@@ -519,6 +519,7 @@ func RenderV2Markdown(v V2, cat catalog.Catalog, loc *time.Location) string {
 				meta = append(meta, t("radius."+f.Radius, p))
 			}
 			w("%s\n\n", strings.Join(meta, " · "))
+			w("%s\n\n", computerUseWhereMarkdown(cat, f))
 			var own []string
 			for _, a := range f.Evidence.Assumptions {
 				if !sharedAssumption[a] {
@@ -1033,4 +1034,18 @@ func whyKey(f rules.Finding) string {
 		return "finding.cred_in_git.why.local"
 	}
 	return "finding." + f.Rule + ".why"
+}
+
+// computerUseWhereMarkdown is a desktop finding's «where» line in the
+// Markdown: every app, by name, and "*" said as all apps.
+func computerUseWhereMarkdown(cat catalog.Catalog, f rules.Finding) string {
+	var parts []string
+	for _, a := range f.Evidence.Locations {
+		if a == computerUseAllApps {
+			parts = append(parts, cat.Text("html.where.all_apps", nil))
+			continue
+		}
+		parts = append(parts, "`"+untrusted.PlainText(a)+"`")
+	}
+	return cat.Text("html.where", nil) + " " + strings.Join(parts, ", ")
 }
