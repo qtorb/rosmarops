@@ -611,7 +611,11 @@ func fromScans(mcp platform.MCPScan, settings platform.ClaudeSettingsScan, curso
 	// Grok §4): their configured capabilities, from FromCodex / FromGrok, sit
 	// beside them, and the inference reconciles them.
 	for _, product := range []string{knowledge.ClaudeCodeProduct, knowledge.CursorProduct, knowledge.CodexProduct, knowledge.GrokBuildProduct} {
-		defaults = append(defaults, ProductDefaults(merged.Nodes, bases[product]))
+		frag := ProductDefaults(merged.Nodes, bases[product])
+		if product == knowledge.CodexProduct {
+			frag = withoutCodexReadOnlyWrite(frag, codex)
+		}
+		defaults = append(defaults, frag)
 	}
 	// Hermes Agent builds its own capabilities (BV-111): product_default
 	// read/write/shell/network/mcp, scoped to the sandbox when the backend is

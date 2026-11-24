@@ -15,8 +15,10 @@ import (
 
 // The guided profiles (BV-238, CTO-50 §2–§3, CTO-46 §2): Cursor, Grok Build
 // and Grok Bot. A guided profile gives the exact steps and, where there is
-// one, a text to paste, but no class or score before and after: the engine
-// does not measure it. Nothing is read, written or evaluated for them.
+// one, a text to paste. Some are measured (Cursor's P0 and P1 and Grok Bot's
+// two as declared answers, Grok Build's P2 off Windows): applyProfiles adds
+// their scores to the agent's index entry. Grok Build's P0, P1 and P3 are
+// not measured. Nothing is written for them.
 
 // guidedProfile is one guided profile: its name, its steps, its four rows
 // and what it copies.

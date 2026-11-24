@@ -86,8 +86,8 @@
         "any_reach"
       ],
       "magnitude": 2,
-      "source_url": "https://learn.chatgpt.com/docs/config-reference",
-      "verified": "CTO-16 §2, 2026-11-01: [projects.<path>] trust_level = \"untrusted\" makes Codex ignore the repository's own .codex settings, hooks, rules and AGENTS.md"
+      "source_url": "https://learn.chatgpt.com/docs/config-file/config-reference",
+      "verified": "CTO-16 §2, 2026-11-01: [projects.<path>] trust_level = \"untrusted\" makes Codex ignore the repository's own .codex settings, hooks, rules and AGENTS.md. The page moved from /docs/config-reference to /docs/config-file/config-reference (read again 2026-11-24, BV-293)"
     }
   ],
   "code_launchers": []

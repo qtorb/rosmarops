@@ -38,11 +38,14 @@ func (w *WindowsPlatform) ListCopilot(ctx context.Context, repoRoots []string) (
 	return ReadCopilot(ctx, userDir, home, env, repoRoots, reg), nil
 }
 
-// copilotVSCodeUserDir is VS Code's user folder, as claude_settings resolves
-// it: %APPDATA%\Code\User on Windows, the layout's path on macOS.
+// copilotVSCodeUserDir is VS Code's user folder: %APPDATA%\Code\User on
+// Windows, and off Windows the layout's path, where VS Code keeps it:
+// ~/Library/Application Support/Code/User on macOS, $XDG_CONFIG_HOME or
+// ~/.config/Code/User on Linux (code.visualstudio.com/docs/configure/settings,
+// «Settings file locations», read 2026-11-24).
 func copilotVSCodeUserDir(layout agentdirs.Layout, home string, env agentdirs.Env) string {
-	if layout == agentdirs.MacOSLayout {
-		return layout.VSCodeUserDir(home, nil)
+	if layout != agentdirs.WindowsLayout {
+		return layout.VSCodeUserDir(home, env)
 	}
 	appData, ok := env("APPDATA")
 	if !ok || appData == "" {

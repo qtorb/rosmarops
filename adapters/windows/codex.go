@@ -25,7 +25,8 @@ const codexPolicyKey = `SOFTWARE\Policies\OpenAI\Codex`
 // the user config.toml, each repo's .codex/config.toml (in force only when the
 // user config trusts it), the CODEX_HOME profiles, and the system
 // requirements.toml from %ProgramData%\OpenAI\Codex (or the HKLM
-// RequirementsPath). Session transcripts (sessions\) are never read.
+// RequirementsPath) on Windows, /etc/codex off Windows. Session
+// transcripts (sessions\) are never read.
 func (w *WindowsPlatform) ListCodex(ctx context.Context, repoRoots []string) (platform.CodexScan, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -36,16 +37,25 @@ func (w *WindowsPlatform) ListCodex(ctx context.Context, repoRoots []string) (pl
 	if w.managed != nil {
 		reg = w.managed.registry
 	}
-	req := resolveCodexRequirements(ctx, env, reg)
+	req := resolveCodexRequirements(ctx, w.layout, env, reg)
 	return ReadCodex(home, env, repoRoots, req), nil
 }
 
+// codexUnixRequirements is Codex's system requirements.toml on Linux and macOS.
+const codexUnixRequirements = "/etc/codex/requirements.toml"
+
 // resolveCodexRequirements is where the system requirements.toml lives on this
-// machine: the HKLM RequirementsPath value when set, otherwise
-// %ProgramData%\OpenAI\Codex\requirements.toml (CTO-16 §2 targets Windows; off
-// Windows the registry reader is nil and the ProgramData path simply does not
-// exist, so the layer reads as missing).
-func resolveCodexRequirements(ctx context.Context, env agentdirs.Env, reg RegistryReader) string {
+// machine: on Windows, the HKLM RequirementsPath value when set, otherwise
+// %ProgramData%\OpenAI\Codex\requirements.toml; off Windows,
+// /etc/codex/requirements.toml («System requirements.toml
+// (/etc/codex/requirements.toml on Unix systems, including Linux and macOS, or
+// %ProgramData%\OpenAI\Codex\requirements.toml on Windows)»,
+// learn.chatgpt.com/docs/enterprise/managed-configuration, read 2026-11-24).
+// The file is only read, as on Windows.
+func resolveCodexRequirements(ctx context.Context, layout agentdirs.Layout, env agentdirs.Env, reg RegistryReader) string {
+	if layout != agentdirs.WindowsLayout {
+		return codexUnixRequirements
+	}
 	if reg != nil {
 		if v, ok, err := reg.StringValue(ctx, HiveHKLM, codexPolicyKey, "RequirementsPath"); err == nil && ok {
 			if p := strings.TrimSpace(v); p != "" {
