@@ -45,6 +45,8 @@ Add a scan struct with what you read, and a method on the `Platform` interface.
 
 Implement the method on `WindowsPlatform`. The macOS and Linux platforms (`adapters/darwin/platform.go`, `adapters/linux/platform.go`) embed `WindowsPlatform`, so the same reader runs there on the layout of each system.
 
+Every path the reader looks in must come from the layout (`w.layout`, through `internal/agentdirs`), never from a Windows variable such as `%APPDATA%` alone, and must cite where the agent documents it for each system. A path that only exists on Windows is read on Windows only. BV-293 fixed four readers that used the Windows path on Linux too (ADR 0036): for example, VS Code's user folder is `layout.VSCodeUserDir`, and Codex's system `requirements.toml` is `/etc/codex/requirements.toml` off Windows. When the agent documents no path for a system, leave that system unread rather than guess.
+
 - Cline: `adapters/windows/cline.go`. `ListCline` resolves the home and calls `ReadCline`, a pure function that takes the layout, home, environment and repository roots, so tests can call it on a temporary folder.
 - Read files through the bounded reader the other readers use (`readBounded`). Record the read status of every file you open; a file that could not be read must show up as not read, never as clean.
 - Never keep a secret value in the scan. Credentials go through `internal/scan/credfiles` (step 5).

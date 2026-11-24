@@ -15,7 +15,7 @@ The ids are `P0` to `P3`, as the report names them. Their names are catalog text
 | Agent | Template | Where the text is | Measured? |
 |---|---|---|---|
 | Claude Code | P0, P1 (block for `~/.claude/settings.json`) | `p0JSON`, `p1JSON` in `internal/profiles/profiles.go` | yes, on every system |
-| Claude Code | P2 (user block, plus a block for each project's `.claude/settings.json`) | `p2JSON`, `p2ProjectJSON` in `internal/profiles/profiles.go` | yes, on macOS and Linux only (`MeasuredOn`) |
+| Claude Code | P2 (user block only: it has had no project block since BV-254) | `p2JSON` in `internal/profiles/profiles.go` | yes, on macOS and Linux only (`MeasuredOn`) |
 | Claude Code | P3 (launch command) | `p3Command` in `internal/profiles/profiles.go` | no |
 | Grok Build | P0, P1, P3 | `grokP0`, `grokP1`, `grokP3` in `internal/profiles/guided.go` | no (guided) |
 | Grok Build | P2 (P1 with the `strict` sandbox) | `grokP2` in `internal/profiles/guided.go` | yes, on macOS and Linux |

@@ -144,14 +144,10 @@ func (w *WindowsPlatform) ListClaudeSettings(ctx context.Context, repoRoots []st
 		scan.Files = append(scan.Files, f)
 	}
 	scan.Trust = readProjectTrust(filepath.Join(home, ".claude.json"))
-	appData := os.Getenv("APPDATA")
-	if appData == "" {
-		appData = filepath.Join(home, "AppData", "Roaming")
-	}
-	vscodeUser := filepath.Join(appData, "Code", "User")
-	if w.layout == agentdirs.MacOSLayout {
-		vscodeUser = w.layout.VSCodeUserDir(home, nil)
-	}
+	// VS Code's user folder, where Claude Code's VS Code mode lives: the same
+	// folder Copilot's reader uses (copilotVSCodeUserDir), so off Windows it is
+	// VS Code's own path for this system, not the Windows one.
+	vscodeUser := copilotVSCodeUserDir(w.layout, home, agentdirs.Env(os.LookupEnv))
 	scan.VSCode = readVSCodeMode(filepath.Join(vscodeUser, "settings.json"), dir)
 	if w.managed != nil {
 		w.managed.read(ctx, dir, &scan)

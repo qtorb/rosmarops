@@ -46,9 +46,11 @@ func profilePass(in V2Input, fams map[string]string, p ProfileInput) *factoryRes
 	return passOf(fin, *p.Graph, fams)
 }
 
-// applyProfiles fills, for Claude Code, its score and class with each profile,
-// and the computer's (BV-236 §4): the lowest score among the evaluated agents
-// with the profile, the class of the agent that gives it, and that agent.
+// applyProfiles fills, for every agent with measured profiles (Claude Code,
+// Cursor, Grok Bot, and Grok Build off Windows), its score and class with
+// each profile; and, for Claude Code's profiles, the computer's (BV-236 §4):
+// the lowest score among the evaluated agents with the profile, the class of
+// the agent that gives it, and that agent.
 func applyProfiles(v *V2, in V2Input, fams map[string]string) {
 	byProduct := map[string]map[string]bool{}
 	for _, a := range v.AgentsOverview {

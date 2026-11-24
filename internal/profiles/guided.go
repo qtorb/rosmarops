@@ -8,8 +8,10 @@ import (
 )
 
 // The guided profiles of BV-238 (CTO-50 §2 Cursor, §3 Grok Build, with the
-// adjustments of 14-11 22:11): the steps are shown and the text is copied,
-// but the engine does not measure them.
+// adjustments of 14-11 22:11): the steps are shown and the text is copied.
+// The engine measures some of them: Cursor's P0 and P1 as declared answers
+// (pipeline.DeclaredProfiles), and Grok Build's P2 off Windows
+// (pipeline.GrokProfile). Grok Build's P0, P1 and P3 are not measured.
 
 // cursorBlock is the literal ~/.cursor/sandbox.json of Cursor's P0 and P1.
 const cursorBlock = `{ "readBoundary": "workspace" }`

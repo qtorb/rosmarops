@@ -218,13 +218,15 @@ type AgentIndex struct {
 	// Groups are, per group of its findings, the score without the whole
 	// group (R2).
 	Groups []Group `json:"groups"`
-	// Profiles are, for Claude Code only, its score and class with each
-	// measured profile of CTO-50 §1 (BV-236 §4). The report fills them.
+	// Profiles are the agent's score and class with each measured profile
+	// (BV-236 §4): Claude Code's, Cursor's and Grok Bot's declared ones, and
+	// Grok Build's P2 off Windows. The report fills them.
 	Profiles []Profile `json:"profiles,omitempty"`
 }
 
-// Profile is a score and class with one measured profile of Claude Code
-// (BV-236 §4): its block added to Claude Code's user settings, in memory.
+// Profile is a score and class with one measured profile (BV-236 §4): for
+// Claude Code and Grok Build, its block added to the agent's settings, in
+// memory; for Cursor and Grok Bot, its declared answers.
 type Profile struct {
 	Profile string `json:"profile"`
 	// OS is the system it was measured on (BV-249 §6): windows, macos or
