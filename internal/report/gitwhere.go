@@ -90,9 +90,14 @@ func (c htmlCtx) gitHistoryOnly(f rules.Finding) bool {
 
 // findingWhere writes the «where» line of a finding: for cred_in_git with
 // its committed places, html.f.cred_in_git.where.tracked or .where.history
-// of the first one (a tracked one first), then how many more; for any other
-// finding, the «Found in» line of its locations (BV-153).
+// of the first one (a tracked one first), then how many more; for a
+// desktop finding, every app (computerUseWhere); for any other finding,
+// the «Found in» line of its locations (BV-153).
 func (c htmlCtx) findingWhere(f rules.Finding) {
+	if f.Rule == rules.RuleComputerUseAppAllowed {
+		c.w(`%s`, c.computerUseWhere(f))
+		return
+	}
 	ps := c.gitPlaces(f)
 	if len(ps) == 0 {
 		c.whereLine(c.rowLocations(f))

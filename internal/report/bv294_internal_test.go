@@ -91,18 +91,27 @@ func TestDetailJoinsSameTitles(t *testing.T) {
 		if mal != 2 {
 			t.Errorf("%s: %d malicious package problems, want 2 (never joined)", lang, mal)
 		}
-		if len(same) != 2 {
-			t.Fatalf("%s: %d joined problems, want 2 (the secrets, and «acts without you»)", lang, len(same))
-		}
-		var titles []string
-		for _, is := range same {
-			titles = append(titles, c.issueTitle(is))
+		// BV-297 §2.2: «acts without you» says its agent, so two agents' are
+		// no longer the same title; only the secrets are joined.
+		if len(same) != 1 {
+			t.Fatalf("%s: %d joined problems, want 1 (the secrets)", lang, len(same))
 		}
 		secrets := escapeHTML(cat.Text("html.r3.group.secret.many", map[string]string{"n": "2", "agents": listNames(cat, []string{"agent_cc", "agent_cursor"})}))
-		acts := escapeHTML(cat.Text("html.r3.group.same", map[string]string{"title": cat.Text("finding.acts_without_you.title", nil), "n": "2"}))
-		joined := strings.Join(titles, "\n")
-		if !strings.Contains(joined, secrets) || !strings.Contains(joined, acts) {
-			t.Errorf("%s: titles %q, want %q and %q", lang, titles, secrets, acts)
+		if got := c.issueTitle(same[0]); got != secrets {
+			t.Errorf("%s: title %q, want %q", lang, got, secrets)
+		}
+		acts := 0
+		for _, is := range iss {
+			if is.kind == issueOne && is.findings[0].Rule == rules.RuleActsWithoutYou {
+				acts++
+				want := escapeHTML(cat.Text("finding.acts_without_you.title", map[string]string{"agent": is.findings[0].Params.Agent}))
+				if got := c.issueTitle(is); got != want {
+					t.Errorf("%s: acts title %q, want %q", lang, got, want)
+				}
+			}
+		}
+		if acts != 2 {
+			t.Errorf("%s: %d «acts without you» problems, want 2 (two agents: one each)", lang, acts)
 		}
 		// Each joined finding stays its own row in its section.
 		for _, is := range same {
@@ -145,11 +154,14 @@ func TestDetailAgentLinesAndFolds(t *testing.T) {
 		}
 		c.renderR3Steps(iss)
 		page := sb.String()
-		if got := strings.Count(page, `<details class="r3-ag" open>`); got != 1 {
-			t.Errorf("%s: %d open agent lines, want 1 (the first)", lang, got)
+		// Two single rows: «between agents» (2 agents) and, since BV-297,
+		// the three agents that can rewrite their own instructions; the
+		// first line of each is open.
+		if got := strings.Count(page, `<details class="r3-ag" open>`); got != 2 {
+			t.Errorf("%s: %d open agent lines, want 2 (the first of each single row)", lang, got)
 		}
-		if got := strings.Count(page, `<details class="r3-ag"`); got != 2 {
-			t.Errorf("%s: %d agent lines, want 2", lang, got)
+		if got := strings.Count(page, `<details class="r3-ag"`); got != 5 {
+			t.Errorf("%s: %d agent lines, want 5 (2 between agents, 3 of their own)", lang, got)
 		}
 		many := escapeHTML(cat.Text("html.r3.cfg.many.config", map[string]string{"agent": c.agentName("agent_cc"), "n": "3"}))
 		if !strings.Contains(page, many) {
