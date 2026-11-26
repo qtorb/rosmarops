@@ -41,7 +41,8 @@ func TestRenderHTML_V3Structure(t *testing.T) {
 		}
 		_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
 		steps, _, _ = strings.Cut(steps, `<section aria-labelledby="dismissed">`)
-		if rows := strings.Count(steps, `<details class="row">`); rows != len(v.Findings) {
+		// BV-307 (R3): a problem's sole row is drawn open, with no header.
+		if rows := strings.Count(steps, `<details class="row">`) + strings.Count(steps, `<div class="rb rb-sole"`); rows != len(v.Findings) {
 			t.Errorf("%s: %d rows in the problems' steps for %d findings", lang, rows, len(v.Findings))
 		}
 	}

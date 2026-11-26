@@ -3,6 +3,7 @@ package report_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -135,6 +136,9 @@ func TestSaturatedScoreHidesReference(t *testing.T) {
 }
 
 // counts is the first screen's line of counts.
+// stripTags is s without its HTML tags.
+func stripTags(s string) string { return regexp.MustCompile(`<[^>]*>`).ReplaceAllString(s, "") }
+
 func counts(page string) string {
 	_, c, _ := strings.Cut(page, `<p class="r3-counts">`)
 	c, _, _ = strings.Cut(c, `</p>`)
@@ -164,12 +168,16 @@ func TestCountWhenProjectsDidNotFinish(t *testing.T) {
 			found := false
 			for n := 0; n < 50; n++ {
 				want := cat.Text(c.key, map[string]string{"n": strconv.Itoa(n), "k": strconv.Itoa(c.k)})
-				if strings.Contains(page, `<p class="r3-counts">`) && strings.Contains(counts(page), htmlEscape(want)) {
+				// BV-307 (R1): the projects that did not finish are a link.
+				if strings.Contains(page, `<p class="r3-counts">`) && strings.Contains(stripTags(counts(page)), htmlEscape(want)) {
 					found = true
 				}
 			}
 			if !found {
 				t.Errorf("%s %s: no %s in the problems' count", c.name, lang, c.key)
+			}
+			if !strings.Contains(counts(page), `<a href="#not-finished">`) || !strings.Contains(page, `<p id="not-finished">`) {
+				t.Errorf("%s %s: the projects not finished link to no paragraph", c.name, lang)
 			}
 			if strings.Contains(visibleText(page), "{k}") || strings.Contains(visibleText(page), "{n}") {
 				t.Errorf("%s %s: placeholder left", c.name, lang)

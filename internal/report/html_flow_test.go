@@ -79,7 +79,9 @@ func TestRenderHTML_SingleFlowThreeColumns(t *testing.T) {
 				t.Errorf("%s (space=%v): direct children = %v, want %v", lang, withSpace, got, want)
 			}
 			for _, f := range v.Findings {
-				if !strings.Contains(page, `<div class="rb" id="`+f.ID+`">`) {
+				// BV-307 (R3): a problem's sole row is drawn open, with its
+				// anchor on its body.
+				if !strings.Contains(page, `<div class="rb" id="`+f.ID+`">`) && !strings.Contains(page, `<div class="rb rb-sole" id="`+f.ID+`">`) {
 					t.Errorf("%s: finding %s has no anchor in its row", lang, f.ID)
 				}
 			}

@@ -257,8 +257,8 @@ func (c htmlCtx) renderTypedRows(part issue) {
 // title on one line, its count, its level and the arrow.
 func (c htmlCtx) renderFoldedHead(n int, is issue) {
 	fam := issueFamily(is)
-	c.w(`<details class="r3-fold"><summary><span class="r3-n">%d</span>%s<span class="r3-fold-t">%s</span><span class="r3-fold-r"><span class="r3-fold-c">%s</span>%s<span class="chev" aria-hidden="true">›</span></span></summary>`,
-		n, c.familyIconSmall(fam, is.red()), c.issueTitle(is), c.r3Count("html.r3.cfg.agent.count", len(c.issueRows(is))), c.pill(is))
+	c.w(`<details class="r3-fold"><summary><span class="r3-n">%d</span>%s<span class="r3-fold-t">%s</span><span class="r3-fold-r">%s<span class="r3-fold-c">%s</span>%s<span class="chev" aria-hidden="true">›</span></span></summary>`,
+		n, c.familyIconSmall(fam, is.red()), c.issueTitle(is), c.soleVerdict(is), c.r3Count("html.r3.cfg.agent.count", len(c.issueRows(is))), c.pill(is))
 }
 
 // familyIconSmall is the folded line's 28 px box: the family's name is its
@@ -302,6 +302,7 @@ op(location.hash)})();`
 // detailCSS is the style of the agent lines, the folded problems and the
 // small and neutral boxes (0.20 detail, §4 and §6).
 const detailCSS = `
+.r3-pv{margin-left:auto;font-size:13px;font-weight:400;line-height:1.3;color:var(--mut);white-space:nowrap;text-align:right}
 .r3-ico.sm{width:28px;height:28px;border-radius:9px}
 .r3-ico.sm svg{width:16px;height:16px}
 .r3-ico.neutral{background:var(--ds-surface);color:var(--ds-ink-2)}
