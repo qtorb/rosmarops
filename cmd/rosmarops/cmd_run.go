@@ -339,6 +339,14 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	seedDemoProblemB(dataDir, start)
 	prevUnfinishedDay, _ := notebook.StartReview(start)
 	defer func() { _ = notebook.EndReview() }()
+	// Ctrl+C or closing the console cancels the review: nothing of it is
+	// written and its mark is cleared, so it is not a review that did not
+	// finish. A scheduled review keeps its behaviour.
+	var cancelWatch *reviewCancel
+	if !unattended {
+		cancelWatch = watchCancel(notebook.EndReview, os.Stdout, cat)
+		defer cancelWatch.stop()
+	}
 	seedDemoProblemA(dataDir, start)
 
 	// BV-210 §2 B: the previous review did not finish. Record run_unfinished now
@@ -938,6 +946,9 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	scanErrors = append(scanErrors, scan.Run(ctx, steps)...)
 	// An ignored company configuration keeps the review at least yellow.
 	scanErrors = append(scanErrors, comp.scanErrors()...)
+	// From here this review writes its results; a cancellation waits for
+	// them to end (reviewCancel).
+	cancelWatch.beginWrites()
 	if buildGraph != nil {
 		// The graph build runs outside scan.Run, so a panic here would otherwise
 		// bring the program down with no report (BV-202 C1, CTO-28). Contain it
@@ -1227,6 +1238,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 	if err := state.SaveState(stPath, st); err != nil {
 		return "", fmt.Errorf("save state: %w", err)
 	}
+	cancelWatch.endWrites()
 
 	// BV-248 (CTO-56 §4, decision 5): with a console, the questions about the
 	// settings RosmarOps cannot read; never in a scheduled review or a double

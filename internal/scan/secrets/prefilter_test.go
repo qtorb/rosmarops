@@ -67,11 +67,7 @@ func TestBuiltinPrefiltersAreNecessary(t *testing.T) {
 // patterns' own literals and random noise, and on every pattern's example.
 func TestPrefilterDoesNotChangeMatches(t *testing.T) {
 	with := BuiltinPatterns()
-	without := make([]Pattern, len(with))
-	for i, p := range with {
-		p.pre = prefilter{}
-		without[i] = p
-	}
+	without := WithoutPrefilters(with) // BV-311: and without the shapes
 	rng := rand.New(rand.NewSource(1))
 	alphabet := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.:=/@ \"'\n"
 	var pieces []string
@@ -79,6 +75,7 @@ func TestPrefilterDoesNotChangeMatches(t *testing.T) {
 		pieces = append(pieces, p.lit, strings.ToUpper(p.lit), strings.ToLower(p.lit))
 	}
 	pieces = append(pieces, "Bearer ", "postgres://u:p@h", "PRIVATE KEY-----", "-sk-", "eyJ", ".eyJ")
+	pieces = append(pieces, bv311Pieces...) // BV-311: tokens and near misses of the shapes
 	for i := 0; i < 20000; i++ {
 		var b strings.Builder
 		for j := 0; j < 6; j++ {
