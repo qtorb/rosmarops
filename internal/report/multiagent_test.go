@@ -176,6 +176,8 @@ func TestRenderHTML_MultiAgentReading(t *testing.T) {
 // at BV-307 with the header's verdict CSS and the two problems of one row
 // drawn open under their header, with no title of their own (checked: only
 // those);
+// at BV-311 with the 12 px CSS after the projects not finished (checked:
+// only that line);
 // before, at 7b41e35 with the changes of BV-51 and BV-54). A change to it
 // is a change to review.
 func TestRenderHTML_OneAgentUnchanged(t *testing.T) {

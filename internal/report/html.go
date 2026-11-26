@@ -161,6 +161,7 @@ pre{background:var(--code);padding:10px 12px;font-size:13px;white-space:pre-wrap
 .sig .n{color:var(--mut)}
 .rot{font-size:15px;margin:0 0 12px;padding-left:20px}
 .cov p,.cov ul{margin:0}
+.cov .cov-after+p{margin-top:12px}
 .more{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;border-top:1px solid var(--line);margin-top:20px;padding-top:14px}
 .more h3{font-size:14px;font-weight:700;margin:0 0 6px}
 .more p{font-size:14px;color:var(--mut);line-height:1.45;margin:0 0 8px}
@@ -485,7 +486,7 @@ func (c htmlCtx) renderCoverage() {
 		for _, r := range timedOut {
 			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(r)))
 		}
-		c.w(`</ul><p>%s</p>`, c.t("html.coverage.timeout.after", nil))
+		c.w(`</ul><p class="cov-after">%s</p>`, c.t("html.coverage.timeout.after", nil))
 	}
 	if !gaps {
 		c.w(`</div>`)

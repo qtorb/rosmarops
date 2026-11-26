@@ -12,10 +12,11 @@ import (
 	"github.com/qtorb/rosmarops/internal/rules"
 )
 
-// bv307Texts are the signed texts of BV-307 (R1, R2 and R5), word for word.
+// bv307Texts are the signed texts of BV-307 (R1, R2 and R5), word for word,
+// with the two that BV-311 (T2) corrected.
 var bv307Texts = []struct{ key, es, en string }{
-	{"html.coverage.timeout", "{k} proyectos no se terminaron de revisar. Cada uno pasó del minuto que RosmarOps le da, así que lo que habría encontrado en ellos no está en este informe:", "{k} projects were not checked to the end. Each one went over the minute RosmarOps gives it, so anything it would have found in them is not in this report:"},
-	{"html.coverage.timeout.one", "1 proyecto no se terminó de revisar. Pasó del minuto que RosmarOps le da, así que lo que habría encontrado en él no está en este informe:", "1 project was not checked to the end. It went over the minute RosmarOps gives it, so anything it would have found in it is not in this report:"},
+	{"html.coverage.timeout", "{k} proyectos no se terminaron de revisar. Cada uno pasó del minuto que RosmarOps le da. Lo que encontró en ellos hasta ese momento está en este informe; lo que le faltaba por mirar, no:", "{k} projects were not checked to the end. Each one went over the minute RosmarOps gives it. What it found in them up to that point is in this report; what was left to check is not:"}, // BV-311 (T2)
+	{"html.coverage.timeout.one", "1 proyecto no se terminó de revisar. Pasó del minuto que RosmarOps le da. Lo que encontró en él hasta ese momento está en este informe; lo que le faltaba por mirar, no:", "1 project was not checked to the end. It went over the minute RosmarOps gives it. What it found in it up to that point is in this report; what was left to check is not:"},                           // BV-311 (T2)
 	{"html.coverage.timeout.after", "Suele pasar con proyectos muy grandes o con mucho historial de git. Vuelve a pasar RosmarOps. Si el mismo proyecto se repite, hoy RosmarOps no puede acabarlo y su parte del informe sigue incompleta.", "This usually happens with very large projects or with a long git history. Run RosmarOps again. If the same project comes up again, RosmarOps cannot finish it today and its part of the report stays incomplete."},
 	{"html.coverage.reason.source_unsupported", "no se leyó: es un tipo de fichero o de enlace que RosmarOps no lee", "not read: it is a kind of file or link RosmarOps does not read"},
 	{"html.coverage.reason.read_error", "no se pudo abrir", "could not be opened"},
@@ -91,7 +92,7 @@ func TestBV307NotFinishedProjects(t *testing.T) {
 					if len(tc.repos) == 2 {
 						list += `<li><code>C:\src\b</code></li>`
 					}
-					if !strings.Contains(got, list+`</ul><p>`+escapeHTML(cat.Text("html.coverage.timeout.after", nil))+`</p>`) {
+					if !strings.Contains(got, list+`</ul><p class="cov-after">`+escapeHTML(cat.Text("html.coverage.timeout.after", nil))+`</p>`) {
 						t.Errorf("%s %s: not the projects, by path, then the line after: %s", lang, k, got)
 					}
 					body := cat.Text("html.coverage.body", nil)

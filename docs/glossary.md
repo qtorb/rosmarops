@@ -102,7 +102,9 @@ The engine measures P0, P1 and P2 by applying them to this computer's settings. 
 
 **Problem of their own.** A problem about an agent itself: it can rewrite its own instructions, change its own settings, or act without you. When three agents or more have the same one at the same level, the report shows one row with a folded line per agent. See [the decision](decisions/0039-titles-that-say-whom-they-are-about.md).
 
-**Project not finished.** A project whose check went over the minute RosmarOps gives each one. What it would have found in it is not in the report. The report names it in «What we could not read». See [the decision](decisions/0040-what-the-report-could-not-check-in-words.md).
+**Cancelled review.** A review the person stopped with Ctrl+C or by closing the console or terminal. Nothing of it is written, the previous report stays as it was, and it is not reported as a review that did not finish. See [the decision](decisions/0041-a-review-that-ends.md).
+
+**Project not finished.** A project whose check went over the minute RosmarOps gives each one. What it found in it up to that point is in the report; what was left to check is not. The report names it in «What we could not read». See [the decisions](decisions/0040-what-the-report-could-not-check-in-words.md) and [0041](decisions/0041-a-review-that-ends.md).
 
 **Problem family.** What a problem of the report's table is about: Key, Between agents, Agent, MCP, Orchestrator, Subagent, Project or Desktop. It is shown as an icon box coloured by the problem's level, with the family's name above the title. A rule that fits no family has neither. See [the decision](decisions/0037-problem-families-and-single-row.md).
 

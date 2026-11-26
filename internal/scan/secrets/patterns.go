@@ -10,6 +10,7 @@ package secrets
 import (
 	"bytes"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,17 @@ type Pattern struct {
 	Type string // human-readable type surfaced in findings, e.g. "Anthropic API key"
 	re   *regexp.Regexp
 	pre  prefilter // necessary literal; empty for user patterns
+	// shape, when set, is a further condition every match meets, checked
+	// after the literal: content that fails it cannot match either
+	// (BV-311). It lets a pattern whose only literal is very common
+	// (discord_bot_token's ".") skip almost every file;
+	// TestShapesAreNecessary proves each one.
+	shape func(content []byte) bool
+}
+
+// admits reports whether content may match p: it has p's literal and shape.
+func (p Pattern) admits(content []byte) bool {
+	return p.pre.admits(content) && (p.shape == nil || p.shape(content))
 }
 
 // prefilter is a literal every match of a pattern contains (fold: in any
@@ -44,40 +56,68 @@ func (p prefilter) admits(content []byte) bool {
 }
 
 // containsFoldASCII reports whether content contains lit, ASCII letters in
-// either case. lit is ASCII. Linear in len(content): the next position of
-// each case of lit's first byte is searched again only once passed.
+// either case. lit is ASCII. It looks for the literal around each place of
+// its rarest letter (anchorOf), in either case, so a common first letter
+// ("a" of "Authorization") does not make it test nearly every byte. Linear
+// in len(content): the next position of each case of the anchor is searched
+// again only once passed.
 func containsFoldASCII(content []byte, lit string) bool {
 	if lit == "" {
 		return true
 	}
 	n := len(content)
-	lo, up := lower(lit[0]), upper(lit[0])
+	at := anchorOf(lit)
+	lo, up := lower(lit[at]), upper(lit[at])
 	nextLo, nextUp := -1, -1
-	next := func(c byte, at, from int) int {
-		if at >= from {
-			return at
+	next := func(c byte, pos, from int) int {
+		if pos >= from {
+			return pos
 		}
 		if k := bytes.IndexByte(content[from:], c); k >= 0 {
 			return from + k
 		}
 		return n
 	}
-	for i := 0; i+len(lit) <= n; {
+	// i is the first place the anchor may be at: the literal starts at
+	// i-at, so i >= at, and ends by n.
+	for i := at; i+len(lit)-at <= n; {
 		nextLo = next(lo, nextLo, i)
-		start := nextLo
+		pos := nextLo
 		if lo != up {
 			nextUp = next(up, nextUp, i)
-			start = min(start, nextUp)
+			pos = min(pos, nextUp)
 		}
+		start := pos - at
 		if start+len(lit) > n {
 			return false
 		}
 		if bytes.EqualFold(content[start:start+len(lit)], []byte(lit)) {
 			return true
 		}
-		i = start + 1
+		i = pos + 1
 	}
 	return false
+}
+
+// letterRarity orders the letters from the least to the most frequent in
+// source code and text, roughly; anything that is not a letter counts as
+// rarer than any letter. It only chooses where containsFoldASCII looks: the
+// answer is the same with any order.
+const letterRarity = "zqjxkvbwyfgpmhucdlsnrotiae"
+
+// anchorOf is the index in lit of its rarest byte (letterRarity).
+func anchorOf(lit string) int {
+	best, bestRank := 0, len(letterRarity)+1
+	for i := 0; i < len(lit); i++ {
+		r := strings.IndexByte(letterRarity, lower(lit[i]))
+		if r < 0 {
+			r = -1 // not a letter: rarer than any letter
+		}
+		if r < bestRank {
+			best, bestRank = i, r
+		}
+	}
+	return best
 }
 
 func lower(c byte) byte {
@@ -94,12 +134,13 @@ func upper(c byte) byte {
 	return c
 }
 
-// WithoutPrefilters returns copies of patterns with no prefilter: every
-// regex is run on every content, as before BV-33. For equivalence tests.
+// WithoutPrefilters returns copies of patterns with no prefilter and no
+// shape: every regex is run on every content, as before BV-33. For
+// equivalence tests.
 func WithoutPrefilters(patterns []Pattern) []Pattern {
 	out := make([]Pattern, len(patterns))
 	for i, p := range patterns {
-		p.pre = prefilter{}
+		p.pre, p.shape = prefilter{}, nil
 		out[i] = p
 	}
 	return out
@@ -370,13 +411,85 @@ func compileSpecs(specs []struct{ id, typ, expr string }) []Pattern {
 	out := make([]Pattern, 0, len(specs))
 	for _, s := range specs {
 		out = append(out, Pattern{
-			ID:   s.id,
-			Type: s.typ,
-			re:   regexp.MustCompile(s.expr),
-			pre:  builtinPrefilters[s.id],
+			ID:    s.id,
+			Type:  s.typ,
+			re:    regexp.MustCompile(s.expr),
+			pre:   builtinPrefilters[s.id],
+			shape: builtinShapes[s.id],
 		})
 	}
 	return out
+}
+
+// builtinShapes are the further necessary conditions of some built-in
+// patterns (prefilter.shape).
+var builtinShapes = map[string]func([]byte) bool{
+	"discord_bot_token": discordShape,
+	// Its literal Bearer, in any case (no letter of it folds outside ASCII).
+	"authorization_bearer_hardcoded": func(c []byte) bool { return containsFoldASCII(c, "Bearer") },
+	// Its literals _url, in any case (no letter of it folds outside ASCII;
+	// "database" has an s, which also matches U+017F), and ://.
+	"database_url_with_credentials": func(c []byte) bool {
+		return bytes.Contains(c, []byte("://")) && containsFoldASCII(c, "_url")
+	},
+}
+
+// isB64URL reports a byte of [A-Za-z0-9_-], the alphabet of the parts of a
+// Discord bot token.
+func isB64URL(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-'
+}
+
+// discordShape reports whether content has the shape every match of
+// discord_bot_token has around its first dot: at least 24 characters of
+// [A-Za-z0-9_-] right before it ([MNO] and 23 to 25 more), then exactly 6
+// of them, a second dot, and at least 27 of them. A file without it cannot
+// match, so the regex is not run on it.
+func discordShape(content []byte) bool {
+	n := len(content)
+	for i := 0; i < n; {
+		k := bytes.IndexByte(content[i:], '.')
+		if k < 0 {
+			return false
+		}
+		dot := i + k
+		i = dot + 1
+		// The second dot, 7 bytes on, with 6 of the alphabet between.
+		if dot+8+27 > n || content[dot+7] != '.' {
+			continue
+		}
+		six := true
+		for j := dot + 1; j < dot+7; j++ {
+			if !isB64URL(content[j]) {
+				six = false
+				break
+			}
+		}
+		if !six || dot < 24 {
+			continue
+		}
+		before := true
+		for j := dot - 24; j < dot; j++ {
+			if !isB64URL(content[j]) {
+				before = false
+				break
+			}
+		}
+		if !before {
+			continue
+		}
+		after := true
+		for j := dot + 8; j < dot+8+27; j++ {
+			if !isB64URL(content[j]) {
+				after = false
+				break
+			}
+		}
+		if after {
+			return true
+		}
+	}
+	return false
 }
 
 // Match scans content for every pattern in patterns and returns all matches.
@@ -402,7 +515,7 @@ func matchAll(content []byte, patterns []Pattern, perPattern map[string]time.Dur
 		if perPattern != nil {
 			start = time.Now()
 		}
-		if !p.pre.admits(content) {
+		if !p.admits(content) {
 			if perPattern != nil {
 				perPattern[p.ID] += time.Since(start)
 			}
