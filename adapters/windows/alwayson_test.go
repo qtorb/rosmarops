@@ -85,7 +85,8 @@ func TestReadAlwaysOn(t *testing.T) {
 	hermes := filepath.Join(home, ".hermes")
 	writeFile(t, filepath.Join(hermes, "cron", "jobs.json"), `{"jobs":[{"enabled":true,"schedule":{"kind":"cron"},"deliver":"telegram:-100123","prompt":"secret"},{"enabled":false,"deliver":"local"}]}`)
 	none := agentdirs.Env(func(string) (string, bool) { return "", false })
-	scan := windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, claude, []string{repo}, none)
+	user := windows.ReadClaudeSettings(filepath.Join(claude, "settings.json"), platform.MCPScopeUser, "", claude)
+	scan := windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, claude, []string{repo}, none, platform.ClaudeSettingsScan{Files: []platform.ClaudeSettingsFile{user}})
 
 	byPlat := map[string]platform.InboundChannel{}
 	for _, c := range scan.Channels {
@@ -133,5 +134,84 @@ func TestReadAlwaysOn(t *testing.T) {
 	}
 	if len(scan.Failed) != 0 {
 		t.Errorf("failed: %+v", scan.Failed)
+	}
+}
+
+// BV-310 C2: autoMemoryDirectory is read in every settings scope read (user,
+// project, local, managed), and autoMemoryEnabled false marks the memory it
+// applies to as off: the managed settings first, then the project's local and
+// project settings, then the user's.
+func TestReadAlwaysOnAutoMemorySettings(t *testing.T) {
+	home := t.TempDir()
+	claude := filepath.Join(home, ".claude")
+	on, off := filepath.Join(home, "on"), filepath.Join(home, "off")
+	none := agentdirs.Env(func(string) (string, bool) { return "", false })
+	for _, d := range []string{on, off} {
+		writeFile(t, filepath.Join(claude, "projects", windows.ClaudeProjectDirName(d), "memory", "MEMORY.md"), "1")
+	}
+	writeFile(t, filepath.Join(claude, "projects", "-somewhere-else", "memory", "MEMORY.md"), "1")
+	writeFile(t, filepath.Join(home, "proj-mem", "a.md"), "1")
+	writeFile(t, filepath.Join(home, "local-mem", "a.md"), "1")
+	writeFile(t, filepath.Join(home, "managed-mem", "a.md"), "1")
+	writeFile(t, filepath.Join(claude, "settings.json"), `{"autoMemoryEnabled":false}`)
+	writeFile(t, filepath.Join(on, ".claude", "settings.json"), `{"autoMemoryEnabled":true,"autoMemoryDirectory":"~/proj-mem"}`)
+	writeFile(t, filepath.Join(off, ".claude", "settings.json"), `{"autoMemoryEnabled":true}`)
+	writeFile(t, filepath.Join(off, ".claude", "settings.local.json"), `{"autoMemoryEnabled":false,"autoMemoryDirectory":"~/local-mem"}`)
+	writeFile(t, filepath.Join(home, "managed.json"), `{"autoMemoryDirectory":"~/managed-mem"}`)
+	read := func(path, scope, root string) platform.ClaudeSettingsFile {
+		return windows.ReadClaudeSettings(path, scope, root, claude)
+	}
+	settings := platform.ClaudeSettingsScan{
+		Files: []platform.ClaudeSettingsFile{
+			read(filepath.Join(claude, "settings.json"), platform.MCPScopeUser, ""),
+			read(filepath.Join(on, ".claude", "settings.json"), platform.MCPScopeProject, on),
+			read(filepath.Join(on, ".claude", "settings.local.json"), platform.MCPScopeLocal, on),
+			read(filepath.Join(off, ".claude", "settings.json"), platform.MCPScopeProject, off),
+			read(filepath.Join(off, ".claude", "settings.local.json"), platform.MCPScopeLocal, off),
+		},
+		Managed: []platform.ManagedSource{{Kind: platform.ManagedFiles, Files: []platform.ClaudeSettingsFile{
+			read(filepath.Join(home, "managed.json"), platform.MCPScopeManaged, ""),
+		}}},
+	}
+	scan := windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, claude, []string{on, off}, none, settings)
+	got := map[string]bool{}
+	for _, m := range scan.Memory {
+		if m.Product == knowledge.ClaudeCodeProduct {
+			got[m.Path] = m.AutoMemoryOff
+		}
+	}
+	want := map[string]bool{
+		filepath.Join(claude, "projects", windows.ClaudeProjectDirName(on), "memory"):  false, // the project turns it on
+		filepath.Join(claude, "projects", windows.ClaudeProjectDirName(off), "memory"): true,  // its local settings turn it off
+		filepath.Join(claude, "projects", "-somewhere-else", "memory"):                 false, // no known project: a project turns it on
+		filepath.Join(home, "proj-mem"):                                                false, // project scope
+		filepath.Join(home, "local-mem"):                                               true,  // local scope, off there
+		filepath.Join(home, "managed-mem"):                                             false, // managed scope
+	}
+	if len(got) != len(want) {
+		t.Fatalf("claude memory: %v, want %v", got, want)
+	}
+	for p, w := range want {
+		if v, ok := got[p]; !ok || v != w {
+			t.Errorf("%s: off %v (present %v), want off %v", p, v, ok, w)
+		}
+	}
+
+	// Off in the user settings and turned on in no project: every memory is off.
+	settings.Files = settings.Files[:1]
+	settings.Managed = nil
+	for _, m := range windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, claude, []string{on, off}, none, settings).Memory {
+		if m.Product == knowledge.ClaudeCodeProduct && !m.AutoMemoryOff {
+			t.Errorf("%s: on, want off (autoMemoryEnabled false in the user settings)", m.Path)
+		}
+	}
+	// A managed setting wins over the project's.
+	writeFile(t, filepath.Join(home, "managed.json"), `{"autoMemoryEnabled":false}`)
+	settings.Files = []platform.ClaudeSettingsFile{read(filepath.Join(on, ".claude", "settings.json"), platform.MCPScopeProject, on)}
+	settings.Managed = []platform.ManagedSource{{Kind: platform.ManagedFiles, Files: []platform.ClaudeSettingsFile{read(filepath.Join(home, "managed.json"), platform.MCPScopeManaged, "")}}}
+	for _, m := range windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, claude, []string{on}, none, settings).Memory {
+		if m.Product == knowledge.ClaudeCodeProduct && !m.AutoMemoryOff {
+			t.Errorf("%s: on, want off (managed autoMemoryEnabled false)", m.Path)
+		}
 	}
 }

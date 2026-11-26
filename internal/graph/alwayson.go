@@ -78,6 +78,7 @@ func AddAlwaysOn(f Fragment, hermes platform.HermesScan, ao platform.AlwaysOnSca
 		b.node(Node{
 			ID: "res_agent_memory_" + keyHash(ResourceAgentMemory, canonicalPath(m.Path), client), Kind: KindResource, Type: ResourceAgentMemory,
 			Path: m.Path, Configures: client, DiscoveredAt: seen, FileCount: &files, TotalBytes: &size, InRepository: m.InRepository,
+			AutoMemoryOff: m.AutoMemoryOff,
 		})
 	}
 	for _, fail := range ao.Failed {

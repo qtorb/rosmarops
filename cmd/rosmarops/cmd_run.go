@@ -704,7 +704,7 @@ func runWith(lang string, m runMode) (htmlPath string, err error) {
 			grokBotScan = grokBot
 			// BV-251 (CTO-62 §1, §4): what can wake an agent without the
 			// person, and its memory's metadata.
-			alwaysOn, alwaysOnErr := plat.ListAlwaysOn(ctx, repoList)
+			alwaysOn, alwaysOnErr := plat.ListAlwaysOn(ctx, repoList, settingsScan)
 			if alwaysOnErr != nil {
 				slog.Warn("always-on: not read", "err", alwaysOnErr)
 			}

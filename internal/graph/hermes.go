@@ -114,10 +114,14 @@ func hermesCapID(client, basis, typ, entry string) string {
 // it reaches every credential and writes every agent resource — unless its
 // terminal backend is isolated, which keeps the tools off the computer.
 type hermesInference struct {
-	client       Node
-	readCap      *Node // read_files any_path, in force
-	writeCap     *Node // write_files any_path, in force
-	protectInstr bool  // security.protected_instruction_files on (gates instruction writes)
+	client   Node
+	readCap  *Node // read_files any_path, in force
+	writeCap *Node // write_files any_path, in force
+	// isolatedWrite is write_files with an isolated terminal backend, in
+	// force: the file tools run in the sandbox, but the memory and
+	// skill_manage tools still write on the computer (see ownWrites).
+	isolatedWrite *Node
+	protectInstr  bool // security.protected_instruction_files on (gates instruction writes)
 }
 
 func (p prepared) hermesInference(client Node) hermesInference {
@@ -129,6 +133,10 @@ func (p prepared) hermesInference(client Node) hermesInference {
 		}
 		if c.Type == CapWriteFiles && c.Approval == ApprovalAsk && c.TargetScope == HermesScopeProtectedInstructions {
 			in.protectInstr = true
+			continue
+		}
+		if c.Type == CapWriteFiles && c.Approval == ApprovalAllow && c.TargetScope == HermesScopeIsolated {
+			in.isolatedWrite = &p.caps[client.ID][i]
 			continue
 		}
 		if c.Approval != ApprovalAllow || c.TargetScope != "any_path" {
@@ -166,7 +174,7 @@ func (in hermesInference) reaches(all []Node) []Edge {
 // config, contract §1): its own instructions (SOUL.md) are kept.
 func (in hermesInference) writes(all []Node) []Edge {
 	if in.writeCap == nil {
-		return nil
+		return in.ownWrites(all)
 	}
 	var out []Edge
 	for _, res := range all {
@@ -186,6 +194,49 @@ func (in hermesInference) writes(all []Node) []Edge {
 			continue
 		}
 		out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.writeCap))
+	}
+	return out
+}
+
+// HermesWritesOnHost reports that res is written by Hermes Agent's memory or
+// skill_manage tool for client: its own memory, or a SKILL.md or script of a
+// skill in its own skills folder. Those two tools write on the computer
+// whatever the terminal backend: the memory folder is
+// get_hermes_home()/"memories" (tools/memory_tool.py:38-40) and skill_manage
+// writes with mkdir_under_hermes_home and atomic_write_text on the
+// computer's paths (tools/skill_manager_tool.py:421-423), and neither tool
+// reads terminal.backend (NousResearch hermes-agent @ 02afb74). The lab
+// confirmed it with the docker backend (rosmarops-lab, Hermes H1, run
+// 45812326416).
+func HermesWritesOnHost(client, res Node) bool {
+	if res.Kind != KindResource || res.Configures != client.ID {
+		return false
+	}
+	file, ok := resourceFile(res.Path)
+	if !ok {
+		return false
+	}
+	switch res.Type {
+	case ResourceAgentMemory:
+		return true
+	case ResourceAgentInstructions, ResourceAgentExecutable:
+		return within(strings.TrimRight(client.ConfigPath, `/\`)+"/skills", file)
+	}
+	return false
+}
+
+// ownWrites, with an isolated terminal backend, is one writes_config_of edge
+// per resource the memory and skill_manage tools write (HermesWritesOnHost).
+// Every other write stays in the sandbox, so it has no edge.
+func (in hermesInference) ownWrites(all []Node) []Edge {
+	if in.isolatedWrite == nil {
+		return nil
+	}
+	var out []Edge
+	for _, res := range all {
+		if HermesWritesOnHost(in.client, res) {
+			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, *in.isolatedWrite))
+		}
 	}
 	return out
 }

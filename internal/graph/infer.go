@@ -636,8 +636,44 @@ func (in inference) writes(all []Node) []Edge {
 		for _, w := range in.writeWays(file) {
 			out = append(out, in.edge(EdgeWritesConfigOf, res.ID, w.v, w.assumptions, w.rules))
 		}
+		if res.Type == ResourceAgentMemory && res.Configures == in.client.ID && !res.AutoMemoryOff {
+			for _, w := range in.autoMemoryWays(file) {
+				out = append(out, in.edge(EdgeWritesConfigOf, res.ID, w.v, w.assumptions, w.rules))
+			}
+		}
 	}
 	return out
+}
+
+// autoMemoryWays are the ways Claude Code writes its own auto memory without
+// approval beyond writeWays. In Manual mode (default) it asks before editing
+// files «except files such as Claude Code's own plan and auto memory files»
+// (code.claude.com/docs/en/permissions, permission system table, read
+// 26-11-2026): one way, through its product-default Edit capability, when a
+// session runs in that mode and no Edit rule covers the memory. The other
+// modes do not say it, so they keep what writeWays gives them.
+func (in inference) autoMemoryWays(file string) []inferredWay {
+	if len(in.editRules(file)) > 0 {
+		return nil
+	}
+	var edit *Node
+	for i := range in.inForce {
+		c := in.inForce[i]
+		if c.Type == CapWriteFiles && c.Basis == BasisProductDefault && c.Approval == ApprovalAsk && c.TargetScope == scopeAll {
+			edit = &in.inForce[i]
+			break
+		}
+	}
+	if edit == nil {
+		return nil
+	}
+	for _, sess := range in.sessions {
+		if sess.mode == permissionModeDefault {
+			a := baseAssumptions(append([]string{AssumeNoPreToolUseHookBlocks}, modeAssumptions(sess)...)...)
+			return []inferredWay{{via{*edit, a}, a, nil}}
+		}
+	}
+	return nil
 }
 
 // writeWays are the ways Claude Code writes file without approval, as writes
