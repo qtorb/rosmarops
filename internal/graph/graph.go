@@ -186,6 +186,11 @@ type Node struct {
 	FileCount    *int   `json:"file_count"`
 	TotalBytes   *int64 `json:"total_bytes"`
 	InRepository bool   `json:"in_repository"`
+	// AutoMemoryOff, on a Claude Code agent_memory, is autoMemoryEnabled
+	// false in the settings that apply to it: Claude Code does not write it
+	// as its auto memory. In memory only, never serialized, so the graph
+	// schema does not change.
+	AutoMemoryOff bool `json:"-"`
 
 	// agent, credential, resource
 	DiscoveredAt string `json:"discovered_at"`

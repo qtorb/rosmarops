@@ -17,23 +17,25 @@ import (
 )
 
 // ListAlwaysOn implements platform.Platform (BV-251, CTO-62 §1, §4).
-func (w *WindowsPlatform) ListAlwaysOn(_ context.Context, repoRoots []string) (platform.AlwaysOnScan, error) {
+// claude is what ListClaudeSettings read: its auto memory keys, in every
+// scope, say where Claude Code's memory is and whether it is on.
+func (w *WindowsPlatform) ListAlwaysOn(_ context.Context, repoRoots []string, claude platform.ClaudeSettingsScan) (platform.AlwaysOnScan, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return platform.AlwaysOnScan{}, fmt.Errorf("resolve home dir: %w", err)
 	}
-	return readAlwaysOn(w.layout, home, claudeConfigDir(home), repoRoots, nil), nil
+	return readAlwaysOn(w.layout, home, claudeConfigDir(home), repoRoots, nil, claude), nil
 }
 
 // ReadAlwaysOn is ListAlwaysOn on layout l with the Claude Code configuration
-// folder claudeDir. env is nil outside tests.
-func ReadAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string, env agentdirs.Env) platform.AlwaysOnScan {
-	return readAlwaysOn(l, home, claudeDir, repoRoots, env)
+// folder claudeDir and the settings claude. env is nil outside tests.
+func ReadAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string, env agentdirs.Env, claude platform.ClaudeSettingsScan) platform.AlwaysOnScan {
+	return readAlwaysOn(l, home, claudeDir, repoRoots, env, claude)
 }
 
-func readAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string, env agentdirs.Env) platform.AlwaysOnScan {
+func readAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string, env agentdirs.Env, claude platform.ClaudeSettingsScan) platform.AlwaysOnScan {
 	var scan platform.AlwaysOnScan
-	claudeAlwaysOn(&scan, home, claudeDir, repoRoots)
+	claudeAlwaysOn(&scan, home, claudeDir, repoRoots, claude)
 	clineAlwaysOn(&scan, home, agentdirs.ClineDataDir(home, env), repoRoots)
 	hermes := l.HermesHome(home, env)
 	dirs := []string{hermes}
@@ -63,7 +65,7 @@ func readAlwaysOn(l agentdirs.Layout, home, claudeDir string, repoRoots []string
 // A channel runs only when Claude Code starts with --channels: at rest it is
 // launch_flag_required. Its .env is never opened; of access.json only
 // dmPolicy and how many entries allowFrom has are kept.
-func claudeAlwaysOn(scan *platform.AlwaysOnScan, home, dir string, repoRoots []string) {
+func claudeAlwaysOn(scan *platform.AlwaysOnScan, home, dir string, repoRoots []string, claude platform.ClaudeSettingsScan) {
 	product := knowledge.ClaudeCodeProduct
 	for _, name := range subdirs(filepath.Join(dir, "channels")) {
 		chDir := filepath.Join(dir, "channels", name)
@@ -88,26 +90,127 @@ func claudeAlwaysOn(scan *platform.AlwaysOnScan, home, dir string, repoRoots []s
 		n := len(tasks)
 		scan.Schedules = append(scan.Schedules, platform.AgentSchedule{Product: product, ConfigDir: dir, Path: filepath.Join(dir, "scheduled-tasks"), Tasks: &n, Active: intPtr(n)})
 	}
-	for _, p := range subdirs(filepath.Join(dir, "projects")) {
-		addMemory(scan, product, dir, filepath.Join(dir, "projects", p, "memory"), false)
-	}
-	// autoMemoryDirectory in the user settings moves the memory
-	// (code.claude.com/docs/en/memory). Only that key is kept.
-	if raw, status, _ := readBounded(filepath.Join(dir, "settings.json")); status == platform.MCPSourceRead {
-		var s struct {
-			AutoMemoryDirectory string `json:"autoMemoryDirectory"`
-		}
-		if json.Unmarshal(raw, &s) == nil {
-			if p := strings.TrimSpace(s.AutoMemoryDirectory); p != "" {
-				if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
-					p = filepath.Join(home, p[2:])
-				}
-				if filepath.IsAbs(p) {
-					addMemory(scan, product, dir, p, false)
-				}
+	claudeMemory(scan, home, dir, repoRoots, claude)
+}
+
+// claudeMemory adds Claude Code's auto memory folders
+// (code.claude.com/docs/en/memory): <config>/projects/<project>/memory, and
+// the folder autoMemoryDirectory names in any settings scope read (user,
+// project, local, managed). Each is marked AutoMemoryOff when
+// autoMemoryEnabled is false in the settings that apply to it.
+func claudeMemory(scan *platform.AlwaysOnScan, home, dir string, repoRoots []string, claude platform.ClaudeSettingsScan) {
+	product := knowledge.ClaudeCodeProduct
+	// enabled is autoMemoryEnabled for a project root: the managed settings
+	// first, then the project's local and project settings, then the user's
+	// (code.claude.com/docs/en/settings, settings precedence). An empty root
+	// is a memory of no known project: only the managed and user settings
+	// apply, and a project that turns it on keeps it on.
+	var managed, user *bool
+	byRoot := map[string]*bool{}
+	anyOn := false
+	for _, src := range claude.Managed {
+		for _, f := range src.Files {
+			if managed == nil && f.Status == platform.MCPSourceRead && f.AutoMemoryEnabled != nil {
+				managed = f.AutoMemoryEnabled
 			}
 		}
 	}
+	// Local is read before project for the same root: it takes precedence.
+	files := append([]platform.ClaudeSettingsFile{}, claude.Files...)
+	sort.SliceStable(files, func(i, j int) bool {
+		return files[i].Scope == platform.MCPScopeLocal && files[j].Scope == platform.MCPScopeProject
+	})
+	for _, f := range files {
+		if f.Status != platform.MCPSourceRead || f.AutoMemoryEnabled == nil {
+			continue
+		}
+		switch f.Scope {
+		case platform.MCPScopeUser:
+			user = f.AutoMemoryEnabled
+		case platform.MCPScopeProject, platform.MCPScopeLocal:
+			if f.HomeLocalOnly {
+				continue
+			}
+			if _, set := byRoot[f.ScopePath]; !set {
+				byRoot[f.ScopePath] = f.AutoMemoryEnabled
+			}
+			anyOn = anyOn || *f.AutoMemoryEnabled
+		}
+	}
+	off := func(root string) bool {
+		switch {
+		case managed != nil:
+			return !*managed
+		case root != "" && byRoot[root] != nil:
+			return !*byRoot[root]
+		case user != nil:
+			return !*user && (root != "" || !anyOn)
+		}
+		return false
+	}
+	add := func(path, root string) {
+		for _, m := range scan.Memory {
+			if m.Product == product && sameDir(m.Path, path) {
+				return
+			}
+		}
+		n := len(scan.Memory)
+		addMemory(scan, product, dir, path, false)
+		if len(scan.Memory) > n {
+			scan.Memory[n].AutoMemoryOff = off(root)
+		}
+	}
+	// <config>/projects/<project>/memory: the folder name is the project's
+	// path with every character that is not a letter or a digit turned into
+	// "-" (e.g. /home/user becomes -home-user).
+	roots := map[string]string{}
+	for _, root := range repoRoots {
+		roots[claudeProjectDirName(root)] = root
+	}
+	for _, p := range subdirs(filepath.Join(dir, "projects")) {
+		add(filepath.Join(dir, "projects", p, "memory"), roots[p])
+	}
+	// autoMemoryDirectory moves the memory. Only that key is kept.
+	moved := func(f platform.ClaudeSettingsFile, root string) {
+		p := f.AutoMemoryDirectory
+		if f.Status != platform.MCPSourceRead || p == "" {
+			return
+		}
+		if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+			p = filepath.Join(home, p[2:])
+		}
+		if filepath.IsAbs(p) {
+			add(p, root)
+		}
+	}
+	for _, f := range claude.Files {
+		root := ""
+		if (f.Scope == platform.MCPScopeProject || f.Scope == platform.MCPScopeLocal) && !f.HomeLocalOnly {
+			root = f.ScopePath
+		}
+		moved(f, root)
+	}
+	for _, src := range claude.Managed {
+		for _, f := range src.Files {
+			moved(f, "")
+		}
+	}
+}
+
+// claudeProjectDirName is the name Claude Code gives a project's folder under
+// <config>/projects: its path with every character that is not an ASCII
+// letter or digit replaced by "-".
+func claudeProjectDirName(root string) string { return ClaudeProjectDirName(root) }
+
+// ClaudeProjectDirName is claudeProjectDirName, for tests.
+func ClaudeProjectDirName(root string) string {
+	b := []byte(root)
+	for i, c := range b {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+			b[i] = '-'
+		}
+	}
+	return string(b)
 }
 
 // claudeAccess reads a channel's access.json (external_plugins/telegram/

@@ -331,6 +331,12 @@ type ClaudeSettingsFile struct {
 	ChannelsEnabled       *bool
 	AllowedChannelPlugins []string
 
+	// AutoMemoryEnabled and AutoMemoryDirectory are the auto memory keys
+	// (code.claude.com/docs/en/memory), read in every scope: nil and empty
+	// when absent.
+	AutoMemoryEnabled   *bool
+	AutoMemoryDirectory string
+
 	// HasPolicyKey reports that the document sets a policy key: any key other
 	// than managedSourcesBehavior and wslInheritsWindowsSettings, to a value
 	// other than null (managed-settings, "When an admin document counts as
@@ -687,7 +693,9 @@ type Platform interface {
 	// connector state files and its schedules folder; Hermes Agent's cron
 	// jobs.json fields; and the memory folders' metadata, never their content.
 	// Hermes Agent's gateway and approvers come with ListHermes.
-	ListAlwaysOn(ctx context.Context, repoRoots []string) (AlwaysOnScan, error)
+	// claude is what ListClaudeSettings read: the auto memory keys of every
+	// scope say where Claude Code's memory is and whether it is on.
+	ListAlwaysOn(ctx context.Context, repoRoots []string, claude ClaudeSettingsScan) (AlwaysOnScan, error)
 
 	// ListHermes reads Hermes Agent's config.yaml and every profile's
 	// (decision 2026-10-27, agentes nuevos, N2a): its approval mode, its
@@ -1667,6 +1675,9 @@ type AgentMemory struct {
 	Files        int
 	Bytes        int64
 	InRepository bool
+	// AutoMemoryOff, for Claude Code, is autoMemoryEnabled false in the
+	// settings that apply to this memory.
+	AutoMemoryOff bool
 }
 
 // SourceFailure is a file that exists and could not be read.

@@ -19,6 +19,7 @@ import (
 
 	"github.com/qtorb/rosmarops/adapters/windows"
 	"github.com/qtorb/rosmarops/internal/agentdirs"
+	"github.com/qtorb/rosmarops/internal/platform"
 )
 
 // noOpenFS lists folders and gives metadata, and fails the test when a file
@@ -62,7 +63,7 @@ func TestBV251_MemoryNeverOpened(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	scan := windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, filepath.Join(home, ".claude"), nil, agentdirs.Env(func(string) (string, bool) { return "", false }))
+	scan := windows.ReadAlwaysOn(agentdirs.LinuxLayout, home, filepath.Join(home, ".claude"), nil, agentdirs.Env(func(string) (string, bool) { return "", false }), platform.ClaudeSettingsScan{})
 	found := false
 	for _, m := range scan.Memory {
 		if m.Path == dir {

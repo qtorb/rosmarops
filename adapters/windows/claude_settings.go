@@ -24,7 +24,7 @@ import (
 // settingsFile is the only part of a Claude Code settings file RosmarOps
 // decodes (https://code.claude.com/docs/en/settings-reference): permission
 // keys, .mcp.json approvals, env, the commands Claude Code runs (hooks,
-// statusLine, apiKeyHelper) and two managed-only keys. Any other key is
+// statusLine, apiKeyHelper), two managed-only keys and the auto memory keys. Any other key is
 // discarded; keys are matched exactly (jsonkeys.Decode, B5). Command texts are read only to see that a
 // command exists; they are never kept.
 type settingsFile struct {
@@ -97,6 +97,11 @@ type settingsFile struct {
 	// managed settings.
 	ChannelsEnabled       *bool    `json:"channelsEnabled"`
 	AllowedChannelPlugins []string `json:"allowedChannelPlugins"`
+
+	// Auto memory (code.claude.com/docs/en/memory): whether it is on, and
+	// the folder it is moved to. Both are read from any settings scope.
+	AutoMemoryEnabled   *bool  `json:"autoMemoryEnabled"`
+	AutoMemoryDirectory string `json:"autoMemoryDirectory"`
 }
 
 // controlKeys are the managed settings keys that are not policy keys
@@ -347,6 +352,7 @@ func parseClaudeSettings(raw []byte, f platform.ClaudeSettingsFile) platform.Cla
 	if f.Scope == platform.MCPScopeManaged {
 		f.ChannelsEnabled, f.AllowedChannelPlugins = s.ChannelsEnabled, s.AllowedChannelPlugins
 	}
+	f.AutoMemoryEnabled, f.AutoMemoryDirectory = s.AutoMemoryEnabled, strings.TrimSpace(s.AutoMemoryDirectory)
 	return f
 }
 

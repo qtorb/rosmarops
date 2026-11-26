@@ -26,6 +26,10 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Resource.** Something an agent can reach or change: a file, a database, an external service, another agent's configuration, instructions or executable, a git repository, an inbound channel, a schedule, or an agent's memory.
 
+**Agent memory.** Files an agent writes for itself and loads in later sessions, such as Claude Code's auto memory (`~/.claude/projects/<project>/memory/`, or the folder `autoMemoryDirectory` names) or Hermes Agent's `memories` folder. RosmarOps reads only how many files there are and their size. Who can write an agent's memory counts as who can write its instructions. Claude Code writes its auto memory without asking in Manual mode, unless `autoMemoryEnabled` is false (ADR 0042).
+
+**Isolated backend.** A Hermes Agent terminal backend that runs its terminal, file and code tools away from the computer: `docker`, `ssh`, `modal`, `daytona` or `vercel_sandbox`. Its memory and skill tools still write on the computer, so those writes still count (ADR 0042).
+
 **Edge certainty.** How an edge of the graph is known. `observed`: read in a file. `inferred`: worked out from the product's documented behaviour (see knowledge file).
 
 ## Findings

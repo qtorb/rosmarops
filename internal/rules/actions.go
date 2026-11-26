@@ -178,6 +178,13 @@ func actionsFor(in Input, a *agentView, f Finding, nodes map[string]graph.Node) 
 		case ActionHermesIsolatedBackend:
 			// The change is in Hermes's own config.yaml, not a settings.json:
 			// it moves its terminal, file and code tools off the computer.
+			// Its memory and skill_manage tools still write on the computer,
+			// so the writes of those tools are not cut (graph.HermesWritesOnHost).
+			for _, id := range f.Evidence.Nodes {
+				if graph.HermesWritesOnHost(a.node, nodes[id]) {
+					uncovered[id] = true
+				}
+			}
 			act.File = inConfigDir(a.node.ConfigPath, "config.yaml")
 			act.FileExists = configExists(in.Graph, act.File)
 			act.Key, act.Value = "", ""
