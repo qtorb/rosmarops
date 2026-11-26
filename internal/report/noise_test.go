@@ -315,7 +315,8 @@ func TestNoise_CountsByRow(t *testing.T) {
 				t.Errorf("%s %s: the problems count %d rows, counts %d+%d", name, lang, sum, red, yellow)
 			}
 			_, steps, _ := strings.Cut(page, `<div class="r3-steps">`)
-			if shown := strings.Count(steps, `<details class="row">`); shown != red+yellow {
+			// BV-307 (R3): a problem's sole row is drawn open, with no header.
+			if shown := strings.Count(steps, `<details class="row">`) + strings.Count(steps, `<div class="rb rb-sole"`); shown != red+yellow {
 				t.Errorf("%s %s: %d rows in the problems' steps, counts %d+%d", name, lang, shown, red, yellow)
 			}
 			line := cat.Text("console.summary", map[string]string{

@@ -211,15 +211,18 @@ var bandVar = map[string]string{
 
 // htmlCtx carries what the HTML renderer shares.
 type htmlCtx struct {
-	v      V2
-	cat    catalog.Catalog
-	home   string
-	sb     *strings.Builder
-	score  map[string]*index.AgentIndex // agent id → its score
-	gloss  *int                         // the last help id, g1, g2…
-	exists func(name string) bool       // a file of the reports directory exists
-	rows   map[string]*credRow          // finding id → its row (v3 §12.2)
-	local  time.Time                    // the run's time in the report's timezone (BV-148)
+	// soleRow draws a row with no header of its own: its body, open, under
+	// its problem's header, which already says its title (soleRowOf).
+	soleRow bool
+	v       V2
+	cat     catalog.Catalog
+	home    string
+	sb      *strings.Builder
+	score   map[string]*index.AgentIndex // agent id → its score
+	gloss   *int                         // the last help id, g1, g2…
+	exists  func(name string) bool       // a file of the reports directory exists
+	rows    map[string]*credRow          // finding id → its row (v3 §12.2)
+	local   time.Time                    // the run's time in the report's timezone (BV-148)
 }
 
 // help is the «i» of term (§4): the button and, right after it, its hidden
@@ -455,9 +458,14 @@ func (c htmlCtx) ofScoredAgent(f rules.Finding, a *index.AgentIndex) bool {
 }
 
 // renderCoverage is «What we could not read» (§6.1), only when there are
-// coverage gaps. The global time limit is not a code here (BV-155): step 1
-// carries the limit, so it is left out and the block is absent when nothing
-// else remains.
+// coverage gaps or projects whose check did not finish. The global time limit
+// is not a code here (BV-155): step 1 carries the limit, so it is left out and
+// the block is absent when nothing else remains.
+//
+// The projects that went over their own minute come first, by path, between
+// a paragraph that says what that means and a line that says what to do; the
+// findings line of block 2 links to that paragraph (timeoutAnchor). Each
+// source not read then says why in words, not as its reason code.
 func (c htmlCtx) renderCoverage() {
 	cov := c.v.Coverage
 	scanErrs := make([]string, 0, len(cov.ScanErrors))
@@ -466,17 +474,30 @@ func (c htmlCtx) renderCoverage() {
 			scanErrs = append(scanErrs, s)
 		}
 	}
-	if len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs)+len(cov.Notes) == 0 && cov.GraphBuilt && cov.BinarySkipped == 0 {
+	timedOut := timedOutRepos(c.v)
+	gaps := len(cov.SourcesFailed)+len(cov.AgentsUnsupported)+len(scanErrs)+len(cov.Notes) > 0 || !cov.GraphBuilt || cov.BinarySkipped > 0
+	if !gaps && len(timedOut) == 0 {
 		return
 	}
-	c.w(`<div class="cov"><h3>%s</h3><p>%s</p><ul>`, c.t("html.coverage.title", nil), c.t("html.coverage.body", nil))
+	c.w(`<div class="cov"><h3>%s</h3>`, c.t("html.coverage.title", nil))
+	if k := len(timedOut); k > 0 {
+		c.w(`<p id="%s">%s</p><ul>`, timeoutAnchor, c.t(c.cat.One("html.coverage.timeout", k), map[string]string{"k": strconv.Itoa(k)}))
+		for _, r := range timedOut {
+			c.w(`<li><code>%s</code></li>`, html.EscapeString(untrusted.PlainText(r)))
+		}
+		c.w(`</ul><p>%s</p>`, c.t("html.coverage.timeout.after", nil))
+	}
+	if !gaps {
+		c.w(`</div>`)
+		return
+	}
+	c.w(`<p>%s</p><ul>`, c.t("html.coverage.body", nil))
 	// BV-193 D3: informational coverage notes render their full signed sentence.
 	for _, n := range cov.Notes {
 		c.w(`<li>%s</li>`, c.t(n, nil))
 	}
 	for _, f := range cov.SourcesFailed {
-		code, _, _ := strings.Cut(f.Reason, ": ")
-		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(untrusted.PlainText(code)))
+		c.w(`<li><code>%s</code> — %s</li>`, html.EscapeString(untrusted.PlainText(f.Path)), html.EscapeString(reasonText(c.cat, f.Reason)))
 	}
 	for _, a := range cov.AgentsUnsupported {
 		c.w(`<li><code>%s</code> (%s)</li>`, html.EscapeString(untrusted.PlainText(a.ConfigPath)), html.EscapeString(untrusted.PlainText(a.Platform)))
@@ -492,6 +513,30 @@ func (c htmlCtx) renderCoverage() {
 		c.w(`<li>%s</li>`, html.EscapeString(c.cat.Plural("coverage.binary_skipped", cov.BinarySkipped, map[string]string{"n": strconv.Itoa(cov.BinarySkipped)})))
 	}
 	c.w(`</ul></div>`)
+}
+
+// timeoutAnchor is the id of the paragraph about the projects that did not
+// finish, the target of the findings line's link.
+const timeoutAnchor = "not-finished"
+
+// reasonText is why a source was not read, in words: the catalog's text for
+// its reason code (the part of the reason before ": "). A code with no text
+// in the catalog keeps the code as it is.
+func reasonText(cat catalog.Catalog, reason string) string {
+	code, _, _ := strings.Cut(reason, ": ")
+	if key := "html.coverage.reason." + code; cat.Has(key) {
+		return cat.Text(key, nil)
+	}
+	return untrusted.PlainText(code)
+}
+
+// coverageReasonKeys are the texts of the five reason codes.
+func coverageReasonKeys() []string {
+	keys := make([]string, 0, len(graph.ReasonCodes))
+	for _, code := range graph.ReasonCodes {
+		keys = append(keys, "html.coverage.reason."+code)
+	}
+	return keys
 }
 
 // renderSignals is «Other signals on this computer» (§9.4): the red
@@ -680,8 +725,12 @@ func (c htmlCtx) renderAccepted() {
 // verdict as text; open, the card body of v1 §3.6.
 func (c htmlCtx) renderRow(f rules.Finding) {
 	p := c.params(f)
-	c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s">`,
-		c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID))
+	if c.soleRow {
+		c.w(`<div class="rb rb-sole" id="%s">`, html.EscapeString(f.ID))
+	} else {
+		c.w(`<details class="row"><summary><span class="chev" aria-hidden="true">›</span><span class="t">%s</span><span class="x">%s</span></summary><div class="rb" id="%s">`,
+			c.rowTitle(f), c.verdict(f), html.EscapeString(f.ID))
+	}
 	// BV-153: the file each finding is in, on the card's first line, so a
 	// person can check it without opening «Technical details» (which is
 	// unchanged). Same locations the «Where» line shows there; for
@@ -726,7 +775,16 @@ func (c htmlCtx) renderRow(f rules.Finding) {
 	c.where(f.Evidence.Locations)
 	c.w(`</p><p>%s</p><ul>`, c.t("html.tech.confidence."+f.Confidence, p))
 	c.assumptions(f)
-	c.w(`</ul></details></div></details>`)
+	c.w(`</ul></details></div>%s`, c.rowEnd())
+}
+
+// rowEnd closes a row: its details, unless it is drawn as its problem's sole
+// row (soleRow).
+func (c htmlCtx) rowEnd() string {
+	if c.soleRow {
+		return ""
+	}
+	return `</details>`
 }
 
 // gain is the p.gain line of f (v3 §15.3), html.gain.agent… in a merged
@@ -798,7 +856,7 @@ func (c htmlCtx) renderMultiRow(f rules.Finding) {
 		c.assumptions(m)
 		c.w(`</ul>`)
 	}
-	c.w(`</details></div></details>`)
+	c.w(`</details></div>%s`, c.rowEnd())
 }
 
 // rowLocations are the locations the card's «Found in» line shows for a
@@ -1353,6 +1411,7 @@ func HTMLKeys() []string {
 		"html.projects.not_searched.incomplete.one",
 		"html.tech", "html.tech.where", "html.tech.more", "html.tech.confidence.high", "html.tech.confidence.medium",
 		"html.unknown.body", "html.coverage.title", "html.coverage.body",
+		"html.coverage.timeout", "html.coverage.timeout.one", "html.coverage.timeout.after",
 		"html.f.cred.title", "html.f.cred_readable.extra", "html.cred.model_api.impact",
 		"html.fix.title", "html.fix.step1", "html.fix.step2", "html.fix.step3", "html.fix.copy", "html.fix.copied",
 		"html.fix.manual", "html.fix.manual.open", "html.fix.manual.open.macos", "html.fix.manual.open.other", "html.fix.manual.add", "html.fix.manual.create", "html.fix.manual.save",
@@ -1484,6 +1543,7 @@ func HTMLKeys() []string {
 	// BV-193: the Computer Use finding renders with its one signed sentence as
 	// the title (red or yellow), no separate impact.
 	keys = append(keys, computerUseKeys...)
+	keys = append(keys, coverageReasonKeys()...)
 	// BV-107: the project-hook finding also renders with its finding.* texts.
 	keys = append(keys, "finding.project_hook_runs_repo_script.title", "finding.project_hook_runs_repo_script.title.large",
 		"finding.project_hook_runs_repo_script.what", "finding.project_hook_runs_repo_script.what.large",

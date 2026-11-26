@@ -171,15 +171,19 @@ func osName(os string) string {
 }
 
 // timedOutProjects is how many repositories ran out of their time
-// (scan_timeout) in this review.
-func timedOutProjects(v V2) int {
-	n := 0
+// (scan_timeout) in this review: the ones timedOutRepos lists.
+func timedOutProjects(v V2) int { return len(timedOutRepos(v)) }
+
+// timedOutRepos are the repositories that ran out of their time
+// (scan_timeout) in this review, each once, by path.
+func timedOutRepos(v V2) []string {
+	var out []string
 	for _, g := range v.Legacy.Groups {
 		if g.Category == "scan_timeout" {
-			n += g.Count
+			out = append(out, g.Repos...)
 		}
 	}
-	return n
+	return uniqueSorted(out)
 }
 
 // scoreSaturated: the score and its factory reference are both 0, so comparing

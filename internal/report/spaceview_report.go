@@ -453,17 +453,13 @@ func svGain(c htmlCtx, f rules.Finding) string {
 // --- coverage and signals (html.go renderCoverage / renderSignals) ---
 
 // svCoverage are «what we could not read» lines (html.go renderCoverage): a
-// failed source as «path (code)», an unsupported agent as «path (platform)»,
+// failed source as «path — why» (its reason in words), an unsupported agent as «path (platform)»,
 // a scan error, and the graph file when it was not built. Paths are sanitized.
 func svCoverage(c htmlCtx) []string {
 	cov := c.v.Coverage
 	var out []string
 	for _, f := range cov.SourcesFailed {
-		code := f.Reason
-		if i := indexColonSpace(f.Reason); i >= 0 {
-			code = f.Reason[:i]
-		}
-		out = append(out, untrusted.PlainText(f.Path)+" ("+untrusted.PlainText(code)+")")
+		out = append(out, untrusted.PlainText(f.Path)+" — "+reasonText(c.cat, f.Reason))
 	}
 	for _, a := range cov.AgentsUnsupported {
 		out = append(out, untrusted.PlainText(a.ConfigPath)+" ("+untrusted.PlainText(a.Platform)+")")
@@ -569,13 +565,4 @@ func clipRunes(s string, max int) string {
 		return "…"
 	}
 	return string(rs[:max-1]) + "…"
-}
-
-func indexColonSpace(s string) int {
-	for i := 0; i+1 < len(s); i++ {
-		if s[i] == ':' && s[i+1] == ' ' {
-			return i
-		}
-	}
-	return -1
 }

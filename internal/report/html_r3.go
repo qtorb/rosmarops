@@ -140,6 +140,27 @@ func (c htmlCtx) r3Findings(n int) string {
 	return c.cat.Text(key, map[string]string{"n": strconv.Itoa(n), "k": strconv.Itoa(k)})
 }
 
+// r3LinkMark stands for the findings' count in the problems' line until the
+// line has been escaped.
+const r3LinkMark = "\x01"
+
+// r3FindingsHTML is r3Findings, escaped, with the projects that did not
+// finish («{k} projects not finished», the piece after the last « · ») as a
+// link to the paragraph that names them in «What we could not read».
+func (c htmlCtx) r3FindingsHTML(n int) string {
+	s := c.r3Findings(n)
+	if timedOutProjects(c.v) == 0 {
+		return html.EscapeString(s)
+	}
+	const sep = " · "
+	i := strings.LastIndex(s, sep)
+	if i < 0 {
+		return html.EscapeString(s)
+	}
+	head, tail := s[:i+len(sep)], s[i+len(sep):]
+	return html.EscapeString(head) + `<a href="#` + timeoutAnchor + `">` + html.EscapeString(tail) + `</a>`
+}
+
 // r3Title is a block's title: its number in a circle and its name.
 func (c htmlCtx) r3Title(n int, id, key string) string {
 	return `<h2 class="r3-h" id="` + id + `"><span class="r3-n" aria-hidden="true">` + strconv.Itoa(n) + `</span>` + c.t(key, nil) + `</h2>`
@@ -371,12 +392,13 @@ func (c htmlCtx) r3RowCounts(iss []issue) (urgent, review, findings int) {
 
 func (c htmlCtx) renderR3Findings(iss []issue) {
 	urgent, review, findings := c.r3RowCounts(iss)
+	counts := c.t("html.r3.counts", map[string]string{
+		"groups": c.r3Count("html.r3.groups", len(iss)), "findings": r3LinkMark,
+		"urgent": c.r3Count("html.r3.urgent", urgent), "review": c.r3Count("html.r3.review", review),
+	})
+	counts = strings.Replace(counts, r3LinkMark, c.r3FindingsHTML(findings), 1)
 	c.w(`<section class="r3-card" aria-labelledby="r3-h2"><div class="r3-top">%s<p class="r3-counts">%s</p></div>`,
-		c.r3Title(2, "r3-h2", "html.r3.h2"),
-		c.t("html.r3.counts", map[string]string{
-			"groups": c.r3Count("html.r3.groups", len(iss)), "findings": c.r3Findings(findings),
-			"urgent": c.r3Count("html.r3.urgent", urgent), "review": c.r3Count("html.r3.review", review),
-		}))
+		c.r3Title(2, "r3-h2", "html.r3.h2"), counts)
 	if len(iss) == 0 {
 		empty := "html.none"
 		if !c.v.Coverage.GraphBuilt {
@@ -510,8 +532,8 @@ func (c htmlCtx) renderR3Steps(iss []issue) {
 		// After the number, the family's icon box; the family's name above
 		// the title.
 		fam := issueFamily(is)
-		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span>%s<span class="r3-pt">%s<span>%s</span></span></h2>`,
-			n, n, n, n, familyIcon(fam, is.red()), c.familyName(fam), c.issueTitle(is))
+		c.w(`<section class="r3-p" id="p-%d" aria-labelledby="p-%d-h"><h2 id="p-%d-h"><span class="r3-n" aria-hidden="true">%d</span>%s<span class="r3-pt">%s<span>%s</span></span>%s</h2>`,
+			n, n, n, n, familyIcon(fam, is.red()), c.familyName(fam), c.issueTitle(is), c.soleVerdict(is))
 		c.renderIssueContent(is)
 		c.w(`</section>`)
 	}
@@ -533,12 +555,47 @@ func (c htmlCtx) renderIssueContent(is issue) {
 }
 
 // renderIssueBody is a problem's score gain line and its findings, under
-// its header and detail line.
+// its header and detail line. A problem whose only row has its own title
+// draws that row's body open, with no title of its own (soleRowOf).
 func (c htmlCtx) renderIssueBody(is issue) {
 	c.renderGain(is)
+	if f, ok := c.soleRowOf(is); ok {
+		d := c
+		d.soleRow = true
+		d.renderRow(f)
+		return
+	}
 	for _, f := range c.rankedReps(is) {
 		c.renderRow(f)
 	}
+}
+
+// soleRowOf is a problem's only row when its title is the problem's title,
+// so the row needs no header of its own. Problems with a line per agent are
+// never drawn this way.
+func (c htmlCtx) soleRowOf(is issue) (rules.Finding, bool) {
+	if is.kind == issueConfigMany || is.kind == issueOwnMany {
+		return rules.Finding{}, false
+	}
+	reps := c.rankedReps(is)
+	if len(reps) != 1 || c.rowTitle(reps[0]) != c.issueTitle(is) {
+		return rules.Finding{}, false
+	}
+	return reps[0], true
+}
+
+// soleVerdict is the verdict (open since, new…) of a problem's sole row, for
+// its header, where the row would have shown it; "" when the problem has no
+// sole row or the row no verdict.
+func (c htmlCtx) soleVerdict(is issue) string {
+	f, ok := c.soleRowOf(is)
+	if !ok {
+		return ""
+	}
+	if v := c.verdict(f); v != "" {
+		return `<span class="x r3-pv">` + v + `</span>`
+	}
+	return ""
 }
 
 // renderGain is a problem's «if you fix this» line, when it moves the score.
