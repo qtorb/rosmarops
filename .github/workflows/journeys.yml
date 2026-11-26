@@ -274,7 +274,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
-          timeout 900 sudo snap install firefox
+          # The Snap Store sometimes cuts a download («unexpected EOF») or
+          # snapd hangs restarting itself: try up to three times, waiting
+          # between tries. Each try gets 6 minutes, so the three fit in the
+          # job's 30. Without Firefox installed, the step still fails.
+          for try in 1 2 3; do
+            if timeout 360 sudo snap install firefox; then
+              break
+            fi
+            echo "snap install firefox: try $try failed"
+            if [ "$try" -lt 3 ]; then sleep 30; fi
+          done
           snap list firefox
           echo "JOURNEY_FIREFOX=snap run firefox" >> "$GITHUB_ENV"
       - name: Firefox (Windows, macOS)
