@@ -395,12 +395,15 @@ function Add-Row($card) {
   $btnA.Size = New-Object System.Drawing.Size($chW, $chH)
   $btnA.Location = New-Object System.Drawing.Point(($btnD.Left - $chGap - $chW), $chY)
   $btnR = $null
-  $pairs = @(@($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))
   if ($card.rotatable) {
     $btnR = New-Object System.Windows.Forms.Panel
     $btnR.Size = New-Object System.Drawing.Size($chW, $chH)
     $btnR.Location = New-Object System.Drawing.Point(($btnA.Left - $chGap - $chW), $chY)
-    $pairs = @(@($btnR, 'rotated', $cfg.rotate)) + $pairs
+    # Each pair is its own array: the list is written out in both branches so
+    # PowerShell does not flatten a one-pair array into its elements.
+    $pairs = @(@($btnR, 'rotated', $cfg.rotate), @($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))
+  } else {
+    $pairs = @(@($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))
   }
   foreach ($pair in $pairs) {
     $b = $pair[0]
