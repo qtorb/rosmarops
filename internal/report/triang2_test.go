@@ -35,7 +35,9 @@ func TestTriang2_Rotation(t *testing.T) {
 			}
 		}
 		for _, k := range []string{"html.fix.rotate.step2", "html.after.rotate"} {
-			if !strings.Contains(page, htmlEscape(cat.Text(k, nil))) {
+			// BV-314: the command in step 2 is drawn as <code>.
+			want := strings.ReplaceAll(htmlEscape(cat.Text(k, nil)), "`rosmarops findings`", "<code>rosmarops findings</code>")
+			if !strings.Contains(page, want) {
 				t.Errorf("%s: no %s", lang, k)
 			}
 		}

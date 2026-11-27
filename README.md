@@ -144,7 +144,7 @@ A company can install RosmarOps with a device manager such as Fleet and read a s
 - What an agent does while it runs. RosmarOps reads configuration at rest.
 - Settings that live only inside an app's database or on a vendor's servers (for example, the mode you pick in Cursor's settings), and anything you set only in one terminal session. The report states what it assumes in those cases.
 - Whether a key in git was actually pushed to a public place.
-- Whether a key you declared rotated was really revoked at the provider. RosmarOps records your statement and says so.
+- Whether a key you declared rotated was really revoked at the provider. RosmarOps records your statement and says so. After you change a key saved in git, run `rosmarops findings` and mark its finding «I have changed it».
 
 Whatever it could not read is listed in the report and never counted as clean.
 

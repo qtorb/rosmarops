@@ -100,7 +100,8 @@ var bv236Texts = []struct{ key, es, en string }{
 	{"report.accepted.title", "Asumidos por ti ({n})", "Accepted by you ({n})"},
 	{"report.accepted.on", "Lo asumiste el {date}", "You accepted it on {date}"},
 	{"findings.q.accept", "¿Qué haces con estos avisos?", "What do you want to do with these findings?"},
-	{"findings.text.accept", "Lo asumo: sigue contando en tu nota y deja de salir como pendiente. Descartar: deja de contar desde la próxima revisión, para lo que no te afecta. Puedes cambiarlo cuando quieras.", "I accept it: it keeps counting in your score and stops showing as pending. Dismiss: it stops counting from the next check, for what doesn't apply to you. You can change this at any time."},
+	// BV-314 changed W2 and K1 (the third choice, «Ya la he cambiado»).
+	{"findings.text.accept", "Lo asumo: sigue contando en tu nota y deja de salir como pendiente. Descartar: deja de contar desde la próxima revisión, para lo que no te afecta. Ya la he cambiado: solo para una clave guardada en git que ya has revocado en su proveedor. Puedes cambiarlo cuando quieras.", "I accept it: it keeps counting in your score and stops showing as pending. Dismiss: it stops counting from the next check, for what doesn't apply to you. I have changed it: only for a key saved in git that you have already revoked at its provider. You can change this at any time."},
 	{"findings.accept", "Lo asumo", "I accept it"},
 	{"findings.dismiss", "Descartar", "Dismiss"},
 	{"findings.group.accepted", "Asumidos por ti", "Accepted by you"},
@@ -110,7 +111,7 @@ var bv236Texts = []struct{ key, es, en string }{
 	{"findings.tally.dismissed.one", "1 descartado", "1 dismissed"},
 	{"findings.tally.dismissed.other", "{n} descartados", "{n} dismissed"},
 	{"findings.tally.none", "Ninguno cambiado", "None changed"},
-	{"findings.console.prompt.accept", "Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente (Enter para no cambiar nada): ", "Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again (Enter to change nothing): "},
+	{"findings.console.prompt.accept", "Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente; «3c» marca como cambiada la clave del aviso 3, o lo deshace (Enter para no cambiar nada): ", "Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again; «3c» marks the key of finding 3 as changed, or undoes it (Enter to change nothing): "},
 	{"findings.console.accepted", "asumido por ti", "accepted by you"},
 	{"cc.back", "← Plantillas del ordenador", "← Computer templates"},
 	{"pc.others", "Los demás", "The others"},

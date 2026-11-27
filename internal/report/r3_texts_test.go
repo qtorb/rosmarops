@@ -44,7 +44,7 @@ var r3Texts = []struct{ key, es, en string }{
 	{"html.r3.group.cred.git.one", "Una de ellas está, además, en el historial de git de 1 proyecto.", "One of them is also in the git history of 1 project."},
 	{"html.r3.group.config", "{agent} puede cambiar la configuración de otros agentes:", "{agent} can change the settings of other agents:"},
 	{"html.r3.group.config.detail", "{targets}.", "{targets}."},
-	{"html.r3.fix.rotate", "Cambiar la clave en {service} ›", "Change the key in {service} ›"},
+	{"html.r3.fix.rotate", "Ver cómo cambiar la clave de {service} ›", "See how to change the {service} key ›"}, // BV-314
 	{"html.r3.fix.rotate_tpl", "Cambia la clave y aplica la plantilla ›", "Change the key and apply the template ›"},
 	{"html.r3.fix.tpl_all", "Con una plantilla (bloque 3)", "With a template (block 3)"},
 	{"html.r3.fix.tpl_some", "La plantilla arregla {k} de {n}; quedan {rest}", "The template fixes {k} of {n}; {rest} remain"},

@@ -25,6 +25,13 @@ import (
 // Cline extension (new agents).
 func cto7Report(t *testing.T) report.V2 {
 	t.Helper()
+	return cto7ReportRotated(t, nil)
+}
+
+// cto7ReportRotated is cto7Report with allow_list.rotated_credentials
+// (BV-314: what «Ya la he cambiado» writes).
+func cto7ReportRotated(t *testing.T, rotated []config.AllowEntryRotated) report.V2 {
+	t.Helper()
 	salt := []byte("0123456789abcdef0123456789abcdef")
 	id := graph.Identifier(salt)
 	stripe := "sk_live_" + strings.Repeat("R", 24)
@@ -61,7 +68,7 @@ func cto7Report(t *testing.T) report.V2 {
 		Graph: &g, GraphSHA256: strings.Repeat("ab", 32), Base: base, RepoRoots: []string{"/src/a", "/src/b"},
 		Families: [][]string{{"/src/a"}, {"/src/b"}}, V1: v1, GeneratedAt: v2Now,
 		Fixtures:   []config.AllowEntryTestFixture{{Repo: "/src/b", Path: "**/*_test.go", Note: "fake keys in tests", ExpiresOn: "2027-10-01"}},
-		ConfigFile: "/h/.rosmarops/config.json",
+		ConfigFile: "/h/.rosmarops/config.json", Rotated: rotated,
 	})
 	return v
 }

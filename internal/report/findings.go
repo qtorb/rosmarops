@@ -31,6 +31,13 @@ type FindingCard struct {
 	// report's order inside each. An accepted finding («Lo asumo») is in
 	// «accepted», never in «new» or «the rest».
 	Group string
+	// CredID is the credential of a key saved in git (cred_in_git): only
+	// those cards offer «I have changed it», which records CredID in
+	// allow_list.rotated_credentials. Empty for every other finding.
+	CredID string
+	// WhenRotated is findings.when.rotated, shown under «When it doesn't
+	// apply» on a cred_in_git card only.
+	WhenRotated string
 }
 
 // Card group names, in the window's and the console list's order.
@@ -39,6 +46,10 @@ const (
 	CardGroupRest      = "rest"
 	CardGroupAccepted  = "accepted"
 	CardGroupDismissed = "dismissed"
+	// CardGroupRotated is «Keys you have changed»: a key saved in git the
+	// person recorded as changed. Its card starts with «I have changed it»
+	// chosen.
+	CardGroupRotated = "rotated"
 )
 
 // FindingCards renders, from a built v2 report, the cards the dismiss window
@@ -59,6 +70,10 @@ func FindingCards(v V2, cat catalog.Catalog, home string) []FindingCard {
 			ID: f.ID, Severity: f.Severity, Group: group,
 			Title: c.titleText(f), WhatItMeans: c.impactText(f),
 			WhenApplies: cat.Text(whenKey, whenParams(f)), Agent: f.Params.Agent,
+		}
+		if f.Rule == rules.RuleCredInGit && f.Params.CredID != "" {
+			fc.CredID = f.Params.CredID
+			fc.WhenRotated = cat.Text("findings.when.rotated", nil)
 		}
 		if f.Memory != nil {
 			if f.Memory.Verdict == memory.VerdictNew {

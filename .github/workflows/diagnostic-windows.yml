@@ -25,6 +25,7 @@ on:
     paths:
       - "cmd/rosmarops/connectwindow*.go"
       - "cmd/rosmarops/findingswindow*.go"
+      - "cmd/rosmarops/windowscripts.go"
       - "cmd/rosmarops/usagewindow*.go"
       - "tools/winres/**"
       - "assets/windows/**"

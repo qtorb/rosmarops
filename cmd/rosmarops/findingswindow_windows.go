@@ -29,10 +29,16 @@ type dismissCard struct {
 	New   bool   `json:"new"`   // a new finding
 	Since string `json:"since"` // the localized «open since» sentence; empty when New
 	Agent string `json:"agent"` // the agent, or empty for a machine finding
-	Group string `json:"group"` // "new", "rest", "accepted" or "dismissed"
-	// State is the button chosen when the window opens (BV-236 §5):
-	// "accepted" («Lo asumo»), "dismissed" («Descartar») or "" (pending).
+	Group string `json:"group"` // "new", "rest", "accepted", "dismissed" or "rotated"
+	// State is the button chosen when the window opens (BV-236 §5, BV-314):
+	// "accepted" («Lo asumo»), "dismissed" («Descartar»), "rotated" («Ya la
+	// he cambiado») or "" (pending).
 	State string `json:"state"`
+	// Rotatable marks a key saved in git (BV-314): only its row has «Ya la
+	// he cambiado», and its detail adds WhenRotated under «When it doesn't
+	// apply».
+	Rotatable   bool   `json:"rotatable"`
+	WhenRotated string `json:"when_rotated"`
 }
 
 // dismissWindowConfig is everything the window draws, all text from the
@@ -45,20 +51,26 @@ type dismissWindowConfig struct {
 	GroupRest    string `json:"group_rest"`
 	GroupAccept  string `json:"group_accepted"`
 	GroupDismiss string `json:"group_dismissed"`
-	Accept       string `json:"accept"`  // «Lo asumo»
-	Dismiss      string `json:"dismiss"` // «Descartar»
+	GroupRotated string `json:"group_rotated"` // «Claves que has cambiado» (BV-314)
+	Accept       string `json:"accept"`        // «Lo asumo»
+	Dismiss      string `json:"dismiss"`       // «Descartar»
+	Rotate       string `json:"rotate"`        // «Ya la he cambiado» (BV-314)
 	Red          string `json:"red"`
 	Yellow       string `json:"yellow"`
 	SubNew       string `json:"sub_new"`
 	WhatLabel    string `json:"what_label"`
 	WhenLabel    string `json:"when_label"`
 	// W3: «{accepted} · {dismissed}», each with its form of 1, or TallyNone.
-	Tally        string        `json:"tally"`
-	TallyAOne    string        `json:"tally_a_one"`
-	TallyAOther  string        `json:"tally_a_other"`
-	TallyDOne    string        `json:"tally_d_one"`
-	TallyDOther  string        `json:"tally_d_other"`
-	TallyNone    string        `json:"tally_none"`
+	Tally       string `json:"tally"`
+	TallyAOne   string `json:"tally_a_one"`
+	TallyAOther string `json:"tally_a_other"`
+	TallyDOne   string `json:"tally_d_one"`
+	TallyDOther string `json:"tally_d_other"`
+	TallyNone   string `json:"tally_none"`
+	// BV-314: the keys changed, added to the tally only when a row offers
+	// «Ya la he cambiado».
+	TallyROne    string        `json:"tally_r_one"`
+	TallyROther  string        `json:"tally_r_other"`
 	No           string        `json:"no"`
 	Save         string        `json:"save"`
 	Cards        []dismissCard `json:"cards"`
@@ -85,8 +97,10 @@ func dismissWindowConfigFrom(cat catalog.Catalog, cards []report.FindingCard) di
 		GroupRest:    cat.Text("findings.group.rest", nil),
 		GroupAccept:  cat.Text("findings.group.accepted", nil),
 		GroupDismiss: cat.Text("findings.group.dismissed", nil),
+		GroupRotated: cat.Text("findings.group.rotated", nil),
 		Accept:       cat.Text("findings.accept", nil),
 		Dismiss:      cat.Text("findings.dismiss", nil),
+		Rotate:       cat.Text("findings.rotated", nil),
 		Red:          cat.Text("findings.red", nil),
 		Yellow:       cat.Text("findings.yellow", nil),
 		SubNew:       cat.Text("findings.sub.new", nil),
@@ -98,6 +112,8 @@ func dismissWindowConfigFrom(cat catalog.Catalog, cards []report.FindingCard) di
 		TallyDOne:    cat.Text("findings.tally.dismissed.one", nil),
 		TallyDOther:  cat.Text("findings.tally.dismissed.other", nil),
 		TallyNone:    cat.Text("findings.tally.none", nil),
+		TallyROne:    cat.Text("findings.tally.rotated.one", nil),
+		TallyROther:  cat.Text("findings.tally.rotated.other", nil),
 		No:           cat.Text("findings.no", nil),
 		Save:         cat.Text("findings.save", nil),
 		Icon:         icon,
@@ -111,7 +127,8 @@ func dismissWindowConfigFrom(cat catalog.Catalog, cards []report.FindingCard) di
 		out.Cards = append(out.Cards, dismissCard{
 			ID: c.ID, Sev: c.Severity, Title: c.Title, What: c.WhatItMeans, When: c.WhenApplies,
 			New: c.New, Since: sub, Agent: c.Agent, Group: c.Group,
-			State: cardState(c.Group),
+			State:     cardState(c.Group),
+			Rotatable: c.CredID != "", WhenRotated: c.WhenRotated,
 		})
 	}
 	return out
@@ -125,6 +142,8 @@ func cardState(group string) string {
 		return "accepted"
 	case report.CardGroupDismissed:
 		return "dismissed"
+	case report.CardGroupRotated:
+		return "rotated"
 	}
 	return ""
 }
@@ -134,10 +153,11 @@ func dismissWindowInput(c dismissWindowConfig) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-// driveDismissWindow reads the window's answer (BV-236 §5): "save", then a
-// line of the space-separated ids marked «Descartar», then a line of those
-// marked «Lo asumo» (either possibly empty); or "cancel" (or a closed stream)
-// for «Not now». It returns both lists and whether saved.
+// driveDismissWindow reads the window's answer (BV-236 §5, BV-314): "save",
+// then a line of the space-separated ids marked «Descartar», a line of those
+// marked «Lo asumo» and a line of those marked «Ya la he cambiado» (any
+// possibly empty); or "cancel" (or a closed stream) for «Not now». It returns
+// the lists and whether saved.
 func driveDismissWindow(out io.Reader) (findingChoice, bool) {
 	r := bufio.NewReader(out)
 	first, _ := r.ReadString('\n')
@@ -147,7 +167,8 @@ func driveDismissWindow(out io.Reader) (findingChoice, bool) {
 	}
 	dismissed, _ := r.ReadString('\n')
 	accepted, _ := r.ReadString('\n')
-	return findingChoice{Dismissed: strings.Fields(dismissed), Accepted: strings.Fields(accepted)}, true
+	rotated, _ := r.ReadString('\n')
+	return findingChoice{Dismissed: strings.Fields(dismissed), Accepted: strings.Fields(accepted), Rotated: strings.Fields(rotated)}, true
 }
 
 // showDismiss shows the findings window on Windows and returns both lists the

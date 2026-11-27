@@ -51,6 +51,8 @@ The words RosmarOps uses, as the code uses them. The map of the code is in [ARCH
 
 **Not checked.** A finding that was open and is not in this review because its place was not checked in full: a repository that timed out, was deleted or was not reached, or an agent that is no longer installed. It stays open: it is never counted as fixed.
 
+**Key marked as changed.** A key saved in git that the person says they changed at the provider: in `rosmarops findings`, its finding marked «I have changed it». RosmarOps writes its credential id, the day and an empty note in `allow_list.rotated_credentials` of `~/.rosmarops/config.json`, and from the next review the key gives no finding in git. RosmarOps cannot check the change: it is declared by the person. The findings of agents that can read the same key keep showing. See [the decision](decisions/0043-i-have-changed-it.md).
+
 **No longer observed.** A finding that was open and is not in this review, where RosmarOps cannot tell whether its place was checked in full: it was recorded by a version before 0.18. It does not mean fixed.
 
 ## Scores
