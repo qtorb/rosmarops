@@ -23,7 +23,7 @@ The person-facing description is in [README.md](README.md). The promises the cod
 7. Build the reports: the v1 report (`report.Build`) and the v2 report (`report.BuildV2`). The v2 report runs the rules (`internal/rules`), the score (`internal/index`), the exposure class (`internal/exposure`) and the memory of the previous run (`internal/memory`).
 8. If this computer is connected to its space, seal the results package (`internal/results`) and send it (`internal/spacenet`).
 9. Write the report files, the score history, the findings memory and the status line, then save the state.
-10. Print the summary and open the report. With someone at a console and at least one new finding, one line says that `rosmarops findings` dismisses or accepts findings; `run` itself never asks.
+10. Print the summary and open the report. With someone at a console and at least one new finding, one line says that `rosmarops findings` dismisses or accepts findings, or marks a key saved in git as changed; `run` itself never asks.
 11. After the report, the problem-report step and the usage statistics step (`cmd/rosmarops/cmd_usage.go`). In the installation's first review (`firstReviewThisRun`, no `last_run` and no earlier reports), only these two, the problem list first; in the following reviews the usage statistics step comes first, then the connect offer, the «No me afecta» window and the problem list ([ADR 0034](docs/decisions/0034-one-question-after-the-first-review.md)). The usage step, with someone at a console and no answer yet, asks: on Windows in its own window (`usageWindowScript`), elsewhere or when the window cannot be shown in the console (only `y`/`s` or `n` answer; Enter alone leaves it for the next review, ADR 0033; that review's report then has no usage line); with usage statistics on, build this review's `usage.v1` summary (`internal/usage`) and send it once (`internal/spacenet`). On an installation marked as the RosmarOps team's (`rosmarops usage team on`, `usage_team` in the state), the summary's channel is `internal` instead of the real one; nothing else changes. Only a published version (exactly `X.Y.Z`) asks or sends usage statistics: a development or test build never does ([ADR 0032](docs/decisions/0032-only-published-versions-send-usage.md)). Neither step changes the report or the exit code.
 
 Ctrl+C, or closing the console or terminal, cancels a review started at a console (`cmd/rosmarops/cancel.go`): before it writes its results, the review stops, clears its in-progress mark and says so, so the previous report stays and the next review records no `run_unfinished`; once the results are being written, the cancellation waits for them to end. A scheduled review keeps its behaviour ([ADR 0041](docs/decisions/0041-a-review-that-ends.md)).
@@ -63,7 +63,7 @@ The entry point is `cmd/rosmarops`. Data flows from the readers to the engine to
 
 ### Entry
 
-- `cmd/rosmarops`: the program. Command tree in `main.go`; one `cmd_*.go` file per command; the console, windows and prompts of each system.
+- `cmd/rosmarops`: the program. Command tree in `main.go`; one `cmd_*.go` file per command; the console, windows and prompts of each system. The findings window and the console list (`findings.go`, `findingswindow_*.go`, the window script in `windowscripts.go`) offer «Lo asumo» and «Descartar» on every finding, and «Ya la he cambiado» on a key saved in git. `writeFindingLists` writes `allow_list.dismissed`, `allow_list.accepted` and `allow_list.rotated_credentials` atomically into `~/.rosmarops/config.json` and re-points the configuration's integrity reference, so the next review does not ask ([ADR 0043](docs/decisions/0043-i-have-changed-it.md)).
 - `internal/cli`: the command dispatcher on the standard `flag` package, with help texts from the catalog.
 
 ### Reading
@@ -178,7 +178,7 @@ Inside the band, the score is `floor(span × K / (K + P))` above the band's floo
 Only these places receive writes (invariant 2 in [CLAUDE.md](CLAUDE.md)):
 
 - `~/.rosmarops/state.json`: the state, written atomically.
-- `~/.rosmarops/config.json`: created once by `init`, and rewritten only when the person dismisses or accepts findings.
+- `~/.rosmarops/config.json`: created once by `init`, and rewritten only when the person dismisses or accepts findings, or marks a key saved in git as changed ([ADR 0043](docs/decisions/0043-i-have-changed-it.md)).
 - `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS, Linux): the kit key.
 - The reports directory, `~/.rosmarops/reports/` (`~/RosmarOps/` on Linux) unless the configuration sets another:
   - `report.html` and `report.<lang>.html`: the visual report, one page per language;

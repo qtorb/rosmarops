@@ -42,7 +42,7 @@ func TestBV236_ConsoleToggles(t *testing.T) {
 		// Typing «1a» twice toggles it back: pending.
 		{"1a, 1a\n", []string{"f_dis"}, []string{"f_acc"}},
 	} {
-		ch, saved := applyConsoleToggles(cards, tc.answer)
+		ch, saved, _ := applyConsoleToggles(cards, tc.answer)
 		if !saved {
 			t.Errorf("%q: not saved", tc.answer)
 			continue
@@ -52,7 +52,7 @@ func TestBV236_ConsoleToggles(t *testing.T) {
 		}
 	}
 	for _, junk := range []string{"\n", "9a, x, a\n", "0\n"} {
-		if _, saved := applyConsoleToggles(cards, junk); saved {
+		if _, saved, _ := applyConsoleToggles(cards, junk); saved {
 			t.Errorf("%q counted as a change", junk)
 		}
 	}
@@ -62,8 +62,9 @@ func TestBV236_ConsoleToggles(t *testing.T) {
 // and ES, from the catalog.
 func TestBV236_ConsoleTexts(t *testing.T) {
 	want := map[string][3]string{
-		"en": {"Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again (Enter to change nothing): ", "(accepted by you)", "(dismissed by you)"},
-		"es": {"Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente (Enter para no cambiar nada): ", "(asumido por ti)", "(descartado por ti)"},
+		// BV-314: K1 names «3c».
+		"en": {"Type the numbers you want to change, separated by commas: «3» dismisses or restores finding 3; «3a» accepts it or makes it pending again; «3c» marks the key of finding 3 as changed, or undoes it (Enter to change nothing): ", "(accepted by you)", "(dismissed by you)"},
+		"es": {"Escribe los números que quieras cambiar, separados por comas: «3» descarta o recupera el aviso 3; «3a» lo asume o lo deja pendiente; «3c» marca como cambiada la clave del aviso 3, o lo deshace (Enter para no cambiar nada): ", "(asumido por ti)", "(descartado por ti)"},
 	}
 	for lang, w := range want {
 		cat, err := catalog.Load(lang)
@@ -104,7 +105,7 @@ func TestBV236_SaveWritesBothLists(t *testing.T) {
 	}
 	// The person accepts cred_bbbb (it leaves «dismissed») and f_cccc, and
 	// dismisses f_dddd. f_aaaa was not shown: it stays dismissed.
-	ch, saved := applyConsoleToggles(cards, "1a, 2a, 3\n")
+	ch, saved, _ := applyConsoleToggles(cards, "1a, 2a, 3\n")
 	if !saved {
 		t.Fatal("not saved")
 	}
@@ -126,7 +127,7 @@ func TestBV236_SaveWritesBothLists(t *testing.T) {
 		{ID: "cred_bbbbbbbbbbbb", Group: report.CardGroupAccepted},
 		{ID: "f_cccccccccccc", Group: report.CardGroupAccepted},
 	}
-	ch, _ = applyConsoleToggles(cards2, "2a\n")
+	ch, _, _ = applyConsoleToggles(cards2, "2a\n")
 	if err := saveFindingChoice(cfgPath, reports, stPath, cfg.AllowList, cards2, ch, "2026-11-20"); err != nil {
 		t.Fatal(err)
 	}

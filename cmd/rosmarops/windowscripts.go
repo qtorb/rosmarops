@@ -40,6 +40,7 @@ $shotOpenI = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_OPEN_I
 $shotScroll = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_SCROLL     # "bottom" shows "the rest" and "dismissed"
 $shotTickNew = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW  # choose "Descartar" on the first "new" row so the tally shows it
 $shotHover = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_HOVER       # paint one row in the hover colour
+$shotRotated = $env:ROSMAROPS_FINDINGS_WINDOW_SHOT_ROTATED   # BV-314: "tick" chooses "Ya la he cambiado" on the first key row; "show" brings the first key row into view
 $selftest = -not [string]::IsNullOrEmpty($env:ROSMAROPS_FINDINGS_WINDOW_SELFTEST)
 $f = 1.0
 if ($shot -and $shotScale) { $f = [double]$shotScale }
@@ -218,21 +219,30 @@ try {
   if ($subOff -lt 0) { $subOff = 0 }
 } catch { $subOff = 0 }
 
+$script:anyRotatable = $false
+foreach ($c in $cfg.cards) { if ($c.rotatable) { $script:anyRotatable = $true } }
 function Update-Count {
-  # W3: "{accepted} - {dismissed}" (the catalog template), each with its form of 1; both zero: tally_none.
-  $na = 0; $nd = 0
+  # W3: "{accepted} - {dismissed}" (the catalog template), each with its form of 1; all zero: tally_none.
+  # BV-314: when a row offers "Ya la he cambiado", the keys changed follow, after the same middle dot.
+  $na = 0; $nd = 0; $nr = 0
   foreach ($k in $script:choice.Keys) {
     if ($script:choice[$k] -eq 'accepted') { $na++ }
     elseif ($script:choice[$k] -eq 'dismissed') { $nd++ }
+    elseif ($script:choice[$k] -eq 'rotated') { $nr++ }
   }
-  if ($na -eq 0 -and $nd -eq 0) { $countl.Text = $cfg.tally_none; return }
+  if ($na -eq 0 -and $nd -eq 0 -and $nr -eq 0) { $countl.Text = $cfg.tally_none; return }
   if ($na -eq 1) { $ta = $cfg.tally_a_one } else { $ta = ($cfg.tally_a_other -replace '\{n\}', $na) }
   if ($nd -eq 1) { $td = $cfg.tally_d_one } else { $td = ($cfg.tally_d_other -replace '\{n\}', $nd) }
-  $countl.Text = (($cfg.tally -replace '\{accepted\}', $ta) -replace '\{dismissed\}', $td)
+  $text = (($cfg.tally -replace '\{accepted\}', $ta) -replace '\{dismissed\}', $td)
+  if ($script:anyRotatable) {
+    if ($nr -eq 1) { $tr = $cfg.tally_r_one } else { $tr = ($cfg.tally_r_other -replace '\{n\}', $nr) }
+    $text = $text + $mid + $tr
+  }
+  $countl.Text = $text
 }
 
 function Set-Choice($state) {
-  foreach ($b in @($state.btnA, $state.btnD)) { if ($b -ne $null) { $b.Invalidate() } }
+  foreach ($b in @($state.btnR, $state.btnA, $state.btnD)) { if ($b -ne $null) { $b.Invalidate() } }
 }
 
 function Set-RowBack($state, $col) {
@@ -240,7 +250,7 @@ function Set-RowBack($state, $col) {
   # title and subtitle labels, the pill (its corners outside the rounded fill
   # show this colour) and the open detail box (BV-184 polish, points 1-2).
   $state.row.BackColor = $col
-  foreach ($c in @($state.title, $state.subStatus, $state.subAgent, $state.pill, $state.rtb, $state.btnA, $state.btnD)) { if ($c -ne $null) { $c.BackColor = $col } }
+  foreach ($c in @($state.title, $state.subStatus, $state.subAgent, $state.pill, $state.rtb, $state.btnR, $state.btnA, $state.btnD)) { if ($c -ne $null) { $c.BackColor = $col } }
 }
 
 function Add-Header($text) {
@@ -257,7 +267,13 @@ function Add-Header($text) {
 }
 
 function Add-Row($card) {
-  $colW = $rowW0 - $textX - $rightInset
+  # BV-314: a key saved in git has a third button, "Ya la he cambiado", left
+  # of the other two, the same control with the same values.
+  $nBtn = 2
+  if ($card.rotatable) { $nBtn = 3 }
+  $rowBlock = ($chW * $nBtn) + ($chGap * ($nBtn - 1))
+  $rowInset = (Px 16) + $rowBlock + (Px 12) + (Px 20) + (Px 12)
+  $colW = $rowW0 - $textX - $rowInset
   $th = [System.Windows.Forms.TextRenderer]::MeasureText($card.title, $fRow, (New-Object System.Drawing.Size($colW, 0)), $wordBreak).Height
   if ($th -gt $titleMaxH) { $th = $titleMaxH }
   if ($th -lt $titleLineH) { $th = $titleLineH }
@@ -345,7 +361,7 @@ function Add-Row($card) {
   # Open: #1B1A18 fill, white "i". An elliptical Region clips it to a circle.
   $icon = New-Object System.Windows.Forms.Panel
   $icon.Size = New-Object System.Drawing.Size((Px 20), (Px 20))
-  $icon.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - $chBlock - (Px 12) - (Px 20)), (Px 12))
+  $icon.Location = New-Object System.Drawing.Point(($rowW0 - (Px 16) - $rowBlock - (Px 12) - (Px 20)), (Px 12))
   $icon.Anchor = $aTR
   $icon.BackColor = $cWhite
   $icon.Region = Rounded-Region (Px 20) (Px 20) (Px 10)
@@ -378,7 +394,15 @@ function Add-Row($card) {
   $btnA = New-Object System.Windows.Forms.Panel
   $btnA.Size = New-Object System.Drawing.Size($chW, $chH)
   $btnA.Location = New-Object System.Drawing.Point(($btnD.Left - $chGap - $chW), $chY)
-  foreach ($pair in @(@($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))) {
+  $btnR = $null
+  $pairs = @(@($btnA, 'accepted', $cfg.accept), @($btnD, 'dismissed', $cfg.dismiss))
+  if ($card.rotatable) {
+    $btnR = New-Object System.Windows.Forms.Panel
+    $btnR.Size = New-Object System.Drawing.Size($chW, $chH)
+    $btnR.Location = New-Object System.Drawing.Point(($btnA.Left - $chGap - $chW), $chY)
+    $pairs = @(@($btnR, 'rotated', $cfg.rotate)) + $pairs
+  }
+  foreach ($pair in $pairs) {
     $b = $pair[0]
     $b.Anchor = $aTR; $b.BackColor = $cWhite; $b.Cursor = [System.Windows.Forms.Cursors]::Hand
     $b.Tag = @{ id = $card.id; kind = $pair[1]; txt = $pair[2] }
@@ -421,7 +445,7 @@ function Add-Row($card) {
   $rtb.Add_Enter({ try { $list.Focus() } catch { } })
   $row.Controls.Add($rtb)
 
-  $state = @{ card = $card; open = $false; built = $false; row = $row; btnA = $btnA; btnD = $btnD; title = $title;
+  $state = @{ card = $card; open = $false; built = $false; row = $row; btnR = $btnR; btnA = $btnA; btnD = $btnD; title = $title;
     subStatus = $subStatus; subAgent = $subAgent; icon = $icon; pill = $pill; rtb = $rtb; subtop = $rowSubTop; baseh = $baseH }
   $row.Tag = $state
   $icon.Tag = $state
@@ -444,6 +468,10 @@ function Build-Detail($st) {
   $rtb.SelectionFont = $fDetail; $rtb.SelectionColor = $cDetail; $rtb.AppendText($st.card.what + [Environment]::NewLine + [Environment]::NewLine)
   $rtb.SelectionFont = $fDetailB; $rtb.SelectionColor = $cInk; $rtb.AppendText($cfg.when_label + ' ')
   $rtb.SelectionFont = $fDetail; $rtb.SelectionColor = $cDetail; $rtb.AppendText($st.card.when)
+  if ($st.card.when_rotated) {
+    # BV-314: under "When it doesn't apply", on a key saved in git only.
+    $rtb.SelectionFont = $fDetail; $rtb.SelectionColor = $cDetail; $rtb.AppendText([Environment]::NewLine + [Environment]::NewLine + $st.card.when_rotated)
+  }
   $rtb.SelectionStart = 0; $rtb.SelectionLength = 0
   $st.built = $true
 }
@@ -493,6 +521,7 @@ foreach ($c in $cfg.cards) {
     elseif ($c.group -eq 'rest') { $label = $cfg.group_rest }
     elseif ($c.group -eq 'accepted') { $label = $cfg.group_accepted }
     elseif ($c.group -eq 'dismissed') { $label = $cfg.group_dismissed }
+    elseif ($c.group -eq 'rotated') { $label = $cfg.group_rotated }
     Add-Header $label
     $lastGroup = $c.group
   }
@@ -511,15 +540,17 @@ try {
 
 $script:result = 'cancel'
 $save.Add_Click({
-  # BV-236 sec. 5: both lists, "Descartar" then "Lo asumo".
-  $dis = @(); $acc = @()
+  # BV-236 sec. 5, BV-314: the lists, "Descartar", "Lo asumo", then "Ya la he cambiado".
+  $dis = @(); $acc = @(); $rot = @()
   foreach ($k in $script:choice.Keys) {
     if ($script:choice[$k] -eq 'dismissed') { $dis += $k }
     elseif ($script:choice[$k] -eq 'accepted') { $acc += $k }
+    elseif ($script:choice[$k] -eq 'rotated') { $rot += $k }
   }
   [Console]::Out.WriteLine('save')
   [Console]::Out.WriteLine([string]::Join(' ', $dis))
   [Console]::Out.WriteLine([string]::Join(' ', $acc))
+  [Console]::Out.WriteLine([string]::Join(' ', $rot))
   [Console]::Out.Flush()
   $script:result = 'save'
   $form.Close()
@@ -653,6 +684,17 @@ if ($shot) {
       }
       # Hover: paint the target row in the hover colour before opening its
       # detail, so the detail and pill take the hover background (points 1-2, 4c).
+      # BV-314: the first key saved in git, brought into view, and with
+      # "tick" its "Ya la he cambiado" chosen so the tally shows it.
+      if ($shotRotated) {
+        foreach ($r in $script:rows) {
+          if ($r.Tag.card.rotatable -and $r.Tag.card.group -ne 'rotated') {
+            if ($shotRotated -eq 'tick') { $script:choice[$r.Tag.card.id] = 'rotated'; Set-Choice $r.Tag; Update-Count }
+            $list.ScrollControlIntoView($r)
+            break
+          }
+        }
+      }
       if ($shotHover -and $target -ne $null) { Set-RowBack $target.Tag $cHover }
       if ($shotOpenI -and $target -ne $null) { Open-Detail $target }
       Start-Sleep -Milliseconds 300

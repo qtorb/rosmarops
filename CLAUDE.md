@@ -38,7 +38,7 @@ These cannot be violated by any code you write. They are the product.
 2. **No writes outside scope.** Only four write targets allowed:
    - `~/.rosmarops/state.json`
    - the kit key file: `~/.rosmarops/kit.dpapi` (Windows) or `~/.rosmarops/kit.key` (macOS and Linux)
-   - `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted.
+   - `~/.rosmarops/config.json`: created once at install if it does not exist, and rewritten only when the person changes which findings are dismissed or accepted, or marks a key saved in git as changed.
    - the configured reports directory (default `~/.rosmarops/reports/`; `~/RosmarOps/` on Linux).
    No other `os.Create`, `os.WriteFile`, `os.OpenFile`, or `os.MkdirAll` calls outside these paths.
    RosmarOps never writes, creates or changes the permissions of the company configuration, the administrator fingerprint list, or their folders.

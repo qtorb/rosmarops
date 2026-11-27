@@ -103,7 +103,7 @@ func TestBV235_AcceptKeepsDismissed(t *testing.T) {
 	}
 
 	// Both lists at once are refused by the writer and by the loader.
-	if err := writeFindingLists(cfgPath, reports, stPath, want, []config.AllowEntryAccepted{{ID: want[0].ID, Date: "2026-11-14"}}); err == nil {
+	if err := writeFindingLists(cfgPath, reports, stPath, want, []config.AllowEntryAccepted{{ID: want[0].ID, Date: "2026-11-14"}}, nil); err == nil {
 		t.Error("an id in both lists was written")
 	}
 	both := strings.Replace(string(raw), `"accepted": [`, `"accepted": [{"id": "f_aaaaaaaaaaaa", "date": "2026-11-14"}, `, 1)

@@ -39,6 +39,10 @@ import (
 type findingChoice struct {
 	Dismissed []string
 	Accepted  []string
+	// Rotated are the card ids marked «Ya la he cambiado» (BV-314): only
+	// cards of a key saved in git, whose credential goes to
+	// allow_list.rotated_credentials.
+	Rotated []string
 }
 
 // dismissUIHook shows the findings and returns the person's choice and whether
@@ -131,14 +135,29 @@ func loadDismissOffer(lang, cfgPath string, onlyIfNew bool) (dismissOffer, bool)
 	return dismissOffer{cat: cat, cfg: cfg, reportDir: reportDir, cards: cards}, true
 }
 
-// saveFindingChoice writes both lists after the person saved (BV-236 §5):
-// allow_list.dismissed and allow_list.accepted recomputed from what they left
-// chosen among the findings shown, keeping the entries of findings that did
-// not appear in this review, through writeFindingLists. An id kept from an
-// earlier review never stays in the other list too.
+// saveFindingChoice writes the lists after the person saved (BV-236 §5,
+// BV-314): allow_list.dismissed and allow_list.accepted recomputed from what
+// they left chosen among the findings shown, keeping the entries of findings
+// that did not appear in this review, and allow_list.rotated_credentials with
+// the credentials of the keys they marked «Ya la he cambiado», through
+// writeFindingLists. A finding is in at most one of the three: an id kept from
+// an earlier review never stays in another list too.
 func saveFindingChoice(cfgPath, reportDir, stPath string, al config.AllowList, cards []report.FindingCard, choice findingChoice, today string) error {
-	dismissed := recomputeDismissed(al.Dismissed, cards, choice.Dismissed, today)
-	accepted := recomputeAccepted(al.Accepted, cards, choice.Accepted, today)
+	rotatedCards := map[string]bool{}
+	for _, id := range choice.Rotated {
+		rotatedCards[id] = true
+	}
+	notRotated := func(ids []string) []string {
+		var out []string
+		for _, id := range ids {
+			if !rotatedCards[id] {
+				out = append(out, id)
+			}
+		}
+		return out
+	}
+	dismissed := recomputeDismissed(al.Dismissed, cards, notRotated(choice.Dismissed), today)
+	accepted := recomputeAccepted(al.Accepted, cards, notRotated(choice.Accepted), today)
 	inD := map[string]bool{}
 	for _, d := range dismissed {
 		inD[d.ID] = true
@@ -149,7 +168,52 @@ func saveFindingChoice(cfgPath, reportDir, stPath string, al config.AllowList, c
 			acc = append(acc, a)
 		}
 	}
-	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, acc)
+	rotated := recomputeRotated(al.RotatedCredentials, cards, choice.Rotated, today)
+	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, acc, &rotated)
+}
+
+// recomputeRotated is the new allow_list.rotated_credentials after the person
+// saved (BV-314): the credentials of the key cards they left marked «Ya la he
+// cambiado», plus the entries of credentials no card shows in this review
+// (kept, whoever wrote them: the window, an agent or the person by hand). A
+// newly marked credential takes today's date, the day the person marks it;
+// one already in the list keeps its date and its note. Sorted by id.
+func recomputeRotated(old []config.AllowEntryRotated, cards []report.FindingCard, chosen []string, today string) []config.AllowEntryRotated {
+	oldByID := make(map[string]config.AllowEntryRotated, len(old))
+	for _, e := range old {
+		oldByID[e.ID] = e
+	}
+	visible := map[string]bool{}
+	for _, c := range cards {
+		if c.CredID != "" {
+			visible[c.CredID] = true
+		}
+	}
+	chosenSet := make(map[string]bool, len(chosen))
+	for _, id := range chosen {
+		chosenSet[id] = true
+	}
+	var out []config.AllowEntryRotated
+	seen := map[string]bool{}
+	for _, e := range old {
+		if !visible[e.ID] && !seen[e.ID] {
+			out = append(out, e)
+			seen[e.ID] = true
+		}
+	}
+	for _, c := range cards {
+		if c.CredID == "" || !chosenSet[c.ID] || seen[c.CredID] {
+			continue
+		}
+		seen[c.CredID] = true
+		if e, ok := oldByID[c.CredID]; ok {
+			out = append(out, e)
+		} else {
+			out = append(out, config.AllowEntryRotated{ID: c.CredID, Date: today, Note: ""})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
 }
 
 // consoleFindingLine is one numbered line of the console list (BV-184 point 5):
@@ -172,21 +236,26 @@ func consoleFindingLine(n int, c report.FindingCard, cat catalog.Catalog) string
 		line += " (" + cat.Text("findings.console.accepted", nil) + ")" // K2
 	case report.CardGroupDismissed:
 		line += " (" + cat.Text("findings.console.dismissed", nil) + ")" // K3
+	case report.CardGroupRotated:
+		line += " (" + cat.Text("findings.console.rotated", nil) + ")" // BV-314
 	}
 	return line
 }
 
 // applyConsoleToggles applies the numbers the person typed (comma-separated,
-// 1-based; BV-236 §5): «N» flips finding N between dismissed and pending, «Na»
-// between accepted and pending. A finding is in at most one list, so «N» on an
-// accepted finding dismisses it and «Na» on a dismissed one accepts it. A
-// finding starts in the state of its group. An empty line, or one with no
-// valid token, changes nothing and is not saved.
-func applyConsoleToggles(cards []report.FindingCard, answer string) (findingChoice, bool) {
+// 1-based; BV-236 §5, BV-314): «N» flips finding N between dismissed and
+// pending, «Na» between accepted and pending, «Nc» between «Ya la he cambiado»
+// and pending — only on a key saved in git; on any other finding «Nc» changes
+// nothing and N is returned in na, for findings.console.rotated.na. A finding
+// is in at most one list, so «N» on an accepted finding dismisses it and «Na»
+// on a dismissed one accepts it. A finding starts in the state of its group.
+// An empty line, or one with no valid token, changes nothing and is not saved.
+func applyConsoleToggles(cards []report.FindingCard, answer string) (choice findingChoice, saved bool, na []int) {
 	const (
 		pending = iota
 		dismissed
 		accepted
+		rotated
 	)
 	st := make([]int, len(cards))
 	for i, c := range cards {
@@ -195,17 +264,25 @@ func applyConsoleToggles(cards []report.FindingCard, answer string) (findingChoi
 			st[i] = dismissed
 		case report.CardGroupAccepted:
 			st[i] = accepted
+		case report.CardGroupRotated:
+			st[i] = rotated
 		}
 	}
 	changed := false
 	for _, tok := range strings.Split(answer, ",") {
-		tok = strings.TrimSpace(tok)
+		tok = strings.ToLower(strings.TrimSpace(tok))
 		want := dismissed
-		if t, ok := strings.CutSuffix(strings.ToLower(tok), "a"); ok {
+		if t, ok := strings.CutSuffix(tok, "a"); ok {
 			tok, want = t, accepted
+		} else if t, ok := strings.CutSuffix(tok, "c"); ok {
+			tok, want = t, rotated
 		}
 		n, err := strconv.Atoi(strings.TrimSpace(tok))
 		if err != nil || n < 1 || n > len(cards) {
+			continue
+		}
+		if want == rotated && cards[n-1].CredID == "" {
+			na = append(na, n)
 			continue
 		}
 		if st[n-1] == want {
@@ -216,18 +293,19 @@ func applyConsoleToggles(cards []report.FindingCard, answer string) (findingChoi
 		changed = true
 	}
 	if !changed {
-		return findingChoice{}, false
+		return findingChoice{}, false, na
 	}
-	var out findingChoice
 	for i, c := range cards {
 		switch st[i] {
 		case dismissed:
-			out.Dismissed = append(out.Dismissed, c.ID)
+			choice.Dismissed = append(choice.Dismissed, c.ID)
 		case accepted:
-			out.Accepted = append(out.Accepted, c.ID)
+			choice.Accepted = append(choice.Accepted, c.ID)
+		case rotated:
+			choice.Rotated = append(choice.Rotated, c.ID)
 		}
 	}
-	return out, true
+	return choice, true, na
 }
 
 // anyNewCard reports whether any card is a new finding.
@@ -314,7 +392,7 @@ func writeDismissed(cfgPath, reportDir, stPath string, list []config.AllowEntryD
 			accepted = append(accepted, a)
 		}
 	}
-	return writeFindingLists(cfgPath, reportDir, stPath, list, accepted)
+	return writeFindingLists(cfgPath, reportDir, stPath, list, accepted, nil)
 }
 
 // writeAccepted writes allow_list.accepted («Lo asumo», BV-235 R3) into
@@ -336,7 +414,7 @@ func writeAccepted(cfgPath, reportDir, stPath string, list []config.AllowEntryAc
 			dismissed = append(dismissed, d)
 		}
 	}
-	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, list)
+	return writeFindingLists(cfgPath, reportDir, stPath, dismissed, list, nil)
 }
 
 // writeFindingLists writes allow_list.dismissed and allow_list.accepted into
@@ -344,9 +422,12 @@ func writeAccepted(cfgPath, reportDir, stPath string, list []config.AllowEntryAc
 // not ask about the change (BV-184 point 2): config.json atomically (a temp
 // file in the same directory, then a rename), its new SHA-256 into
 // state.integrity.config_sha256, the accepted copy in data/ rewritten, and the
-// state saved. Only those two lists are touched, each absent when empty; every
-// other key of the file is kept as written. An id in both lists is refused.
-func writeFindingLists(cfgPath, reportDir, stPath string, list []config.AllowEntryDismissed, accepted []config.AllowEntryAccepted) error {
+// state saved. With rotated not nil it also writes
+// allow_list.rotated_credentials (BV-314: a key saved in git marked as
+// changed, invariant 2); nil leaves that list as it is. Only those lists are
+// touched, each absent when empty; every other key of the file is kept as
+// written. An id in both dismissed and accepted is refused.
+func writeFindingLists(cfgPath, reportDir, stPath string, list []config.AllowEntryDismissed, accepted []config.AllowEntryAccepted, rotated *[]config.AllowEntryRotated) error {
 	both := map[string]bool{}
 	for _, d := range list {
 		both[d.ID] = true
@@ -393,6 +474,17 @@ func writeFindingLists(cfgPath, reportDir, stPath string, list []config.AllowEnt
 			arr = append(arr, map[string]any{"id": e.ID, "date": e.Date})
 		}
 		al["accepted"] = arr
+	}
+	if rotated != nil {
+		if len(*rotated) == 0 {
+			delete(al, config.ListRotatedCredentials)
+		} else {
+			arr := make([]any, 0, len(*rotated))
+			for _, e := range *rotated {
+				arr = append(arr, map[string]any{"id": e.ID, "date": e.Date, "note": e.Note})
+			}
+			al[config.ListRotatedCredentials] = arr
+		}
 	}
 	if len(al) == 0 {
 		delete(m, "allow_list")

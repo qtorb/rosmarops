@@ -641,19 +641,22 @@ func (c htmlCtx) gitEnvHelp(f rules.Finding) string {
 	return ""
 }
 
-// renderRotate is the body of rotate_credential (v3 §9.2): the three steps,
-// the button that copies html.agent.prompt.rotated with the configuration
-// file and the entry, and «I'd rather do it by hand» with the same entry.
-// wide is the step 2 button.
+// renderRotate is the body of rotate_credential (v3 §9.2, BV-314): the three
+// steps, the second telling the person to mark the finding «I have changed
+// it» in `rosmarops findings`; then, folded, «Other ways to record it»: its
+// note, the button that copies html.agent.prompt.rotated with the
+// configuration file and the entry, and «I'd rather do it by hand» with the
+// same entry. wide is the step 2 button.
 func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 	p := c.params(f)
-	c.w(`<ol class="rot"><li>%s</li><li>%s</li><li>%s</li></ol>`, c.t("html.fix.rotate.step1", p), c.t("html.fix.rotate.step2", p), c.t("html.fix.rotate.step3", p))
+	c.w(`<ol class="rot"><li>%s</li><li>%s</li><li>%s</li></ol>`, c.t("html.fix.rotate.step1", p), codeTicks(c.t("html.fix.rotate.step2", p)), c.t("html.fix.rotate.step3", p))
 	pp := copyParams(p)
 	pp["file"] = userPath(a.File, c.home, c.v.homePrefix())
 	class := ""
 	if wide {
 		class = ` class="wide"`
 	}
+	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><p>%s</p>`, c.t("html.fix.rotate.other", p), c.t("html.fix.rotate.other.note", p))
 	c.w(`<pre hidden>%s
 
 %s</pre><button type="button"%s data-copied="%s">%s</button><span class="live" aria-live="polite"></span>`,
@@ -661,8 +664,31 @@ func (c htmlCtx) renderRotate(f rules.Finding, a rules.Action, wide bool) {
 	mp := copyParams(p)
 	mp["file"] = userPath(a.File, c.home, "~")
 	// By hand, the entry inside its list, nested in full (v3 §14.3).
-	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details>`,
+	c.w(`<details class="manual"><summary><span class="chev" aria-hidden="true">›</span>%s</summary><ol><li>%s</li><li>%s<pre>%s</pre></li><li>%s</li></ol></details></details>`,
 		c.t("html.fix.manual", p), c.manualOpen(mp), c.t("html.fix.manual.rotated", p), html.EscapeString(rotatedNested(untrusted.VisiblePaste(a.Value))), c.t("html.fix.manual.save", p))
+}
+
+// codeTicks puts each `…` of an already escaped text inside <code> (BV-314:
+// the command in html.fix.rotate.step2). An unpaired backtick is left as it is.
+func codeTicks(escaped string) string {
+	parts := strings.Split(escaped, "`")
+	if len(parts) < 3 {
+		return escaped
+	}
+	var b strings.Builder
+	for i, part := range parts {
+		switch {
+		case i == 0:
+		case i%2 == 1 && i < len(parts)-1:
+			b.WriteString("<code>")
+		case i%2 == 0:
+			b.WriteString("</code>")
+		default:
+			b.WriteString("`")
+		}
+		b.WriteString(part)
+	}
+	return b.String()
 }
 
 // rotatedNested is the rotate_credential entry inside
@@ -1441,7 +1467,7 @@ func HTMLKeys() []string {
 	// v3 §9 (BV-50)
 	keys = append(keys, "html.f.cred_in_git.title", "html.f.cred_in_git.impact.remote", "html.f.cred_in_git.impact.local",
 		"html.f.cred_in_git.title.history", "html.f.cred_in_git.where.tracked", "html.f.cred_in_git.where.history", // BV-219
-		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
+		"html.fix.rotate.step1", "html.fix.rotate.step2", "html.fix.rotate.step3", "html.fix.rotate.other", "html.fix.rotate.other.note", "html.agent.prompt.rotated", "html.fix.copy.generic", "html.fix.copy.rotated",
 		"html.silenced.one", "html.silenced.other", "html.card.silenced", "html.card.silenced.one", "html.memory.new_agent",
 		// BV-232 §6: the forms for one.
 		"html.today.reach.one", "html.chip.any_project.one", "html.limit.reached.one_left", "html.limit.reached.one_project",

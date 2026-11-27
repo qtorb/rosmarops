@@ -25,7 +25,7 @@ func TestBV184_ApplyConsoleToggles(t *testing.T) {
 		{ID: "cred_c", Severity: "red", Group: report.CardGroupDismissed},
 	}
 	// Mark 1 (dismiss f_a) and un-mark 3 (recover cred_c).
-	ch, saved := applyConsoleToggles(cards, "1, 3\n")
+	ch, saved, _ := applyConsoleToggles(cards, "1, 3\n")
 	if !saved {
 		t.Fatal("not saved after typing numbers")
 	}
@@ -34,11 +34,11 @@ func TestBV184_ApplyConsoleToggles(t *testing.T) {
 		t.Errorf("checked ids = %q, want f_a (f_a on, cred_c recovered)", got)
 	}
 	// Enter with nothing: no change, not saved.
-	if ch, saved := applyConsoleToggles(cards, "\n"); saved || ch.Dismissed != nil || ch.Accepted != nil {
+	if ch, saved, _ := applyConsoleToggles(cards, "\n"); saved || ch.Dismissed != nil || ch.Accepted != nil {
 		t.Errorf("empty answer changed state: %+v saved=%v", ch, saved)
 	}
 	// Out-of-range and junk are ignored (not saved).
-	if _, saved := applyConsoleToggles(cards, "9, x\n"); saved {
+	if _, saved, _ := applyConsoleToggles(cards, "9, x\n"); saved {
 		t.Error("out-of-range/junk counted as a change")
 	}
 }

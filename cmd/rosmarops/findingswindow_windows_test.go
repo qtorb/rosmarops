@@ -16,8 +16,8 @@ import (
 	"github.com/qtorb/rosmarops/internal/report"
 )
 
-// sampleDismissCards are the shared test set (BV-184, BV-236 §5): seven
-// findings — two new, three the rest, one accepted, one dismissed — with reds and yellows, the longest
+// sampleDismissCards are the shared test set (BV-184, BV-236 §5): eight
+// findings — two new, three the rest (one a key saved in git), one accepted, one dismissed, one key changed — with reds and yellows, the longest
 // (Spanish) texts, to stress the window's layout and scrolling. The «open
 // since» dates come from cat.LongDate, so they render in the catalog's long
 // form («25 de octubre de 2026» in Spanish) exactly as the real window does.
@@ -28,11 +28,13 @@ func sampleDismissCards(cat catalog.Catalog) []report.FindingCard {
 	return []report.FindingCard{
 		{ID: "f_1", Severity: "red", Title: "Una clave de Supabase que un agente puede leer y enviar fuera", WhatItMeans: "El agente puede leer esta clave y mandarla a un servicio de fuera.", WhenApplies: "Si esa clave es de prueba o no da acceso a nada real, aunque el agente pueda enviarla fuera.", New: true, Agent: "Claude Code", Group: report.CardGroupNew},
 		{ID: "f_2", Severity: "yellow", Title: "Otro agente puede escribir la configuración de este agente", WhatItMeans: "Otro agente puede cambiar cómo trabaja este.", WhenApplies: "Si usas a propósito este agente para configurar al otro y revisas cada cambio que hace.", New: true, Agent: "Cursor", Group: report.CardGroupNew},
-		{ID: "f_3", Severity: "red", Title: "Una credencial dentro de git", WhatItMeans: "Hay una credencial guardada en el historial del repositorio.", WhenApplies: "Si es una clave de prueba, ya revocada o de un proyecto que nunca se publicó, y no abre nada real.", Since: since(2026, time.October, 25), Agent: "Claude Code", Group: report.CardGroupRest},
+		{ID: "f_3", Severity: "red", Title: "Tu clave de Supabase: en git", WhatItMeans: "Al menos uno de estos repositorios tiene un remoto. RosmarOps no puede saber sin red si el commit con la clave se subió; si se subió, considera la clave comprometida y revócala en el proveedor.", WhenApplies: cat.Text("findings.when.cred_in_git", nil), Since: since(2026, time.October, 25), Group: report.CardGroupRest, CredID: "cred_3", WhenRotated: cat.Text("findings.when.rotated", nil)},
 		{ID: "f_4", Severity: "yellow", Title: "Una clave que un agente puede leer", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.November, 1), Agent: "Aider", Group: report.CardGroupRest},
 		{ID: "f_5", Severity: "red", Title: "Un hook del proyecto ejecuta un script del repositorio", WhatItMeans: "Un script del repositorio se ejecuta cuando salta un hook.", WhenApplies: "Si el proyecto es tuyo y conoces el script que ejecuta ese hook.", Since: since(2026, time.October, 30), Agent: "Codex", Group: report.CardGroupRest},
 		{ID: "f_7", Severity: "yellow", Title: "Claude Code puede cambiar la configuración de otros agentes", WhatItMeans: "El agente puede editar los ajustes de otro agente.", WhenApplies: "Si usas a propósito este agente para configurar al otro y revisas cada cambio que hace.", Since: since(2026, time.October, 28), Agent: "Claude Code", Group: report.CardGroupAccepted},
 		{ID: "cred_6", Severity: "yellow", Title: "Una clave de prueba que descartaste", WhatItMeans: "El agente puede leer esta clave.", WhenApplies: "Si esa clave es de prueba o de un entorno local que no da acceso a nada real.", Since: since(2026, time.October, 20), Agent: "Continue", Group: report.CardGroupDismissed},
+		// BV-314: a key saved in git the person already recorded as changed.
+		{ID: "f_8", Severity: "red", Title: "Tu clave de Stripe: en tu historial de git", WhatItMeans: "Ninguno de estos repositorios tiene un remoto declarado, así que probablemente la clave aún no ha salido de tu ordenador. Un push la enviaría con todo el historial.", WhenApplies: cat.Text("findings.when.cred_in_git", nil), Since: since(2026, time.October, 22), Group: report.CardGroupRotated, CredID: "cred_8", WhenRotated: cat.Text("findings.when.rotated", nil)},
 	}
 }
 
@@ -43,6 +45,10 @@ func TestDismissDriver(t *testing.T) {
 	ch, saved := driveDismissWindow(strings.NewReader("save\nf_1 cred_6\nf_7\n"))
 	if !saved || strings.Join(ch.Dismissed, ",") != "f_1,cred_6" || strings.Join(ch.Accepted, ",") != "f_7" {
 		t.Errorf("save: %+v saved=%v", ch, saved)
+	}
+	// BV-314: a third line carries the ids marked «Ya la he cambiado».
+	if ch, saved := driveDismissWindow(strings.NewReader("save\nf_1\n\nf_3\n")); !saved || strings.Join(ch.Rotated, ",") != "f_3" || strings.Join(ch.Dismissed, ",") != "f_1" {
+		t.Errorf("save with a key changed: %+v saved=%v", ch, saved)
 	}
 	if ch, saved := driveDismissWindow(strings.NewReader("save\n\n\n")); !saved || len(ch.Dismissed) != 0 || len(ch.Accepted) != 0 {
 		t.Errorf("save with nothing chosen: %+v saved=%v", ch, saved)
@@ -178,7 +184,8 @@ func TestDismissWindowSelfTest(t *testing.T) {
 	if kv["BTN"] != "96,28" || kv["BTNGAP"] != "6" || kv["BTNRIGHT"] != "16" || kv["BTNVCENTER"] != "True" {
 		t.Errorf("buttons: BTN=%s BTNGAP=%s BTNRIGHT=%s BTNVCENTER=%s, want 96,28 6 16 True", kv["BTN"], kv["BTNGAP"], kv["BTNRIGHT"], kv["BTNVCENTER"])
 	}
-	if want := strings.ReplaceAll(cfg.TallyAOne+" · "+cfg.TallyDOne, " ", "_"); kv["TALLY"] != want {
+	// BV-314: with a key saved in git among the rows, the keys changed follow.
+	if want := strings.ReplaceAll(cfg.TallyAOne+" · "+cfg.TallyDOne+" · "+cfg.TallyROne, " ", "_"); kv["TALLY"] != want {
 		t.Errorf("TALLY = %q, want %q", kv["TALLY"], want)
 	}
 	// The pill is rounded: its corner (1 px inside the rectangle) still shows the
@@ -266,6 +273,11 @@ func TestDismissWindowScreenshots(t *testing.T) {
 				{"-i", map[string]string{"TICK_NEW": "1", "OPEN_I": "1"}},
 				{"-rest", map[string]string{"SCROLL": "bottom"}},
 				{"-hover", map[string]string{"TICK_NEW": "1", "OPEN_I": "1", "HOVER": "1"}},
+				// BV-314: the key saved in git, pending and with «Ya la he
+				// cambiado» chosen; its group «Claves que has cambiado» is
+				// at the bottom (-rest).
+				{"-key", map[string]string{"ROTATED": "show"}},
+				{"-key-ticked", map[string]string{"ROTATED": "tick"}},
 			} {
 				name := "findings-" + lang + "-" + s.pct + v.suffix
 				out := filepath.Join(dir, name+".png")
@@ -277,6 +289,7 @@ func TestDismissWindowScreenshots(t *testing.T) {
 					"ROSMAROPS_FINDINGS_WINDOW_SHOT_SCROLL="+v.env["SCROLL"],
 					"ROSMAROPS_FINDINGS_WINDOW_SHOT_TICK_NEW="+v.env["TICK_NEW"],
 					"ROSMAROPS_FINDINGS_WINDOW_SHOT_HOVER="+v.env["HOVER"],
+					"ROSMAROPS_FINDINGS_WINDOW_SHOT_ROTATED="+v.env["ROTATED"],
 				)
 				cmd.Stderr = os.Stderr
 				stdin, _ := cmd.StdinPipe()
@@ -338,7 +351,7 @@ func TestBV236WindowConfig(t *testing.T) {
 		for _, c := range cfg.Cards {
 			states[c.ID] = c.State
 		}
-		if states["f_7"] != "accepted" || states["cred_6"] != "dismissed" || states["f_1"] != "" || states["f_3"] != "" {
+		if states["f_7"] != "accepted" || states["cred_6"] != "dismissed" || states["f_1"] != "" || states["f_3"] != "" || states["f_8"] != "rotated" {
 			t.Errorf("%s: initial states %v", lang, states)
 		}
 	}
